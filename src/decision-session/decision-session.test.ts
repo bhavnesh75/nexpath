@@ -19,6 +19,7 @@ import {
   REVIEW_TO_RELEASE,
   RELEASE_TO_FEEDBACK,
   BEHAVIOUR_TESTING,
+  BEHAVIOUR_TESTING_CASUAL,
   ABSENCE_TEST_CREATION,
   ABSENCE_TEST_CREATION_CASUAL,
   ABSENCE_REGRESSION_CHECK,
@@ -1999,7 +2000,7 @@ describe('runDecisionSession', () => {
 
 describe('BEHAVIOUR_TESTING content', () => {
   it('has correct question text', () => {
-    expect(BEHAVIOUR_TESTING.question).toBe('Phase done — any real-user scenario tested?');
+    expect(BEHAVIOUR_TESTING.question).toBe('Implementation done — user scenarios tested?');
   });
 
   it('has correct pinchFallback', () => {
@@ -2043,17 +2044,49 @@ describe('BEHAVIOUR_TESTING content', () => {
 });
 
 describe('resolveDecisionContent — behaviour_testing absence (v0.3.0)', () => {
-  it('returns BEHAVIOUR_TESTING for absence:behaviour_testing in implementation stage', () => {
-    expect(resolveDecisionContent('implementation', 'absence:behaviour_testing')).toBe(BEHAVIOUR_TESTING);
+  it('returns BEHAVIOUR_TESTING_CASUAL for absence:behaviour_testing with no profile (casual default)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:behaviour_testing')).toBe(BEHAVIOUR_TESTING_CASUAL);
   });
 
-  it('returns BEHAVIOUR_TESTING for absence:behaviour_testing in review_testing stage', () => {
-    expect(resolveDecisionContent('review_testing', 'absence:behaviour_testing')).toBe(BEHAVIOUR_TESTING);
+  it('returns BEHAVIOUR_TESTING_CASUAL for absence:behaviour_testing in review_testing stage with no profile', () => {
+    expect(resolveDecisionContent('review_testing', 'absence:behaviour_testing')).toBe(BEHAVIOUR_TESTING_CASUAL);
   });
 
   it('does NOT return BEHAVIOUR_TESTING for unrelated absence signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:test_creation')).not.toBe(BEHAVIOUR_TESTING);
     expect(resolveDecisionContent('implementation', 'absence:regression_check')).not.toBe(BEHAVIOUR_TESTING);
+  });
+});
+
+describe('resolveDecisionContent — behaviour_testing absence profile routing (sub-6)', () => {
+  const proGeekSoulProfile   = { nature: 'pro_geek_soul' as const, precisionScore: 7, playfulnessScore: 5, precisionOrdinal: 'high' as const, playfulnessOrdinal: 'medium' as const, mood: 'focused' as const, depth: 'high' as const, depthScore: 7, computedAt: 0 };
+  const hardcoreProProfile   = { nature: 'hardcore_pro' as const, precisionScore: 9, playfulnessScore: 2, precisionOrdinal: 'very_high' as const, playfulnessOrdinal: 'low' as const, mood: 'focused' as const, depth: 'high' as const, depthScore: 9, computedAt: 0 };
+  const coolGeekProfile      = { nature: 'cool_geek' as const, precisionScore: 3, playfulnessScore: 8, precisionOrdinal: 'low' as const, playfulnessOrdinal: 'high' as const, mood: 'casual' as const, depth: 'medium' as const, depthScore: 5, computedAt: 0 };
+  const beginnerProfile      = { nature: 'beginner' as const, precisionScore: 2, playfulnessScore: 2, precisionOrdinal: 'low' as const, playfulnessOrdinal: 'low' as const, mood: 'casual' as const, depth: 'low' as const, depthScore: 1, computedAt: 0 };
+
+  it('pro_geek_soul + absence:behaviour_testing → BEHAVIOUR_TESTING_CASUAL', () => {
+    const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', proGeekSoulProfile);
+    expect(content).toBe(BEHAVIOUR_TESTING_CASUAL);
+  });
+
+  it('null profile + absence:behaviour_testing → BEHAVIOUR_TESTING_CASUAL', () => {
+    const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', null);
+    expect(content).toBe(BEHAVIOUR_TESTING_CASUAL);
+  });
+
+  it('hardcore_pro + absence:behaviour_testing → BEHAVIOUR_TESTING (formal)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', hardcoreProProfile);
+    expect(content).toBe(BEHAVIOUR_TESTING);
+  });
+
+  it('cool_geek + absence:behaviour_testing → BEHAVIOUR_TESTING_BEGINNER (via isVibe)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', coolGeekProfile);
+    expect(content).toBe(ABSENCE_CONTENT_BEGINNER.behaviour_testing);
+  });
+
+  it('beginner + absence:behaviour_testing → BEHAVIOUR_TESTING_BEGINNER (via isVibe)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', beginnerProfile);
+    expect(content).toBe(ABSENCE_CONTENT_BEGINNER.behaviour_testing);
   });
 });
 
@@ -2066,12 +2099,12 @@ describe('IMPLEMENTATION_TO_REVIEW — v0.3.0 addition', () => {
     expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('manual acceptance test');
   });
 
-  it('5th L1 option mentions user journey', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('user journey');
+  it('5th L1 option mentions spec scenarios', () => {
+    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('spec scenarios');
   });
 
-  it('5th L1 option mentions edge cases', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('edge cases');
+  it('5th L1 option mentions boundary conditions or error states', () => {
+    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toMatch(/boundary conditions|error states/);
   });
 
   it('first 4 L1 options are unchanged from before v0.3.0', () => {
