@@ -107,7 +107,7 @@ const RELEASE_TO_FEEDBACK_BEGINNER: DecisionContent = {
 };
 
 const BEHAVIOUR_TESTING_BEGINNER: DecisionContent = {
-  question:      'Phase done — any real-user scenario tested?',
+  question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
   L1: [
     '1. Walk through this feature as if you\'re a real user — tell me each step, what you\'d click or type, and whether it works the way it should.\n2. Share what you find with me before we move on.\n3. Flag anything that feels wrong or missing along the way.',

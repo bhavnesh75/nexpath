@@ -132,7 +132,7 @@ const IMPLEMENTATION_TO_REVIEW: DecisionContent = {
     'Cross-confirm the full implementation against the spec: review everything built in this phase and identify any gaps between what was implemented and what the spec required — include security, error handling, and edge cases.',
     'Review for regression: does anything that was working before this phase now behave differently or break?',
     // v0.3.0 — acceptance/behaviour testing gap
-    'Write a manual acceptance test script for this phase: the main user journey from first action to goal completion, edge cases that automated tests would not catch, and the expected outcome at each step.',
+    'Write a manual acceptance test script for what was just built: cover the spec scenarios — happy path, boundary conditions, and error states automated tests would miss — and document the expected outcome at each step.',
   ],
   L2: [
     'Run tests for the new code in this phase and report any failures.',
@@ -176,13 +176,13 @@ const RELEASE_TO_FEEDBACK: DecisionContent = {
     'What is the minimum feedback setup needed to know if this feature is landing well — and what is still missing from what is currently in place?',
   ],
   L3: [
-    'Is there anything in what was just built that could silently fail in production without triggering a visible error or alert?',
+    'Is there a signal in place that would tell you if this feature silently breaks in production — or would it fail without alerting anyone?',
   ],
 };
 
 /** Absence trigger: behaviour_testing — fires when implementation proceeds without manual acceptance testing */
 const BEHAVIOUR_TESTING: DecisionContent = {
-  question:      'Phase done — any real-user scenario tested?',
+  question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
   L1: [
     'Write a manual test scenario for the main user journey: list each step a real user would take, what they would see, and what would confirm it is working correctly.',
@@ -195,6 +195,24 @@ const BEHAVIOUR_TESTING: DecisionContent = {
   ],
   L3: [
     'What is one real user scenario I should manually test right now before moving on?',
+  ],
+};
+
+/** BEHAVIOUR_TESTING_CASUAL — casual-register variant for cool_geek and pro_geek_soul profiles */
+const BEHAVIOUR_TESTING_CASUAL: DecisionContent = {
+  question:      'Implementation done — user scenarios tested?',
+  pinchFallback: 'User scenario?',
+  L1: [
+    'Put yourself in a user\'s shoes and go through what was just built from start to finish — what\'s the main thing it does, does it actually work, and is anything confusing or broken along the way?',
+    'Think of a few different ways someone might use this feature in real life — the obvious one and a couple of less obvious ones — and actually run through each to see what happens.',
+    'Think about what could go wrong for a real user in what was just built — try the stuff that automated tests wouldn\'t catch and tell me what you see.',
+  ],
+  L2: [
+    'What\'s the simplest way someone would use this feature end to end — walk me through what they do and whether it actually works.',
+    'Is there anything in what was just built that you haven\'t actually tried yourself yet — and what would "working" look like if you did?',
+  ],
+  L3: [
+    'What\'s one specific thing that could break for a real user in this feature that hasn\'t been tried by hand yet?',
   ],
 };
 
@@ -223,7 +241,7 @@ const ABSENCE_REGRESSION_CHECK: DecisionContent = {
   question:      'Changes made — regression verified?',
   pinchFallback: 'Regression check.',
   L1: [
-    'Run the regression test suite for this project and report: which tests pass, which fail, and what changed in this session that could have caused any failures.',
+    'Identify which existing tests cover the code paths changed in what was just built, run them, and flag any regressions — anything that was passing before this session that is now failing.',
     'Check what was just built against the existing test suite: identify which existing tests cover the code paths that were modified, run them, and report any failures.',
     'Review what was just built for regression risk: what existing functionality could be affected by these changes, and how would you verify it still works correctly?',
   ],
@@ -1282,7 +1300,7 @@ const ABSENCE_CONTENT_CASUAL: Partial<Record<string, DecisionContent>> = {
   regression_check:      ABSENCE_REGRESSION_CHECK_CASUAL,
   spec_acceptance_check: ABSENCE_SPEC_ACCEPTANCE_CASUAL,
   cross_confirming:      ABSENCE_CROSS_CONFIRMING_CASUAL,
-  behaviour_testing:     BEHAVIOUR_TESTING,  // BEHAVIOUR_TESTING_CASUAL is out of sub-2 scope
+  behaviour_testing:     BEHAVIOUR_TESTING_CASUAL,
   security_check:        ABSENCE_SECURITY_CHECK_CASUAL,
   error_handling:        ABSENCE_ERROR_HANDLING_CASUAL,
   documentation:         ABSENCE_DOCUMENTATION_CASUAL,
@@ -1451,6 +1469,7 @@ export {
   REVIEW_TO_RELEASE,
   RELEASE_TO_FEEDBACK,
   BEHAVIOUR_TESTING,
+  BEHAVIOUR_TESTING_CASUAL,
   ABSENCE_TEST_CREATION,
   ABSENCE_TEST_CREATION_CASUAL,
   ABSENCE_REGRESSION_CHECK,
