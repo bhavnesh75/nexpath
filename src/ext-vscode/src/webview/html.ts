@@ -128,29 +128,50 @@ function renderPayload(
   .dismiss { margin-top: 0.9em; font-size: 0.83em; color: var(--vscode-descriptionForeground); cursor: pointer; background: none; border: none; padding: 0.3em 0; font-family: inherit; }
   .dismiss:hover { color: var(--vscode-foreground); text-decoration: underline; }
   .dismiss:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 2px; }
+  .kbd-hint { font-size: 0.85em; color: var(--vscode-descriptionForeground); text-transform: none; letter-spacing: 0; font-weight: normal; opacity: 0.9; }
 </style>
 </head>
 <body>
 <div class="advisory">${escapeHtml(payload.advisory)}</div>
-<div class="options-header">Suggested alternatives</div>
+<div class="options-header">Suggested alternatives <span class="kbd-hint">(press 1–${Math.min(payload.options.length, 9)}, or Esc / Ctrl+X to dismiss)</span></div>
 <ul id="options">
 ${optionsHtml}
 </ul>
-<button class="dismiss" id="dismiss">Dismiss</button>
+<button class="dismiss" id="dismiss">Dismiss <span class="kbd-hint">(Esc / Ctrl+X)</span></button>
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
-  document.querySelectorAll('button.option').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      vscode.postMessage({
-        type: 'select',
-        optionId: btn.dataset.optionId,
-        optionLabel: btn.dataset.optionLabel,
-      });
+  const optionButtons = Array.from(document.querySelectorAll('button.option'));
+
+  function selectOption(btn) {
+    vscode.postMessage({
+      type: 'select',
+      optionId: btn.dataset.optionId,
+      optionLabel: btn.dataset.optionLabel,
     });
-  });
-  document.getElementById('dismiss').addEventListener('click', () => {
+  }
+  function dismiss() {
     vscode.postMessage({ type: 'dismiss' });
+  }
+
+  // Click handlers
+  optionButtons.forEach((btn) => btn.addEventListener('click', () => selectOption(btn)));
+  document.getElementById('dismiss').addEventListener('click', dismiss);
+
+  // Keyboard shortcuts:
+  //   1–9      → select the Nth option (matches the visible numbering)
+  //   Esc      → dismiss
+  //   Ctrl+X   → dismiss (matches Layer C TTY UI's opt-out shortcut for UX consistency)
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') { ev.preventDefault(); dismiss(); return; }
+    if (ev.ctrlKey && (ev.key === 'x' || ev.key === 'X')) { ev.preventDefault(); dismiss(); return; }
+    if (ev.key >= '1' && ev.key <= '9') {
+      const idx = parseInt(ev.key, 10) - 1;
+      if (idx < optionButtons.length) { ev.preventDefault(); selectOption(optionButtons[idx]); }
+    }
   });
+
+  // Focus the first option on render so keyboard users land on something actionable.
+  if (optionButtons[0]) optionButtons[0].focus();
 </script>
 </body>
 </html>`;

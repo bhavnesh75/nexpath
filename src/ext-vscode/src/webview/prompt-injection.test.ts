@@ -75,4 +75,58 @@ describe('handleOptionSelection', () => {
     expect(clip).toHaveBeenCalledWith('');
     expect(toast).toHaveBeenCalledOnce();
   });
+
+  describe('injectFn primary path (B4 contract)', () => {
+    it('skips clipboard + toast when injectFn returns true', async () => {
+      const inject = vi.fn().mockResolvedValue(true);
+      const clip = vi.fn().mockResolvedValue(undefined);
+      const toast = vi.fn().mockResolvedValue(undefined);
+      await handleOptionSelection('hello', {
+        injectFn: inject,
+        clipboardWrite: clip,
+        showInfo: toast,
+      });
+      expect(inject).toHaveBeenCalledWith('hello');
+      expect(clip).not.toHaveBeenCalled();
+      expect(toast).not.toHaveBeenCalled();
+    });
+
+    it('falls back to clipboard when injectFn returns false', async () => {
+      const inject = vi.fn().mockResolvedValue(false);
+      const clip = vi.fn().mockResolvedValue(undefined);
+      const toast = vi.fn().mockResolvedValue(undefined);
+      await handleOptionSelection('hello', {
+        injectFn: inject,
+        clipboardWrite: clip,
+        showInfo: toast,
+      });
+      expect(inject).toHaveBeenCalledOnce();
+      expect(clip).toHaveBeenCalledWith('hello');
+      expect(toast).toHaveBeenCalledOnce();
+    });
+
+    it('falls back to clipboard when injectFn throws', async () => {
+      const inject = vi.fn().mockRejectedValue(new Error('command not found'));
+      const clip = vi.fn().mockResolvedValue(undefined);
+      const toast = vi.fn().mockResolvedValue(undefined);
+      await handleOptionSelection('hello', {
+        injectFn: inject,
+        clipboardWrite: clip,
+        showInfo: toast,
+      });
+      expect(inject).toHaveBeenCalledOnce();
+      expect(clip).toHaveBeenCalledWith('hello');
+      expect(toast).toHaveBeenCalledOnce();
+    });
+
+    it('does NOT call injectFn when it is undefined (default B3 behaviour)', async () => {
+      const clip = vi.fn().mockResolvedValue(undefined);
+      const toast = vi.fn().mockResolvedValue(undefined);
+      await handleOptionSelection('hello', {
+        clipboardWrite: clip,
+        showInfo: toast,
+      });
+      expect(clip).toHaveBeenCalledWith('hello');
+    });
+  });
 });

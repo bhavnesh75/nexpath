@@ -8,28 +8,52 @@ import * as vscode from 'vscode';
  * Windsurf's) AI chat input — so they can hit Enter and re-submit the
  * refined prompt.
  *
- * **VS Code's text-editing APIs do NOT reach the host's chat panel.** They
- * operate on editor documents (open files in the editor area). The chat
- * input is part of the host application's own UI surface, outside the
- * extension API's reach. Documented in dev plan §2.4 (Risks → "Round-trip
+ * # Architecture (B3 sets up; B4 fills in)
+ *
+ * `handleOptionSelection` has TWO paths, in priority order:
+ *
+ *   1. **Primary — direct injection** via `deps.injectFn`. This is supplied
+ *      by the per-agent adapter (B4), which knows which `vscode.commands`
+ *      command writes text to that agent's chat input (Cursor / Windsurf
+ *      each have their own command id). If `injectFn(text)` returns
+ *      `true`, the text is in the chat input and we're done.
+ *
+ *   2. **Fallback — clipboard + toast.** If `injectFn` is absent (B3
+ *      default) or returns `false`, we write the text to the system
+ *      clipboard and show an info toast directing the user to paste it.
+ *
+ * # Why B3 doesn't supply an injectFn
+ *
+ * VS Code's standard text-editing API operates on editor documents, not
+ * the host's chat input panel — so there is no agent-agnostic primary
+ * path. The per-agent command id has to be discovered against each agent
+ * (and tracked across agent versions). That research and wiring is
+ * Branch 4's scope; B3 sets up the contract so B4 only has to plug in
+ * the `injectFn`. Documented as a load-bearing contract in the project
+ * memory `project_b4_prompt_injection_contract.md`.
+ *
+ * Documented as a known fallback in dev plan §2.4 (Risks → "Round-trip
  * prompt injection").
- *
- * Strategy for B3 (this branch):
- *   1. Write the option text to the system clipboard via `vscode.env.clipboard`.
- *   2. Show a non-modal info toast: *"Pasted to clipboard — paste into the
- *      chat input to use it."*
- *
- * Branch 4 (`cursor-windsurf-adapters`) may discover a Cursor-specific
- * command (e.g. via `vscode.commands.getCommands(true)`) that lets us
- * write directly into the chat input, in which case this function gets
- * an additional primary path and the clipboard becomes the secondary
- * fallback. Until then, clipboard + toast is the only reliable path.
  */
 
+/**
+ * A function that attempts to write the option text directly into the
+ * agent's chat input. Returns `true` on success (clipboard fallback is
+ * skipped) or `false` if the agent-specific command is unavailable / errored.
+ *
+ * Implemented per-agent in Branch 4 (cursor-windsurf-adapters).
+ */
+export type OptionInjector = (text: string) => Promise<boolean>;
+
 export interface PromptInjectionDeps {
-  /** Inject the clipboard writer for tests. */
+  /**
+   * Adapter-supplied direct-injection function (the primary path).
+   * Absent in B3 — Branch 4 fills it in per-agent.
+   */
+  injectFn?: OptionInjector;
+  /** Override the clipboard writer (tests). */
   clipboardWrite?: (text: string) => Promise<void>;
-  /** Inject the info-toast call for tests. */
+  /** Override the info-toast call (tests). */
   showInfo?: (message: string) => Promise<string | undefined>;
 }
 
@@ -37,14 +61,26 @@ const FALLBACK_MESSAGE =
   'Nexpath: pasted to clipboard — paste into the chat input to use it.';
 
 /**
- * Hand the selected option's text to the user via the clipboard + toast.
- * Resolves once both steps have been attempted; never throws — failures
- * surface to the user as a different toast.
+ * Hand the selected option's text to the agent: try direct injection
+ * first, fall back to clipboard + toast. Never throws — failures surface
+ * to the user as toasts.
  */
 export async function handleOptionSelection(
   text: string,
   deps: PromptInjectionDeps = {},
 ): Promise<void> {
+  // ── 1. Primary: adapter-supplied direct injection ───────────────────────
+  if (deps.injectFn) {
+    try {
+      const injected = await deps.injectFn(text);
+      if (injected) return;
+      // If injectFn returned false, fall through to clipboard.
+    } catch {
+      // injectFn threw — fall through to clipboard.
+    }
+  }
+
+  // ── 2. Fallback: clipboard + info toast ─────────────────────────────────
   const clipboardWrite =
     deps.clipboardWrite ?? ((s: string) => vscode.env.clipboard.writeText(s));
   const showInfo =

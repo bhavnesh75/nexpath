@@ -136,4 +136,58 @@ describe('renderDecisionSessionHtml — populated state', () => {
     expect(bMatch).not.toBeNull();
     expect(aMatch![1]).not.toBe(bMatch![1]);
   });
+
+  describe('keyboard shortcuts (mirroring Layer C TTY UX)', () => {
+    it('includes the visible keyboard hint in the options header', () => {
+      const html = renderDecisionSessionHtml(payload, {
+        cspSource: CSP_SRC,
+        nonce: FIXED_NONCE,
+      });
+      expect(html).toContain('press 1');
+      expect(html).toContain('Esc');
+      expect(html).toContain('Ctrl+X');
+    });
+
+    it('shows the hint range scoped to the number of options (capped at 9)', () => {
+      const twoOptHtml = renderDecisionSessionHtml(
+        { advisory: 'a', options: [{ id: '1', label: 'A' }, { id: '2', label: 'B' }] },
+        { cspSource: CSP_SRC, nonce: FIXED_NONCE },
+      );
+      expect(twoOptHtml).toContain('1–2');
+      const eleven = Array.from({ length: 11 }, (_, i) => ({ id: `${i}`, label: `Opt ${i}` }));
+      const elevenOptHtml = renderDecisionSessionHtml(
+        { advisory: 'a', options: eleven },
+        { cspSource: CSP_SRC, nonce: FIXED_NONCE },
+      );
+      expect(elevenOptHtml).toContain('1–9'); // capped at 9 since keys 1-9 only
+    });
+
+    it('embeds a keydown handler that dispatches select on number keys 1–9', () => {
+      const html = renderDecisionSessionHtml(payload, {
+        cspSource: CSP_SRC,
+        nonce: FIXED_NONCE,
+      });
+      expect(html).toContain("ev.key >= '1' && ev.key <= '9'");
+      expect(html).toContain('selectOption(optionButtons[idx])');
+    });
+
+    it('embeds Esc + Ctrl+X handlers that dispatch dismiss', () => {
+      const html = renderDecisionSessionHtml(payload, {
+        cspSource: CSP_SRC,
+        nonce: FIXED_NONCE,
+      });
+      expect(html).toContain("ev.key === 'Escape'");
+      expect(html).toContain('ev.ctrlKey');
+      expect(html).toContain("ev.key === 'x' || ev.key === 'X'");
+      expect(html).toContain('dismiss()');
+    });
+
+    it('focuses the first option button on render', () => {
+      const html = renderDecisionSessionHtml(payload, {
+        cspSource: CSP_SRC,
+        nonce: FIXED_NONCE,
+      });
+      expect(html).toContain('optionButtons[0].focus()');
+    });
+  });
 });
