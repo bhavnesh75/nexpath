@@ -68,8 +68,8 @@ describe('pickExtractor (M4 fingerprint)', () => {
     }
   });
 
-  it('picks cursor-v2025-q1 when composerData.composerData is present', () => {
-    const result = pickExtractor(['composerData.composerData', 'other.key']);
+  it('picks cursor-v2025-q1 when composer.composerData is present', () => {
+    const result = pickExtractor(['composer.composerData', 'other.key']);
     expect(result.kind).toBe('known');
     if (result.kind === 'known') {
       expect(result.extractor.id).toBe('cursor-v2025-q1');
@@ -111,7 +111,7 @@ describe('pickExtractor (M4 fingerprint)', () => {
     // — q1 wins because it appears earlier in ALL_EXTRACTORS.
     const result = pickExtractor([
       'aiService.prompts',
-      'composerData.composerData',
+      'composer.composerData',
     ]);
     expect(result.kind).toBe('known');
     if (result.kind === 'known') {

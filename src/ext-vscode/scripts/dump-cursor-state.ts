@@ -1,49 +1,65 @@
 #!/usr/bin/env node
 /**
- * scripts/dump-cursor-state.ts — capture a verified `state.vscdb` fixture
+ * scripts/dump-cursor-state.ts — capture verified `state.vscdb` fixtures
  * from a real machine for extractor regression testing.
  *
- * Run this on any machine where Cursor (or Windsurf) is installed, against
- * a chosen Cursor version. It:
- *   1. Locates the Cursor `state.vscdb` for the OS the script is running on
- *      (or accepts an explicit `--src` override).
- *   2. Opens the SQLite ItemTable with sql.js.
- *   3. Writes a JSON snapshot of all chat-related keys (and only those keys
- *      — filenames, recents, theme settings, etc. are filtered out) to
- *      `src/ext-vscode/test-fixtures/state-vscdb-samples/<name>.json`.
+ * Run this on any machine where Cursor is installed and chat has actually
+ * happened. It:
+ *   1. Locates ALL Cursor `state.vscdb` files under the OS's Cursor config
+ *      tree (or accepts an explicit `--src` for a single file).
+ *      Includes global storage AND per-workspace storage — chat messages
+ *      live in the workspace DB, not the global one.
+ *   2. Opens each DB with `better-sqlite3` (WAL-aware — the live `.vscdb`
+ *      file is ~4 KB; all writes go to the sibling `.vscdb-wal`, which
+ *      `sql.js` cannot read).
+ *   3. Dumps every chat-related row from `ItemTable` AND every row from
+ *      the `cursorDiskKV` table (separate KV store Cursor 3.x uses).
+ *   4. Optionally redacts long string values via `--redact`.
+ *   5. Writes one JSON snapshot per DB to
+ *      `src/ext-vscode/test-fixtures/state-vscdb-samples/`.
  *
- * The fixture file is suitable for committing to the repo (no personal data
- * leaks of unrelated VS Code state) and can be replayed against extractors
- * in unit tests to verify the per-version decoders.
+ * Discovered facts about Cursor 3.4.20 (2026-05-15 real-machine
+ * inspection):
+ *   - `ItemTable` schema is correct, but lives in workspace DB
+ *     (`User/workspaceStorage/<id>/state.vscdb`), not the global one
+ *     (`User/globalStorage/state.vscdb`).
+ *   - WAL mode is enabled — sibling `state.vscdb-wal` holds live writes.
+ *   - Chat-relevant keys observed: `aiService.prompts`, `aiService.generations`,
+ *     `composer.composerData` (metadata only — selectedComposerIds, migration
+ *     flags), `workbench.panel.composerChatViewPane.<id>` (UI state).
+ *   - The actual Composer-mode message storage location was NOT in `ItemTable`
+ *     on a fresh chat-less DB. Run this script AFTER having a real chat to
+ *     find where the messages land.
  *
  * Usage:
- *   npx tsx src/ext-vscode/scripts/dump-cursor-state.ts \
- *     --name cursor-v2025-q2-real \
- *     [--src /path/to/state.vscdb]
+ *   npx tsx scripts/dump-cursor-state.ts --name <fixture-name> [--redact] [--src <path>]
  *
- * NOTE: even after filtering to chat keys, the values may contain prompt
- * text the user typed. Review the JSON output before committing and redact
- * any sensitive content. The `--redact` flag (below) replaces all prompt
- * text with a fixed string of the same length.
+ * If --src is omitted, every state.vscdb under ~/.config/Cursor (linux),
+ * ~/Library/Application Support/Cursor (darwin), %APPDATA%/Cursor (win32)
+ * is dumped — one output file per DB, suffixed with the source path.
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { homedir, platform as osPlatform } from 'node:os';
-import { join, dirname, resolve } from 'node:path';
+import { writeFile, mkdir, copyFile } from 'node:fs/promises';
+import { existsSync, readdirSync, statSync } from 'node:fs';
+import { homedir, platform as osPlatform, tmpdir } from 'node:os';
+import { join, dirname, resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// ESM-friendly equivalent of __dirname (sub-package uses "type": "module")
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** Prefixes of ItemTable keys that should be captured. Everything else is dropped. */
-const KEEP_KEY_PREFIXES = [
+/** Keep ItemTable rows whose key starts with any of these. */
+const KEEP_ITEMTABLE_PREFIXES = [
   'aiService.',
+  'composer.',
   'composerData.',
-  'cursorAIChatService.',
   'cursorAIService.',
+  'cursorAIChatService.',
   'cascade.',
+  // UI-state keys we want too, to confirm composerId associations
+  'workbench.panel.composerChatViewPane.',
+  'workbench.panel.aichat.',
+  'workbench.backgroundComposer.',
 ];
 
 interface CliArgs {
@@ -59,9 +75,8 @@ function parseArgs(argv: string[]): CliArgs {
     if (a === '--name') args.name = argv[++i];
     else if (a === '--src') args.src = argv[++i];
     else if (a === '--redact') args.redact = true;
-    else if (a === '--help' || a === '-h') {
-      printUsageAndExit(0);
-    } else {
+    else if (a === '--help' || a === '-h') printUsageAndExit(0);
+    else {
       console.error(`Unknown argument: ${a}`);
       printUsageAndExit(1);
     }
@@ -78,63 +93,78 @@ function printUsageAndExit(code: number): never {
   npx tsx scripts/dump-cursor-state.ts --name <fixture-name> [--src <path>] [--redact]
 
 Options:
-  --name <s>     Fixture file name (no extension). REQUIRED.
-                 Convention: cursor-v<YEAR>-q<Q>-real / windsurf-real.
-  --src <path>   Path to state.vscdb. If omitted, default OS path is used.
-  --redact       Replace prompt text with same-length placeholder strings.
-                 Use this if the dump may contain sensitive content.
+  --name <s>     Fixture name prefix (no extension). REQUIRED.
+                 One output file per discovered state.vscdb, suffixed with
+                 the source kind (global / workspace-<id>).
+  --src <path>   Path to a single state.vscdb. If omitted, all state.vscdb
+                 files under the OS's Cursor config tree are dumped.
+  --redact       Replace string values longer than 8 chars with same-length
+                 placeholders. Use this if dumps may contain sensitive content.
 
 Output:
-  src/ext-vscode/test-fixtures/state-vscdb-samples/<name>.json
+  src/ext-vscode/test-fixtures/state-vscdb-samples/<name>-<suffix>.json
 `);
   process.exit(code);
 }
 
-function defaultCursorStatePath(): string {
+function cursorConfigRoot(): string {
   const home = homedir();
   switch (osPlatform()) {
     case 'darwin':
-      return join(home, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+      return join(home, 'Library', 'Application Support', 'Cursor');
     case 'win32':
-      return join(process.env.APPDATA ?? home, 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+      return join(process.env.APPDATA ?? home, 'Cursor');
     default:
-      return join(home, '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb');
+      return join(home, '.config', 'Cursor');
   }
 }
 
-interface SqlJsModuleShape {
-  default: () => Promise<{
-    Database: new (data: Uint8Array) => {
-      exec(sql: string): Array<{ columns: string[]; values: unknown[][] }>;
-      close(): void;
-    };
-  }>;
+interface DiscoveredDb {
+  path: string;
+  /** Short label for the output filename, e.g. 'global' or 'workspace-1778826246907'. */
+  label: string;
 }
 
-async function readItemTable(dbBytes: Buffer): Promise<Array<{ key: string; value: string }>> {
-  const mod = (await import('sql.js')) as unknown as SqlJsModuleShape;
-  const SQL = await mod.default();
-  const db = new SQL.Database(new Uint8Array(dbBytes));
-  try {
-    const result = db.exec('SELECT key, value FROM ItemTable');
-    const rows: Array<{ key: string; value: string }> = [];
-    for (const r of result) {
-      for (const v of r.values) {
-        rows.push({ key: String(v[0]), value: String(v[1]) });
+function discoverAllStateVscdb(root: string): DiscoveredDb[] {
+  const found: DiscoveredDb[] = [];
+  const globalPath = join(root, 'User', 'globalStorage', 'state.vscdb');
+  if (existsSync(globalPath)) {
+    found.push({ path: globalPath, label: 'global' });
+  }
+  const wsDir = join(root, 'User', 'workspaceStorage');
+  if (existsSync(wsDir)) {
+    for (const entry of readdirSync(wsDir)) {
+      const dbPath = join(wsDir, entry, 'state.vscdb');
+      if (existsSync(dbPath)) {
+        found.push({ path: dbPath, label: `workspace-${entry}` });
       }
     }
-    return rows;
-  } finally {
-    db.close();
   }
+  return found;
 }
 
-function shouldKeep(key: string): boolean {
-  return KEEP_KEY_PREFIXES.some((p) => key.startsWith(p));
+interface DumpedRow {
+  table: 'ItemTable' | 'cursorDiskKV';
+  key: string;
+  value: string;
+}
+
+interface DumpedDb {
+  capturedAt: string;
+  sourcePath: string;
+  platform: string;
+  redacted: boolean;
+  /** Names of all tables present (useful for schema-fingerprint diagnostics). */
+  tables: string[];
+  /** Rows kept after filtering. */
+  rows: DumpedRow[];
+}
+
+function shouldKeepItemTable(key: string): boolean {
+  return KEEP_ITEMTABLE_PREFIXES.some((p) => key.startsWith(p));
 }
 
 function redactValue(value: string): string {
-  // Best-effort: try to parse and replace any string field longer than 8 chars.
   try {
     const parsed = JSON.parse(value);
     const redacted = JSON.parse(JSON.stringify(parsed), (_k, v) => {
@@ -143,63 +173,143 @@ function redactValue(value: string): string {
     });
     return JSON.stringify(redacted);
   } catch {
-    // not JSON — redact in bulk
     return '*'.repeat(value.length);
   }
 }
 
+/**
+ * better-sqlite3 is WAL-aware: it opens the main DB and the sibling -wal/-shm
+ * automatically. We copy all three siblings to a tmp dir to avoid any chance
+ * of interfering with Cursor's live write path.
+ */
+async function readDbAsSnapshot(path: string): Promise<DumpedDb> {
+  // Copy main + wal + shm so the live DB is never touched.
+  const stagingDir = join(
+    tmpdir(),
+    `nexpath-dump-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  await mkdir(stagingDir, { recursive: true });
+  const stagedMain = join(stagingDir, basename(path));
+  await copyFile(path, stagedMain);
+  for (const suffix of ['-wal', '-shm'] as const) {
+    const sibling = path + suffix;
+    if (existsSync(sibling)) {
+      await copyFile(sibling, stagedMain + suffix);
+    }
+  }
+
+  const mod = (await import('better-sqlite3')) as unknown as {
+    default: new (path: string, options?: { readonly?: boolean }) => {
+      prepare(sql: string): {
+        all(...params: unknown[]): Array<Record<string, unknown>>;
+      };
+      pragma(pragma: string): unknown;
+      close(): void;
+    };
+  };
+  const Database = mod.default;
+  const db = new Database(stagedMain, { readonly: true });
+  // Checkpoint the WAL into the staged copy so all data is in the main file
+  // before we run our SELECTs. (Belt-and-braces — better-sqlite3 reads WAL
+  // transparently anyway, but checkpoint guarantees consistency.)
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+  } catch {
+    // some DBs aren't in WAL mode — that's fine
+  }
+
+  const dump: DumpedDb = {
+    capturedAt: new Date().toISOString(),
+    sourcePath: path,
+    platform: osPlatform(),
+    redacted: false,
+    tables: [],
+    rows: [],
+  };
+
+  const tables = (
+    db
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+      )
+      .all() as Array<{ name: string }>
+  ).map((r) => r.name);
+  dump.tables = tables;
+
+  if (tables.includes('ItemTable')) {
+    const rows = db
+      .prepare('SELECT key, value FROM ItemTable')
+      .all() as Array<{ key: string; value: string }>;
+    for (const r of rows) {
+      if (!shouldKeepItemTable(r.key)) continue;
+      dump.rows.push({ table: 'ItemTable', key: r.key, value: r.value });
+    }
+  }
+  if (tables.includes('cursorDiskKV')) {
+    const rows = db
+      .prepare('SELECT key, value FROM cursorDiskKV')
+      .all() as Array<{ key: string; value: string }>;
+    for (const r of rows) {
+      // Keep ALL cursorDiskKV rows — this table is sparse and likely
+      // chat-relevant when populated.
+      dump.rows.push({ table: 'cursorDiskKV', key: r.key, value: r.value });
+    }
+  }
+
+  db.close();
+  return dump;
+}
+
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-  const srcPath = args.src ?? defaultCursorStatePath();
 
-  if (!existsSync(srcPath)) {
-    console.error(`state.vscdb not found at: ${srcPath}`);
-    console.error('Pass --src <path> to override.');
+  const targets: DiscoveredDb[] = args.src
+    ? [{ path: args.src, label: 'src' }]
+    : discoverAllStateVscdb(cursorConfigRoot());
+
+  if (targets.length === 0) {
+    console.error(`No state.vscdb files found under: ${cursorConfigRoot()}`);
+    console.error('Pass --src <path> for a single file.');
     process.exit(2);
   }
 
-  console.log(`Reading: ${srcPath}`);
-  const bytes = await readFile(srcPath);
-  const rows = await readItemTable(bytes);
-  console.log(`Found ${rows.length} total ItemTable rows.`);
+  console.log(`Discovered ${targets.length} state.vscdb file(s):`);
+  for (const t of targets) console.log(`  - [${t.label}] ${t.path}`);
+  console.log('');
 
-  const kept = rows.filter((r) => shouldKeep(r.key));
-  console.log(`Keeping ${kept.length} chat-related rows (key prefixes: ${KEEP_KEY_PREFIXES.join(', ')}).`);
+  // __dirname = <nexpath-repo>/src/ext-vscode/scripts → go up 1 to reach
+  // the sub-package root, then write to test-fixtures/ alongside src/.
+  const subPackageRoot = resolve(__dirname, '..');
+  const outDir = join(subPackageRoot, 'test-fixtures', 'state-vscdb-samples');
+  await mkdir(outDir, { recursive: true });
 
-  const finalRows = args.redact
-    ? kept.map((r) => ({ key: r.key, value: redactValue(r.value) }))
-    : kept;
-
-  if (args.redact) {
-    console.log('Redacted all string values longer than 8 chars.');
+  for (const t of targets) {
+    try {
+      const dump = await readDbAsSnapshot(t.path);
+      if (args.redact) {
+        dump.redacted = true;
+        for (const row of dump.rows) {
+          row.value = redactValue(row.value);
+        }
+      }
+      const outPath = join(outDir, `${args.name}-${t.label}.json`);
+      await writeFile(outPath, JSON.stringify(dump, null, 2) + '\n', 'utf8');
+      console.log(
+        `[${t.label}] ${dump.rows.length} rows kept (${dump.tables.join(
+          ', ',
+        )}) → ${outPath}`,
+      );
+    } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      console.error(`[${t.label}] ERROR: ${e.message}`);
+    }
   }
 
-  const fixture = {
-    capturedAt: new Date().toISOString(),
-    sourcePath: srcPath,
-    platform: osPlatform(),
-    redacted: args.redact,
-    rows: finalRows,
-  };
-
-  const repoRoot = resolve(__dirname, '..', '..', '..', '..');
-  const outDir = join(
-    repoRoot,
-    'src',
-    'ext-vscode',
-    'test-fixtures',
-    'state-vscdb-samples',
-  );
-  await mkdir(outDir, { recursive: true });
-  const outPath = join(outDir, `${args.name}.json`);
-  await writeFile(outPath, JSON.stringify(fixture, null, 2) + '\n', 'utf8');
-
-  console.log(`Wrote: ${outPath}`);
   console.log('');
   console.log('Next steps:');
-  console.log('  1. Review the JSON for any sensitive content before committing.');
+  console.log('  1. Review the JSON files for sensitive content before committing.');
   console.log('  2. Re-run with --redact if needed.');
-  console.log('  3. Reference this fixture from the relevant extractor test.');
+  console.log('  3. Reference these fixtures from extractor regression tests.');
 }
 
 main().catch((err: unknown) => {

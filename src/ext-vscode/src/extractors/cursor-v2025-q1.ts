@@ -5,20 +5,37 @@ import type {
 } from '../chat-history-types.js';
 
 /**
- * Cursor v2025-Q1 — the Composer-launch era (Cursor versions ~0.45–0.49).
+ * Cursor v2025-Q1 (Composer era).
  *
- * Community-documented key: `composerData.composerData` — a single JSON
- * object with `allComposers: Record<composerId, ComposerConversation>` where
- * each conversation has a `conversation: ComposerMessage[]` field. Messages
- * carry a `type` (1 = user, 2 = assistant) or a `role` ('user' / 'assistant')
- * depending on minor version.
+ * **Real-machine update (2026-05-15, Cursor 3.4.20):** The fingerprint key
+ * is `composer.composerData` (NOT `composerData.composerData` as the
+ * original community docs suggested). Confirmed via
+ * `scripts/dump-cursor-state.ts` against a live Cursor 3.4.20 workspace DB.
  *
- * TODO(M2/B2): verify against a real Cursor v2025-Q1 `state.vscdb` dump
- * before Branch 6 ships. Field names may need adjustment after fixture
- * capture via `scripts/dump-cursor-state.ts`.
+ * **Open finding:** the value at `composer.composerData` is *metadata only*
+ * on Cursor 3.4.20:
+ *   `{ selectedComposerIds: string[], lastFocusedComposerIds: string[],
+ *      hasMigratedComposerData: boolean, hasMigratedMultipleComposers: boolean }`
+ * — it does **not** contain conversation messages. Where modern Composer
+ * messages are actually stored is **TBD** (the workspace's `cursorDiskKV`
+ * table was empty on a chat-less DB; messages may land there once a real
+ * chat occurs, or in a separate file outside SQLite).
+ *
+ * The `allComposers / conversation` shape this extractor parses for is
+ * believed to be correct for an OLDER Composer-era format (~0.45–0.49). On
+ * a Cursor 3.4.20 DB this extractor will fingerprint-match the key but
+ * `decodeRow` will return [] because the expected `allComposers` field is
+ * absent. That's safe — fingerprint matches the modern key, decode falls
+ * through cleanly, and a follow-up fixture-driven update can refine the
+ * decode logic once we have a snapshot of a workspace DB with real chats.
+ *
+ * TODO(M2/B2): re-run `dump-cursor-state.ts` after submitting a real
+ * Composer-mode prompt in Cursor and inspect which row(s) the message
+ * landed in. Update this extractor (or add a sibling) accordingly before
+ * Branch 6 ships.
  */
 
-const COMPOSER_KEY = 'composerData.composerData';
+const COMPOSER_KEY = 'composer.composerData';
 
 interface ComposerConversation {
   /** Composer / tab identifier — used as `rawSessionId`. */

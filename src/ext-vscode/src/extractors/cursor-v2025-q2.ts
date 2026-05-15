@@ -5,16 +5,31 @@ import type {
 } from '../chat-history-types.js';
 
 /**
- * Cursor v2025-Q2+ — current per-tab chat history layout.
+ * Cursor v2025-Q2+ — community-documented per-tab chat history layout.
  *
- * Community-documented key prefix: `cursorAIChatService.chatHistory.<tabId>`
- * — value is a JSON array of message objects. Each message has either a
- * `role` ('user' / 'assistant') or a `type` (string or legacy numeric),
- * and the prompt text lives in either `content` or `text`.
+ * **Real-machine status (2026-05-15, Cursor 3.4.20):** the prefix
+ * `cursorAIChatService.chatHistory.` was **NOT** observed in a real
+ * Cursor 3.4.20 workspace DB. This extractor's fingerprint will only
+ * match if a Cursor version that does use this key prefix is encountered.
  *
- * TODO(M2/B2): verify against a real Cursor v2025-Q2+ `state.vscdb` dump
- * before Branch 6 ships. Field names may need adjustment after fixture
- * capture via `scripts/dump-cursor-state.ts`.
+ * **What we DID see on Cursor 3.4.20** (per
+ * `scripts/dump-cursor-state.ts` inspection):
+ *   - `aiService.prompts` / `aiService.generations` — covered by the
+ *     `cursor-v2024-q4` extractor.
+ *   - `composer.composerData` — metadata only; covered by
+ *     `cursor-v2025-q1`.
+ *   - No `cursorAIChatService.*` keys at all.
+ * The Composer-mode message storage location for Cursor 3.4.20 is still
+ * unknown — likely in `cursorDiskKV` once chats happen, or in a separate
+ * file. The dump script captures both tables and all chat-prefix keys, so
+ * a follow-up commit will refine extractors once a chat-bearing snapshot
+ * arrives.
+ *
+ * TODO(M2/B2): either (a) confirm the `cursorAIChatService.chatHistory.`
+ * prefix in some older Cursor version (and keep this extractor as
+ * version-pinned), or (b) replace it with a `cursor-v3-x` extractor
+ * matching Cursor 3.4.20's actual message storage once it's been
+ * snapshotted.
  */
 
 const KEY_PREFIX = 'cursorAIChatService.chatHistory.';

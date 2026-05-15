@@ -3,7 +3,7 @@ import { cursorV2025Q1 } from './cursor-v2025-q1.js';
 import type { ItemTableRow } from '../chat-history-types.js';
 
 const SRC = '/fake/state.vscdb';
-const KEY = 'composerData.composerData';
+const KEY = 'composer.composerData';
 
 const wrap = (composerData: unknown): ItemTableRow => ({
   key: KEY,
@@ -20,12 +20,13 @@ describe('cursorV2025Q1 extractor', () => {
   });
 
   describe('ownsKey', () => {
-    it('matches exactly composerData.composerData', () => {
+    it('matches exactly composer.composerData', () => {
       expect(cursorV2025Q1.ownsKey(KEY)).toBe(true);
     });
     it('does not match other keys', () => {
       expect(cursorV2025Q1.ownsKey('aiService.prompts')).toBe(false);
-      expect(cursorV2025Q1.ownsKey('composerData.other')).toBe(false);
+      expect(cursorV2025Q1.ownsKey('composer.other')).toBe(false);
+      expect(cursorV2025Q1.ownsKey('composerData.composerData')).toBe(false);
     });
   });
 
