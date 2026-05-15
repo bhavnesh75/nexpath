@@ -7,10 +7,10 @@ import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { isConfigSet, setConfig } from '../../store/config.js';
 
 // Side-effect import: registers all coding-agent adapters with the in-process
-// registry. Must precede any getAdapter() call in installAction below.
+// registry. Must precede any getAdapter() / detectAll() call in installAction below.
 import '../../agents/index.js';
-import { getAdapter } from '../../agents/registry.js';
-import type { HookAdapter } from '../../agents/types.js';
+import { getAdapter, detectAll } from '../../agents/registry.js';
+import type { HookAdapter, InstallContext } from '../../agents/types.js';
 // Internal use + backward-compat re-export of the Claude Code hook helpers
 // (moved to src/agents/adapters/claude-code.ts in M1 Branch 2 — v0.1.3/m1/claude-code-refactor).
 import {
@@ -371,6 +371,35 @@ export async function installAction(
     }
   }
 
+  // \u2500\u2500 Registry-driven adapter installs (M2+) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // VSCodeExtensionAdapters (cursor, windsurf) self-register via
+  // src/agents/index.ts side-effect imports. detectAll() asks each
+  // registered adapter if it should run on THIS machine; only those whose
+  // detect() returns true end up in the list. claude-code is excluded
+  // here because it's already handled in the legacy for-loop above
+  // (agent.type === 'claude-cli' branch).
+  //
+  // Snapshot invariant: in the install-snapshot test, HOME is stubbed to a
+  // tmp directory where ~/.config/Cursor and ~/.config/Windsurf don't
+  // exist, so cursor/windsurf detect() returns false, this block prints
+  // nothing, and the install-snapshot bytes stay byte-identical to the
+  // pre-B4 baseline. CI fails red on snapshot diff.
+  const adapterCtx: InstallContext = {
+    home: homedir(),
+    cwd:  process.cwd(),
+    yes:  !!opts.yes,
+    dbPath,
+  };
+  const detectedAdapters = await detectAll(adapterCtx);
+  for (const adapter of detectedAdapters) {
+    if (adapter.id === 'claude-code') continue;
+    try {
+      await adapter.install(adapterCtx);
+    } catch (err) {
+      console.log(`\u2717 ${adapter.label.padEnd(12)} \u2014 failed: ${(err as Error).message}`);
+    }
+  }
+
   console.log('');
   console.log('Restart your agents to activate nexpath-prompt-store.');
   console.log('Note: advisory pipeline (nexpath auto) auto-wired for Claude Code only.');
@@ -512,6 +541,28 @@ export async function uninstallAction(
       }
     } catch (err) {
       console.log(`\u2717 ${agent.label.padEnd(12)} \u2014 failed: ${(err as Error).message}`);
+    }
+  }
+
+  // \u2500\u2500 Registry-driven adapter uninstalls (M2+) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Mirror of the installAction's registry block. Skips claude-code (already
+  // handled in the legacy for-loop above) and calls each detected adapter's
+  // uninstall() so the user can cleanly back out of every adapter the install
+  // touched. Errors are surfaced as a single line per adapter \u2014 they don't
+  // halt the rest of the uninstall.
+  const adapterCtx: InstallContext = {
+    home: homedir(),
+    cwd:  process.cwd(),
+    yes:  false,
+    dbPath: ':memory:',
+  };
+  const detectedAdapters = await detectAll(adapterCtx);
+  for (const adapter of detectedAdapters) {
+    if (adapter.id === 'claude-code') continue;
+    try {
+      await adapter.uninstall(adapterCtx);
+    } catch (err) {
+      console.log(`\u2717 ${adapter.label.padEnd(12)} \u2014 failed: ${(err as Error).message}`);
     }
   }
 

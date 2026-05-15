@@ -79,8 +79,51 @@ export const cursorAdapter: VSCodeExtensionAdapter = {
     return [join(cursorConfigDir(ctx.home), 'User', 'workspaceStorage')];
   },
 
+  /**
+   * Intentional stub — see "Architectural decision" below.
+   *
+   * The `VSCodeExtensionAdapter` interface declares `extractPrompt` for
+   * symmetric API shape (so a hypothetical future caller could ask
+   * "given this raw row, what's the user prompt?"). In our current
+   * architecture this method has **no caller**:
+   *
+   *   - The `nexpath` CLI never reads `state.vscdb` rows — the watcher
+   *     lives entirely inside the VS Code extension.
+   *   - The extension uses the extractor modules at
+   *     `src/ext-vscode/src/extractors/{cursor-v2024-q4, v2025-q1,
+   *     v2025-q2, windsurf, index}.ts` directly (via
+   *     `chat-history-watcher.ts`'s `pickExtractor` + `decodeRow` flow).
+   *   - The CLI adapter sits on the install/configure side; it doesn't
+   *     do row decoding.
+   *
+   * Returning `null` is the contract-compliant "I don't know" answer.
+   *
+   * ## When this should be filled in (migration path)
+   *
+   * If a future CLI tool needs to decode chat-history rows (e.g.
+   * `nexpath debug last-prompts <state.vscdb>`), the right move is to
+   * **promote the extractor modules from the sub-package to the CLI
+   * level** so both sides share one source of truth:
+   *
+   *   1. Move `src/ext-vscode/src/extractors/*` → `src/agents/chat-history-extractors/*`.
+   *   2. Move `src/ext-vscode/src/chat-history-types.ts` →
+   *      `src/agents/chat-history-extractors/types.ts`.
+   *   3. Update sub-package imports in `chat-history-watcher.ts` to use
+   *      the new CLI path. Sub-package `tsconfig.json` likely needs
+   *      `rootDir` widened (e.g. `".."`) so imports outside `./src` are
+   *      allowed.
+   *   4. Wire `cursor.ts` and `windsurf.ts` adapters' `extractPrompt`
+   *      to call `pickExtractor` + `extractor.decodeRow` and reshape
+   *      to the interface's `{ prompt, sessionId } | null` signature.
+   *   5. Leave thin re-export shims at the old sub-package paths so any
+   *      external importer keeps working.
+   *
+   * This is a non-trivial refactor with cross-tree concerns (esbuild
+   * externals, tsconfig.rootDir, vitest config). Deferred from B4
+   * because there is currently no caller demanding it; the unit tests
+   * verify only the stub-returns-null contract.
+   */
   extractPrompt(_rowKey: string, _rowValue: unknown) {
-    // See module JSDoc — decoding lives in the extension, not the CLI adapter.
     return null;
   },
 

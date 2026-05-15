@@ -87,8 +87,19 @@ export const windsurfAdapter: VSCodeExtensionAdapter = {
     ];
   },
 
+  /**
+   * Intentional stub — same architectural decision as `cursor.ts`. See the
+   * comprehensive JSDoc on `cursorAdapter.extractPrompt` for the full
+   * rationale + migration path if a CLI caller is ever added.
+   *
+   * Short version: decoding lives in the extension runtime
+   * (`src/ext-vscode/src/extractors/`); the CLI adapter never decodes rows.
+   * Returning `null` is contract-compliant ("I don't know"). When the
+   * extractors are promoted to `src/agents/chat-history-extractors/`,
+   * this method gets wired up to delegate via `pickExtractor` +
+   * `extractor.decodeRow`.
+   */
   extractPrompt(_rowKey: string, _rowValue: unknown) {
-    // See module JSDoc — decoding lives in the extension, not the CLI adapter.
     return null;
   },
 

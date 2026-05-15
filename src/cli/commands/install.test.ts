@@ -784,6 +784,106 @@ describe('installAction', () => {
       expect(output).toContain('Claude Code only');
     } finally { cleanup(); }
   });
+
+  // ── Registry-driven VSCodeExtensionAdapter installs (M2/B4) ─────────────────
+  // These tests stub HOME so the registry adapters (cursor / windsurf) check
+  // for their config dirs INSIDE the tmpDir — keeping the test hermetic and
+  // independent of whether the dev machine actually has Cursor / Windsurf
+  // installed.
+
+  it('calls cursor adapter and prints deep-link instructions when Cursor is detected', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      // Cursor config dir present → registry adapter's detect() returns true.
+      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, {
+        paths,
+        isWin: false,
+        execFn: () => {},
+        skipClipboardCheck: true,
+      });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).toContain('Cursor');
+      expect(output).toContain('install the Nexpath extension');
+      expect(output).toContain('Open VSX');
+      expect(output).toContain('cursor --install-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
+
+  it('calls windsurf adapter and prints deep-link instructions when Windsurf is detected', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, {
+        paths,
+        isWin: false,
+        execFn: () => {},
+        skipClipboardCheck: true,
+      });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).toContain('Windsurf');
+      expect(output).toContain('install the Nexpath extension');
+      expect(output).toContain('windsurf --install-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
+
+  it('prints both cursor + windsurf deep-link blocks when both are detected', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
+      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, {
+        paths,
+        isWin: false,
+        execFn: () => {},
+        skipClipboardCheck: true,
+      });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).toContain('cursor --install-extension');
+      expect(output).toContain('windsurf --install-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
+
+  it('does NOT double-invoke the claude-code adapter from the registry loop', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, {
+        paths,
+        isWin: false,
+        execFn: () => {},
+        skipClipboardCheck: true,
+      });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      // The Claude Code adapter prints exactly one "advisory hook written to"
+      // line per install. If the registry loop double-invoked it, we'd see two.
+      const matches = output.match(/advisory hook written to/g) ?? [];
+      expect(matches.length).toBe(1);
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
 });
 
 // ── uninstallAction ───────────────────────────────────────────────────────────
@@ -892,6 +992,42 @@ describe('uninstallAction', () => {
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
       expect(output).toContain('hook not registered');
     } finally { cleanup(); }
+  });
+
+  // ── Registry-driven VSCodeExtensionAdapter uninstalls (M2/B4) ───────────────
+
+  it('calls cursor adapter uninstall and prints uninstall instructions when Cursor is detected', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await uninstallAction({ paths, execFn: () => {} });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).toContain('Cursor');
+      expect(output).toContain('cursor --uninstall-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
+
+  it('calls windsurf adapter uninstall and prints uninstall instructions when Windsurf is detected', async () => {
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await uninstallAction({ paths, execFn: () => {} });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).toContain('Windsurf');
+      expect(output).toContain('windsurf --uninstall-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
   });
 });
 
