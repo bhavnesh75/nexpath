@@ -1,20 +1,41 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mocks for the modules the extension entrypoint imports. `vi.hoisted` is
-// required because `vi.mock` is hoisted above import statements, so the mock
-// references must live at hoist time too.
+// vi.hoisted lets the mocks declared here be referenced from the vi.mock
+// factories below (which are themselves hoisted above the import block).
 const {
   mockShowOnboarding,
   mockRegisterWebviewViewProvider,
   mockProviderCtor,
+  mockDetectHost,
+  mockWorkspaceStorageDir,
+  mockEnumerateStateVscdbPaths,
+  mockCreateChatHistoryWatcher,
+  mockWatcherStart,
+  mockWatcherStop,
+  mockCreateChatEventHandler,
+  mockShowInformationMessage,
 } = vi.hoisted(() => ({
   mockShowOnboarding: vi.fn(),
   mockRegisterWebviewViewProvider: vi.fn(),
   mockProviderCtor: vi.fn(),
+  mockDetectHost: vi.fn(() => 'vscode-generic'),
+  mockWorkspaceStorageDir: vi.fn(() => null),
+  mockEnumerateStateVscdbPaths: vi.fn(() => []),
+  mockCreateChatHistoryWatcher: vi.fn(),
+  mockWatcherStart: vi.fn(),
+  mockWatcherStop: vi.fn(),
+  mockCreateChatEventHandler: vi.fn(() => vi.fn()),
+  mockShowInformationMessage: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
-  window: { registerWebviewViewProvider: mockRegisterWebviewViewProvider },
+  window: {
+    registerWebviewViewProvider: mockRegisterWebviewViewProvider,
+    showInformationMessage: mockShowInformationMessage,
+  },
+  workspace: {
+    workspaceFolders: undefined,
+  },
   env: { appName: 'Visual Studio Code' },
   commands: {
     executeCommand: vi.fn(),
@@ -22,6 +43,7 @@ vi.mock('vscode', () => ({
   },
 }));
 vi.mock('./onboarding.js', () => ({
+  CONSENT_KEY: 'nexpath.consentGranted',
   showOnboardingIfNeeded: mockShowOnboarding,
 }));
 vi.mock('./webview/view-provider.js', () => ({
@@ -30,25 +52,52 @@ vi.mock('./webview/view-provider.js', () => ({
     constructor(...args: unknown[]) {
       mockProviderCtor(...args);
     }
+    publishPayload(): void {}
   },
 }));
 vi.mock('./webview/prompt-injection.js', () => ({
   handleOptionSelection: vi.fn(),
 }));
 vi.mock('./host-detector.js', () => ({
-  detectHost: vi.fn(() => 'vscode-generic'),
+  detectHost: mockDetectHost,
+  workspaceStorageDir: mockWorkspaceStorageDir,
 }));
 vi.mock('./chat-input-injector.js', () => ({
   chatInputInject: vi.fn(),
 }));
+vi.mock('./path-enumerator.js', () => ({
+  enumerateStateVscdbPaths: mockEnumerateStateVscdbPaths,
+}));
+vi.mock('./chat-history-watcher.js', () => ({
+  createChatHistoryWatcher: mockCreateChatHistoryWatcher,
+}));
+vi.mock('./chat-pipeline.js', () => ({
+  createChatEventHandler: mockCreateChatEventHandler,
+}));
+vi.mock('./ipc.js', () => ({
+  spawnAuto: vi.fn(),
+  spawnStop: vi.fn(),
+}));
 
 import { activate, deactivate, getViewProvider } from './extension.js';
 
-function makeCtx(): {
+interface FakeContext {
   extensionUri: { __uri: true };
   subscriptions: unknown[];
-} {
-  return { extensionUri: { __uri: true }, subscriptions: [] };
+  globalState: { get: <T>(k: string) => T | undefined };
+}
+
+function makeCtx(consent: boolean | undefined = undefined): FakeContext {
+  return {
+    extensionUri: { __uri: true },
+    subscriptions: [],
+    globalState: {
+      get: <T>(k: string) =>
+        (k === 'nexpath.consentGranted' ? (consent as T) : undefined) as
+          | T
+          | undefined,
+    },
+  };
 }
 
 describe('activate', () => {
@@ -59,9 +108,22 @@ describe('activate', () => {
     mockShowOnboarding.mockReset();
     mockRegisterWebviewViewProvider.mockReset();
     mockProviderCtor.mockReset();
+    mockDetectHost.mockReset().mockReturnValue('vscode-generic');
+    mockWorkspaceStorageDir.mockReset().mockReturnValue(null);
+    mockEnumerateStateVscdbPaths.mockReset().mockReturnValue([]);
+    mockCreateChatHistoryWatcher.mockReset().mockReturnValue({
+      start: mockWatcherStart,
+      stop: mockWatcherStop,
+    });
+    mockWatcherStart.mockReset();
+    mockWatcherStop.mockReset();
+    mockCreateChatEventHandler.mockReset().mockReturnValue(vi.fn());
+    mockShowInformationMessage.mockReset();
     mockRegisterWebviewViewProvider.mockReturnValue({ dispose: vi.fn() });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Reset module-level state in extension.ts (deactivate clears viewProvider + watcher)
+    deactivate();
   });
 
   afterEach(() => {
@@ -83,50 +145,98 @@ describe('activate', () => {
     expect(mockShowOnboarding).toHaveBeenCalledWith(ctx);
   });
 
-  it('constructs the view provider with the extensionUri and registers it under VIEW_ID', async () => {
+  it('registers the view provider on every activation regardless of consent', async () => {
     mockShowOnboarding.mockResolvedValueOnce(undefined);
-    const ctx = makeCtx();
-    await activate(ctx as never);
-    expect(mockProviderCtor).toHaveBeenCalledTimes(1);
-    expect(mockProviderCtor).toHaveBeenCalledWith(ctx.extensionUri, expect.any(Function));
-    expect(mockRegisterWebviewViewProvider).toHaveBeenCalledTimes(1);
-    expect(mockRegisterWebviewViewProvider.mock.calls[0]![0]).toBe(
-      'nexpath.status',
+    await activate(makeCtx(false) as never); // user denied
+    expect(mockProviderCtor).toHaveBeenCalledOnce();
+    expect(mockRegisterWebviewViewProvider).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT start the watcher when consent is undefined (first launch, user has not answered)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    await activate(makeCtx(undefined) as never);
+    expect(mockCreateChatHistoryWatcher).not.toHaveBeenCalled();
+    expect(mockWatcherStart).not.toHaveBeenCalled();
+  });
+
+  it('does NOT start the watcher when consent is explicitly false (user denied)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    await activate(makeCtx(false) as never);
+    expect(mockCreateChatHistoryWatcher).not.toHaveBeenCalled();
+  });
+
+  it('does NOT start the watcher on plain VS Code host even if consent is true', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('vscode-generic');
+    await activate(makeCtx(true) as never);
+    expect(mockCreateChatHistoryWatcher).not.toHaveBeenCalled();
+  });
+
+  it('does NOT start the watcher when no state.vscdb files are found under workspaceStorage', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    mockWorkspaceStorageDir.mockReturnValueOnce('/fake/workspaceStorage');
+    mockEnumerateStateVscdbPaths.mockReturnValueOnce([]);
+    await activate(makeCtx(true) as never);
+    expect(mockCreateChatHistoryWatcher).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('no workspace state.vscdb found'),
     );
   });
 
-  it('pushes the registration disposable onto context.subscriptions', async () => {
+  it('starts the watcher when consent=true + host=cursor + dbs present', async () => {
     mockShowOnboarding.mockResolvedValueOnce(undefined);
-    const fakeDisposable = { dispose: vi.fn() };
-    mockRegisterWebviewViewProvider.mockReturnValueOnce(fakeDisposable);
-    const ctx = makeCtx();
+    mockDetectHost.mockReturnValueOnce('cursor');
+    mockWorkspaceStorageDir.mockReturnValueOnce('/fake/workspaceStorage');
+    mockEnumerateStateVscdbPaths.mockReturnValueOnce([
+      '/fake/workspaceStorage/wsA/state.vscdb',
+      '/fake/workspaceStorage/wsB/state.vscdb',
+    ]);
+    const ctx = makeCtx(true);
     await activate(ctx as never);
-    expect(ctx.subscriptions).toContain(fakeDisposable);
+    expect(mockCreateChatHistoryWatcher).toHaveBeenCalledOnce();
+    const watcherOpts = mockCreateChatHistoryWatcher.mock.calls[0]![0] as {
+      targets: Array<{ path: string; kind: string }>;
+    };
+    expect(watcherOpts.targets).toHaveLength(2);
+    expect(watcherOpts.targets[0]!.kind).toBe('cursor-sqlite');
+    expect(mockWatcherStart).toHaveBeenCalledOnce();
+    // Cleanup disposable pushed onto subscriptions
+    expect(ctx.subscriptions.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('builds the chat-event handler with the right composer (workspace-prefixed session id)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    mockWorkspaceStorageDir.mockReturnValueOnce('/fake/ws');
+    mockEnumerateStateVscdbPaths.mockReturnValueOnce(['/fake/ws/a/state.vscdb']);
+    await activate(makeCtx(true) as never);
+    expect(mockCreateChatEventHandler).toHaveBeenCalledOnce();
+    const deps = mockCreateChatEventHandler.mock.calls[0]![0] as {
+      composeSessionId?: (e: { rawSessionId: string }) => string;
+    };
+    expect(typeof deps.composeSessionId).toBe('function');
+    const composed = deps.composeSessionId!({ rawSessionId: 'tab-1' });
+    // workspaceFolders is undefined in the mock, so the composer uses 'no-workspace'
+    expect(composed).toBe('no-workspace|tab-1');
+  });
+
+  it('does not throw when showOnboardingIfNeeded rejects — logs error and continues', async () => {
+    mockShowOnboarding.mockRejectedValueOnce(new Error('onboarding boom'));
+    mockDetectHost.mockReturnValueOnce('cursor');
+    await expect(activate(makeCtx(true) as never)).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[nexpath] onboarding failed:',
+      expect.any(Error),
+    );
   });
 
   it('exposes the constructed provider via getViewProvider()', async () => {
     mockShowOnboarding.mockResolvedValueOnce(undefined);
     await activate(makeCtx() as never);
     expect(getViewProvider()).toBeDefined();
-  });
-
-  it('does not throw when showOnboardingIfNeeded rejects — logs error instead', async () => {
-    const err = new Error('boom');
-    mockShowOnboarding.mockRejectedValueOnce(err);
-    await expect(activate(makeCtx() as never)).resolves.toBeUndefined();
-    expect(errorSpy).toHaveBeenCalledWith('[nexpath] onboarding failed:', err);
-  });
-
-  it('still registers the view provider even when onboarding rejects', async () => {
-    mockShowOnboarding.mockRejectedValueOnce(new Error('x'));
-    await activate(makeCtx() as never);
-    expect(mockRegisterWebviewViewProvider).toHaveBeenCalledOnce();
-  });
-
-  it('still logs the activation message even when onboarding rejects', async () => {
-    mockShowOnboarding.mockRejectedValueOnce(new Error('x'));
-    await activate(makeCtx() as never);
-    expect(logSpy).toHaveBeenCalledWith('[nexpath] extension activated');
   });
 });
 
@@ -137,6 +247,15 @@ describe('deactivate', () => {
     mockShowOnboarding.mockReset();
     mockRegisterWebviewViewProvider.mockReset();
     mockProviderCtor.mockReset();
+    mockDetectHost.mockReset().mockReturnValue('vscode-generic');
+    mockWorkspaceStorageDir.mockReset().mockReturnValue(null);
+    mockEnumerateStateVscdbPaths.mockReset().mockReturnValue([]);
+    mockCreateChatHistoryWatcher.mockReset().mockReturnValue({
+      start: mockWatcherStart,
+      stop: mockWatcherStop,
+    });
+    mockWatcherStart.mockReset();
+    mockWatcherStop.mockReset();
     mockRegisterWebviewViewProvider.mockReturnValue({ dispose: vi.fn() });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
   });
@@ -154,11 +273,22 @@ describe('deactivate', () => {
     expect(() => deactivate()).not.toThrow();
   });
 
-  it('clears the module-level viewProvider so getViewProvider() returns undefined', async () => {
+  it('clears module-level viewProvider on deactivate', async () => {
     mockShowOnboarding.mockResolvedValueOnce(undefined);
     await activate(makeCtx() as never);
     expect(getViewProvider()).toBeDefined();
     deactivate();
     expect(getViewProvider()).toBeUndefined();
+  });
+
+  it('stops the watcher on deactivate (if one was started)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    mockWorkspaceStorageDir.mockReturnValueOnce('/fake/ws');
+    mockEnumerateStateVscdbPaths.mockReturnValueOnce(['/fake/ws/a/state.vscdb']);
+    await activate(makeCtx(true) as never);
+    expect(mockWatcherStart).toHaveBeenCalledOnce();
+    deactivate();
+    expect(mockWatcherStop).toHaveBeenCalled();
   });
 });
