@@ -60,6 +60,17 @@ describe('loadSyncState', () => {
       consecutive_failures: 0,
     });
   });
+
+  it('normalises non-numeric consecutive_failures to 0', () => {
+    writeFileSync(statePath, JSON.stringify({
+      next_sync_at:         null,
+      last_attempt_at:      null,
+      last_success_at:      null,
+      last_error:           null,
+      consecutive_failures: 'not-a-number',
+    }), 'utf8');
+    expect(loadSyncState(statePath)?.consecutive_failures).toBe(0);
+  });
 });
 
 describe('saveSyncState', () => {
@@ -114,6 +125,15 @@ describe('TelemetrySyncScheduler — constructor', () => {
     saveSyncState(state, statePath);
     const s = new TelemetrySyncScheduler({ statePath, now: fixedNow });
     expect(s.getState()).toEqual(state);
+  });
+
+  it('getState returns a defensive copy (callers cannot mutate internal state)', () => {
+    const s        = new TelemetrySyncScheduler({ statePath, now: fixedNow });
+    const snapshot = s.getState();
+    snapshot.consecutive_failures = 999;
+    snapshot.last_error           = 'mutated';
+    expect(s.getState().consecutive_failures).toBe(0);
+    expect(s.getState().last_error).toBeNull();
   });
 });
 
@@ -285,6 +305,76 @@ describe('TelemetrySyncScheduler — start/stop with fake timers', () => {
     s.start();
     expect(s.getState().next_sync_at).toBe(firstNext);
     s.stop();
+  });
+
+  it('reschedules after each tick — multiple ticks fire in sequence', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+
+    const onSync = vi.fn(async () => {});
+    const s      = new TelemetrySyncScheduler({
+      onSync, isEnabled: () => true, statePath,
+      now: () => new Date(), random: () => 0.5,
+      minMinutes: 10, maxMinutes: 30,
+    });
+
+    s.start();
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(3);
+
+    s.stop();
+  });
+
+  it('advances next_sync_at forward after a tick fires', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+
+    const s = new TelemetrySyncScheduler({
+      onSync: async () => {}, isEnabled: () => true, statePath,
+      now: () => new Date(), random: () => 0.5,
+      minMinutes: 10, maxMinutes: 30,
+    });
+
+    s.start();
+    const initialNext = new Date(s.getState().next_sync_at!).getTime();
+
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+
+    const afterNext = new Date(s.getState().next_sync_at!).getTime();
+    expect(afterNext).toBeGreaterThan(initialNext);
+    expect(afterNext).toBe(initialNext + 20 * 60 * 1000);
+
+    s.stop();
+  });
+
+  it('stop() called mid-runner prevents re-scheduling of the next tick', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+
+    let resolveRunner!: () => void;
+    const onSync = vi.fn(() => new Promise<void>(r => { resolveRunner = r; }));
+
+    const s = new TelemetrySyncScheduler({
+      onSync, isEnabled: () => true, statePath,
+      now: () => new Date(), random: () => 0.5,
+    });
+
+    s.start();
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(1);
+
+    s.stop();
+    resolveRunner();
+    await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(1);
   });
 });
 
