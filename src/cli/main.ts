@@ -10,6 +10,13 @@ import { registerAutoCommand } from './commands/auto.js';
 import { registerStopCommand } from './commands/stop.js';
 import { registerOptimizeCommand } from './commands/optimize.js';
 import { registerStatusCommand } from './commands/status.js';
+import {
+  telemetrySyncStatusAction,
+  telemetrySyncEnableAction,
+  telemetrySyncDisableAction,
+  telemetrySyncResetCursorAction,
+  telemetrySyncRunAction,
+} from './commands/telemetry-sync.js';
 
 export function createProgram(): Command {
   const program = new Command();
@@ -138,6 +145,51 @@ export function createProgram(): Command {
     .option('--db <path>', 'Path to the SQLite database file')
     .action(async (opts: { olderThan?: string; project?: string; db?: string }) => {
       await storePruneAction(opts, opts.db);
+    });
+
+  // ── Telemetry sync command ────────────────────────────────────────────────────
+
+  const telemetrySyncCmd = program
+    .command('telemetry-sync')
+    .description('Manage the telemetry sync module');
+
+  telemetrySyncCmd
+    .command('status')
+    .description('Show telemetry sync state, cursor position, and config')
+    .option('--db <path>', 'Path to the SQLite database file')
+    .action(async (opts: { db?: string }) => {
+      await telemetrySyncStatusAction(opts.db ? { dbPath: opts.db } : {});
+    });
+
+  telemetrySyncCmd
+    .command('run')
+    .description('Force one sync attempt now (bypasses random window — debug only)')
+    .option('--db <path>', 'Path to the SQLite database file')
+    .action(async (opts: { db?: string }) => {
+      await telemetrySyncRunAction(opts.db ? { dbPath: opts.db } : {});
+    });
+
+  telemetrySyncCmd
+    .command('enable')
+    .description('Set telemetry_sync_enabled = true')
+    .option('--db <path>', 'Path to the SQLite database file')
+    .action(async (opts: { db?: string }) => {
+      await telemetrySyncEnableAction(opts.db ? { dbPath: opts.db } : {});
+    });
+
+  telemetrySyncCmd
+    .command('disable')
+    .description('Set telemetry_sync_enabled = false (in-flight syncs finish; no new ones fire)')
+    .option('--db <path>', 'Path to the SQLite database file')
+    .action(async (opts: { db?: string }) => {
+      await telemetrySyncDisableAction(opts.db ? { dbPath: opts.db } : {});
+    });
+
+  telemetrySyncCmd
+    .command('reset-cursor')
+    .description('Skip backlog: jump cursor to current end-of-file')
+    .action(async () => {
+      await telemetrySyncResetCursorAction();
     });
 
   // ── DB command ────────────────────────────────────────────────────────────────
