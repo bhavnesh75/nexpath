@@ -3151,6 +3151,7 @@ describe('runLevel — NEXPATH_SIM=1 support', () => {
         level: 1,
         autoSelectedText: expect.any(String),
       }),
+      undefined,
     );
   }, 2000);
 
@@ -3158,6 +3159,101 @@ describe('runLevel — NEXPATH_SIM=1 support', () => {
     const selectFn = mockSelect(SKIP_NOW);
     await runLevel(makeInput(), 1, selectFn);
     expect(selectFn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── runLevel — Phase 3 enriched decision_session_dismissed payload ────────────
+
+describe('runLevel — telemetry: decision_session_dismissed enriched payload (Phase 3)', () => {
+  beforeEach(() => { vi.mocked(writeTelemetry).mockClear(); });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  // Common assertion helper — the 6 context fields land verbatim from `input`.
+  const expectRichDismissPayload = (reason: 'cancel' | 'skip', level: 1 | 2 | 3) =>
+    expect.objectContaining({
+      level,
+      reason,
+      flagType:    'stage_transition',
+      stage:       'implementation',
+      pinchLabel:  'Hold up.',
+      sessionId:   'session-test',
+      promptCount: 20,
+    });
+
+  it('emits 6 context fields when user cancels (Ctrl+C) at Level 1', async () => {
+    await runLevel(makeInput(), 1, mockCancel());
+    expect(writeTelemetry).toHaveBeenCalledWith(
+      '/test/project',
+      'decision_session_dismissed',
+      expectRichDismissPayload('cancel', 1),
+      undefined,
+    );
+  });
+
+  it('emits 6 context fields when user clicks SKIP_NOW at Level 2', async () => {
+    await runLevel(makeInput(), 2, mockSelect(SKIP_NOW));
+    expect(writeTelemetry).toHaveBeenCalledWith(
+      '/test/project',
+      'decision_session_dismissed',
+      expectRichDismissPayload('skip', 2),
+      undefined,
+    );
+  });
+
+  it('emits 6 context fields when user clicks a blank separator at Level 3', async () => {
+    // Separator values look like __nexpath_sep__<n> — runLevel treats those as skip.
+    await runLevel(makeInput(), 3, mockSelect(`${OPTION_SEPARATOR}0`));
+    expect(writeTelemetry).toHaveBeenCalledWith(
+      '/test/project',
+      'decision_session_dismissed',
+      expectRichDismissPayload('skip', 3),
+      undefined,
+    );
+  });
+
+  it('skipCountInProject reflects real DB state when store is provided', async () => {
+    const store = await openStore(':memory:');
+    try {
+      // Seed 3 prior skips for this project so the next dismissal observes count=3.
+      const { insertSkippedSession } = await import('../store/skipped-sessions.js');
+      for (let i = 0; i < 3; i++) {
+        insertSkippedSession(store, {
+          projectRoot:          '/proj/skip-count',
+          sessionId:            `prior-${i}`,
+          flagType:             'absence:test_creation',
+          stage:                'implementation',
+          levelReached:         1,
+          skippedAtPromptCount: 5 + i,
+        });
+      }
+
+      vi.mocked(writeTelemetry).mockClear();
+      await runLevel(
+        makeInput({ projectRoot: '/proj/skip-count' }),
+        1,
+        mockSelect(SKIP_NOW),
+        store,
+      );
+
+      expect(writeTelemetry).toHaveBeenCalledWith(
+        '/proj/skip-count',
+        'decision_session_dismissed',
+        expect.objectContaining({ skipCountInProject: 3 }),
+        store,
+      );
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('skipCountInProject is null when no store is provided (graceful degradation)', async () => {
+    await runLevel(makeInput(), 1, mockSelect(SKIP_NOW));
+    expect(writeTelemetry).toHaveBeenCalledWith(
+      '/test/project',
+      'decision_session_dismissed',
+      expect.objectContaining({ skipCountInProject: null }),
+      undefined,
+    );
   });
 });
 
