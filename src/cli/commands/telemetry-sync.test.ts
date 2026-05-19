@@ -118,7 +118,7 @@ describe('telemetrySyncEnableAction — first-time consent flow', () => {
     expect(text).toContain('What is NEVER uploaded:');
     expect(text).toContain('Raw user prompt text');
     expect(text).toContain('How often:  every 10–30 minutes');
-    expect(text).toContain('PostHog');
+    expect(text).toContain('Where to:   https://us.i.posthog.com/capture/');
     expect(text).toContain('Telemetry sync enabled.');
 
     const store = await openStore(dbPath);
@@ -197,6 +197,38 @@ describe('telemetrySyncEnableAction — first-time consent flow', () => {
       endpoint:          'https://eu.example/capture/',
       hash_project_root: true,
     });
+  });
+
+  it('banner shows the configured endpoint, not just the PostHog default', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_endpoint', 'https://eu.example/capture/'));
+
+    const { lines, print } = captureOutput();
+    await telemetrySyncEnableAction(
+      { dbPath, output: print },
+      async () => false,
+      () => {},
+    );
+    const text = lines.join('\n');
+    expect(text).toContain('Where to:   https://eu.example/capture/');
+    expect(text).not.toContain('https://us.i.posthog.com');
+  });
+
+  it('default audit swallows logger failures (enable still completes)', async () => {
+    const loggerModule = await import('../../logger.js');
+    vi.spyOn(loggerModule.logger, 'info').mockImplementation(() => {
+      throw new Error('logger broken');
+    });
+
+    const { lines, print } = captureOutput();
+    await expect(
+      telemetrySyncEnableAction({ dbPath, output: print }, async () => true),
+    ).resolves.toBeUndefined();
+
+    const store = await openStore(dbPath);
+    expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('true');
+    expect(getConfig(store.db, 'telemetry_sync_consent_granted')).toBe('true');
+    closeStore(store);
+    expect(lines.join('\n')).toContain('Telemetry sync enabled.');
   });
 });
 

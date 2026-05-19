@@ -42,7 +42,11 @@ const defaultAudit: AuditFn = (event, props) => {
   }
 };
 
-function printPrivacyBanner(print: (line: string) => void, hashEnabled: boolean): void {
+function printPrivacyBanner(
+  print:       (line: string) => void,
+  hashEnabled: boolean,
+  endpoint:    string,
+): void {
   print('');
   print('Telemetry sync — privacy notice');
   print('');
@@ -59,7 +63,7 @@ function printPrivacyBanner(print: (line: string) => void, hashEnabled: boolean)
   print('  • Any personal information beyond what is listed above');
   print('');
   print('How often:  every 10–30 minutes (random)');
-  print('Where to:   PostHog (https://us.i.posthog.com)');
+  print(`Where to:   ${endpoint}`);
   print('To disable: nexpath telemetry-sync disable');
   print('');
 }
@@ -102,7 +106,8 @@ export async function telemetrySyncEnableAction(
 
     if (!alreadyConsented) {
       const hashEnabled = getConfig(store.db, 'telemetry_sync_hash_project_root') !== 'false';
-      printPrivacyBanner(print, hashEnabled);
+      const endpoint    = getConfig(store.db, 'telemetry_sync_endpoint') ?? DEFAULT_POSTHOG_ENDPOINT;
+      printPrivacyBanner(print, hashEnabled, endpoint);
 
       const confirmed = await confirmFn();
       if (!confirmed) {
@@ -113,7 +118,7 @@ export async function telemetrySyncEnableAction(
       setConfig(store, 'telemetry_sync_consent_granted', 'true');
       audit('telemetry_sync_consent_granted', {
         nexpath_version:    NEXPATH_VERSION,
-        endpoint:           getConfig(store.db, 'telemetry_sync_endpoint') ?? DEFAULT_POSTHOG_ENDPOINT,
+        endpoint,
         hash_project_root:  hashEnabled,
       });
     }
