@@ -174,12 +174,42 @@ describe('TelemetryReader — defensive behavior', () => {
     expect(result.events.map(e => e.event)).toEqual(['prompt_received', 'prompt_classified']);
   });
 
+  it('skips blank and whitespace-only lines between valid events', () => {
+    writeLine(livePath, sampleEvent('prompt_received'));
+    appendFileSync(livePath, '\n   \n\t\n', 'utf8');
+    writeLine(livePath, sampleEvent('prompt_classified', { stage: 'planning' }));
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.events.map(e => e.event)).toEqual(['prompt_received', 'prompt_classified']);
+  });
+
   it('returns empty events when there is no complete line yet (only a partial)', () => {
     appendFileSync(livePath, '{"ts":"2026-05-19T10:00:00.000Z","v":1', 'utf8');
 
     const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
     expect(result.events).toEqual([]);
     expect(result.newOffset).toBe(0);
+  });
+});
+
+describe('TelemetryReader — documented limitations', () => {
+  it('first run does NOT drain pre-existing .1 (no cursor anchor to scope the range)', () => {
+    writeLine(rotPath, sampleEvent('prompt_received', { source: 'rotated_file' }));
+    writeLine(livePath, sampleEvent('prompt_classified', { source: 'live_file' }));
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].source).toBe('live_file');
+  });
+
+  it('cursor with inode 0 (uninitialised) is treated as rotation', () => {
+    writeLine(livePath, sampleEvent('prompt_received'));
+    saveCursor({ inode: 0, offset: 0, last_synced_ts: null }, cursorPath);
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.rotated).toBe(true);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].event).toBe('prompt_received');
   });
 });
 

@@ -38,6 +38,11 @@ describe('TelemetryCursor — loadCursor', () => {
     expect(loadCursor(cursorPath)).toBeNull();
   });
 
+  it('returns null when inode is a non-numeric type', () => {
+    writeFileSync(cursorPath, JSON.stringify({ inode: 'abc', offset: 0, last_synced_ts: null }), 'utf8');
+    expect(loadCursor(cursorPath)).toBeNull();
+  });
+
   it('normalises missing last_synced_ts to null', () => {
     writeFileSync(cursorPath, JSON.stringify({ inode: 1, offset: 2 }), 'utf8');
     expect(loadCursor(cursorPath)).toEqual({ inode: 1, offset: 2, last_synced_ts: null });
