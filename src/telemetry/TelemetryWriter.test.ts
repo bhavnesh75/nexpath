@@ -241,5 +241,57 @@ describe('TelemetryWriter — writeTelemetry', () => {
       expect(second['userId']).toBe(first['userId']);
       expect(second['teamId']).toBe(first['teamId']);
     });
+
+    it('still writes the record (without IDs) when identity-read throws', async () => {
+      const { writeTelemetry, TELEMETRY_PATH } = await import('./TelemetryWriter.js');
+      const fs = await import('node:fs');
+      const identity = await import('./identity.js');
+
+      let written = '';
+      vi.spyOn(fs, 'appendFileSync').mockImplementation((_p, data) => {
+        if (_p === TELEMETRY_PATH) written += String(data);
+      });
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+
+      // Force the first identity getter to throw — exercises the
+      // try/catch fail-open path inside writeTelemetry.
+      vi.spyOn(identity, 'getInstallationId').mockImplementation(() => {
+        throw new Error('simulated config-read failure');
+      });
+
+      expect(() =>
+        writeTelemetry('/proj', 'prompt_received', { promptCount: 1 }, store),
+      ).not.toThrow();
+
+      const parsed = JSON.parse(written.trim()) as Record<string, unknown>;
+      // Record still landed with core fields intact …
+      expect(parsed['event']).toBe('prompt_received');
+      expect(parsed['promptCount']).toBe(1);
+      // … but the 3 identity fields were skipped because the read failed.
+      expect(parsed).not.toHaveProperty('installationId');
+      expect(parsed).not.toHaveProperty('userId');
+      expect(parsed).not.toHaveProperty('teamId');
+    });
+
+    it('accepts undefined data plus store (stop.ts:91 stop_no_pending shape)', async () => {
+      const { writeTelemetry, TELEMETRY_PATH } = await import('./TelemetryWriter.js');
+      const fs = await import('node:fs');
+
+      let written = '';
+      vi.spyOn(fs, 'appendFileSync').mockImplementation((_p, data) => {
+        if (_p === TELEMETRY_PATH) written += String(data);
+      });
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+
+      writeTelemetry('/proj', 'stop_no_pending', undefined, store);
+
+      const parsed = JSON.parse(written.trim()) as Record<string, unknown>;
+      expect(parsed['event']).toBe('stop_no_pending');
+      expect(parsed['installationId']).toMatch(UUID_V4);
+      expect(parsed['userId']).toMatch(UUID_V4);
+      expect(parsed['teamId']).toMatch(UUID_V4);
+    });
   });
 });
