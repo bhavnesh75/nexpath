@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs';
+import { confirm, isCancel } from '@clack/prompts';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { getConfig, setConfig } from '../../store/config.js';
 import { loadSyncState } from '../../telemetry/TelemetrySyncScheduler.js';
@@ -6,6 +7,9 @@ import { loadCursor, saveCursor, clearCursor } from '../../telemetry/TelemetryCu
 import { runSyncAttempt } from '../../telemetry/TelemetrySyncRunner.js';
 import { DEFAULT_POSTHOG_ENDPOINT } from '../../telemetry/TelemetryClient.js';
 import { TELEMETRY_PATH, TELEMETRY_SYNC_CURSOR_PATH } from '../../telemetry/paths.js';
+import { logger } from '../../logger.js';
+
+const NEXPATH_VERSION = '0.1.1';
 
 export interface TelemetrySyncActionOpts {
   dbPath?:         string;
@@ -18,6 +22,47 @@ export interface TelemetrySyncActionOpts {
 }
 
 const defaultPrint = (line: string): void => { console.log(line); };
+
+export type ConfirmFn = () => Promise<boolean>;
+export type AuditFn   = (event: string, props: Record<string, unknown>) => void;
+
+const defaultEnableConfirm: ConfirmFn = async () => {
+  const answer = await confirm({
+    message:      'Enable telemetry sync?',
+    initialValue: false,
+  });
+  return !isCancel(answer) && answer === true;
+};
+
+const defaultAudit: AuditFn = (event, props) => {
+  try {
+    logger.info(event, props);
+  } catch {
+    // Audit logging failure must never crash the command.
+  }
+};
+
+function printPrivacyBanner(print: (line: string) => void, hashEnabled: boolean): void {
+  print('');
+  print('Telemetry sync — privacy notice');
+  print('');
+  print('What is uploaded:');
+  print('  • Event names (e.g. prompt_received, decision_session_started)');
+  print('  • Structured metadata (counters, classifications, timestamps)');
+  print('  • Auto-generated installation / user / team UUIDs');
+  print(`  • Project root path (${hashEnabled ? 'SHA-256 hashed' : 'raw'} — toggle via telemetry_sync_hash_project_root)`);
+  print('');
+  print('What is NEVER uploaded:');
+  print('  • Raw user prompt text');
+  print('  • Your source code');
+  print('  • OpenAI API key');
+  print('  • Any personal information beyond what is listed above');
+  print('');
+  print('How often:  every 10–30 minutes (random)');
+  print('Where to:   PostHog (https://us.i.posthog.com)');
+  print('To disable: nexpath telemetry-sync disable');
+  print('');
+}
 
 export async function telemetrySyncStatusAction(opts: TelemetrySyncActionOpts = {}): Promise<void> {
   const print = opts.output ?? defaultPrint;
@@ -45,10 +90,34 @@ export async function telemetrySyncStatusAction(opts: TelemetrySyncActionOpts = 
   }
 }
 
-export async function telemetrySyncEnableAction(opts: TelemetrySyncActionOpts = {}): Promise<void> {
+export async function telemetrySyncEnableAction(
+  opts:       TelemetrySyncActionOpts = {},
+  confirmFn:  ConfirmFn = defaultEnableConfirm,
+  audit:      AuditFn   = defaultAudit,
+): Promise<void> {
   const print = opts.output ?? defaultPrint;
   const store = await openStore(opts.dbPath ?? DEFAULT_DB_PATH);
   try {
+    const alreadyConsented = getConfig(store.db, 'telemetry_sync_consent_granted') === 'true';
+
+    if (!alreadyConsented) {
+      const hashEnabled = getConfig(store.db, 'telemetry_sync_hash_project_root') !== 'false';
+      printPrivacyBanner(print, hashEnabled);
+
+      const confirmed = await confirmFn();
+      if (!confirmed) {
+        print('Telemetry sync NOT enabled. Run "nexpath telemetry-sync enable" again to opt in.');
+        return;
+      }
+
+      setConfig(store, 'telemetry_sync_consent_granted', 'true');
+      audit('telemetry_sync_consent_granted', {
+        nexpath_version:    NEXPATH_VERSION,
+        endpoint:           getConfig(store.db, 'telemetry_sync_endpoint') ?? DEFAULT_POSTHOG_ENDPOINT,
+        hash_project_root:  hashEnabled,
+      });
+    }
+
     setConfig(store, 'telemetry_sync_enabled', 'true');
     print('Telemetry sync enabled.');
     print('Sync window: 10–30 minutes (override via telemetry_sync_min_minutes / _max_minutes).');

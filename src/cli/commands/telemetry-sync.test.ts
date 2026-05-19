@@ -102,15 +102,101 @@ describe('telemetrySyncStatusAction', () => {
   });
 });
 
-describe('telemetrySyncEnableAction', () => {
-  it('sets telemetry_sync_enabled to "true"', async () => {
+describe('telemetrySyncEnableAction — first-time consent flow', () => {
+  it('shows privacy banner on first invocation and sets flag when confirmed', async () => {
     const { lines, print } = captureOutput();
-    await telemetrySyncEnableAction({ dbPath, output: print });
+    const audit            = vi.fn();
+    await telemetrySyncEnableAction(
+      { dbPath, output: print },
+      async () => true,
+      audit,
+    );
+
+    const text = lines.join('\n');
+    expect(text).toContain('Telemetry sync — privacy notice');
+    expect(text).toContain('What is uploaded:');
+    expect(text).toContain('What is NEVER uploaded:');
+    expect(text).toContain('Raw user prompt text');
+    expect(text).toContain('How often:  every 10–30 minutes');
+    expect(text).toContain('PostHog');
+    expect(text).toContain('Telemetry sync enabled.');
+
+    const store = await openStore(dbPath);
+    expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('true');
+    expect(getConfig(store.db, 'telemetry_sync_consent_granted')).toBe('true');
+    closeStore(store);
+
+    expect(audit).toHaveBeenCalledWith('telemetry_sync_consent_granted', expect.objectContaining({
+      nexpath_version:   '0.1.1',
+      hash_project_root: true,
+    }));
+  });
+
+  it('does NOT set flag when user declines confirmation', async () => {
+    const { lines, print } = captureOutput();
+    const audit            = vi.fn();
+    await telemetrySyncEnableAction(
+      { dbPath, output: print },
+      async () => false,
+      audit,
+    );
+
+    const store = await openStore(dbPath);
+    expect(getConfig(store.db, 'telemetry_sync_enabled')).toBeUndefined();
+    expect(getConfig(store.db, 'telemetry_sync_consent_granted')).toBeUndefined();
+    closeStore(store);
+
+    expect(audit).not.toHaveBeenCalled();
+    expect(lines.join('\n')).toContain('Telemetry sync NOT enabled');
+  });
+
+  it('skips the banner on subsequent invocations once consent is granted', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_consent_granted', 'true'));
+
+    const { lines, print } = captureOutput();
+    const confirmFn        = vi.fn(async () => true);
+    const audit            = vi.fn();
+    await telemetrySyncEnableAction({ dbPath, output: print }, confirmFn, audit);
+
+    const text = lines.join('\n');
+    expect(text).not.toContain('Telemetry sync — privacy notice');
+    expect(confirmFn).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
 
     const store = await openStore(dbPath);
     expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('true');
     closeStore(store);
-    expect(lines.join('\n')).toContain('Telemetry sync enabled.');
+  });
+
+  it('banner reflects hash_project_root config — "raw" when disabled', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_hash_project_root', 'false'));
+
+    const { lines, print } = captureOutput();
+    await telemetrySyncEnableAction(
+      { dbPath, output: print },
+      async () => false,
+      () => {},
+    );
+    const text = lines.join('\n');
+    expect(text).toContain('Project root path (raw');
+  });
+
+  it('audit payload includes endpoint and hash flag', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_endpoint', 'https://eu.example/capture/'));
+
+    const audit = vi.fn();
+    const { print } = captureOutput();
+    await telemetrySyncEnableAction(
+      { dbPath, output: print },
+      async () => true,
+      audit,
+    );
+
+    expect(audit).toHaveBeenCalledWith('telemetry_sync_consent_granted', {
+      nexpath_version:   '0.1.1',
+      endpoint:          'https://eu.example/capture/',
+      hash_project_root: true,
+    });
   });
 });
 
