@@ -23,7 +23,11 @@ export type TelemetryEventName =
   | 'decision_session_dismissed'
   | 'decision_session_sim_dismissed'
   // Language detection
-  | 'language_detected';
+  | 'language_detected'
+  // Sync self-events
+  | 'telemetry_sync_attempt'
+  | 'telemetry_sync_success'
+  | 'telemetry_sync_failed';
 
 export interface TelemetryEvent {
   ts:              string;
@@ -52,4 +56,16 @@ export interface SyncState {
   last_success_at:      string | null;
   last_error:           string | null;
   consecutive_failures: number;
+}
+
+export interface PostHogEvent {
+  event:       string;
+  distinct_id: string;
+  timestamp:   string;
+  properties:  Record<string, unknown>;
+}
+
+export interface PostHogBatchEnvelope {
+  api_key: string;
+  batch:   PostHogEvent[];
 }
