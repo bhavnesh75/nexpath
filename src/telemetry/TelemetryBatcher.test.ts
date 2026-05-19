@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import {
   partitionEvents,
@@ -8,6 +8,7 @@ import {
   POSTHOG_LIB_NAME,
   POSTHOG_LIB_VERSION,
 } from './TelemetryBatcher.js';
+import { postBatch, type FetchLike } from './TelemetryClient.js';
 import type { TelemetryEvent } from './types.js';
 
 const API_KEY = 'phc_test_key';
@@ -178,6 +179,40 @@ describe('TelemetryBatcher — partitioning caps', () => {
   });
 });
 
+describe('TelemetryBatcher — nested types and ordering', () => {
+  it('passes recentPrompts metadata array through untouched (PII-safe shape)', () => {
+    const recentPrompts = [
+      { index: 1, classifiedStage: 'planning',       confidence: 0.9, capturedAt: 1715000000 },
+      { index: 2, classifiedStage: 'implementation', confidence: 0.8, capturedAt: 1715000100 },
+    ];
+    const result = partitionEvents([ev({ event: 'decision_session_started', recentPrompts })], {
+      apiKey: API_KEY, hashProjectRoot: false,
+    });
+    expect(result.batches[0].batch[0].properties.recentPrompts).toEqual(recentPrompts);
+  });
+
+  it('with an empty allowedKeys, properties contain only $lib and $lib_version', () => {
+    const result = partitionEvents([ev({ stage: 'planning', confidence: 0.9 })], {
+      apiKey: API_KEY, allowedKeys: [], hashProjectRoot: false,
+    });
+    expect(Object.keys(result.batches[0].batch[0].properties).sort()).toEqual(['$lib', '$lib_version']);
+  });
+
+  it('preserves input order across batch splits (FIFO)', () => {
+    const events = [
+      ev({ event: 'prompt_received',   promptCount: 1 }),
+      ev({ event: 'prompt_classified', promptCount: 2 }),
+      ev({ event: 'profile_computed',  promptCount: 3 }),
+      ev({ event: 'absence_flags_detected', promptCount: 4 }),
+    ];
+    const result = partitionEvents(events, {
+      apiKey: API_KEY, maxEventsPerBatch: 2, maxBatchesPerRun: 10, hashProjectRoot: false,
+    });
+    const ordered = result.batches.flatMap(b => b.batch).map(e => e.properties.promptCount);
+    expect(ordered).toEqual([1, 2, 3, 4]);
+  });
+});
+
 describe('TelemetryBatcher — defaults & integration', () => {
   it('defaults libVersion to POSTHOG_LIB_VERSION constant', () => {
     const result = partitionEvents([ev()], { apiKey: API_KEY });
@@ -201,5 +236,33 @@ describe('TelemetryBatcher — defaults & integration', () => {
     ]);
     expect(result.batches[0].batch.every(e => e.distinct_id === '550e8400-e29b-41d4-a716-446655440000')).toBe(true);
     expect(result.batches[0].batch.every(e => e.properties.$lib === 'nexpath')).toBe(true);
+  });
+});
+
+describe('TelemetryBatcher → TelemetryClient integration', () => {
+  it('partitioned envelope reaches fetch with valid PostHog shape and returns ok=true', async () => {
+    const events = [
+      ev({ event: 'prompt_received',   promptCount: 1 }),
+      ev({ event: 'prompt_classified', stage: 'planning', confidence: 0.9 }),
+    ];
+    const { batches } = partitionEvents(events, { apiKey: API_KEY, hashProjectRoot: true });
+
+    const fetchMock = vi.fn<FetchLike>(async () => ({
+      ok:      true,
+      status:  200,
+      headers: { get: () => null },
+    }));
+
+    const result = await postBatch('https://us.i.posthog.com/capture/', batches[0], { fetch: fetchMock });
+    expect(result).toEqual({ ok: true, status: 200, acceptedCount: 2 });
+
+    const init     = fetchMock.mock.calls[0][1];
+    const body     = JSON.parse(init.body);
+    expect(body.api_key).toBe(API_KEY);
+    expect(body.batch).toHaveLength(2);
+    expect(body.batch[0].event).toBe('prompt_received');
+    expect(body.batch[0].distinct_id).toBe('550e8400-e29b-41d4-a716-446655440000');
+    expect(body.batch[0].properties.$lib).toBe('nexpath');
+    expect(String(body.batch[0].properties.projectRoot)).toMatch(/^sha256:/);
   });
 });

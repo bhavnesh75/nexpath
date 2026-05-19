@@ -160,6 +160,37 @@ describe('parseRetryAfter', () => {
   });
 });
 
+describe('TelemetryClient — options', () => {
+  it('passes the supplied URL to fetch', async () => {
+    const fetchMock = vi.fn<FetchLike>(async () => mockResponse({ ok: true, status: 200 }));
+    const url       = 'https://eu.posthog.example/capture/';
+    await postBatch(url, ENVELOPE, { fetch: fetchMock });
+    expect(fetchMock.mock.calls[0][0]).toBe(url);
+  });
+
+  it('honours custom timeoutMs option', async () => {
+    let signalRef: AbortSignal | null = null;
+    const fetchMock = vi.fn<FetchLike>(async (_url, init) => {
+      signalRef = init.signal;
+      return new Promise((_resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    });
+    const start  = Date.now();
+    const result = await postBatch(ENDPOINT, ENVELOPE, { fetch: fetchMock, timeoutMs: 30 });
+    const elapsed = Date.now() - start;
+    expect(result).toEqual({ ok: false, kind: 'network' });
+    expect(elapsed).toBeLessThan(500);
+    expect(signalRef).not.toBeNull();
+  });
+});
+
+describe('parseRetryAfter — negative inputs rejected', () => {
+  it('returns undefined for negative numeric seconds', () => {
+    expect(parseRetryAfter('-30')).toBeUndefined();
+  });
+});
+
 describe('TelemetryClient — constants', () => {
   it('DEFAULT_POSTHOG_ENDPOINT points at PostHog US cloud /capture/', () => {
     expect(DEFAULT_POSTHOG_ENDPOINT).toBe('https://us.i.posthog.com/capture/');
