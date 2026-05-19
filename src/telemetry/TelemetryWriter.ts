@@ -2,6 +2,8 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'nod
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import type { TelemetryEventName } from './types.js';
+import type { Store } from '../store/db.js';
+import { getInstallationId, getUserId, getTeamId } from './identity.js';
 
 export const TELEMETRY_PATH = join(homedir(), '.nexpath', 'telemetry.jsonl');
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -24,14 +26,25 @@ export function writeTelemetry(
   projectRoot: string,
   event:       TelemetryEventName,
   data?:       Record<string, unknown>,
+  store?:      Store,
 ): void {
-  const record = {
+  const record: Record<string, unknown> = {
     ts: new Date().toISOString(),
     v:  1 as const,
     projectRoot,
     event,
     ...data,
   };
+
+  if (store) {
+    try {
+      record['installationId'] = getInstallationId(store);
+      record['userId']         = getUserId(store);
+      record['teamId']         = getTeamId(store);
+    } catch {
+      // identity-read failure must never crash the hook — fall through without IDs
+    }
+  }
 
   try {
     rotate();

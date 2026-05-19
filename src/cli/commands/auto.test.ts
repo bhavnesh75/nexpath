@@ -1373,28 +1373,28 @@ describe('runAuto — telemetry events', () => {
   it('emits prompt_received on every runAuto call', async () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-recv' }), store);
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-recv', 'prompt_received', expect.objectContaining({ promptCount: expect.any(Number) }),
+      '/test/tel-recv', 'prompt_received', expect.objectContaining({ promptCount: expect.any(Number) }), expect.anything(),
     );
   });
 
   it('emits prompt_classified after stage 1 classification', async () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-class' }), store);
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-class', 'prompt_classified', expect.objectContaining({ stage: expect.any(String), confidence: expect.any(Number) }),
+      '/test/tel-class', 'prompt_classified', expect.objectContaining({ stage: expect.any(String), confidence: expect.any(Number) }), expect.anything(),
     );
   });
 
   it('emits absence_flags_detected after absence detection', async () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-abs' }), store);
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-abs', 'absence_flags_detected', expect.objectContaining({ newFlagsCount: expect.any(Number), totalFlagsCount: expect.any(Number) }),
+      '/test/tel-abs', 'absence_flags_detected', expect.objectContaining({ newFlagsCount: expect.any(Number), totalFlagsCount: expect.any(Number) }), expect.anything(),
     );
   });
 
   it('emits advisory_min_prompts_blocked when promptCount < MIN_PROMPTS_BEFORE_ADVISORY', async () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-min' }), store);
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-min', 'advisory_min_prompts_blocked', expect.objectContaining({ promptCount: 1, minRequired: 3 }),
+      '/test/tel-min', 'advisory_min_prompts_blocked', expect.objectContaining({ promptCount: 1, minRequired: 3 }), expect.anything(),
     );
   });
 
@@ -1433,7 +1433,7 @@ describe('runAuto — telemetry events', () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-freq' }), store, makeMockOpenAI(FIRE_YES_RESPONSE));
 
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-freq', 'advisory_freq_blocked', expect.objectContaining({ freq: 'off' }),
+      '/test/tel-freq', 'advisory_freq_blocked', expect.objectContaining({ freq: 'off' }), expect.anything(),
     );
   });
 
@@ -1451,7 +1451,7 @@ describe('runAuto — telemetry events', () => {
     await runAuto(makeInput({ projectRoot: '/test/tel-cap' }), store, makeMockOpenAI(FIRE_YES_RESPONSE));
 
     expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-      '/test/tel-cap', 'advisory_cap_blocked', expect.objectContaining({ advisoryCount: 5, advisoryCap: 5 }),
+      '/test/tel-cap', 'advisory_cap_blocked', expect.objectContaining({ advisoryCount: 5, advisoryCap: 5 }), expect.anything(),
     );
   });
 
@@ -1464,7 +1464,7 @@ describe('runAuto — telemetry events', () => {
 
     if (result.outcome === 'pending') {
       expect(vi.mocked(writeTelemetry)).toHaveBeenCalledWith(
-        '/test/tel-pending', 'pipeline_advisory_pending', expect.objectContaining({ pinchLabel: 'Hold up.' }),
+        '/test/tel-pending', 'pipeline_advisory_pending', expect.objectContaining({ pinchLabel: 'Hold up.' }), expect.anything(),
       );
     }
   });

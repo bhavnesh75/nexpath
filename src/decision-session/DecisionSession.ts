@@ -278,7 +278,7 @@ export async function runDecisionSession(
     stage:      input.stage,
     pinchLabel: input.pinchLabel,
     sessionId:  input.sessionId,
-  });
+  }, store);
 
   let level: 1 | 2 | 3 = 1;
 

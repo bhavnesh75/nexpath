@@ -3110,6 +3110,7 @@ describe('runDecisionSession — telemetry: decision_session_started', () => {
         pinchLabel: 'Hold up.',
         sessionId:  'session-test',
       }),
+      undefined,
     );
   });
 
@@ -3119,6 +3120,7 @@ describe('runDecisionSession — telemetry: decision_session_started', () => {
       '/test/project',
       'decision_session_started',
       expect.any(Object),
+      undefined,
     );
   });
 });

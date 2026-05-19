@@ -26,9 +26,16 @@ export type TelemetryEventName =
   | 'language_detected';
 
 export interface TelemetryEvent {
-  ts:          string;
-  v:           1;
-  projectRoot: string;
-  event:       TelemetryEventName;
-  [key: string]: unknown;
+  ts:              string;
+  v:               1;
+  // Identity IDs are present on every record once Phase 1 wiring lands at all
+  // call sites. They remain optional in the type because some inner call sites
+  // (e.g. DecisionSession.runLevel) do not yet receive the store handle — that
+  // wiring lands in Phase 3.
+  installationId?: string;
+  userId?:         string;
+  teamId?:         string;
+  projectRoot:     string;
+  event:           TelemetryEventName;
+  [key: string]:   unknown;
 }

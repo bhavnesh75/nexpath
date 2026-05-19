@@ -506,7 +506,7 @@ describe('runStop — telemetry events', () => {
 
   it('emits stop_no_pending when no advisory is queued', async () => {
     await runStop(makePayload(), store);
-    expect(writeTelemetry).toHaveBeenCalledWith('/test/project', 'stop_no_pending');
+    expect(writeTelemetry).toHaveBeenCalledWith('/test/project', 'stop_no_pending', undefined, expect.anything());
   });
 
   it('does not emit stop_no_pending when an advisory is present', async () => {
@@ -527,6 +527,7 @@ describe('runStop — telemetry events', () => {
         stage:            'implementation',
         generatedOptions: false,
       }),
+      expect.anything(),
     );
   });
 
@@ -547,6 +548,7 @@ describe('runStop — telemetry events', () => {
       '/test/project',
       'stop_advisory_shown',
       expect.objectContaining({ generatedOptions: true }),
+      expect.anything(),
     );
   });
 
@@ -561,6 +563,7 @@ describe('runStop — telemetry events', () => {
       '/test/project',
       'language_detected',
       expect.objectContaining({ detectedLanguage: expect.anything() }),
+      expect.anything(),
     );
   });
 
