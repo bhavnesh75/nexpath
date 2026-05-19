@@ -382,6 +382,33 @@ describe('TelemetrySyncRunner — error log format', () => {
   });
 });
 
+describe('TelemetrySyncRunner — high-volume scenario (50-event scale)', () => {
+  it('sends 50 events across multiple batches, advances cursor to EOF, emits success', async () => {
+    for (let i = 0; i < 50; i++) writeEvent(livePath, 'prompt_received', { promptCount: i });
+
+    const fetch = vi.fn<FetchLike>(async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+    }));
+    const emit  = vi.fn();
+    const result = await runSyncAttempt({
+      apiKey:             API_KEY,
+      liveLogPath:        livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath,
+      fetch, emitTelemetry: emit,
+      maxEventsPerBatch:  20,
+      maxBatchesPerRun:   10,
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.sentEvents).toBe(50);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(loadCursor(cursorPath)?.offset).toBe(statSync(livePath).size);
+    const attempt = emit.mock.calls.find(c => c[0] === 'telemetry_sync_attempt');
+    expect((attempt![1] as { event_count: number }).event_count).toBe(50);
+    const success = emit.mock.calls.find(c => c[0] === 'telemetry_sync_success');
+    expect((success![1] as { event_count: number }).event_count).toBe(50);
+  });
+});
+
 describe('TelemetrySyncRunner — constants', () => {
   it('DEFAULT_FAILURE_DISABLE_THRESHOLD is 10', () => {
     expect(DEFAULT_FAILURE_DISABLE_THRESHOLD).toBe(10);

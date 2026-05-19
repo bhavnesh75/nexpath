@@ -59,7 +59,7 @@ describe('telemetrySyncStatusAction', () => {
     const text = lines.join('\n');
     expect(text).toContain('Enabled:              no');
     expect(text).toContain('Endpoint:             https://us.i.posthog.com/capture/');
-    expect(text).toContain('API key configured:   no');
+    expect(text).toContain('API key configured:   yes');
     expect(text).toContain('Last attempt:         (never)');
     expect(text).toContain('Last success:         (never)');
     expect(text).toContain('Consecutive failures: 0');
@@ -272,7 +272,8 @@ describe('telemetrySyncResetCursorAction', () => {
 });
 
 describe('telemetrySyncRunAction', () => {
-  it('bails with exit code 1 when api_key is unset', async () => {
+  it('bails with exit code 1 when api_key is cleared (empty)', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_api_key', ''));
     const { lines, print } = captureOutput();
     await telemetrySyncRunAction({ dbPath, output: print });
     expect(process.exitCode).toBe(1);
@@ -400,7 +401,8 @@ describe('telemetrySyncRunAction', () => {
 });
 
 describe('telemetrySyncPingAction', () => {
-  it('exits 1 when api_key is not configured', async () => {
+  it('exits 1 when api_key is cleared (empty)', async () => {
+    await withConfig(store => setConfig(store, 'telemetry_sync_api_key', ''));
     const { lines, print } = captureOutput();
     await telemetrySyncPingAction({ dbPath, output: print });
     expect(process.exitCode).toBe(1);

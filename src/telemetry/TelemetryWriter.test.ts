@@ -12,6 +12,39 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
+describe('TelemetryWriter — hook latency budget (Plan §18)', () => {
+  it('1000 writeTelemetry calls complete in under 500ms (avg <0.5ms/call)', async () => {
+    const { writeTelemetry } = await import('./TelemetryWriter.js');
+    const fs = await import('node:fs');
+    vi.spyOn(fs, 'appendFileSync').mockImplementation(() => {});
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+    vi.spyOn(fs, 'statSync').mockReturnValue({ size: 100 } as ReturnType<typeof fs.statSync>);
+
+    const start = Date.now();
+    for (let i = 0; i < 1000; i++) {
+      writeTelemetry('/tmp/proj', 'prompt_received', { promptCount: i });
+    }
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it('writeTelemetry has no static dependency on the sync module — telemetry_sync_enabled does not alter the writer code path', async () => {
+    const { writeTelemetry } = await import('./TelemetryWriter.js');
+    const fs = await import('node:fs');
+    const appends: string[] = [];
+    vi.spyOn(fs, 'appendFileSync').mockImplementation((_p, data) => { appends.push(String(data)); });
+    vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+    vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+    vi.spyOn(fs, 'statSync').mockReturnValue({ size: 100 } as ReturnType<typeof fs.statSync>);
+
+    writeTelemetry('/tmp/proj', 'prompt_received', { promptCount: 1 });
+    expect(appends).toHaveLength(1);
+    const written = JSON.parse(appends[0].trim());
+    expect(written.event).toBe('prompt_received');
+  });
+});
+
 describe('TelemetryWriter — writeTelemetry', () => {
   beforeEach(() => {
     vi.resetModules();

@@ -213,6 +213,29 @@ describe('TelemetryReader — documented limitations', () => {
   });
 });
 
+describe('TelemetryReader — rotation stress (200 events across .jsonl.1 + live)', () => {
+  it('reads all 200 events in order across a rotation boundary; cursor advances to end of new live file', () => {
+    for (let i = 0; i < 80; i++) writeLine(rotPath, sampleEvent('prompt_received', { source: 'rotated', i }));
+    const rotInode = statSync(rotPath).ino;
+
+    for (let i = 0; i < 120; i++) writeLine(livePath, sampleEvent('prompt_received', { source: 'live', i }));
+
+    saveCursor({ inode: rotInode, offset: 0, last_synced_ts: null }, cursorPath);
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+
+    expect(result.rotated).toBe(true);
+    expect(result.events).toHaveLength(200);
+    expect(result.events.slice(0, 80).every(e => e.source === 'rotated')).toBe(true);
+    expect(result.events.slice(80).every(e => e.source === 'live')).toBe(true);
+    expect(result.events[79].i).toBe(79);
+    expect(result.events[80].i).toBe(0);
+    expect(result.events[199].i).toBe(119);
+    expect(result.newOffset).toBe(statSync(livePath).size);
+    expect(result.newInode).toBe(statSync(livePath).ino);
+  });
+});
+
 describe('TelemetryReader — eventByteEnds field', () => {
   it('returns empty eventByteEnds when no events read', () => {
     const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });

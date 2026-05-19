@@ -472,6 +472,12 @@ describe('store — config', () => {
     expect(all['language_override']).toBe('es');
   });
 
+  it('telemetry_sync_endpoint and telemetry_sync_api_key have built-in defaults', () => {
+    const all = getAllConfig(store.db);
+    expect(all['telemetry_sync_endpoint']).toBe('https://us.i.posthog.com/capture/');
+    expect(all['telemetry_sync_api_key']).toMatch(/^phc_/);
+  });
+
   // ── isConfigSet ──────────────────────────────────────────────────────────────
 
   it('isConfigSet returns false for a key that has never been written', () => {

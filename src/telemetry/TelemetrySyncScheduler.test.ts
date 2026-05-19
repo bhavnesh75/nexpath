@@ -464,10 +464,11 @@ describe('createDefaultScheduler → runner integration', () => {
     appendFileSync(livePath, JSON.stringify(ev) + '\n', 'utf8');
   }
 
-  it('bails silently when telemetry_sync_api_key is unset (no fetch call)', async () => {
+  it('bails silently when telemetry_sync_api_key is cleared (no fetch call)', async () => {
     const store = await openStore(':memory:');
     try {
       setConfig(store, 'telemetry_sync_enabled', 'true');
+      setConfig(store, 'telemetry_sync_api_key', '');
       writeSampleEvent();
       const fetch = vi.fn();
       const s     = createDefaultScheduler(store, undefined, {
