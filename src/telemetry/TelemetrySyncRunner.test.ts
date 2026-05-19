@@ -302,6 +302,86 @@ describe('TelemetrySyncRunner — endpoint and auth', () => {
   });
 });
 
+describe('TelemetrySyncRunner — empty-batches edge case (all events lack installationId)', () => {
+  it('returns noop, advances cursor past all events, and does not call fetch', async () => {
+    const noIdEvent = {
+      ts: '2026-05-19T10:00:00.000Z',
+      v: 1,
+      projectRoot: '/tmp/p',
+      event: 'prompt_received',
+    };
+    appendFileSync(livePath, JSON.stringify(noIdEvent) + '\n', 'utf8');
+    appendFileSync(livePath, JSON.stringify(noIdEvent) + '\n', 'utf8');
+
+    const fetch = vi.fn<FetchLike>(async () => ({ ok: true, status: 200, headers: { get: () => null } }));
+    const emit  = vi.fn();
+    const result = await runSyncAttempt({
+      apiKey:        API_KEY,
+      liveLogPath:   livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath,
+      fetch, emitTelemetry: emit,
+    });
+    expect(result.status).toBe('noop');
+    expect(result.sentEvents).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+    expect(loadCursor(cursorPath)?.offset).toBe(statSync(livePath).size);
+  });
+});
+
+describe('TelemetrySyncRunner — emitTelemetry payload shape', () => {
+  it('latency_ms is a finite non-negative number on success', async () => {
+    writeEvent(livePath, 'prompt_received');
+    const emit = vi.fn();
+    await runSyncAttempt({
+      apiKey:        API_KEY,
+      liveLogPath:   livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath,
+      fetch:         mockOkFetch(),
+      emitTelemetry: emit,
+    });
+    const successCall = emit.mock.calls.find(c => c[0] === 'telemetry_sync_success');
+    expect(successCall).toBeDefined();
+    const latency = (successCall![1] as { latency_ms?: number }).latency_ms;
+    expect(typeof latency).toBe('number');
+    expect(Number.isFinite(latency)).toBe(true);
+    expect(latency).toBeGreaterThanOrEqual(0);
+  });
+
+  it('http_status is included on failure self-event matching the response status', async () => {
+    writeEvent(livePath, 'prompt_received');
+    const fetch = vi.fn<FetchLike>(async () => ({ ok: false, status: 503, headers: { get: () => null } }));
+    const emit  = vi.fn();
+    await runSyncAttempt({
+      apiKey:        API_KEY,
+      liveLogPath:   livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath,
+      fetch, emitTelemetry: emit,
+    });
+    const failedCall = emit.mock.calls.find(c => c[0] === 'telemetry_sync_failed');
+    expect(failedCall).toBeDefined();
+    expect((failedCall![1] as { http_status?: number }).http_status).toBe(503);
+  });
+});
+
+describe('TelemetrySyncRunner — error log format', () => {
+  it('appends one valid JSON object per line on 4xx', async () => {
+    writeEvent(livePath, 'prompt_received');
+    const fetch = vi.fn<FetchLike>(async () => ({ ok: false, status: 422, headers: { get: () => null } }));
+    await runSyncAttempt({
+      apiKey:        API_KEY,
+      liveLogPath:   livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath,
+      fetch,
+    });
+    const raw = readFileSync(errorLogPath, 'utf8').trim();
+    expect(raw.endsWith('\n') || raw.length > 0).toBe(true);
+    const lines = raw.split('\n').filter(l => l.length > 0);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.status).toBe(422);
+    expect(typeof parsed.ts).toBe('string');
+    expect(typeof parsed.batchIndex).toBe('number');
+    expect(typeof parsed.batchSize).toBe('number');
+  });
+});
+
 describe('TelemetrySyncRunner — constants', () => {
   it('DEFAULT_FAILURE_DISABLE_THRESHOLD is 10', () => {
     expect(DEFAULT_FAILURE_DISABLE_THRESHOLD).toBe(10);

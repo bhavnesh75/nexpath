@@ -6,7 +6,7 @@ import type { Store } from '../store/db.js';
 import type { SyncState } from './types.js';
 import { runSyncAttempt, type RunnerOptions } from './TelemetrySyncRunner.js';
 import { writeTelemetry } from './TelemetryWriter.js';
-import { DEFAULT_POSTHOG_ENDPOINT } from './TelemetryClient.js';
+import { DEFAULT_POSTHOG_ENDPOINT, type FetchLike } from './TelemetryClient.js';
 
 const DEFAULT_MIN_MINUTES = 10;
 const DEFAULT_MAX_MINUTES = 30;
@@ -208,9 +208,24 @@ function buildRunnerOptions(store: Store): Omit<RunnerOptions, 'apiKey'> & { api
   return out;
 }
 
-export function createDefaultScheduler(store: Store, onSyncOverride?: () => Promise<void>): TelemetrySyncScheduler {
+export interface DefaultSchedulerOverrides {
+  liveLogPath?:    string;
+  rotatedLogPath?: string;
+  cursorPath?:     string;
+  errorLogPath?:   string;
+  statePath?:      string;
+  fetch?:          FetchLike;
+  now?:            () => Date;
+}
+
+export function createDefaultScheduler(
+  store:           Store,
+  onSyncOverride?: () => Promise<void>,
+  overrides?:      DefaultSchedulerOverrides,
+): TelemetrySyncScheduler {
   const minFromConfig = readConfigNumber(store, 'telemetry_sync_min_minutes');
   const maxFromConfig = readConfigNumber(store, 'telemetry_sync_max_minutes');
+  const now           = overrides?.now ?? (() => new Date());
 
   let scheduler: TelemetrySyncScheduler;
   const defaultOnSync = async () => {
@@ -220,11 +235,15 @@ export function createDefaultScheduler(store: Store, onSyncOverride?: () => Prom
     const before = scheduler.getState().consecutive_failures;
     const result = await runSyncAttempt({
       ...runnerOpts,
-      apiKey: runnerOpts.apiKey,
+      apiKey:        runnerOpts.apiKey,
       emitTelemetry: (event, props) => writeTelemetry('<sync>', event, props, store),
+      ...(overrides?.liveLogPath    !== undefined ? { liveLogPath:    overrides.liveLogPath }    : {}),
+      ...(overrides?.rotatedLogPath !== undefined ? { rotatedLogPath: overrides.rotatedLogPath } : {}),
+      ...(overrides?.cursorPath     !== undefined ? { cursorPath:     overrides.cursorPath }     : {}),
+      ...(overrides?.errorLogPath   !== undefined ? { errorLogPath:   overrides.errorLogPath }   : {}),
+      ...(overrides?.fetch          !== undefined ? { fetch:          overrides.fetch }          : {}),
+      ...(overrides?.now            !== undefined ? { now:            overrides.now }            : {}),
     }, before);
-
-    scheduler.setConsecutiveFailures(result.consecutiveFailuresAfter);
 
     if (result.shouldDisableSync) {
       try {
@@ -236,7 +255,11 @@ export function createDefaultScheduler(store: Store, onSyncOverride?: () => Prom
 
     if (result.status === 'rate_limited' && result.retryAfterSeconds !== undefined) {
       const delaySeconds = Math.max(result.retryAfterSeconds, 30 * 60);
-      scheduler.setNextSyncAt(new Date(Date.now() + delaySeconds * 1000));
+      scheduler.setNextSyncAt(new Date(now().getTime() + delaySeconds * 1000));
+    }
+
+    if (result.status === 'network' || result.status === 'http_4xx' || result.status === 'http_5xx') {
+      throw new Error(`sync_${result.status}${result.httpStatus !== undefined ? `_${result.httpStatus}` : ''}`);
     }
   };
 
@@ -250,8 +273,10 @@ export function createDefaultScheduler(store: Store, onSyncOverride?: () => Prom
       }
     },
   };
-  if (minFromConfig !== undefined) schedulerOpts.minMinutes = minFromConfig;
-  if (maxFromConfig !== undefined) schedulerOpts.maxMinutes = maxFromConfig;
+  if (minFromConfig          !== undefined) schedulerOpts.minMinutes = minFromConfig;
+  if (maxFromConfig          !== undefined) schedulerOpts.maxMinutes = maxFromConfig;
+  if (overrides?.statePath   !== undefined) schedulerOpts.statePath  = overrides.statePath;
+  if (overrides?.now         !== undefined) schedulerOpts.now        = overrides.now;
 
   scheduler = new TelemetrySyncScheduler(schedulerOpts);
   return scheduler;

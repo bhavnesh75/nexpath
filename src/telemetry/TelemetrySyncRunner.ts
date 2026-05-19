@@ -103,6 +103,20 @@ export async function runSyncAttempt(
     maxBatchesPerRun:   opts.maxBatchesPerRun,
   });
 
+  if (batches.length === 0) {
+    saveCursor({
+      inode:          read.newInode,
+      offset:         read.newOffset,
+      last_synced_ts: new Date(startTime).toISOString(),
+    }, opts.cursorPath);
+    return {
+      status:                   'noop',
+      sentEvents:               0,
+      consecutiveFailuresAfter: consecutiveFailuresBefore,
+      shouldDisableSync:        false,
+    };
+  }
+
   emit('telemetry_sync_attempt', { event_count: consumedCount });
 
   let sentEvents               = 0;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,7 +9,8 @@ import {
   createDefaultScheduler,
 } from './TelemetrySyncScheduler.js';
 import { openStore, closeStore } from '../store/db.js';
-import { setConfig } from '../store/config.js';
+import { setConfig, getConfig } from '../store/config.js';
+import type { FetchLike } from './TelemetryClient.js';
 import type { SyncState } from './types.js';
 
 let tmpDir: string;
@@ -423,13 +424,135 @@ describe('createDefaultScheduler — isEnabled wired through config', () => {
       setConfig(store, 'telemetry_sync_enabled',      'true');
       setConfig(store, 'telemetry_sync_min_minutes',  '5');
       setConfig(store, 'telemetry_sync_max_minutes',  '7');
-      const s = createDefaultScheduler(store, async () => {});
+      const s = createDefaultScheduler(store, async () => {}, { statePath });
       s.start();
       const nextMs   = new Date(s.getState().next_sync_at!).getTime();
       const fromNow  = nextMs - Date.now();
       expect(fromNow).toBeGreaterThanOrEqual(5 * 60 * 1000 - 100);
       expect(fromNow).toBeLessThanOrEqual(7 * 60 * 1000 + 100);
       s.stop();
+    } finally {
+      closeStore(store);
+    }
+  });
+});
+
+describe('createDefaultScheduler → runner integration', () => {
+  let livePath:     string;
+  let rotPath:      string;
+  let cursorPath:   string;
+  let errorLogPath: string;
+
+  beforeEach(() => {
+    livePath     = join(tmpDir, 'telemetry.jsonl');
+    rotPath      = `${livePath}.1`;
+    cursorPath   = join(tmpDir, 'cursor.json');
+    errorLogPath = join(tmpDir, 'sync-errors.log');
+  });
+
+  function writeSampleEvent(extra: Record<string, unknown> = {}): void {
+    const ev = {
+      ts:             '2026-05-19T10:00:00.000Z',
+      v:              1,
+      installationId: '550e8400-e29b-41d4-a716-446655440000',
+      userId:         'user-uuid',
+      teamId:         'team-uuid',
+      projectRoot:    '/tmp/proj',
+      event:          'prompt_received',
+      ...extra,
+    };
+    appendFileSync(livePath, JSON.stringify(ev) + '\n', 'utf8');
+  }
+
+  it('bails silently when telemetry_sync_api_key is unset (no fetch call)', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry_sync_enabled', 'true');
+      writeSampleEvent();
+      const fetch = vi.fn();
+      const s     = createDefaultScheduler(store, undefined, {
+        liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath, statePath,
+        fetch: fetch as unknown as never,
+      });
+      await s.syncNow();
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('end-to-end success: events flow through runner and reach fetch', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry_sync_enabled', 'true');
+      setConfig(store, 'telemetry_sync_api_key', 'phc_int');
+      writeSampleEvent({ event: 'prompt_received', promptCount: 1 });
+      writeSampleEvent({ event: 'prompt_classified', stage: 'planning' });
+
+      const fetch = vi.fn<FetchLike>(async () => ({
+        ok: true, status: 200, headers: { get: () => null },
+      }));
+      const s = createDefaultScheduler(store, undefined, {
+        liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath, statePath,
+        fetch: fetch as unknown as never,
+      });
+      await s.syncNow();
+      expect(fetch).toHaveBeenCalledTimes(1);
+      const body = JSON.parse((fetch.mock.calls[0][1] as { body: string }).body);
+      expect(body.api_key).toBe('phc_int');
+      expect(body.batch).toHaveLength(2);
+      expect(s.getState().consecutive_failures).toBe(0);
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('on 4xx auto-disable threshold reached: telemetry_sync_enabled config flips to "false"', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry_sync_enabled', 'true');
+      setConfig(store, 'telemetry_sync_api_key', 'phc_int');
+      writeSampleEvent();
+
+      const fetch = vi.fn<FetchLike>(async () => ({
+        ok: false, status: 400, headers: { get: () => null },
+      }));
+      const s = createDefaultScheduler(store, undefined, {
+        liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath, statePath,
+        fetch: fetch as unknown as never,
+      });
+      s.setConsecutiveFailures(9);
+      await s.syncNow();
+
+      expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('false');
+      expect(s.getState().consecutive_failures).toBe(10);
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('on 429 with Retry-After: applies max(retryAfter, 30 min) to next_sync_at', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry_sync_enabled', 'true');
+      setConfig(store, 'telemetry_sync_api_key', 'phc_int');
+      writeSampleEvent();
+
+      const fakeNow = new Date('2026-05-19T10:00:00.000Z');
+      const fetch = vi.fn<FetchLike>(async () => ({
+        ok: false, status: 429,
+        headers: { get: (h: string) => h === 'Retry-After' ? '60' : null },
+      }));
+      const s = createDefaultScheduler(store, undefined, {
+        liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath, errorLogPath, statePath,
+        fetch: fetch as unknown as never,
+        now: () => fakeNow,
+      });
+      await s.syncNow();
+
+      const next   = new Date(s.getState().next_sync_at!).getTime();
+      const expected = fakeNow.getTime() + 30 * 60 * 1000;
+      expect(next).toBe(expected);
     } finally {
       closeStore(store);
     }
