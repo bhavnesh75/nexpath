@@ -416,6 +416,57 @@ describe('createDefaultScheduler — isEnabled wired through config', () => {
       closeStore(store);
     }
   });
+
+  it('reads telemetry_sync_min_minutes and telemetry_sync_max_minutes from config', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry_sync_enabled',      'true');
+      setConfig(store, 'telemetry_sync_min_minutes',  '5');
+      setConfig(store, 'telemetry_sync_max_minutes',  '7');
+      const s = createDefaultScheduler(store, async () => {});
+      s.start();
+      const nextMs   = new Date(s.getState().next_sync_at!).getTime();
+      const fromNow  = nextMs - Date.now();
+      expect(fromNow).toBeGreaterThanOrEqual(5 * 60 * 1000 - 100);
+      expect(fromNow).toBeLessThanOrEqual(7 * 60 * 1000 + 100);
+      s.stop();
+    } finally {
+      closeStore(store);
+    }
+  });
+});
+
+describe('TelemetrySyncScheduler — setNextSyncAt and setConsecutiveFailures', () => {
+  it('setNextSyncAt persists next_sync_at to disk', () => {
+    const s    = new TelemetrySyncScheduler({ statePath });
+    const when = new Date('2026-05-19T15:00:00.000Z');
+    s.setNextSyncAt(when);
+    expect(loadSyncState(statePath)?.next_sync_at).toBe(when.toISOString());
+  });
+
+  it('setConsecutiveFailures persists count to disk', () => {
+    const s = new TelemetrySyncScheduler({ statePath });
+    s.setConsecutiveFailures(5);
+    expect(loadSyncState(statePath)?.consecutive_failures).toBe(5);
+  });
+
+  it('setNextSyncAt re-schedules the pending timer to the new time', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FROZEN_NOW);
+
+    const onSync = vi.fn(async () => {});
+    const s      = new TelemetrySyncScheduler({
+      onSync, isEnabled: () => true, statePath,
+      now: () => new Date(), random: () => 0.5,
+    });
+    s.start();
+
+    s.setNextSyncAt(new Date(FROZEN_NOW.getTime() + 5 * 60 * 1000));
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    expect(onSync).toHaveBeenCalledTimes(1);
+
+    s.stop();
+  });
 });
 
 describe('TelemetrySyncScheduler — restart survival', () => {

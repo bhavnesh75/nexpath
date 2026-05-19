@@ -36,8 +36,9 @@ export interface BatchOptions {
 }
 
 export interface BatchPartitions {
-  batches:       PostHogBatchEnvelope[];
-  consumedCount: number;
+  batches:          PostHogBatchEnvelope[];
+  batchEndIndices:  number[];
+  consumedCount:    number;
 }
 
 export function hashProjectRootValue(raw: string): string {
@@ -82,14 +83,16 @@ export function partitionEvents(events: TelemetryEvent[], opts: BatchOptions): B
   const maxBytes        = opts.maxBytesPerBatch  ?? MAX_BYTES_PER_BATCH;
   const maxBatches      = opts.maxBatchesPerRun  ?? MAX_BATCHES_PER_RUN;
 
-  const batches: PostHogBatchEnvelope[] = [];
-  let current: PostHogEvent[] = [];
-  let currentBytes = 0;
-  let consumedCount = 0;
+  const batches:         PostHogBatchEnvelope[] = [];
+  const batchEndIndices: number[]               = [];
+  let current:           PostHogEvent[]         = [];
+  let currentBytes     = 0;
+  let consumedCount    = 0;
 
   const flush = () => {
     if (current.length > 0) {
       batches.push({ api_key: opts.apiKey, batch: current });
+      batchEndIndices.push(consumedCount);
       current = [];
       currentBytes = 0;
     }
@@ -121,5 +124,5 @@ export function partitionEvents(events: TelemetryEvent[], opts: BatchOptions): B
 
   if (batches.length < maxBatches) flush();
 
-  return { batches, consumedCount };
+  return { batches, batchEndIndices, consumedCount };
 }

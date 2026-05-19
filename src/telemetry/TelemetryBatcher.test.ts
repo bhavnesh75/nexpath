@@ -239,6 +239,36 @@ describe('TelemetryBatcher — defaults & integration', () => {
   });
 });
 
+describe('TelemetryBatcher — batchEndIndices', () => {
+  it('empty events: batchEndIndices is empty', () => {
+    const result = partitionEvents([], { apiKey: API_KEY });
+    expect(result.batchEndIndices).toEqual([]);
+  });
+
+  it('single batch covering all events: one entry equal to consumedCount', () => {
+    const result = partitionEvents([ev(), ev(), ev()], { apiKey: API_KEY });
+    expect(result.batchEndIndices).toEqual([3]);
+    expect(result.consumedCount).toBe(3);
+  });
+
+  it('multiple batches: indices are monotonically increasing', () => {
+    const events = Array.from({ length: 7 }, () => ev());
+    const result = partitionEvents(events, {
+      apiKey: API_KEY, maxEventsPerBatch: 3, maxBatchesPerRun: 10,
+    });
+    expect(result.batchEndIndices).toEqual([3, 6, 7]);
+  });
+
+  it('skipped events (no installationId) count toward indices', () => {
+    const noId = ev(); delete noId.installationId;
+    const result = partitionEvents([ev(), noId, ev()], {
+      apiKey: API_KEY, maxEventsPerBatch: 10, maxBatchesPerRun: 10,
+    });
+    expect(result.batchEndIndices).toEqual([3]);
+    expect(result.consumedCount).toBe(3);
+  });
+});
+
 describe('TelemetryBatcher → TelemetryClient integration', () => {
   it('partitioned envelope reaches fetch with valid PostHog shape and returns ok=true', async () => {
     const events = [

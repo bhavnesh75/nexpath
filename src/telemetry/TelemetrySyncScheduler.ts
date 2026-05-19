@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { TELEMETRY_SYNC_STATE_PATH } from './paths.js';
-import { getConfig } from '../store/config.js';
+import { getConfig, setConfig } from '../store/config.js';
 import type { Store } from '../store/db.js';
 import type { SyncState } from './types.js';
+import { runSyncAttempt, type RunnerOptions } from './TelemetrySyncRunner.js';
+import { writeTelemetry } from './TelemetryWriter.js';
+import { DEFAULT_POSTHOG_ENDPOINT } from './TelemetryClient.js';
 
 const DEFAULT_MIN_MINUTES = 10;
 const DEFAULT_MAX_MINUTES = 30;
@@ -107,6 +110,21 @@ export class TelemetrySyncScheduler {
     }
   }
 
+  setNextSyncAt(when: Date): void {
+    this.state.next_sync_at = when.toISOString();
+    saveSyncState(this.state, this.statePath);
+    if (this.timer !== null && !this.stopped) {
+      clearTimeout(this.timer);
+      const delayMs = Math.max(0, when.getTime() - this.now().getTime());
+      this.timer = setTimeout(() => { void this.tick(); }, delayMs);
+    }
+  }
+
+  setConsecutiveFailures(n: number): void {
+    this.state.consecutive_failures = n;
+    saveSyncState(this.state, this.statePath);
+  }
+
   async syncNow(): Promise<void> {
     if (!this.isEnabled()) return;
     if (this.isRunning) return;
@@ -151,9 +169,79 @@ export class TelemetrySyncScheduler {
   }
 }
 
-export function createDefaultScheduler(store: Store, onSync?: () => Promise<void>): TelemetrySyncScheduler {
-  return new TelemetrySyncScheduler({
-    onSync,
+function readConfigNumber(store: Store, key: string): number | undefined {
+  try {
+    const v = getConfig(store.db, key);
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildRunnerOptions(store: Store): Omit<RunnerOptions, 'apiKey'> & { apiKey: string | undefined } {
+  let apiKey:           string | undefined;
+  let endpoint:         string | undefined;
+  let timeoutMs:        number | undefined;
+  let maxEventsPerBatch: number | undefined;
+  let maxBytesPerBatch:  number | undefined;
+  let hashProjectRoot:   boolean | undefined;
+  try {
+    apiKey            = getConfig(store.db, 'telemetry_sync_api_key');
+    endpoint          = getConfig(store.db, 'telemetry_sync_endpoint') ?? DEFAULT_POSTHOG_ENDPOINT;
+    timeoutMs         = readConfigNumber(store, 'telemetry_sync_timeout_ms');
+    maxEventsPerBatch = readConfigNumber(store, 'telemetry_sync_batch_max_events');
+    maxBytesPerBatch  = readConfigNumber(store, 'telemetry_sync_batch_max_bytes');
+    const hashFlag    = getConfig(store.db, 'telemetry_sync_hash_project_root');
+    hashProjectRoot   = hashFlag === undefined ? undefined : hashFlag !== 'false';
+  } catch {
+    // Use defaults if config read fails
+  }
+
+  const out: Omit<RunnerOptions, 'apiKey'> & { apiKey: string | undefined } = { apiKey };
+  if (endpoint          !== undefined) out.endpoint          = endpoint;
+  if (timeoutMs         !== undefined) out.timeoutMs         = timeoutMs;
+  if (maxEventsPerBatch !== undefined) out.maxEventsPerBatch = maxEventsPerBatch;
+  if (maxBytesPerBatch  !== undefined) out.maxBytesPerBatch  = maxBytesPerBatch;
+  if (hashProjectRoot   !== undefined) out.hashProjectRoot   = hashProjectRoot;
+  return out;
+}
+
+export function createDefaultScheduler(store: Store, onSyncOverride?: () => Promise<void>): TelemetrySyncScheduler {
+  const minFromConfig = readConfigNumber(store, 'telemetry_sync_min_minutes');
+  const maxFromConfig = readConfigNumber(store, 'telemetry_sync_max_minutes');
+
+  let scheduler: TelemetrySyncScheduler;
+  const defaultOnSync = async () => {
+    const runnerOpts = buildRunnerOptions(store);
+    if (!runnerOpts.apiKey) return;
+
+    const before = scheduler.getState().consecutive_failures;
+    const result = await runSyncAttempt({
+      ...runnerOpts,
+      apiKey: runnerOpts.apiKey,
+      emitTelemetry: (event, props) => writeTelemetry('<sync>', event, props, store),
+    }, before);
+
+    scheduler.setConsecutiveFailures(result.consecutiveFailuresAfter);
+
+    if (result.shouldDisableSync) {
+      try {
+        setConfig(store, 'telemetry_sync_enabled', 'false');
+      } catch {
+        // setConfig failure must not propagate
+      }
+    }
+
+    if (result.status === 'rate_limited' && result.retryAfterSeconds !== undefined) {
+      const delaySeconds = Math.max(result.retryAfterSeconds, 30 * 60);
+      scheduler.setNextSyncAt(new Date(Date.now() + delaySeconds * 1000));
+    }
+  };
+
+  const schedulerOpts: SchedulerOptions = {
+    onSync: onSyncOverride ?? defaultOnSync,
     isEnabled: () => {
       try {
         return getConfig(store.db, 'telemetry_sync_enabled') === 'true';
@@ -161,5 +249,10 @@ export function createDefaultScheduler(store: Store, onSync?: () => Promise<void
         return false;
       }
     },
-  });
+  };
+  if (minFromConfig !== undefined) schedulerOpts.minMinutes = minFromConfig;
+  if (maxFromConfig !== undefined) schedulerOpts.maxMinutes = maxFromConfig;
+
+  scheduler = new TelemetrySyncScheduler(schedulerOpts);
+  return scheduler;
 }

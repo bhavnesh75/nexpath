@@ -213,6 +213,38 @@ describe('TelemetryReader — documented limitations', () => {
   });
 });
 
+describe('TelemetryReader — eventByteEnds field', () => {
+  it('returns empty eventByteEnds when no events read', () => {
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.eventByteEnds).toEqual([]);
+  });
+
+  it('eventByteEnds[i] points to the byte right after the i-th event (including trailing newline)', () => {
+    writeLine(livePath, sampleEvent('prompt_received'));
+    writeLine(livePath, sampleEvent('prompt_classified', { stage: 'planning' }));
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.eventByteEnds).toHaveLength(2);
+    expect(result.eventByteEnds[0]).toBeGreaterThan(0);
+    expect(result.eventByteEnds[1]).toBe(statSync(livePath).size);
+    expect(result.eventByteEnds[0]).toBeLessThan(result.eventByteEnds[1]);
+  });
+
+  it('rotation: drained events have eventByteEnds=0 (start of new live file)', () => {
+    writeLine(rotPath, sampleEvent('prompt_received',   { source: 'rotated' }));
+    const drainedInode = statSync(rotPath).ino;
+    writeLine(livePath, sampleEvent('prompt_classified', { source: 'live' }));
+
+    saveCursor({ inode: drainedInode, offset: 0, last_synced_ts: null }, cursorPath);
+
+    const result = readNewEvents({ liveLogPath: livePath, rotatedLogPath: rotPath, cursorPath });
+    expect(result.rotated).toBe(true);
+    expect(result.events.map(e => e.source)).toEqual(['rotated', 'live']);
+    expect(result.eventByteEnds[0]).toBe(0);
+    expect(result.eventByteEnds[1]).toBe(statSync(livePath).size);
+  });
+});
+
 describe('TelemetryReader — round-trip with cursor save', () => {
   it('after advancing cursor, second read returns only newly-appended events', () => {
     writeLine(livePath, sampleEvent('prompt_received', { promptCount: 1 }));
