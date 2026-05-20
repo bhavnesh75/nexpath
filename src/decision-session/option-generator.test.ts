@@ -433,6 +433,12 @@ describe('buildOptionPrompt — feature word grounding', () => {
     expect(groundingBlock).toContain('what was just built');
   });
 
+  it('grounding instruction embeds maxWords word limit from GroundingConfig', () => {
+    const history = [makePrompt('build the login page', 0)];
+    const prompt = buildOptionPrompt(TASK_REVIEW, makeProfile(), undefined, history);
+    expect(prompt).toContain(`embed at most ${GroundingConfig.maxWords} word(s)`);
+  });
+
   it('grounding section contains exactly promptWindow entries, not all history', () => {
     const history = [
       makePrompt('out-feat-0', 0),
