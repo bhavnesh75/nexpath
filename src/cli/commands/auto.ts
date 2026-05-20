@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
-import { config as loadDotenv } from 'dotenv';
+import { basename, join } from 'node:path';
+import { resolveOpenAIKey, getKeySource } from '../../config/ApiKeyResolver.js';
 import type { Store } from '../../store/db.js';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { classifyPrompt } from '../../classifier/PromptClassifier.js';
@@ -442,23 +442,24 @@ export function registerAutoCommand(program: import('commander').Command): void 
         process.exit(1);
       }
 
-      // Load project .env so OPENAI_API_KEY is available for Stage 2 calls.
-      // Uses override:true so the project key always wins over any ambient env var.
-      const envPath = join(opts.project, '.env');
-      loadDotenv({ path: envPath, override: true });
+      // Resolve OPENAI_API_KEY through the 4-layer chain (env → project .env →
+      // OS keychain → 0600 fallback file). The resolver promotes the first
+      // valid hit into process.env so downstream OpenAI() constructors pick it
+      // up transparently. Order shift from the prior dotenv-with-override
+      // behaviour: a pre-set env var now WINS over project .env.
+      await resolveOpenAIKey(opts.project);
 
       const store = await openStore(opts.db);
       // Initialise logger — level from config key, then NEXPATH_LOG_LEVEL env var
       const logLevel = getConfig(store.db, 'log_level') as LogLevel | undefined;
       initLogger('auto', logLevel);
 
-      // Diagnostic: log env resolution details so CWD mismatches are visible in the log
-      // instead of silently producing a missing-credentials error in Stage 2.
+      // Diagnostic: log the source layer that produced the key so a missing
+      // key (Stage-2 failure) can be traced to the actual fallback chain.
       logger.debug('env_load', {
-        cwd:      process.cwd(),
-        project:  opts.project,
-        envPath,
-        envExists: existsSync(envPath),
+        cwd:       process.cwd(),
+        project:   opts.project,
+        keySource: await getKeySource(opts.project),
         keyFound:  !!process.env['OPENAI_API_KEY'],
       });
 
