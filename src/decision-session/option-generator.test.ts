@@ -386,6 +386,13 @@ describe('generateOptionList', () => {
     expect(callArg.model).toBe('gpt-4o-mini');
     expect(callArg.messages[0].content).toContain('test prompt');
   });
+
+  it('calls the API with timeout 12000', async () => {
+    const client = makeClient(validResponse());
+    await generateOptionList(TASK_REVIEW, makeProfile(), undefined, [], undefined, client);
+    const timeoutArg = (client.chat.completions.create as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(timeoutArg).toEqual({ timeout: 12_000 });
+  });
 });
 
 // ── buildOptionPrompt — feature word grounding ────────────────────────────────
