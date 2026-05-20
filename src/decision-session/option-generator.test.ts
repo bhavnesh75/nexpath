@@ -392,19 +392,23 @@ describe('generateOptionList', () => {
 
 describe('buildOptionPrompt — feature word grounding', () => {
   it('includes grounding section with last promptWindow prompts when enabled', () => {
-    const total = GroundingConfig.promptWindow + 3;
-    const history = Array.from({ length: total }, (_, i) => makePrompt(`prompt-text-${i}`, i));
+    const history = [
+      makePrompt('out-prompt-0', 0),
+      makePrompt('out-prompt-1', 1),
+      makePrompt('out-prompt-2', 2),
+      ...Array.from({ length: GroundingConfig.promptWindow }, (_, i) => makePrompt(`prompt-text-${i}`, i + 3)),
+    ];
     const prompt = buildOptionPrompt(TASK_REVIEW, makeProfile(), undefined, history);
     expect(prompt).toContain('Feature word grounding');
     // Last promptWindow entries must appear in the grounding block
-    for (let i = 3; i < total; i++) {
+    for (let i = 0; i < GroundingConfig.promptWindow; i++) {
       expect(prompt).toContain(`prompt-text-${i}`);
     }
     // Entries outside the window must not appear in the grounding block
     const groundingBlock = prompt.slice(prompt.indexOf('Feature word grounding'));
-    expect(groundingBlock).not.toContain('prompt-text-0');
-    expect(groundingBlock).not.toContain('prompt-text-1');
-    expect(groundingBlock).not.toContain('prompt-text-2');
+    expect(groundingBlock).not.toContain('out-prompt-0');
+    expect(groundingBlock).not.toContain('out-prompt-1');
+    expect(groundingBlock).not.toContain('out-prompt-2');
   });
 
   it('omits grounding section when GroundingConfig.enabled is false', () => {
@@ -430,18 +434,22 @@ describe('buildOptionPrompt — feature word grounding', () => {
   });
 
   it('grounding section contains exactly promptWindow entries, not all history', () => {
-    const total = GroundingConfig.promptWindow + 3;
-    const history = Array.from({ length: total }, (_, i) => makePrompt(`feat-${i}`, i));
+    const history = [
+      makePrompt('out-feat-0', 0),
+      makePrompt('out-feat-1', 1),
+      makePrompt('out-feat-2', 2),
+      ...Array.from({ length: GroundingConfig.promptWindow }, (_, i) => makePrompt(`feat-${i}`, i + 3)),
+    ];
     const prompt = buildOptionPrompt(TASK_REVIEW, makeProfile(), undefined, history);
     const groundingBlock = prompt.slice(prompt.indexOf('Feature word grounding'));
     // Last promptWindow entries must appear in grounding block
-    for (let i = 3; i < total; i++) {
+    for (let i = 0; i < GroundingConfig.promptWindow; i++) {
       expect(groundingBlock).toContain(`feat-${i}`);
     }
     // Earlier entries (outside the window) must not appear
-    for (let i = 0; i < 3; i++) {
-      expect(groundingBlock).not.toContain(`feat-${i}`);
-    }
+    expect(groundingBlock).not.toContain('out-feat-0');
+    expect(groundingBlock).not.toContain('out-feat-1');
+    expect(groundingBlock).not.toContain('out-feat-2');
   });
 
   it('stage_transition context adds informational advisory block with stage names', () => {
