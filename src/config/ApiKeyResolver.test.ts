@@ -139,6 +139,13 @@ describe('resolveOpenAIKey — layer 3: keychain', () => {
     const result = await resolveOpenAIKey(projectRoot, { fallbackPath });
     expect(result).toBe(VALID_KEY);
   });
+
+  it('promotes the keychain key into process.env.OPENAI_API_KEY', async () => {
+    vi.mocked(keychain.getPassword).mockResolvedValue(VALID_KEY);
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();
+    await resolveOpenAIKey(projectRoot, { fallbackPath });
+    expect(process.env.OPENAI_API_KEY).toBe(VALID_KEY);
+  });
 });
 
 describe('resolveOpenAIKey — layer 4: fallback file', () => {
@@ -160,6 +167,25 @@ describe('resolveOpenAIKey — layer 4: fallback file', () => {
     writeFileSync(fallbackPath, 'not-json{', 'utf8');
     const result = await resolveOpenAIKey(projectRoot, { fallbackPath });
     expect(result).toBeNull();
+  });
+
+  it('promotes the fallback-file key into process.env.OPENAI_API_KEY', async () => {
+    vi.mocked(keychain.getPassword).mockResolvedValue(null);
+    writeFileSync(fallbackPath, JSON.stringify({ openai_api_key: VALID_KEY }), { mode: 0o600 });
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();
+    await resolveOpenAIKey(projectRoot, { fallbackPath });
+    expect(process.env.OPENAI_API_KEY).toBe(VALID_KEY);
+  });
+
+  it('reads openai_api_key from a fallback file that also contains unrelated extra fields', async () => {
+    vi.mocked(keychain.getPassword).mockResolvedValue(null);
+    writeFileSync(fallbackPath, JSON.stringify({
+      openai_api_key: VALID_KEY,
+      something_else: 'ignored',
+      nested: { also: 'ignored' },
+    }), { mode: 0o600 });
+    const result = await resolveOpenAIKey(projectRoot, { fallbackPath });
+    expect(result).toBe(VALID_KEY);
   });
 });
 
@@ -201,6 +227,13 @@ describe('storeApiKey', () => {
   it('throws on invalid key format', async () => {
     await expect(storeApiKey('bad-key', { fallbackPath })).rejects.toThrow(/Invalid OpenAI API key/);
     expect(keychain.setPassword).not.toHaveBeenCalled();
+  });
+
+  it('creates the parent directory before writing the fallback file', async () => {
+    const nestedFallback = join(tmpDir, 'deep', 'nested', 'config.json');
+    vi.mocked(keychain.setPassword).mockRejectedValue(new Error('NoKeyringError'));
+    await storeApiKey(VALID_KEY, { fallbackPath: nestedFallback });
+    expect(existsSync(nestedFallback)).toBe(true);
   });
 });
 
@@ -256,6 +289,13 @@ describe('getKeySource', () => {
   it('returns "none" when no source has a key', async () => {
     vi.mocked(keychain.getPassword).mockResolvedValue(null);
     expect(await getKeySource(projectRoot, { fallbackPath })).toBe('none');
+  });
+
+  it('ignores an invalid value in project .env and falls through to lower layers', async () => {
+    require('node:fs').mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(join(projectRoot, '.env'), `OPENAI_API_KEY=${INVALID_KEY}\n`, 'utf8');
+    vi.mocked(keychain.getPassword).mockResolvedValue(VALID_KEY);
+    expect(await getKeySource(projectRoot, { fallbackPath })).toBe('keychain');
   });
 });
 
