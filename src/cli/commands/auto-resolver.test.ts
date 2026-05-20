@@ -106,6 +106,77 @@ describe('auto.ts → ApiKeyResolver wiring', () => {
     expect(warnEvents).not.toContain('openai_api_key_missing');
   });
 
+  it('env_load debug line carries the plan-mandated fields: cwd, project, keySource, keyFound', async () => {
+    vi.mocked(resolver.resolveOpenAIKey).mockResolvedValueOnce(null);
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
+
+    const logger = await import('../../logger.js');
+    const debugSpy = vi.spyOn(logger.logger, 'debug');
+
+    await runAutoCommand(['--project', '/explicit/project', '--db', ':memory:', 'ok']);
+
+    const envLoadCall = debugSpy.mock.calls.find(c => c[0] === 'env_load');
+    expect(envLoadCall).toBeDefined();
+    const payload = envLoadCall![1] as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['cwd', 'keyFound', 'keySource', 'project']);
+    expect(payload.project).toBe('/explicit/project');
+    expect(payload.keySource).toBe('keychain');
+    expect(typeof payload.cwd).toBe('string');
+    expect(typeof payload.keyFound).toBe('boolean');
+  });
+
+  it('keyFound reflects process.env.OPENAI_API_KEY presence after the resolver runs', async () => {
+    vi.mocked(resolver.resolveOpenAIKey).mockImplementationOnce(async () => {
+      process.env.OPENAI_API_KEY = 'sk-abcdefghij1234567890abcdefghij';
+      return process.env.OPENAI_API_KEY;
+    });
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('env');
+
+    const logger = await import('../../logger.js');
+    const debugSpy = vi.spyOn(logger.logger, 'debug');
+
+    await runAutoCommand(['--db', ':memory:', 'ok']);
+
+    const envLoadCall = debugSpy.mock.calls.find(c => c[0] === 'env_load');
+    expect(envLoadCall).toBeDefined();
+    const payload = envLoadCall![1] as Record<string, unknown>;
+    expect(payload.keyFound).toBe(true);
+    expect(payload.keySource).toBe('env');
+  });
+
+  it('env_load debug payload no longer carries the removed envPath / envExists fields (regression guard)', async () => {
+    vi.mocked(resolver.resolveOpenAIKey).mockResolvedValueOnce(null);
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('none');
+
+    const logger = await import('../../logger.js');
+    const debugSpy = vi.spyOn(logger.logger, 'debug');
+
+    await runAutoCommand(['--db', ':memory:', 'ok']);
+
+    const envLoadCall = debugSpy.mock.calls.find(c => c[0] === 'env_load');
+    expect(envLoadCall).toBeDefined();
+    const payload = envLoadCall![1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('envPath');
+    expect(payload).not.toHaveProperty('envExists');
+  });
+
+  it('warn line "openai_api_key_missing" carries project + actionable hint', async () => {
+    vi.mocked(resolver.resolveOpenAIKey).mockResolvedValueOnce(null);
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('none');
+
+    const logger = await import('../../logger.js');
+    const warnSpy = vi.spyOn(logger.logger, 'warn');
+
+    await runAutoCommand(['--project', '/explicit/project', '--db', ':memory:', 'ok']);
+
+    const warnCall = warnSpy.mock.calls.find(c => c[0] === 'openai_api_key_missing');
+    expect(warnCall).toBeDefined();
+    const payload = warnCall![1] as Record<string, unknown>;
+    expect(payload.project).toBe('/explicit/project');
+    expect(typeof payload.actionable).toBe('string');
+    expect((payload.actionable as string).length).toBeGreaterThan(0);
+  });
+
   it('resolver is awaited before logger initialisation downstream', async () => {
     let resolveResolver!: (v: string | null) => void;
     vi.mocked(resolver.resolveOpenAIKey).mockReturnValueOnce(
