@@ -334,10 +334,12 @@ function validateWithError(raw: string, content: DecisionContent): ValidationRes
       const srcMultiLine = source[i].includes('\n');
       const item = items[i];
       if (srcMultiLine) {
+        // Cases 1+2: structural violations — fall back to original source text for this item
         if (!Array.isArray(item) || (item as unknown[]).length !== srcSteps) {
           result.push(source[i]);
           continue;
         }
+        // Case 3: content quality failure — keep error-return so retry still fires
         if (!(item as unknown[]).every((x) => typeof x === 'string' && (x as string).trim().length > 0))
           return `${key}[${i}] contains an empty or non-string step.`;
         result.push((item as string[]).join('\n'));

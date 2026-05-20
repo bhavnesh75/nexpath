@@ -353,6 +353,9 @@ describe('validateGeneratedOptions — multi-step fallback', () => {
     const result = validateGeneratedOptions(raw, TASK_REVIEW_BEGINNER);
     expect(result).not.toBeNull();
     expect(result!.l1[0]).toBe(TASK_REVIEW_BEGINNER.L1[0]);
+    expect(result!.l1[1]).toBe('Check done');
+    expect(result!.l2[0]).toBe('Looks good');
+    expect(result!.l3[0]).toBe('Nothing wrong');
   });
 
   it('multi-step item returned as string falls back to source text', () => {
@@ -364,6 +367,9 @@ describe('validateGeneratedOptions — multi-step fallback', () => {
     const result = validateGeneratedOptions(raw, TASK_REVIEW_BEGINNER);
     expect(result).not.toBeNull();
     expect(result!.l1[0]).toBe(TASK_REVIEW_BEGINNER.L1[0]);
+    expect(result!.l1[1]).toBe('Check done');
+    expect(result!.l2[0]).toBe('Looks good');
+    expect(result!.l3[0]).toBe('Nothing wrong');
   });
 
   it('valid multi-step item is joined and returned without fallback', () => {
@@ -388,11 +394,11 @@ describe('validateGeneratedOptions — multi-step fallback', () => {
 
   it('array returned for single-line source item returns null', () => {
     const raw = JSON.stringify({
-      l1: [['step one', 'step two', 'step three'], ['array', 'for', 'string']],
-      l2: ['Looks good'],
-      l3: ['Nothing wrong'],
+      l1: [['step one', 'step two', 'step three'], '[a] item two', '[a] item three'],
+      l2: ['[a] l2 one', '[a] l2 two'],
+      l3: ['[a] l3 one'],
     });
-    expect(validateGeneratedOptions(raw, TASK_REVIEW_BEGINNER)).toBeNull();
+    expect(validateGeneratedOptions(raw, TASK_REVIEW)).toBeNull();
   });
 });
 
