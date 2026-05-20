@@ -422,6 +422,17 @@ export function getKeychainName(platform: NodeJS.Platform = process.platform): s
 
 const defaultInstallPrompts: InstallPrompts = {
   apiKeyPrompt: async (ctx) => {
+    note(
+      [
+        'Nexpath needs an OpenAI API key to generate advisories.',
+        'Enter it once here — it will be stored securely and used',
+        'for all your projects until you run `nexpath uninstall`.',
+        '',
+        'Get a key: https://platform.openai.com/api-keys',
+      ].join('\n'),
+      'Step 1 of 3 — OpenAI API Key (required)',
+    );
+
     if (ctx.hasEnvKey) {
       const useEnv = await confirm({
         message:      'Detected existing API key in environment. Use it?',
@@ -447,6 +458,21 @@ const defaultInstallPrompts: InstallPrompts = {
     return { kind: 'new_key', value: String(input) };
   },
   telemetryConsent: async () => {
+    note(
+      [
+        'We highly recommend you provide us logs so we can',
+        'get better information to improve nexpath as much',
+        'as possible.',
+        '',
+        "What's collected:  anonymous usage events (command",
+        '                   names, timings, error types)',
+        "What's NOT sent:   your code, prompts, API key,",
+        '                   file paths, personal information',
+        '',
+        'Change anytime: `nexpath config set telemetry.enabled true|false`',
+      ].join('\n'),
+      'Step 2 of 3 — Telemetry',
+    );
     const answer = await confirm({
       message:      'Enable telemetry?',
       initialValue: true,
@@ -460,6 +486,7 @@ export interface InstallSummary {
   apiKey:    { source: 'keychain' | 'file' | 'kept' | 'skipped' };
   telemetry: { enabled: boolean };
   agents:    { registered: string[]; failed: string[] };
+  extras:    { clipboardInstalled: boolean; clipboardTool: string | null };
 }
 
 export async function installAction(
@@ -510,9 +537,11 @@ export async function installAction(
       if (result.kind === 'new_key') {
         const stored = await storeApiKey(result.value);
         apiKeySource = stored.source;
+        console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else if (result.kind === 'use_env') {
         const stored = await storeApiKey(envKey);
         apiKeySource = stored.source;
+        console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else if (result.kind === 'keep_existing') {
         apiKeySource = 'kept';
       } else {
@@ -545,7 +574,12 @@ export async function installAction(
   if (agents.length === 0) {
     console.log('No supported agents detected. Run nexpath install --help for details.');
     closeStore(store);
-    return { apiKey: { source: apiKeySource }, telemetry: { enabled: telemetryEnabled }, agents: { registered: [], failed: [] } };
+    return {
+      apiKey:    { source: apiKeySource },
+      telemetry: { enabled: telemetryEnabled },
+      agents:    { registered: [], failed: [] },
+      extras:    { clipboardInstalled: false, clipboardTool: null },
+    };
   }
 
   const detectedNames = agents.map((a) => a.label).join(', ');
@@ -618,8 +652,9 @@ export async function installAction(
 
   closeStore(store);
 
+  let clipboardResult: ClipboardEnsureResult = { installed: false, toolName: null, alreadyHad: false };
   if (!skipClipboardCheck) {
-    await ensureLinuxClipboard({ autoConfirm: opts.yes });
+    clipboardResult = await ensureLinuxClipboard({ autoConfirm: opts.yes });
   }
 
   // ── Final summary (note + outro) ─────────────────────────────────────────
@@ -627,12 +662,20 @@ export async function installAction(
     apiKey:    { source: apiKeySource },
     telemetry: { enabled: telemetryEnabled },
     agents:    { registered, failed },
+    extras:    {
+      clipboardInstalled: clipboardResult.installed,
+      clipboardTool:      clipboardResult.toolName,
+    },
   };
+  const extrasLine = clipboardResult.installed
+    ? `Extras:     ${clipboardResult.toolName} installed for clipboard`
+    : null;
   const summaryLines = [
     `API key:    ${apiKeySource}`,
     `Telemetry:  ${telemetryEnabled ? 'enabled' : 'disabled'}`,
     `Agents:     ${registered.length > 0 ? registered.join(', ') : 'none'}`,
     failed.length > 0 ? `Failed:     ${failed.join(', ')}` : null,
+    extrasLine,
     '',
     'Run `nexpath status` to verify connections.',
   ].filter((l): l is string => l !== null).join('\n');
@@ -665,6 +708,12 @@ const PKG_MANAGERS: PkgManager[] = [
  * Clipboard is optional — if install is skipped or fails, decision sessions
  * still work but "Copy to clipboard" silently does nothing.
  */
+export interface ClipboardEnsureResult {
+  installed:    boolean;
+  toolName:     string | null;
+  alreadyHad:   boolean;
+}
+
 export async function ensureLinuxClipboard(
   deps: {
     platform?: string;
@@ -674,15 +723,17 @@ export async function ensureLinuxClipboard(
     autoConfirm?: boolean;
     waylandDisplay?: string;
   } = {},
-): Promise<void> {
+): Promise<ClipboardEnsureResult> {
   const plat  = deps.platform ?? process.platform;
   const spawn = deps.spawnFn  ?? spawnSync;
   const exec  = deps.execFn   ?? execSync;
 
-  if (plat !== 'linux') return;
+  if (plat !== 'linux') return { installed: false, toolName: null, alreadyHad: false };
 
   for (const cmd of ['xclip', 'wl-copy', 'xsel']) {
-    if (spawn('which', [cmd], { stdio: 'pipe' }).status === 0) return;
+    if (spawn('which', [cmd], { stdio: 'pipe' }).status === 0) {
+      return { installed: false, toolName: cmd, alreadyHad: true };
+    }
   }
 
   // Wayland prefers wl-clipboard (provides wl-copy); X11 prefers xclip
@@ -699,7 +750,7 @@ export async function ensureLinuxClipboard(
   const pm = pkgManagers.find((p) => spawn('which', [p.cmd], { stdio: 'pipe' }).status === 0);
   if (!pm) {
     console.log(`\u26a0 No clipboard tool (xclip/wl-copy/xsel) found. Install one manually for clipboard support.`);
-    return;
+    return { installed: false, toolName: null, alreadyHad: false };
   }
 
   console.log('');
@@ -713,7 +764,7 @@ export async function ensureLinuxClipboard(
     const ok = await confirmFn();
     if (!ok) {
       console.log('\u26a0 Skipped \u2014 "Copy to clipboard" in decision sessions will not work.');
-      return;
+      return { installed: false, toolName: null, alreadyHad: false };
     }
   }
 
@@ -722,11 +773,13 @@ export async function ensureLinuxClipboard(
     // Verify installation succeeded
     if (spawn('which', [toolName], { stdio: 'pipe' }).status === 0) {
       console.log(`\u2713 ${pkgName} installed successfully`);
-    } else {
-      console.log(`\u26a0 ${pkgName} install command ran but ${toolName} not found \u2014 check output above`);
+      return { installed: true, toolName, alreadyHad: false };
     }
+    console.log(`\u26a0 ${pkgName} install command ran but ${toolName} not found \u2014 check output above`);
+    return { installed: false, toolName: null, alreadyHad: false };
   } catch {
     console.log(`\u26a0 ${pkgName} installation failed \u2014 install manually: sudo ${pm.cmd} install ${pkgName}`);
+    return { installed: false, toolName: null, alreadyHad: false };
   }
 }
 

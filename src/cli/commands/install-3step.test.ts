@@ -238,6 +238,77 @@ describe('install 3-step — Summary returned', () => {
   });
 });
 
+// ── Q3 + Q4 follow-ups: rich UI logs + clipboard in summary ─────────────────
+
+describe('install 3-step — Q3 rich UI: "Stored in <keychain>" confirmation line', () => {
+  it('logs "✓ Stored in <keychain>" after a new_key storeApiKey call', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      vi.mocked(resolver.storeApiKey).mockResolvedValueOnce({ source: 'keychain' });
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        platformForKeychain: 'darwin',
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async () => ({ kind: 'new_key', value: 'sk-abcdefghij1234567890abcdefghij' }),
+        }),
+      });
+      const output = logSpy.mock.calls.map(c => c[0] as string).join('\n');
+      expect(output).toContain('Stored in macOS Keychain');
+    } finally { cleanup(); }
+  });
+
+  it('logs "✓ Stored in fallback file" when storeApiKey falls back to the 0600 file', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      vi.mocked(resolver.storeApiKey).mockResolvedValueOnce({ source: 'file' });
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async () => ({ kind: 'new_key', value: 'sk-abcdefghij1234567890abcdefghij' }),
+        }),
+      });
+      const output = logSpy.mock.calls.map(c => c[0] as string).join('\n');
+      expect(output).toContain('Stored in fallback file');
+    } finally { cleanup(); }
+  });
+});
+
+describe('install 3-step — Q4: clipboard install reflected in summary', () => {
+  it('summary.extras has clipboardInstalled=false and clipboardTool=null when skipClipboardCheck is true', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const summary = await installAction({ yes: true }, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+      });
+      expect(summary!.extras.clipboardInstalled).toBe(false);
+      expect(summary!.extras.clipboardTool).toBeNull();
+    } finally { cleanup(); }
+  });
+
+  it('InstallSummary type includes extras { clipboardInstalled, clipboardTool } fields', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const summary = await installAction({ yes: true }, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+      });
+      expect(summary).not.toBeNull();
+      expect(summary!.extras).toBeDefined();
+      expect('clipboardInstalled' in summary!.extras).toBe(true);
+      expect('clipboardTool' in summary!.extras).toBe(true);
+    } finally { cleanup(); }
+  });
+});
+
 // ── getKeychainName platform variants ────────────────────────────────────────
 
 describe('getKeychainName', () => {
