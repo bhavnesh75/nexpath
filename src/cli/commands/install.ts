@@ -2,9 +2,15 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { confirm, isCancel } from '@clack/prompts';
+import { confirm, isCancel, password, note, intro, outro, cancel as clackCancel } from '@clack/prompts';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
-import { isConfigSet, setConfig } from '../../store/config.js';
+import { setConfig } from '../../store/config.js';
+import {
+  storeApiKey,
+  isValidApiKey,
+  getKeySource,
+  type KeySource,
+} from '../../config/ApiKeyResolver.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -380,6 +386,82 @@ const defaultConfirm: ConfirmFn = async () => {
   return !isCancel(answer) && answer === true;
 };
 
+// ── 3-step install UX prompt interface ───────────────────────────────────────
+
+export type ApiKeyPromptContext = {
+  hasEnvKey:    boolean;
+  hasStoredKey: boolean;
+  keychainName: string;
+};
+
+export type ApiKeyPromptResult =
+  | { kind: 'use_env' }
+  | { kind: 'keep_existing' }
+  | { kind: 'new_key'; value: string }
+  | { kind: 'skip' }
+  | { kind: 'cancel' };
+
+export type TelemetryConsentResult =
+  | { kind: 'enable' }
+  | { kind: 'disable' }
+  | { kind: 'cancel' };
+
+export interface InstallPrompts {
+  apiKeyPrompt:     (ctx: ApiKeyPromptContext) => Promise<ApiKeyPromptResult>;
+  telemetryConsent: () => Promise<TelemetryConsentResult>;
+}
+
+export function getKeychainName(platform: NodeJS.Platform = process.platform): string {
+  switch (platform) {
+    case 'darwin': return 'macOS Keychain';
+    case 'linux':  return 'Secret Service (libsecret)';
+    case 'win32':  return 'Credential Manager';
+    default:       return 'Encrypted file at ~/.nexpath/config.json';
+  }
+}
+
+const defaultInstallPrompts: InstallPrompts = {
+  apiKeyPrompt: async (ctx) => {
+    if (ctx.hasEnvKey) {
+      const useEnv = await confirm({
+        message:      'Detected existing API key in environment. Use it?',
+        initialValue: true,
+      });
+      if (isCancel(useEnv)) return { kind: 'cancel' };
+      if (useEnv === true)  return { kind: 'use_env' };
+    }
+    const promptMsg = ctx.hasStoredKey
+      ? `API Key (Enter to keep existing key stored in ${ctx.keychainName}):`
+      : `API Key (will be stored in ${ctx.keychainName}):`;
+    const input = await password({
+      message:  promptMsg,
+      validate: (value) => {
+        if (ctx.hasStoredKey && value === '') return undefined;
+        if (!isValidApiKey(value)) return 'Invalid OpenAI API key format (expected sk-...)';
+        return undefined;
+      },
+    });
+    if (isCancel(input)) return { kind: 'cancel' };
+    if (input === '' && ctx.hasStoredKey) return { kind: 'keep_existing' };
+    if (input === '') return { kind: 'skip' };
+    return { kind: 'new_key', value: String(input) };
+  },
+  telemetryConsent: async () => {
+    const answer = await confirm({
+      message:      'Enable telemetry?',
+      initialValue: true,
+    });
+    if (isCancel(answer)) return { kind: 'cancel' };
+    return answer === true ? { kind: 'enable' } : { kind: 'disable' };
+  },
+};
+
+export interface InstallSummary {
+  apiKey:    { source: 'keychain' | 'file' | 'kept' | 'skipped' };
+  telemetry: { enabled: boolean };
+  agents:    { registered: string[]; failed: string[] };
+}
+
 export async function installAction(
   opts: { yes?: boolean } = {},
   {
@@ -387,38 +469,83 @@ export async function installAction(
     paths = resolveAgentPaths(),
     execFn,
     confirmFn = defaultConfirm,
+    promptFn  = defaultInstallPrompts,
     dbPath = ':memory:',
     skipClipboardCheck = false,
+    platformForKeychain = process.platform,
   }: {
-    isWin?: boolean;
-    paths?: AgentPaths;
-    execFn?: ExecFn;
-    confirmFn?: ConfirmFn;
-    dbPath?: string;
-    skipClipboardCheck?: boolean;
+    isWin?:               boolean;
+    paths?:               AgentPaths;
+    execFn?:              ExecFn;
+    confirmFn?:           ConfirmFn;
+    promptFn?:            InstallPrompts;
+    dbPath?:              string;
+    skipClipboardCheck?:  boolean;
+    platformForKeychain?: NodeJS.Platform;
   } = {},
-): Promise<void> {
-  // ── First-run disclosure ───────────────────────────────────────────────────
-  const disclosureStore = await openStore(dbPath);
+): Promise<InstallSummary | null> {
+  intro('Installing nexpath');
+
+  const store = await openStore(dbPath);
+
+  let apiKeySource:  InstallSummary['apiKey']['source'] = 'skipped';
+  let telemetryEnabled = true;
+
   try {
-    if (!isConfigSet(disclosureStore.db, 'first_run_shown')) {
-      console.log('');
-      console.log('Before installing nexpath, a few things to know:');
-      console.log('  1. An OpenAI API key is required (OPENAI_API_KEY) for advisory generation');
-      console.log(`  2. Prompts are stored locally at ${DEFAULT_DB_PATH} — nothing leaves your machine`);
-      console.log(`  3. To opt out at any time: press ${process.platform === 'darwin' ? 'Cmd' : 'Ctrl'}+X during an advisory, or run nexpath uninstall`);
-      console.log('');
-      setConfig(disclosureStore, 'first_run_shown', 'true');
+    // ── Step 1: API key ───────────────────────────────────────────────────────
+    if (!opts.yes) {
+      const envKey       = process.env.OPENAI_API_KEY ?? '';
+      const hasEnvKey    = envKey !== '' && isValidApiKey(envKey);
+      const storedSource = await getKeySource(process.cwd());
+      const hasStoredKey = !hasEnvKey && (storedSource === 'keychain' || storedSource === 'file');
+      const keychainName = getKeychainName(platformForKeychain);
+
+      const result = await promptFn.apiKeyPrompt({ hasEnvKey, hasStoredKey, keychainName });
+
+      if (result.kind === 'cancel') {
+        clackCancel('Setup aborted — no changes made');
+        closeStore(store);
+        return null;
+      }
+      if (result.kind === 'new_key') {
+        const stored = await storeApiKey(result.value);
+        apiKeySource = stored.source;
+      } else if (result.kind === 'use_env') {
+        const stored = await storeApiKey(envKey);
+        apiKeySource = stored.source;
+      } else if (result.kind === 'keep_existing') {
+        apiKeySource = 'kept';
+      } else {
+        apiKeySource = 'skipped';
+      }
+    } else {
+      apiKeySource = 'skipped';
     }
+
+    // ── Step 2: Telemetry ─────────────────────────────────────────────────────
+    if (!opts.yes) {
+      const consent = await promptFn.telemetryConsent();
+      if (consent.kind === 'cancel') {
+        clackCancel('Setup aborted — no changes made');
+        closeStore(store);
+        return null;
+      }
+      telemetryEnabled = consent.kind === 'enable';
+    }
+    setConfig(store, 'telemetry.enabled', String(telemetryEnabled));
   } finally {
-    closeStore(disclosureStore);
+    if (store.dbPath !== ':memory:' || telemetryEnabled !== true) {
+      // close happens at end of step 3 path; nothing to do here
+    }
   }
 
+  // ── Step 3: Agent detection + registration ────────────────────────────────
   const agents = detectAgents(paths);
 
   if (agents.length === 0) {
     console.log('No supported agents detected. Run nexpath install --help for details.');
-    return;
+    closeStore(store);
+    return { apiKey: { source: apiKeySource }, telemetry: { enabled: telemetryEnabled }, agents: { registered: [], failed: [] } };
   }
 
   const detectedNames = agents.map((a) => a.label).join(', ');
@@ -428,13 +555,17 @@ export async function installAction(
     const ok = await confirmFn();
     if (!ok) {
       console.log('Cancelled.');
-      return;
+      closeStore(store);
+      return null;
     }
   }
 
   // NOTE: Enable REGISTER_MCP_SERVER when MCP tools are added to src/server/tools.ts.
   // Currently TOOLS is empty — no reason to spin up the MCP server process yet.
   const REGISTER_MCP_SERVER = false;
+
+  const registered: string[] = [];
+  const failed:     string[] = [];
 
   for (const agent of agents) {
     try {
@@ -453,8 +584,10 @@ export async function installAction(
         try {
           writeHookEntry(paths.claudeSettings, homedir(), isWin ? 'win32' : process.platform);
           console.log(`\u2713 ${'Claude Code'.padEnd(12)} \u2014 advisory hook written to ${paths.claudeSettings}`);
+          registered.push('Claude Code');
         } catch (err) {
           console.log(`\u26a0 ${'Claude Code'.padEnd(12)} \u2014 hook write failed: ${(err as Error).message}`);
+          failed.push('Claude Code');
         }
       } else if (REGISTER_MCP_SERVER) {
         if (agent.type === 'cline') {
@@ -470,9 +603,11 @@ export async function installAction(
           writeMcpEntry(agent.configPath, buildStandardEntry(isWin));
           console.log(`\u2713 ${agent.label.padEnd(12)} \u2014 written to ${agent.configPath}`);
         }
+        registered.push(agent.label);
       }
     } catch (err) {
       console.log(`\u2717 ${agent.label.padEnd(12)} \u2014 failed: ${(err as Error).message}`);
+      failed.push(agent.label);
     }
   }
 
@@ -481,9 +616,30 @@ export async function installAction(
   console.log('Note: advisory pipeline (nexpath auto) auto-wired for Claude Code only.');
   console.log('Run: nexpath status  to verify connections.');
 
+  closeStore(store);
+
   if (!skipClipboardCheck) {
     await ensureLinuxClipboard({ autoConfirm: opts.yes });
   }
+
+  // ── Final summary (note + outro) ─────────────────────────────────────────
+  const summary: InstallSummary = {
+    apiKey:    { source: apiKeySource },
+    telemetry: { enabled: telemetryEnabled },
+    agents:    { registered, failed },
+  };
+  const summaryLines = [
+    `API key:    ${apiKeySource}`,
+    `Telemetry:  ${telemetryEnabled ? 'enabled' : 'disabled'}`,
+    `Agents:     ${registered.length > 0 ? registered.join(', ') : 'none'}`,
+    failed.length > 0 ? `Failed:     ${failed.join(', ')}` : null,
+    '',
+    'Run `nexpath status` to verify connections.',
+  ].filter((l): l is string => l !== null).join('\n');
+  note(summaryLines, 'Setup Complete');
+  outro('Done!');
+
+  return summary;
 }
 
 // ── Linux clipboard tool auto-install ─────────────────────────────────────────
