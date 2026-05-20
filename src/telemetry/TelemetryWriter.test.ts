@@ -496,5 +496,54 @@ describe('TelemetryWriter — writeTelemetry', () => {
       );
       expect(enabledReads.length).toBe(1);
     });
+
+    it('cache also serves disabled state — repeated writes with telemetry.enabled=false do not re-read config', async () => {
+      setConfig(store, 'telemetry.enabled', 'false');
+      const config = await import('../store/config.js');
+      const { writeTelemetry } = await import('./TelemetryWriter.js');
+      const fs = await import('node:fs');
+
+      const appendSpy = vi.spyOn(fs, 'appendFileSync').mockImplementation(() => {});
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+
+      const getConfigSpy = vi.spyOn(config, 'getConfig');
+
+      writeTelemetry('/proj', 'prompt_received',   { promptCount: 1 }, store);
+      writeTelemetry('/proj', 'prompt_classified', { stage: 'planning' }, store);
+      writeTelemetry('/proj', 'absence_flags_detected', { newFlagsCount: 0 }, store);
+
+      expect(appendSpy).not.toHaveBeenCalled();
+      const enabledReads = getConfigSpy.mock.calls.filter(
+        (call) => call[1] === 'telemetry.enabled',
+      );
+      expect(enabledReads.length).toBe(1);
+    });
+
+    it('only the literal string "false" disables — empty string keeps writes enabled', async () => {
+      setConfig(store, 'telemetry.enabled', '');
+      const { writeTelemetry } = await import('./TelemetryWriter.js');
+      const fs = await import('node:fs');
+
+      const appendSpy = vi.spyOn(fs, 'appendFileSync').mockImplementation(() => {});
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+
+      writeTelemetry('/proj', 'prompt_received', { promptCount: 1 }, store);
+      expect(appendSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('disable check is case-sensitive — "False" does NOT disable, only lowercase "false"', async () => {
+      setConfig(store, 'telemetry.enabled', 'False');
+      const { writeTelemetry } = await import('./TelemetryWriter.js');
+      const fs = await import('node:fs');
+
+      const appendSpy = vi.spyOn(fs, 'appendFileSync').mockImplementation(() => {});
+      vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+      vi.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as never);
+
+      writeTelemetry('/proj', 'prompt_received', { promptCount: 1 }, store);
+      expect(appendSpy).toHaveBeenCalledTimes(1);
+    });
   });
 });
