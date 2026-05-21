@@ -145,7 +145,7 @@ function buildToneLine(profile: UserProfile): string {
  * Builds the feature word grounding section of the option generation prompt.
  *
  * Passes the last `promptWindow` session prompts to the LLM and instructs it
- * to extract 1–maxWords specific feature nouns and embed them naturally into
+ * to extract 1–maxWords specific feature nouns and embed them into
  * each generated option. If fewer prompts exist than the window, all are used.
  *
  * When `context` is provided, an informational advisory block is prepended that
@@ -175,19 +175,32 @@ function buildFeatureGroundingSection(
     }
   }
 
+  // stop-hook fires on signal prompt; feature noun is in the preceding window prompts
   return `
-Feature word grounding — embed at most ${maxWords} word(s) naturally per option:
+Feature word grounding — embed at most ${maxWords} word(s) per option:
 ${advisoryBlock}Most recent session prompts (current feature context — do not quote verbatim):
 ${promptLines}
-Extract the feature term from the last prompt listed only (the highest-numbered one).
-If it describes a meta-operation (fixing a bug, making something look nicer, deploying,
-restyling) with no specific feature noun, write 'this feature' as the replacement — it
-reads neutrally. Embed the term into each option by replacing the most fitting generic
-noun phrase. Valid replacement targets:
+Feature noun extraction — two steps:
+
+Step A — from the last prompt (highest-numbered), extract the most specific named component,
+page, field, or behaviour. A feature noun is present even in bug reports and styling prompts:
+  "the login is not working on my phone" → "login"
+  "the client list shows old data" → "client list"
+  "the pdf formatting is broken" → "pdf"
+  "one of my clients cant reset their password from the portal" → "forgot password"
+  "the portal page looks plain" → "client portal"
+Use 'this feature' ONLY when the last prompt contains NO named feature at all:
+  "fix this" / "make it look nicer" / "deploy it" / "where do i see errors" → 'this feature'
+
+Step B — if Step A falls back to 'this feature', scan the 4 prompts immediately before
+the last one. Use the most recent specific feature noun found there instead. Only keep
+'this feature' if none of those 4 prompts contains a specific feature noun.
+
+Embed the extracted term into each option by replacing the first matching generic noun phrase:
   "what was just built", "what was just made", "what was just created",
   "this project", "this feature".
-Replace the first natural occurrence per option only. If none of these phrases
-appears in an option, leave that option unchanged.`;
+Replace the first occurrence per option only. If none of these phrases appears in an
+option, leave that option unchanged.`;
 }
 
 // ── CO-STAR prompt ─────────────────────────────────────────────────────────────
