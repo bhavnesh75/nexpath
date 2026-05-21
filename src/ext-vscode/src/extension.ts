@@ -69,7 +69,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewViewProvider(VIEW_ID, viewProvider),
   );
 
-  // 3. Show onboarding (consent prompt + macOS FDA guidance). May await
+  // 3. On hosts that route non-modal info messages to the silent
+  //    notification stack (Cursor, Windsurf) instead of surfacing them as
+  //    transient bottom-right toasts (VS Code's default), pre-open the
+  //    notification panel so the consent toast in `showOnboardingIfNeeded`
+  //    is immediately visible. Best-effort — failures are silent because
+  //    the command id is host-dependent and the toast still lands in the
+  //    panel either way.
+  if (host !== 'vscode-generic') {
+    try {
+      await vscode.commands.executeCommand('notifications.showList');
+    } catch {
+      // ignored — discoverability hint, not load-bearing
+    }
+  }
+
+  // 4. Show onboarding (consent prompt + macOS FDA guidance). May await
   //    the user's click; safe — the activate flow is allowed to block.
   try {
     await showOnboardingIfNeeded(context);
@@ -78,7 +93,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     console.error('[nexpath] onboarding failed:', err);
   }
 
-  // 4. Watcher start-up — gated on consent + host being recognised. If the
+  // 5. Watcher start-up — gated on consent + host being recognised. If the
   //    user denied, the value is `false` (NOT undefined) → watcher does
   //    not start. If the host is vscode-generic, there's no AI chat to
   //    watch.
@@ -123,7 +138,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     targets.push({ path: codeiumDir!, kind: 'windsurf-dir' });
   }
 
-  // 5. Build the pipeline handler (auto → stop → publish) with real
+  // 6. Build the pipeline handler (auto → stop → publish) with real
   //    dependencies (ipc.spawnAuto / ipc.spawnStop / viewProvider.publishPayload).
   //    Session id is workspace-prefixed so concurrent workspaces don't
   //    collide on the same chat tab id.

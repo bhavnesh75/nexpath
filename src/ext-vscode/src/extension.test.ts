@@ -16,6 +16,7 @@ const {
   mockCreateChatEventHandler,
   mockShowInformationMessage,
   mockExistsSync,
+  mockExecuteCommand,
 } = vi.hoisted(() => ({
   mockShowOnboarding: vi.fn(),
   mockRegisterWebviewViewProvider: vi.fn(),
@@ -30,6 +31,7 @@ const {
   mockCreateChatEventHandler: vi.fn(() => vi.fn()),
   mockShowInformationMessage: vi.fn(),
   mockExistsSync: vi.fn(() => false),
+  mockExecuteCommand: vi.fn(),
 }));
 
 vi.mock('vscode', () => ({
@@ -46,7 +48,7 @@ vi.mock('vscode', () => ({
   },
   env: { appName: 'Visual Studio Code' },
   commands: {
-    executeCommand: vi.fn(),
+    executeCommand: mockExecuteCommand,
     getCommands: vi.fn().mockResolvedValue([]),
   },
 }));
@@ -134,6 +136,7 @@ describe('activate', () => {
     mockCreateChatEventHandler.mockReset().mockReturnValue(vi.fn());
     mockShowInformationMessage.mockReset();
     mockExistsSync.mockReset().mockReturnValue(false);
+    mockExecuteCommand.mockReset().mockResolvedValue(undefined);
     mockRegisterWebviewViewProvider.mockReturnValue({ dispose: vi.fn() });
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -255,6 +258,44 @@ describe('activate', () => {
     mockShowOnboarding.mockResolvedValueOnce(undefined);
     await activate(makeCtx() as never);
     expect(getViewProvider()).toBeDefined();
+  });
+
+  // ── Notification-panel pre-open (Cursor/Windsurf toast visibility) ─────────
+  // VS Code shows showInformationMessage toasts as transient bottom-right
+  // popups. Cursor and Windsurf route them to the silent notification stack
+  // (bell icon) and stay invisible until the user opens the panel. extension.ts
+  // pre-opens the panel via the `notifications.showList` command on non-VS-Code
+  // hosts so the consent toast is immediately discoverable. Dev plan §2.2 M11
+  // ("consent toast") + §2.5 cursor-quirks compliance.
+
+  it('on host=cursor: pre-opens notification panel before consent toast', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    await activate(makeCtx() as never);
+    expect(mockExecuteCommand).toHaveBeenCalledWith('notifications.showList');
+  });
+
+  it('on host=windsurf: pre-opens notification panel before consent toast', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('windsurf');
+    await activate(makeCtx() as never);
+    expect(mockExecuteCommand).toHaveBeenCalledWith('notifications.showList');
+  });
+
+  it('on host=vscode-generic: does NOT pre-open notification panel (toast surfaces natively)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('vscode-generic');
+    await activate(makeCtx() as never);
+    expect(mockExecuteCommand).not.toHaveBeenCalledWith('notifications.showList');
+  });
+
+  it('swallows errors from notifications.showList (best-effort discoverability hint)', async () => {
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    mockExecuteCommand.mockRejectedValueOnce(new Error('command not found'));
+    await expect(activate(makeCtx() as never)).resolves.toBeUndefined();
+    // Onboarding still runs even though showList rejected
+    expect(mockShowOnboarding).toHaveBeenCalledOnce();
   });
 
   // ── Windsurf codeium-cascade dir wiring (Drift A fix) ──────────────────────
