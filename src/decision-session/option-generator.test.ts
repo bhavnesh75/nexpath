@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   buildAdaptationPrompt,
+  buildEmbeddingPrompt,
   validateGeneratedOptions,
   generateOptionList,
   OPTION_GEN_MAX_RETRIES,
@@ -586,5 +587,136 @@ describe('buildAdaptationPrompt — type contract', () => {
     expect(contractIdx).toBeGreaterThan(-1);
     expect(inputIdx).toBeGreaterThan(-1);
     expect(contractIdx).toBeLessThan(inputIdx);
+  });
+});
+
+// ── buildEmbeddingPrompt — feature word grounding ────────────────────────────
+
+describe('buildEmbeddingPrompt — feature word grounding', () => {
+  const adaptedOpts: GeneratedOptions = {
+    l1: ['Check the login flow.', 'Run tests.', 'Flag gaps.'],
+    l2: ['Quick check.', 'Verify.'],
+    l3: ['Any problems?'],
+  };
+
+  it('contains R4 two-step extraction header with Step A and Step B', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('Feature noun extraction — two steps');
+    expect(prompt).toContain('Step A');
+    expect(prompt).toContain('Step B');
+  });
+
+  it('R8 scoped non-quotation header present', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('do not copy these prompts verbatim into option text');
+    expect(prompt).toContain('extracting specific nouns for feature grounding is required');
+  });
+
+  it('includes stage_transition advisory context block when context provided', () => {
+    const context: OptionGenContext = {
+      flagType:              'stage_transition',
+      currentStage:          'testing',
+      prevStage:             'implementation',
+      promptsInCurrentStage: 5,
+    };
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('fix the tests', 0)], context);
+    expect(prompt).toContain('stage_transition');
+    expect(prompt).toContain('implementation');
+    expect(prompt).toContain('testing');
+  });
+
+  it('includes absence advisory context block when context provided', () => {
+    const context: OptionGenContext = {
+      flagType:              'absence:test_creation',
+      currentStage:          'implementation',
+      promptsInCurrentStage: 12,
+    };
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('add the login page', 0)], context);
+    expect(prompt).toContain('absence advisory');
+    expect(prompt).toContain('test_creation');
+  });
+
+  it('no advisory context block when context is undefined', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).not.toContain('Advisory context:');
+  });
+
+  it('respects promptWindow — prompts outside window do not appear', () => {
+    const history = [
+      makePrompt('OUTSIDE_WINDOW_SENTINEL', 0),
+      makePrompt('OUTSIDE_WINDOW_SENTINEL', 1),
+      ...Array.from({ length: GroundingConfig.promptWindow - 1 }, (_, i) =>
+        makePrompt(`inside-prompt-${i}`, i + 2),
+      ),
+      makePrompt('INSIDE_WINDOW_SENTINEL', GroundingConfig.promptWindow + 1),
+    ];
+    const prompt = buildEmbeddingPrompt(adaptedOpts, history);
+    expect(prompt).not.toContain('OUTSIDE_WINDOW_SENTINEL');
+    expect(prompt).toContain('INSIDE_WINDOW_SENTINEL');
+  });
+});
+
+// ── buildEmbeddingPrompt — embedding instruction ──────────────────────────────
+
+describe('buildEmbeddingPrompt — embedding instruction', () => {
+  const adaptedOpts: GeneratedOptions = {
+    l1: ['Check the login flow.', 'Run tests.', 'Flag gaps.'],
+    l2: ['Quick check.', 'Verify.'],
+    l3: ['Any problems?'],
+  };
+
+  it('embed instruction present and contains no "naturally" qualifier', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('Embed the extracted feature noun');
+    expect(prompt).not.toContain('naturally');
+  });
+
+  it('Design B fallback instruction present', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('If none of these phrases survived adaptation');
+  });
+
+  it('input JSON reflects adaptedOptions not static content', () => {
+    const unique = 'UNIQUE_ADAPTED_OPTION_TEXT_XYZ';
+    const opts: GeneratedOptions = {
+      l1: [unique, 'opt2', 'opt3'],
+      l2: ['opt4', 'opt5'],
+      l3: ['opt6'],
+    };
+    const prompt = buildEmbeddingPrompt(opts, [makePrompt('build something', 0)]);
+    expect(prompt).toContain(unique);
+  });
+
+  it('type contract labels reflect adaptedOptions item types', () => {
+    const multiStep: GeneratedOptions = {
+      l1: ['step1\nstep2\nstep3', 'plain string'],
+      l2: ['another string'],
+      l3: ['last string'],
+    };
+    const prompt = buildEmbeddingPrompt(multiStep, [makePrompt('build something', 0)]);
+    expect(prompt).toContain('l1: [ARRAY(3), STRING]');
+  });
+
+  it('type contract appears before input JSON block', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    const contractIdx = prompt.indexOf('Item type contract');
+    const inputIdx    = prompt.indexOf('Now embed the feature noun');
+    expect(contractIdx).toBeGreaterThan(-1);
+    expect(inputIdx).toBeGreaterThan(-1);
+    expect(contractIdx).toBeLessThan(inputIdx);
+  });
+
+  it('all 5 Research 5 examples are present', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('Feature noun: "login flow"');       // P2-1
+    expect(prompt).toContain('Feature noun: "recurring invoice"'); // P2-2
+    expect(prompt).toContain('Feature noun: "client portal"');    // P2-3
+    expect(prompt).toContain('Feature noun: "invoice reminder"'); // P2-4
+    expect(prompt).toContain('login is still working');           // P2-5 Design B output
+  });
+
+  it('response format instruction present', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    expect(prompt).toContain('Response — return JSON only');
   });
 });
