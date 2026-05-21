@@ -671,6 +671,15 @@ describe('buildEmbeddingPrompt — embedding instruction', () => {
     expect(prompt).not.toContain('naturally');
   });
 
+  it('R4 positive and negative extraction examples present', () => {
+    const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
+    // Positive — bug/styling prompt with a feature noun → noun extracted
+    expect(prompt).toContain('"the login is not working on my phone" → "login"');
+    // Negative — genuinely meta prompt with no feature noun → 'this feature' fallback
+    expect(prompt).toContain('"fix this"');
+    expect(prompt).toContain("'this feature'");
+  });
+
   it('Design B fallback instruction present', () => {
     const prompt = buildEmbeddingPrompt(adaptedOpts, [makePrompt('build the login page', 0)]);
     expect(prompt).toContain('If none of these phrases survived adaptation');
