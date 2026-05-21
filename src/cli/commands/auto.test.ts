@@ -1212,6 +1212,11 @@ describe('runAuto — generated options wiring', () => {
   it('advisory stores generatedL1/L2/L3 when generateOptionList returns valid options', async () => {
     const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
     const { TASK_REVIEW } = await import('../../decision-session/options.js');
+
+    for (let i = 0; i < 2; i++) {
+      await runAuto(makeInput({ projectRoot: '/test/gen-opts' }), store);
+    }
+
     const mgr = SessionStateManager.load(store, '/test/gen-opts');
     mgr.addAbsenceFlag(store, {
       signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: 0, cooldownUntil: 100,
