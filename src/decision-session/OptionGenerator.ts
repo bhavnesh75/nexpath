@@ -178,7 +178,7 @@ function buildFeatureGroundingSection(
   // stop-hook fires on signal prompt; feature noun is in the preceding window prompts
   return `
 Feature word grounding — embed at most ${maxWords} word(s) per option:
-${advisoryBlock}Most recent session prompts (current feature context — do not quote verbatim):
+${advisoryBlock}Most recent session prompts (current feature context — do not copy these prompts verbatim into option text; extracting specific nouns for feature grounding is required):
 ${promptLines}
 Feature noun extraction — two steps:
 
