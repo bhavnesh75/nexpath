@@ -233,13 +233,27 @@ describe('activate', () => {
     await activate(makeCtx(true) as never);
     expect(mockCreateChatEventHandler).toHaveBeenCalledOnce();
     const deps = mockCreateChatEventHandler.mock.calls[0]![0] as {
-      composeSessionId?: (e: { rawSessionId: string }) => string;
+      composeSessionId?: (e: {
+        rawSessionId: string;
+        sourcePath: string;
+        prompt: string;
+        capturedAt: Date;
+        extractorId: string;
+      }) => string;
     };
     expect(typeof deps.composeSessionId).toBe('function');
-    const composed = deps.composeSessionId!({ rawSessionId: 'tab-1' });
-    // workspaceFolders is undefined in the mock → the composer falls back to
-    // `process.cwd()`. We don't pin the literal value because it differs by
-    // runner; just assert it ends with the tab id and contains the pipe.
+    // R4.3 fix: composer now derives cwd per-event from event.sourcePath via
+    // sibling workspace.json lookup. The fake path here has no real
+    // workspace.json on disk → helper returns null → composer falls back to
+    // the extension instance's workspaceCwd (process.cwd() since
+    // workspaceFolders is undefined in the mock).
+    const composed = deps.composeSessionId!({
+      rawSessionId: 'tab-1',
+      sourcePath: '/fake/ws/a/state.vscdb',
+      prompt: 'irrelevant',
+      capturedAt: new Date(0),
+      extractorId: 'cursor-v2024-q4',
+    });
     expect(composed.endsWith('|tab-1')).toBe(true);
     expect(composed).toMatch(/.+\|tab-1$/);
   });

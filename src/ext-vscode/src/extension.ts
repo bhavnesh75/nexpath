@@ -19,7 +19,8 @@ import {
 } from './chat-history-watcher.js';
 import { createChatEventHandler } from './chat-pipeline.js';
 import { spawnAuto, spawnStop } from './ipc.js';
-import type { WatchTarget } from './chat-history-types.js';
+import { resolveWorkspaceFromDbPath } from './resolve-db-workspace.js';
+import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
 
 /**
  * Module-level state held across activate / deactivate so the watcher's
@@ -109,7 +110,44 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
 
   const wsStorage = workspaceStorageDir({ host });
-  const dbPaths = enumerateStateVscdbPaths(wsStorage);
+  const allDbPaths = enumerateStateVscdbPaths(wsStorage);
+
+  // Multi-workspace correctness (R4.3 fix):
+  // Cursor / Windsurf keep ONE workspaceStorage/<hash>/state.vscdb per open
+  // workspace, but every running extension instance can see all of them.
+  // If every instance watched every db, two open windows would each capture
+  // every prompt — producing duplicate rows in prompt-store.db with one
+  // row mis-attributed to the wrong window's cwd.
+  //
+  // The defensive choice: filter to dbs whose sibling workspace.json#folder
+  // matches THIS instance's workspaceCwd. Each db ends up watched by
+  // exactly one instance, so prompts land in prompt-store.db exactly once
+  // with the correct project_root.
+  //
+  // Fallback ladder:
+  //   - No workspace folder open (window-without-folder): can't filter →
+  //     keep current "watch all" behaviour so the user still gets capture.
+  //   - workspace.json missing / multi-root (.code-workspace with
+  //     `configuration` not `folder`) / unparseable: keep that db in the
+  //     watch list, and rely on per-event cwd resolution below to attribute
+  //     correctly.
+  const ownWorkspaceCwd =
+    vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null;
+  const dbPaths =
+    ownWorkspaceCwd === null
+      ? allDbPaths
+      : allDbPaths.filter((p) => {
+          const folder = resolveWorkspaceFromDbPath(p);
+          // null → workspace.json missing/unparseable → keep as defensive
+          // catch-all (per-event resolution will sort attribution).
+          return folder === null || folder === ownWorkspaceCwd;
+        });
+  if (ownWorkspaceCwd !== null && dbPaths.length < allDbPaths.length) {
+    log(
+      `[nexpath] filtered ${allDbPaths.length - dbPaths.length} cross-workspace db(s); ` +
+        `watching ${dbPaths.length} for own workspace ${ownWorkspaceCwd}`,
+    );
+  }
 
   // Per dev plan §2.3 acceptance #2, Windsurf's chat data may also live at
   // `~/.codeium/windsurf/` (legacy Codeium Cascade store) in addition to
@@ -152,11 +190,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // .env loading.
   const workspaceCwd =
     vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
+  // Per-event cwd resolution (defense-in-depth alongside the enumeration
+  // filter above). For every captured prompt, derive cwd from the db that
+  // fired the event — NOT the extension instance's workspaceCwd. Falls
+  // back to instance cwd when workspace.json is missing / multi-root.
+  const cwdForEvent = (event: ChatHistoryEvent): string =>
+    resolveWorkspaceFromDbPath(event.sourcePath) ?? workspaceCwd;
   const handleChatEvent = createChatEventHandler({
-    spawnAuto: (prompt, sid) => spawnAuto(prompt, sid, { cwd: workspaceCwd }),
-    spawnStop: (sid) => spawnStop(sid, { cwd: workspaceCwd }),
+    spawnAuto: (prompt, sid, event) =>
+      spawnAuto(prompt, sid, { cwd: cwdForEvent(event) }),
+    spawnStop: (sid, event) => spawnStop(sid, { cwd: cwdForEvent(event) }),
     publishPayload: (payload) => viewProvider?.publishPayload(payload),
-    composeSessionId: (event) => `${workspaceCwd}|${event.rawSessionId}`,
+    composeSessionId: (event) => `${cwdForEvent(event)}|${event.rawSessionId}`,
     // Wire IPC failures (e.g. nexpath binary not on PATH → ENOENT) into
     // the Nexpath OutputChannel so they surface to the user. Default logger
     // only writes to console.error which is invisible outside Developer

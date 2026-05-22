@@ -35,10 +35,25 @@ import type { DecisionSessionPayload } from './ipc.js';
  */
 
 export interface ChatPipelineDeps {
-  /** Inject `ipc.spawnAuto`. Tests pass a mock. */
-  spawnAuto: (prompt: string, sessionId: string) => Promise<void>;
+  /**
+   * Inject `ipc.spawnAuto`. Tests pass a mock.
+   *
+   * The third argument carries the originating `ChatHistoryEvent` so the
+   * caller can derive a per-event `cwd` from `event.sourcePath` — necessary
+   * for multi-workspace correctness, since one extension instance may watch
+   * `state.vscdb` files belonging to other workspaces and must attribute
+   * each prompt to its true project root, not to its own `workspaceCwd`.
+   */
+  spawnAuto: (
+    prompt: string,
+    sessionId: string,
+    event: ChatHistoryEvent,
+  ) => Promise<void>;
   /** Inject `ipc.spawnStop`. Tests pass a mock. */
-  spawnStop: (sessionId: string) => Promise<DecisionSessionPayload | null>;
+  spawnStop: (
+    sessionId: string,
+    event: ChatHistoryEvent,
+  ) => Promise<DecisionSessionPayload | null>;
   /** Inject the view-provider's `publishPayload`. Tests pass a mock. */
   publishPayload: (payload: DecisionSessionPayload) => void;
   /**
@@ -70,14 +85,14 @@ export function createChatEventHandler(
   return async (event: ChatHistoryEvent): Promise<void> => {
     const sessionId = composeSessionId(event);
     try {
-      await deps.spawnAuto(event.prompt, sessionId);
+      await deps.spawnAuto(event.prompt, sessionId, event);
     } catch (err) {
       logger.error('[nexpath] spawnAuto failed:', err);
       return;
     }
     let payload: DecisionSessionPayload | null;
     try {
-      payload = await deps.spawnStop(sessionId);
+      payload = await deps.spawnStop(sessionId, event);
     } catch (err) {
       logger.error('[nexpath] spawnStop failed:', err);
       return;

@@ -38,9 +38,10 @@ describe('createChatEventHandler', () => {
       publishPayload,
       logger: { error: errorLog },
     });
-    await handler(makeEvent());
-    expect(spawnAuto).toHaveBeenCalledWith('hello world', 'tab:abc-123');
-    expect(spawnStop).toHaveBeenCalledWith('tab:abc-123');
+    const event = makeEvent();
+    await handler(event);
+    expect(spawnAuto).toHaveBeenCalledWith('hello world', 'tab:abc-123', event);
+    expect(spawnStop).toHaveBeenCalledWith('tab:abc-123', event);
     expect(publishPayload).toHaveBeenCalledWith(fakePayload);
     expect(errorLog).not.toHaveBeenCalled();
   });
@@ -69,10 +70,36 @@ describe('createChatEventHandler', () => {
       composeSessionId: compose,
       logger: { error: errorLog },
     });
-    await handler(makeEvent());
+    const event = makeEvent();
+    await handler(event);
     expect(compose).toHaveBeenCalledOnce();
-    expect(spawnAuto).toHaveBeenCalledWith('hello world', 'ws-X|tab:abc-123');
-    expect(spawnStop).toHaveBeenCalledWith('ws-X|tab:abc-123');
+    expect(spawnAuto).toHaveBeenCalledWith(
+      'hello world',
+      'ws-X|tab:abc-123',
+      event,
+    );
+    expect(spawnStop).toHaveBeenCalledWith('ws-X|tab:abc-123', event);
+  });
+
+  it('forwards the originating ChatHistoryEvent so callers can derive per-event cwd', async () => {
+    // Multi-workspace R4.3 regression guard. If two extension instances
+    // ever watch the same db, each must be able to attribute the prompt
+    // to the source workspace via event.sourcePath — not to its own cwd.
+    spawnStop.mockResolvedValueOnce(fakePayload);
+    const handler = createChatEventHandler({
+      spawnAuto,
+      spawnStop,
+      publishPayload,
+      logger: { error: errorLog },
+    });
+    const event = makeEvent({
+      sourcePath: '/home/u/.config/Cursor/User/workspaceStorage/abc/state.vscdb',
+    });
+    await handler(event);
+    const autoCallEvent = spawnAuto.mock.calls[0][2] as ChatHistoryEvent;
+    const stopCallEvent = spawnStop.mock.calls[0][1] as ChatHistoryEvent;
+    expect(autoCallEvent.sourcePath).toBe(event.sourcePath);
+    expect(stopCallEvent.sourcePath).toBe(event.sourcePath);
   });
 
   it('logs and returns early when spawnAuto rejects (no stop, no publish)', async () => {
