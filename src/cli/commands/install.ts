@@ -807,12 +807,14 @@ export async function uninstallAction(
     apiKeyConfirmFn = defaultUninstallApiKeyConfirm,
     yes = false,
     projectRoot = process.cwd(),
+    dbPath,
   }: {
     paths?:           AgentPaths;
     execFn?:          ExecFn;
     apiKeyConfirmFn?: UninstallApiKeyConfirmFn;
     yes?:             boolean;
     projectRoot?:     string;
+    dbPath?:          string;
   } = {},
 ): Promise<void> {
   const agents = detectAgents(paths);
@@ -865,6 +867,20 @@ export async function uninstallAction(
     } else {
       console.log('- API key retained; remove later with `nexpath config remove-api-key`.');
     }
+  }
+
+  // ── Telemetry config cleanup ─────────────────────────────────────────────
+  try {
+    const store = await openStore(dbPath ?? DEFAULT_DB_PATH);
+    try {
+      setConfig(store, 'telemetry.enabled',      'false');
+      setConfig(store, 'telemetry_sync_enabled', 'false');
+      console.log('✓ Telemetry disabled in local config.');
+    } finally {
+      closeStore(store);
+    }
+  } catch {
+    // Best-effort — never crash uninstall over a config write failure.
   }
 
   console.log('');
