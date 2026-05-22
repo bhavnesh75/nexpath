@@ -26,11 +26,8 @@ type ClipboardCmd = [cmd: string, args: string[]];
  *   - Imports @clack/prompts select() from the resolved clackUrl
  *   - Reads opts (message + options) from optFileFwd
  *   - Calls select() — full arrow-key UI, visual cursor, ANSI rendering
- *   - Writes the selected value to resultFileFwd (or nothing on cancel/timeout)
+ *   - Writes the selected value to resultFileFwd (or nothing on cancel/close)
  *   - Exits with process.exit(0)
- *
- * 60-second timeout via Promise.race: if user ignores the window, the script
- * exits cleanly without writing the result file → hook treats as 'skipped'.
  *
  * clipboardCmds: ordered list of clipboard commands to try. The script
  * iterates until one succeeds (status 0). Single entry for Windows/macOS,
