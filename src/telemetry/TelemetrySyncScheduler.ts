@@ -267,7 +267,10 @@ export function createDefaultScheduler(
     onSync: onSyncOverride ?? defaultOnSync,
     isEnabled: () => {
       try {
-        return getConfig(store.db, 'telemetry_sync_enabled') === 'true';
+        const syncFlag = getConfig(store.db, 'telemetry_sync_enabled');
+        if (syncFlag !== undefined) return syncFlag === 'true';
+        // Fallback: respect top-level telemetry.enabled (defaults to 'true').
+        return getConfig(store.db, 'telemetry.enabled') !== 'false';
       } catch {
         return false;
       }

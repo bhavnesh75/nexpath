@@ -380,19 +380,23 @@ describe('TelemetrySyncScheduler — start/stop with fake timers', () => {
 });
 
 describe('createDefaultScheduler — isEnabled wired through config', () => {
-  it('returns false when telemetry_sync_enabled config key is unset (default disabled)', async () => {
+  it('falls back to telemetry.enabled when telemetry_sync_enabled is unset (default enabled)', async () => {
+    // When telemetry_sync_enabled is not explicitly set, sync is gated by
+    // telemetry.enabled, which defaults to 'true'. This keeps legacy installs
+    // (set before install.ts started writing telemetry_sync_enabled) working
+    // without a migration script.
     const store = await openStore(':memory:');
     try {
       const onSync = vi.fn(async () => {});
       const s     = createDefaultScheduler(store, onSync);
       await s.syncNow();
-      expect(onSync).not.toHaveBeenCalled();
+      expect(onSync).toHaveBeenCalledTimes(1);
     } finally {
       closeStore(store);
     }
   });
 
-  it('returns true only when telemetry_sync_enabled config key is set to "true"', async () => {
+  it('returns true when telemetry_sync_enabled config key is set to "true"', async () => {
     const store = await openStore(':memory:');
     try {
       setConfig(store, 'telemetry_sync_enabled', 'true');
@@ -405,14 +409,55 @@ describe('createDefaultScheduler — isEnabled wired through config', () => {
     }
   });
 
-  it('treats any value other than "true" as disabled', async () => {
+  it('explicit telemetry_sync_enabled="false" disables sync regardless of telemetry.enabled', async () => {
     const store = await openStore(':memory:');
     try {
       setConfig(store, 'telemetry_sync_enabled', 'false');
+      // telemetry.enabled defaults to 'true' here — explicit sync flag wins.
       const onSync = vi.fn(async () => {});
       const s     = createDefaultScheduler(store, onSync);
       await s.syncNow();
       expect(onSync).not.toHaveBeenCalled();
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('fallback path: sync_enabled unset + telemetry.enabled="false" → disabled', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry.enabled', 'false');
+      const onSync = vi.fn(async () => {});
+      const s     = createDefaultScheduler(store, onSync);
+      await s.syncNow();
+      expect(onSync).not.toHaveBeenCalled();
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('fallback path: sync_enabled unset + telemetry.enabled explicit "true" → enabled', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry.enabled', 'true');
+      const onSync = vi.fn(async () => {});
+      const s     = createDefaultScheduler(store, onSync);
+      await s.syncNow();
+      expect(onSync).toHaveBeenCalledTimes(1);
+    } finally {
+      closeStore(store);
+    }
+  });
+
+  it('explicit sync_enabled="true" wins even if telemetry.enabled="false"', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry.enabled',      'false');
+      setConfig(store, 'telemetry_sync_enabled', 'true');
+      const onSync = vi.fn(async () => {});
+      const s     = createDefaultScheduler(store, onSync);
+      await s.syncNow();
+      expect(onSync).toHaveBeenCalledTimes(1);
     } finally {
       closeStore(store);
     }
