@@ -470,6 +470,9 @@ const defaultInstallPrompts: InstallPrompts = {
         "What's NOT sent:   your code, prompts, API key,",
         '                   file paths, personal information',
         '',
+        'Yes  → events captured locally AND auto-synced to our server',
+        'No   → no capture, no sync — full stop',
+        '',
         'Change anytime: `nexpath config set telemetry.enabled true|false`',
       ].join('\n'),
       'Step 2 of 3 — Telemetry',
@@ -562,7 +565,8 @@ export async function installAction(
       }
       telemetryEnabled = consent.kind === 'enable';
     }
-    setConfig(store, 'telemetry.enabled', String(telemetryEnabled));
+    setConfig(store, 'telemetry.enabled',      String(telemetryEnabled));
+    setConfig(store, 'telemetry_sync_enabled', String(telemetryEnabled));
   } finally {
     if (store.dbPath !== ':memory:' || telemetryEnabled !== true) {
       // close happens at end of step 3 path; nothing to do here

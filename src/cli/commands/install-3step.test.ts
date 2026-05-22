@@ -19,7 +19,7 @@ import {
 } from './install.js';
 import * as resolver from '../../config/ApiKeyResolver.js';
 import { openStore, closeStore } from '../../store/db.js';
-import { getConfig } from '../../store/config.js';
+import { getConfig, isConfigSet } from '../../store/config.js';
 
 function tmpDirAgents(): { dir: string; cleanup: () => void } {
   const dir = join(tmpdir(), `nexpath-install3-${randomUUID()}`);
@@ -147,7 +147,7 @@ describe('install 3-step — Step 1: API key', () => {
 // ── Step 2: Telemetry consent ────────────────────────────────────────────────
 
 describe('install 3-step — Step 2: Telemetry consent', () => {
-  it('enable → telemetry.enabled set to "true" in config', async () => {
+  it('enable → telemetry.enabled AND telemetry_sync_enabled both set to "true" in config', async () => {
     const { dir, cleanup } = tmpDirAgents();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const dbPath = join(dir, 'telem.db');
@@ -161,11 +161,12 @@ describe('install 3-step — Step 2: Telemetry consent', () => {
       });
       const store = await openStore(dbPath);
       expect(getConfig(store.db, 'telemetry.enabled')).toBe('true');
+      expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('true');
       closeStore(store);
     } finally { cleanup(); }
   });
 
-  it('disable → telemetry.enabled set to "false" in config', async () => {
+  it('disable → telemetry.enabled AND telemetry_sync_enabled both set to "false" in config', async () => {
     const { dir, cleanup } = tmpDirAgents();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const dbPath = join(dir, 'telem-off.db');
@@ -179,6 +180,26 @@ describe('install 3-step — Step 2: Telemetry consent', () => {
       });
       const store = await openStore(dbPath);
       expect(getConfig(store.db, 'telemetry.enabled')).toBe('false');
+      expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('false');
+      closeStore(store);
+    } finally { cleanup(); }
+  });
+
+  it('--yes mode → both telemetry.enabled and telemetry_sync_enabled set to "true" in DB', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const dbPath = join(dir, 'telem-yes-mode.db');
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        dbPath,
+      });
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'telemetry.enabled')).toBe('true');
+      expect(getConfig(store.db, 'telemetry_sync_enabled')).toBe('true');
+      expect(isConfigSet(store.db, 'telemetry.enabled')).toBe(true);
+      expect(isConfigSet(store.db, 'telemetry_sync_enabled')).toBe(true);
       closeStore(store);
     } finally { cleanup(); }
   });
@@ -402,12 +423,9 @@ describe('install 3-step — cancellation aborts subsequent steps', () => {
       });
       expect(summary).toBeNull();
       expect(telemetrySpy).not.toHaveBeenCalled();
-      // Fresh DB → no telemetry.enabled row was written (default still resolves on read)
       const store = await openStore(dbPath);
-      // Re-opening returns the DEFAULT_CONFIG fallback, so we cannot tell from
-      // getConfig alone whether the row was explicitly written. Use isConfigSet
-      // by reading the raw config table instead — but here we just assert the
-      // summary contract (null on cancel).
+      expect(isConfigSet(store.db, 'telemetry.enabled')).toBe(false);
+      expect(isConfigSet(store.db, 'telemetry_sync_enabled')).toBe(false);
       closeStore(store);
     } finally { cleanup(); }
   });
@@ -429,6 +447,11 @@ describe('install 3-step — cancellation aborts subsequent steps', () => {
       expect(summary).toBeNull();
       // Step 1 already wrote: storeApiKey was called.
       expect(resolver.storeApiKey).toHaveBeenCalledWith('sk-abcdefghij1234567890abcdefghij');
+      // Step 2 was cancelled → neither telemetry flag should be written.
+      const store = await openStore(dbPath);
+      expect(isConfigSet(store.db, 'telemetry.enabled')).toBe(false);
+      expect(isConfigSet(store.db, 'telemetry_sync_enabled')).toBe(false);
+      closeStore(store);
     } finally { cleanup(); }
   });
 });
