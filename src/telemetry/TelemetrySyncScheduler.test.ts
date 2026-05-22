@@ -463,6 +463,20 @@ describe('createDefaultScheduler — isEnabled wired through config', () => {
     }
   });
 
+  it('both flags explicitly "false" → disabled (lower bound)', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'telemetry.enabled',      'false');
+      setConfig(store, 'telemetry_sync_enabled', 'false');
+      const onSync = vi.fn(async () => {});
+      const s     = createDefaultScheduler(store, onSync);
+      await s.syncNow();
+      expect(onSync).not.toHaveBeenCalled();
+    } finally {
+      closeStore(store);
+    }
+  });
+
   it('reads telemetry_sync_min_minutes and telemetry_sync_max_minutes from config', async () => {
     const store = await openStore(':memory:');
     try {
