@@ -172,20 +172,51 @@ export const defaultReadItemTable: ReadItemTableFn = async (dbPath) => {
     } catch {
       // Not in WAL mode — fine, continue.
     }
-    // Defensive: ItemTable may not exist on freshly-created VS Code
-    // state.vscdb files; treat as empty rather than throwing.
-    const tables = (
+    // Discover which of the known chat-data tables exist in this DB.
+    // - `ItemTable` is the standard VS Code state table — holds Ask-mode
+    //   `aiService.prompts` (cursor-v2024-q4) and the Composer-metadata
+    //   `composer.composerData` row (cursor-v2025-q1).
+    // - `cursorDiskKV` is Cursor's modern Composer / Agent chat storage —
+    //   `composerData:<uuid>` (metadata) + `bubbleId:<composerId>:<bubbleId>`
+    //   (individual user / assistant messages). Lives in `globalStorage/
+    //   state.vscdb` and is the default storage location for Cursor's
+    //   Agent mode (the right-side chat panel in 3.4.20+).
+    // Either table may be absent on freshly-created state.vscdb files;
+    // treat as empty rather than throwing.
+    const tableNames = (
       db
         .prepare(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='ItemTable'",
+          "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('ItemTable','cursorDiskKV')",
         )
         .all() as Array<{ name: string }>
-    ).length;
-    if (tables === 0) return [];
-    const rows = db
-      .prepare('SELECT key, value FROM ItemTable')
-      .all() as Array<{ key: string; value: string }>;
-    return rows.map((r) => ({ key: String(r.key), value: String(r.value) }));
+    ).map((r) => r.name);
+    const out: Array<{ key: string; value: string }> = [];
+    if (tableNames.includes('ItemTable')) {
+      const rows = db
+        .prepare('SELECT key, value FROM ItemTable')
+        .all() as Array<{ key: string; value: string }>;
+      for (const r of rows) {
+        out.push({ key: String(r.key), value: String(r.value) });
+      }
+    }
+    if (tableNames.includes('cursorDiskKV')) {
+      // cursorDiskKV keys are prefixed with `cursorDiskKV/` in the row
+      // stream so existing ItemTable extractors (which match keys like
+      // `aiService.prompts` exactly) can NEVER accidentally consume them,
+      // and the new composer-bubble extractor uses the prefix as a
+      // load-bearing fingerprint signal. The extractor strips the prefix
+      // before parsing the row's value.
+      const rows = db
+        .prepare('SELECT key, value FROM cursorDiskKV')
+        .all() as Array<{ key: string; value: string }>;
+      for (const r of rows) {
+        out.push({
+          key: `cursorDiskKV/${String(r.key)}`,
+          value: String(r.value),
+        });
+      }
+    }
+    return out;
   } finally {
     db.close();
     // Best-effort cleanup — staging dir is in /tmp, OS will clean up eventually.

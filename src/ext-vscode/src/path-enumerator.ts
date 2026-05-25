@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /**
  * Path enumeration for the extension's watcher start-up (M2 Branch 5).
@@ -12,6 +12,19 @@ import { join } from 'node:path';
  * Multiple workspaces produce multiple sibling dirs under
  * `workspaceStorage/`. This module walks that tree and returns the
  * concrete `state.vscdb` paths the watcher should monitor.
+ *
+ * Additionally, Cursor stores Composer / Agent mode conversations in
+ *
+ *   <host-config-dir>/User/globalStorage/state.vscdb
+ *
+ * under the `cursorDiskKV` table with `composerData:<uuid>` +
+ * `bubbleId:<composerId>:<bubbleId>` rows. This is a SINGLE shared file
+ * across all workspaces — unlike workspaceStorage, there's no
+ * per-workspace partition. `globalStorageStateVscdbPath` returns that
+ * path (or null if missing). Discovered during M2 closeout — Composer/
+ * Agent mode is Cursor's default modern UX and the original v0.1.3
+ * enumeration (workspaceStorage only) silently dropped every prompt
+ * submitted through it.
  *
  * Enumeration runs at extension activation time (not at install time)
  * — by then any workspaces the user has opened are present on disk.
@@ -68,4 +81,28 @@ export function enumerateStateVscdbPaths(
     if (fs.existsSync(dbPath)) out.push(dbPath);
   }
   return out;
+}
+
+/**
+ * Return the host's globalStorage `state.vscdb` path (or null if missing).
+ *
+ * `workspaceStorageDir` is the sibling tree (`User/workspaceStorage/`); the
+ * globalStorage file sits at `User/globalStorage/state.vscdb` — same parent
+ * dir, different leaf name. Caller passes the workspaceStorage path so this
+ * function works without re-deriving the host-config tree.
+ *
+ * Returns `null` when the file doesn't exist — host is not installed, or
+ * the user has never opened any chat (rare on Cursor; the file is created
+ * on first launch).
+ */
+export function globalStorageStateVscdbPath(
+  workspaceStorageDir: string | null,
+  inputs: EnumerateInputs = {},
+): string | null {
+  if (workspaceStorageDir === null) return null;
+  const fs = inputs.fs ?? defaultFs;
+  // workspaceStorageDir is .../User/workspaceStorage; sibling is .../User/globalStorage
+  const userDir = dirname(workspaceStorageDir);
+  const globalDbPath = join(userDir, 'globalStorage', 'state.vscdb');
+  return fs.existsSync(globalDbPath) ? globalDbPath : null;
 }

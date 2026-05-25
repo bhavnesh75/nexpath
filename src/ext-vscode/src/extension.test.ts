@@ -82,6 +82,7 @@ vi.mock('./chat-input-injector.js', () => ({
 }));
 vi.mock('./path-enumerator.js', () => ({
   enumerateStateVscdbPaths: mockEnumerateStateVscdbPaths,
+  globalStorageStateVscdbPath: () => null,
 }));
 vi.mock('./chat-history-watcher.js', () => ({
   createChatHistoryWatcher: mockCreateChatHistoryWatcher,
@@ -200,7 +201,7 @@ describe('activate', () => {
     await activate(makeCtx(true) as never);
     expect(mockCreateChatHistoryWatcher).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining('no workspace state.vscdb found'),
+      expect.stringContaining('no workspace state.vscdb'),
     );
   });
 

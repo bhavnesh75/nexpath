@@ -2,7 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { enumerateStateVscdbPaths } from './path-enumerator.js';
+import {
+  enumerateStateVscdbPaths,
+  globalStorageStateVscdbPath,
+} from './path-enumerator.js';
 
 describe('enumerateStateVscdbPaths', () => {
   let tmp: string;
@@ -81,5 +84,60 @@ describe('enumerateStateVscdbPaths', () => {
     };
     const out = enumerateStateVscdbPaths('/fake/ws', { fs: fakeFs });
     expect(out).toEqual(['/fake/ws/wsA/state.vscdb']);
+  });
+});
+
+describe('globalStorageStateVscdbPath', () => {
+  let tmp: string;
+  beforeEach(() => {
+    tmp = mkdtempSync(join(tmpdir(), 'nexpath-global-'));
+  });
+  afterEach(() => {
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('returns null when workspaceStorageDir is null', () => {
+    expect(globalStorageStateVscdbPath(null)).toBeNull();
+  });
+
+  it('returns the sibling globalStorage/state.vscdb path when present', () => {
+    const userDir = join(tmp, 'User');
+    mkdirSync(join(userDir, 'workspaceStorage'), { recursive: true });
+    mkdirSync(join(userDir, 'globalStorage'), { recursive: true });
+    writeFileSync(join(userDir, 'globalStorage', 'state.vscdb'), '');
+    const wsDir = join(userDir, 'workspaceStorage');
+    const out = globalStorageStateVscdbPath(wsDir);
+    expect(out).toBe(join(userDir, 'globalStorage', 'state.vscdb'));
+  });
+
+  it('returns null when globalStorage exists but state.vscdb is missing', () => {
+    const userDir = join(tmp, 'User');
+    mkdirSync(join(userDir, 'workspaceStorage'), { recursive: true });
+    mkdirSync(join(userDir, 'globalStorage'), { recursive: true });
+    // No state.vscdb written
+    expect(
+      globalStorageStateVscdbPath(join(userDir, 'workspaceStorage')),
+    ).toBeNull();
+  });
+
+  it('returns null when globalStorage directory does not exist at all', () => {
+    const userDir = join(tmp, 'User');
+    mkdirSync(join(userDir, 'workspaceStorage'), { recursive: true });
+    expect(
+      globalStorageStateVscdbPath(join(userDir, 'workspaceStorage')),
+    ).toBeNull();
+  });
+
+  it('uses injected fs helpers', () => {
+    const fakeFs = {
+      existsSync: (p: string) => p.endsWith('/globalStorage/state.vscdb'),
+      readdirSync: () => [],
+      statSync: () => ({ isDirectory: () => true }),
+    };
+    expect(
+      globalStorageStateVscdbPath('/fake/User/workspaceStorage', {
+        fs: fakeFs,
+      }),
+    ).toBe('/fake/User/globalStorage/state.vscdb');
   });
 });

@@ -12,7 +12,10 @@ import {
   workspaceStorageDir,
 } from './host-detector.js';
 import { chatInputInject } from './chat-input-injector.js';
-import { enumerateStateVscdbPaths } from './path-enumerator.js';
+import {
+  enumerateStateVscdbPaths,
+  globalStorageStateVscdbPath,
+} from './path-enumerator.js';
 import {
   createChatHistoryWatcher,
   type ChatHistoryWatcher,
@@ -159,10 +162,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     host === 'windsurf' ? windsurfCodeiumDir() : null;
   const codeiumExists = codeiumDir !== null && existsSync(codeiumDir);
 
-  log(`[nexpath] enumerated ${dbPaths.length} state.vscdb file(s) under ${wsStorage}; codeiumExists=${codeiumExists}`);
-  if (dbPaths.length === 0 && !codeiumExists) {
+  // Cursor's modern Composer / Agent mode stores conversations in
+  // `globalStorage/state.vscdb` (shared file across all workspaces) under
+  // the `cursorDiskKV` table — NOT in `workspaceStorage`. Add it as a
+  // target unconditionally on Cursor hosts so Agent / Composer prompts
+  // actually reach the pipeline. Multi-window caveat: two open Cursor
+  // windows will both watch this file and both emit each new bubble (no
+  // cross-instance dedup), so each event reaches Layer C twice with each
+  // window's respective `workspaceCwd`. Documented as a known v0.1.3
+  // limitation (single-window is the common case).
+  const globalDbPath =
+    host === 'cursor' ? globalStorageStateVscdbPath(wsStorage) : null;
+  log(
+    `[nexpath] enumerated ${dbPaths.length} state.vscdb file(s) under ${wsStorage}; ` +
+      `globalStorageDb=${globalDbPath === null ? 'absent' : 'present'}; ` +
+      `codeiumExists=${codeiumExists}`,
+  );
+  if (dbPaths.length === 0 && globalDbPath === null && !codeiumExists) {
     log(
-      `[nexpath] no workspace state.vscdb found under ${wsStorage} — watcher not started. ` +
+      `[nexpath] no workspace state.vscdb, no global state.vscdb, and no codeium dir found — watcher not started. ` +
         'Open at least one workspace in the host and reload the extension to retry.',
     );
     return;
@@ -172,6 +190,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     path,
     kind: 'cursor-sqlite',
   }));
+  if (globalDbPath !== null) {
+    targets.push({ path: globalDbPath, kind: 'cursor-sqlite' });
+  }
   if (codeiumExists) {
     targets.push({ path: codeiumDir!, kind: 'windsurf-dir' });
   }
