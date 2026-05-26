@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FREQUENCY_LEVEL_CONFIGS, resolveFrequencyConfig } from './GlobalConfig.js';
+import { FREQUENCY_LEVEL_CONFIGS, OPTIMUM_LEVEL_CONFIG, resolveFrequencyConfig } from './GlobalConfig.js';
 import {
   STAGE2_LLM_MIN_CONFIDENCE,
   STAGE2_CONTEXT_WINDOW,
@@ -74,5 +74,58 @@ describe('GlobalConfig — resolveFrequencyConfig', () => {
 
   it('major_only level has postAdvisoryCooldown of 10', () => {
     expect(FREQUENCY_LEVEL_CONFIGS.major_only.postAdvisoryCooldown).toBe(10);
+  });
+});
+
+// ── Stream C — optimum cap validation (Phase 3) ───────────────────────────────
+
+describe('GlobalConfig — OPTIMUM_LEVEL_CONFIG cap values (Stream C validation)', () => {
+  it('sessionAdvisoryCapDefault is 20', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault).toBe(20);
+  });
+
+  it('sessionAdvisoryCapVibe is 30', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(30);
+  });
+
+  it('sessionAdvisoryCapDefault 20 is 4× the every_event cap of 5', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault).toBe(
+      4 * FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapDefault,
+    );
+  });
+
+  it('sessionAdvisoryCapVibe 30 is 3× the every_event vibe cap of 10', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(
+      3 * FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapVibe,
+    );
+  });
+
+  it('postAdvisoryCooldown is 2 (tight cooldown for high-frequency target)', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.postAdvisoryCooldown).toBe(2);
+  });
+
+  it('signalAbsenceThresholdMultiplier is 0.25 (75% reduction on all signal thresholds)', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.signalAbsenceThresholdMultiplier).toBe(0.25);
+  });
+
+  it('minPromptsBeforeAdvisory is 1 (advisory can fire from the second prompt)', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.minPromptsBeforeAdvisory).toBe(1);
+  });
+
+  it('all 9 FrequencyLevelConfig fields are present', () => {
+    const keys: Array<keyof typeof OPTIMUM_LEVEL_CONFIG> = [
+      'minPromptsBeforeAdvisory',
+      'postAdvisoryCooldown',
+      'sessionAdvisoryCapDefault',
+      'sessionAdvisoryCapVibe',
+      'stage2MinConfidence',
+      'stage2ContextWindow',
+      'stage2S1LowConfidence',
+      'signalAbsenceThresholdMultiplier',
+      'minStageChangeConfidence',
+    ];
+    for (const key of keys) {
+      expect(OPTIMUM_LEVEL_CONFIG[key]).toBeDefined();
+    }
   });
 });

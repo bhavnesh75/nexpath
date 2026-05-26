@@ -62,20 +62,25 @@ export const FREQUENCY_LEVEL_CONFIGS: Record<AdvisoryFrequencyLevel, FrequencyLe
     signalAbsenceThresholdMultiplier:  1.0,
     minStageChangeConfidence:          0.50,
   },
-  // optimum — uncomment when 'optimum' is added to AdvisoryFrequencyLevel:
-  // optimum: {
-  //   minPromptsBeforeAdvisory:          1,
-  //   postAdvisoryCooldown:              2,
-  //   sessionAdvisoryCapDefault:        20,
-  //   sessionAdvisoryCapVibe:           30,
-  //   stage2MinConfidence:            0.30,
-  //   stage2ContextWindow:               5,
-  //   stage2S1LowConfidence:          0.25,
-  //   signalAbsenceThresholdMultiplier: 0.25,
-  //   minStageChangeConfidence:         0.35,
-  // },
+  // Phase 8: add 'optimum' to AdvisoryFrequencyLevel, then add: optimum: OPTIMUM_LEVEL_CONFIG,
 };
 
 export function resolveFrequencyConfig(level: AdvisoryFrequencyLevel): FrequencyLevelConfig {
   return FREQUENCY_LEVEL_CONFIGS[level];
 }
+
+// Phase 8 pending — all values locked; activate by:
+//   1. Adding 'optimum' to AdvisoryFrequencyLevel
+//   2. Adding `optimum: OPTIMUM_LEVEL_CONFIG` to FREQUENCY_LEVEL_CONFIGS
+//   3. Accepting 'optimum' in nexpath config set advisory_frequency validation
+export const OPTIMUM_LEVEL_CONFIG: Readonly<FrequencyLevelConfig> = {
+  minPromptsBeforeAdvisory:          1,
+  postAdvisoryCooldown:              2,
+  sessionAdvisoryCapDefault:        20,
+  sessionAdvisoryCapVibe:           30,
+  stage2MinConfidence:            0.30,
+  stage2ContextWindow:               5,
+  stage2S1LowConfidence:          0.25,
+  signalAbsenceThresholdMultiplier: 0.25,
+  minStageChangeConfidence:         0.35,
+};
