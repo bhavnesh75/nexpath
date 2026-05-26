@@ -62,14 +62,14 @@ export const FREQUENCY_LEVEL_CONFIGS: Record<AdvisoryFrequencyLevel, FrequencyLe
     signalAbsenceThresholdMultiplier:  1.0,
     minStageChangeConfidence:          0.50,
   },
-  // Phase 8: add 'optimum' to AdvisoryFrequencyLevel, then add: optimum: OPTIMUM_LEVEL_CONFIG,
+  // To activate: add 'optimum' to AdvisoryFrequencyLevel, then add: optimum: OPTIMUM_LEVEL_CONFIG,
 };
 
 export function resolveFrequencyConfig(level: AdvisoryFrequencyLevel): FrequencyLevelConfig {
   return FREQUENCY_LEVEL_CONFIGS[level];
 }
 
-// Phase 8 pending — all values locked; activate by:
+// All values locked — activate by:
 //   1. Adding 'optimum' to AdvisoryFrequencyLevel
 //   2. Adding `optimum: OPTIMUM_LEVEL_CONFIG` to FREQUENCY_LEVEL_CONFIGS
 //   3. Accepting 'optimum' in nexpath config set advisory_frequency validation

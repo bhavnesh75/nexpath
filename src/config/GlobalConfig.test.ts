@@ -77,7 +77,7 @@ describe('GlobalConfig — resolveFrequencyConfig', () => {
   });
 });
 
-// ── Stream C — optimum cap validation (Phase 3) ───────────────────────────────
+// ── optimum cap validation ────────────────────────────────────────────────────
 
 describe('GlobalConfig — OPTIMUM_LEVEL_CONFIG cap values (Stream C validation)', () => {
   it('sessionAdvisoryCapDefault is 20', () => {
