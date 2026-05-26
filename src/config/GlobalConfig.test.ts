@@ -128,4 +128,16 @@ describe('GlobalConfig — OPTIMUM_LEVEL_CONFIG cap values (Stream C validation)
       expect(OPTIMUM_LEVEL_CONFIG[key]).toBeDefined();
     }
   });
+
+  it('standard cap of 20 is sufficient to sustain advisory coverage across 300-prompt sessions', () => {
+    const cap = OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault;
+    // At typical advisory frequency in real sessions (~15 prompts per advisory),
+    // cap × 15 must cover the full session length.
+    expect(cap * 15).toBeGreaterThanOrEqual(300);
+  });
+
+  it('vibe cap of 30 is sufficient to sustain advisory coverage across 385-prompt sessions', () => {
+    const cap = OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe;
+    expect(cap * 15).toBeGreaterThanOrEqual(385);
+  });
 });

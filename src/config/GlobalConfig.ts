@@ -3,7 +3,7 @@ export type AdvisoryFrequencyLevel =
   | 'major_only'
   | 'once_per_session'
   | 'every_event';
-// 'optimum' is defined below (commented out) — enabled after Streams A+B+C complete
+// 'optimum' is defined in OPTIMUM_LEVEL_CONFIG below — not yet a selectable level
 
 export interface FrequencyLevelConfig {
   minPromptsBeforeAdvisory: number;
