@@ -112,6 +112,7 @@ export class SessionStateManager {
     promptText: string,
     classification: ClassificationResult,
     now = Date.now(),
+    minStageChangeConfidence = MIN_STAGE_CHANGE_CONFIDENCE,
   ): void {
     const s = this.state;
 
@@ -154,7 +155,7 @@ export class SessionStateManager {
     // stageConfirmedAt is kept for the EMA / epoch logic below — it is just no
     // longer used as the absence-detection anchor.
     if (classification.stage !== s.currentStage
-        && classification.confidence >= MIN_STAGE_CHANGE_CONFIDENCE) {
+        && classification.confidence >= minStageChangeConfidence) {
       s.currentStage          = classification.stage;
       s.stageConfidence       = classification.confidence;
       s.stageConfirmedAt      = classification.confidence >= STAGE_CONFIRM_THRESHOLD

@@ -201,7 +201,7 @@ export async function runLevel(
     });
   }
   // Help hint — 2 blank lines of breathing room then the styled hint row
-  if (input.decisionSessionCount < 3) {
+  if (input.decisionSessionCount < 12) {
     clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
     clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
     clackOptions.push({ value: `${OPTION_SEPARATOR}help`, label: HELP_LABEL });

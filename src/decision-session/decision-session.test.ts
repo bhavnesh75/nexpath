@@ -2221,7 +2221,7 @@ describe('runLevel', () => {
 
   it('passes the correct option list to selectFn on Level 1', async () => {
     const selectFn = mockSelect(SKIP_NOW);
-    await runLevel(makeInput(), 1, selectFn);
+    await runLevel(makeInput({ decisionSessionCount: 12 }), 1, selectFn);
     const call = (selectFn as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const values = call.options.map((o: { value: string }) => o.value);
     expect(values).toContain(SHOW_SIMPLER);
@@ -2621,7 +2621,7 @@ describe('runDecisionSession — decisionSessionCount increment', () => {
 });
 
 describe('runLevel — help line injection', () => {
-  it('injects help item at bottom of options when decisionSessionCount < 3', async () => {
+  it('injects help item at bottom of options when decisionSessionCount < 12', async () => {
     const spy = vi.fn().mockResolvedValue(SKIP_NOW);
     await runLevel(makeInput({ decisionSessionCount: 0 }), 1, spy as SelectFn);
     const opts = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0].options as { value: string; label: string }[];
@@ -2631,9 +2631,9 @@ describe('runLevel — help line injection', () => {
     expect(helpItem?.label).toContain('Ctrl+T');
   });
 
-  it('does NOT inject help item when decisionSessionCount >= 3', async () => {
+  it('does NOT inject help item when decisionSessionCount >= 12', async () => {
     const spy = vi.fn().mockResolvedValue(SKIP_NOW);
-    await runLevel(makeInput({ decisionSessionCount: 3 }), 1, spy as SelectFn);
+    await runLevel(makeInput({ decisionSessionCount: 12 }), 1, spy as SelectFn);
     const opts = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0].options as { value: string; label: string }[];
     const helpItem = opts.find((o) => o.value === `${OPTION_SEPARATOR}help`);
     expect(helpItem).toBeUndefined();

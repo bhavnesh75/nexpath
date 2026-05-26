@@ -27,6 +27,7 @@ import { writeHookStats } from '../../store/hook-stats.js';
 import { upsertPendingAdvisory } from '../../store/pending-advisories.js';
 import { insertSkippedSession } from '../../store/skipped-sessions.js';
 import { writeTelemetry } from '../../telemetry/index.js';
+import { resolveFrequencyConfig, type AdvisoryFrequencyLevel } from '../../config/GlobalConfig.js';
 
 /**
  * nexpath auto — orchestration command (per decision-session-ux-research.md).
@@ -48,9 +49,6 @@ import { writeTelemetry } from '../../telemetry/index.js';
  * If no action is needed, returns silently in < 50ms with no output.
  */
 
-const MIN_PROMPTS_BEFORE_ADVISORY = 3;
-/** Prompts to suppress after any advisory fires — prevents rapid back-to-back advisories. */
-const POST_ADVISORY_COOLDOWN = 5;
 
 function resolveProjectName(projectRoot: string): string {
   try {
@@ -140,6 +138,20 @@ export async function runAuto(
   logger.debug('session_loaded', { promptCount: mgr.current.promptCount, stage: prevStage, project: input.projectRoot });
   writeTelemetry(input.projectRoot, 'prompt_received', { promptCount: mgr.current.promptCount });
 
+  // ── 1.5. Resolve frequency config and role — used throughout the pipeline ────
+  const freq = (
+    getConfig(store.db, `advisory_frequency:${input.projectRoot}`) ??
+    getConfig(store.db, 'advisory_frequency') ??
+    'every_event'
+  ) as AdvisoryFrequencyLevel;
+  const freqConfig = resolveFrequencyConfig(freq);
+
+  const configuredRole = (
+    getConfig(store.db, `role:${input.projectRoot}`) ??
+    getConfig(store.db, 'role') ??
+    null
+  ) as import('../../classifier/types.js').UserRole | null;
+
   // ── 2. Stage 1 classifier ────────────────────────────────────────────────────
   const classification = await classifyPrompt(input.promptText);
   logger.debug('stage1_result', { classified: classification.stage, confidence: classification.confidence });
@@ -167,7 +179,7 @@ export async function runAuto(
   }
 
   // ── 3. Process prompt → updates state (stage, history, counters) ─────────────
-  mgr.processPrompt(store, input.promptText, classification);
+  mgr.processPrompt(store, input.promptText, classification, Date.now(), freqConfig.minStageChangeConfidence);
   logger.debug('after_process', { stage: mgr.current.currentStage, stageConfidence: mgr.current.stageConfidence });
 
   // ── 3.5. Effective language — read from projects table (detection runs in nexpath stop) ──
@@ -183,6 +195,8 @@ export async function runAuto(
     mgr.current as import('../../classifier/types.js').SessionState,
     mgr.current.profile,
     projectType,
+    freqConfig.signalAbsenceThresholdMultiplier,
+    configuredRole,
   );
   for (const flag of newFlags) {
     mgr.addAbsenceFlag(store, flag);
@@ -194,9 +208,14 @@ export async function runAuto(
     flagKeys:        newFlags.map((f) => f.signalKey),
   });
 
-  // ── 4.5. Minimum prompt guard ────────────────────────────────────────────────
-  if (mgr.current.promptCount < MIN_PROMPTS_BEFORE_ADVISORY) {
-    writeTelemetry(input.projectRoot, 'advisory_min_prompts_blocked', { promptCount: mgr.current.promptCount, minRequired: MIN_PROMPTS_BEFORE_ADVISORY });
+  // ── 4.5. Frequency off fast-exit + minimum prompt guard ────────────────────
+  if (freq === 'off') {
+    writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq });
+    logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_off' });
+    return { outcome: 'no_action' };
+  }
+  if (mgr.current.promptCount < freqConfig.minPromptsBeforeAdvisory) {
+    writeTelemetry(input.projectRoot, 'advisory_min_prompts_blocked', { promptCount: mgr.current.promptCount, minRequired: freqConfig.minPromptsBeforeAdvisory });
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'min_prompts_not_reached' });
     return { outcome: 'no_action' };
   }
@@ -206,6 +225,7 @@ export async function runAuto(
     mgr.current as import('../../classifier/types.js').SessionState,
     prevStage,
     newFlags,
+    freqConfig.stage2S1LowConfidence,
   );
   logger.debug('should_fire', { flagType: flagType ?? null });
 
@@ -226,16 +246,6 @@ export async function runAuto(
   }
 
   // ── 6.5. Advisory frequency gate ────────────────────────────────────────────
-  const freq =
-    getConfig(store.db, `advisory_frequency:${input.projectRoot}`) ??
-    getConfig(store.db, 'advisory_frequency') ??
-    'every_event';
-
-  if (freq === 'off') {
-    writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType });
-    logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_off' });
-    return { outcome: 'no_action' };
-  }
   if (freq === 'major_only' && flagType !== 'stage_transition') {
     writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType });
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_major_only', flagType });
@@ -249,11 +259,11 @@ export async function runAuto(
 
   // ── 6.6. Post-advisory cooldown — suppress rapid back-to-back advisories ─────
   const lastAdvisory = mgr.current.lastAdvisoryPromptIndex ?? -1;
-  if (lastAdvisory >= 0 && mgr.current.promptCount - lastAdvisory < POST_ADVISORY_COOLDOWN) {
+  if (lastAdvisory >= 0 && mgr.current.promptCount - lastAdvisory < freqConfig.postAdvisoryCooldown) {
     writeTelemetry(input.projectRoot, 'advisory_cooldown_blocked', {
       promptCount:       mgr.current.promptCount,
       lastAdvisoryAt:    lastAdvisory,
-      cooldownRemaining: POST_ADVISORY_COOLDOWN - (mgr.current.promptCount - lastAdvisory),
+      cooldownRemaining: freqConfig.postAdvisoryCooldown - (mgr.current.promptCount - lastAdvisory),
     });
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'post_advisory_cooldown', promptsSinceLast: mgr.current.promptCount - lastAdvisory });
     return { outcome: 'no_action' };
@@ -263,7 +273,9 @@ export async function runAuto(
   const isVibeProfile =
     mgr.current.profile?.nature === 'beginner' ||
     mgr.current.profile?.nature === 'cool_geek';
-  const advisoryCap   = isVibeProfile ? 10 : 5;
+  const advisoryCap = isVibeProfile
+    ? freqConfig.sessionAdvisoryCapVibe
+    : freqConfig.sessionAdvisoryCapDefault;
   const advisoryCount = mgr.current.advisoryCount ?? 0;
   if (advisoryCount >= advisoryCap) {
     insertSkippedSession(store, {
@@ -294,7 +306,10 @@ export async function runAuto(
 
   let stage2Output: import('../../classifier/Stage2Trigger.js').Stage2Output;
   try {
-    stage2Output = await runStage2(stage2Input, openai);
+    stage2Output = await runStage2(stage2Input, openai, {
+      minConfidence: freqConfig.stage2MinConfidence,
+      contextWindow: freqConfig.stage2ContextWindow,
+    });
     logger.debug('stage2_result', { fire: stage2Output.fire_decision_session, confidence: stage2Output.stage_confidence, reason: stage2Output.reason });
     writeTelemetry(input.projectRoot, 'stage2_evaluated', { flagType, confirmed: stage2Output.fire_decision_session });
   } catch (err) {

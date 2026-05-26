@@ -105,6 +105,12 @@ export interface SessionState {
    * Optional for backward compatibility with existing persisted state — read as 0 when absent.
    */
   advisoryCount?: number;
+  /**
+   * Explicit role set via `nexpath config set role <value>`.
+   * Unlocks Dim2 (role-based) signals. null = no role configured (Dim2 signals inactive).
+   * Optional for backward compatibility with existing persisted state — read as null when absent.
+   */
+  configuredRole?: UserRole | null;
 }
 
 // ── User nature / mood / depth (item 9) ───────────────────────────────────────
@@ -150,6 +156,11 @@ export interface UserProfile {
   computedAt: number;
 }
 
+// ── Role ──────────────────────────────────────────────────────────────────────
+
+/** Explicit project role set via config. Unlocks Dim2 (role-based) signals. */
+export type UserRole = 'founder' | 'indie_hacker' | 'pm';
+
 // ── Signal definitions ─────────────────────────────────────────────────────────
 
 export interface SignalDefinition {
@@ -164,4 +175,8 @@ export interface SignalDefinition {
   absenceThreshold: number; // 15–20 per research
   /** Project types for which this signal is relevant. undefined = all project types. */
   relevantProjectTypes?: string[];
+  /** Dim1: fire only when profile.nature matches. undefined = all natures (universal signal). */
+  nature?: UserNature;
+  /** Dim2: fire only when configuredRole matches. undefined = all roles (universal signal). */
+  role?: UserRole;
 }

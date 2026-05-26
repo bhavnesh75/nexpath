@@ -91,12 +91,12 @@ export function buildSignalList(stage: Stage): string {
  * Build the complete LLM confirmation prompt per research spec.
  * Context window: last STAGE2_CONTEXT_WINDOW prompts (oldest first).
  */
-export function buildStage2Prompt(input: Stage2Input): string {
+export function buildStage2Prompt(input: Stage2Input, contextWindow = STAGE2_CONTEXT_WINDOW): string {
   const { state, detectedStage, confidence, flagType } = input;
   const stageLabel = STAGE_LABEL[detectedStage];
   const profile = state.profile;
 
-  const recentPrompts = state.promptHistory.slice(-STAGE2_CONTEXT_WINDOW);
+  const recentPrompts = state.promptHistory.slice(-contextWindow);
   const promptLines = recentPrompts
     .map((p, i) => `[${i + 1}] ${p.text}`)
     .join('\n');
@@ -151,9 +151,10 @@ Return JSON only — no explanation, no markdown:
  *   3. S1 confidence < 0.50 AND an active absence flag exists → 'absence:<signalKey>'
  */
 export function shouldFireStage2(
-  state:           SessionState,
-  prevStage:       Stage | undefined,
-  newAbsenceFlags: AbsenceFlag[],
+  state:            SessionState,
+  prevStage:        Stage | undefined,
+  newAbsenceFlags:  AbsenceFlag[],
+  s1LowConfidence = STAGE2_S1_LOW_CONFIDENCE,
 ): FlagType | null {
   // Condition 1 — stage transition
   if (prevStage !== undefined && prevStage !== state.currentStage) {
@@ -166,7 +167,7 @@ export function shouldFireStage2(
   }
 
   // Condition 3 — low-confidence classification AND an active (non-cooldown) absence flag
-  if (state.stageConfidence < STAGE2_S1_LOW_CONFIDENCE) {
+  if (state.stageConfidence < s1LowConfidence) {
     const active = state.absenceFlags.find(
       (f) => f.dismissedAtIndex === undefined && state.promptCount < f.cooldownUntil,
     );
@@ -186,7 +187,7 @@ export function shouldFireStage2(
  * - Overrides fire_decision_session to false when stage_confidence < STAGE2_LLM_MIN_CONFIDENCE.
  * - Throws descriptive errors on invalid or incomplete JSON.
  */
-export function parseStage2Response(raw: string): Stage2Output {
+export function parseStage2Response(raw: string, minConfidence = STAGE2_LLM_MIN_CONFIDENCE): Stage2Output {
   // Strip optional markdown fencing
   const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
 
@@ -218,7 +219,7 @@ export function parseStage2Response(raw: string): Stage2Output {
   // Post-processing: low LLM confidence → don't bother user
   const fireDecisionSession =
     (p.fire_decision_session as boolean) &&
-    (p.stage_confidence as number) >= STAGE2_LLM_MIN_CONFIDENCE;
+    (p.stage_confidence as number) >= minConfidence;
 
   return {
     stage,
@@ -241,11 +242,14 @@ export function parseStage2Response(raw: string): Stage2Output {
  * @throws  On API failure or unparseable response
  */
 export async function runStage2(
-  input:   Stage2Input,
-  client?: OpenAI,
+  input:        Stage2Input,
+  client?:      OpenAI,
+  stage2Config?: { minConfidence?: number; contextWindow?: number },
 ): Promise<Stage2Output> {
+  const minConfidence = stage2Config?.minConfidence ?? STAGE2_LLM_MIN_CONFIDENCE;
+  const contextWindow = stage2Config?.contextWindow ?? STAGE2_CONTEXT_WINDOW;
   const openai = client ?? new OpenAI();
-  const prompt = buildStage2Prompt(input);
+  const prompt = buildStage2Prompt(input, contextWindow);
 
   const response = await openai.chat.completions.create(
     {
@@ -266,10 +270,10 @@ export async function runStage2(
     logger.debug('stage2_raw', {
       llm_fire:       p.fire_decision_session,
       llm_confidence: p.stage_confidence,
-      threshold:      STAGE2_LLM_MIN_CONFIDENCE,
-      overridden:     p.fire_decision_session === true && (p.stage_confidence as number) < STAGE2_LLM_MIN_CONFIDENCE,
+      threshold:      minConfidence,
+      overridden:     p.fire_decision_session === true && (p.stage_confidence as number) < minConfidence,
     });
   } catch { /* parse failure handled by parseStage2Response below */ }
 
-  return parseStage2Response(raw);
+  return parseStage2Response(raw, minConfidence);
 }
