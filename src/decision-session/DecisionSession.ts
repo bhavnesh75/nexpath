@@ -290,16 +290,16 @@ export async function runDecisionSession(
       if (store) setConfig(store, `advisory_frequency:${input.projectRoot}`, 'off');
       return { outcome: 'skipped' };
     }
-    // Windows sentinel: Ctrl+T frequency change — write config and skip
+    // Sentinel: Ctrl+T → root chooser → frequency selected — write config and skip
     if (typeof levelResult === 'string' && levelResult.startsWith('__FREQ__:')) {
       const newFreq = levelResult.slice('__FREQ__:'.length);
       if (store) setConfig(store, `advisory_frequency:${input.projectRoot}`, newFreq);
       return { outcome: 'skipped' };
     }
-    // Role selection via Ctrl+T → frequency menu → Configure role… — write config and skip
+    // Sentinel: Ctrl+T → root chooser → role selected — write config and skip
     if (typeof levelResult === 'string' && levelResult.startsWith('__ROLE__:')) {
       const roleValue = levelResult.slice('__ROLE__:'.length);
-      if (store) setConfig(store, `role:${input.projectRoot}`, roleValue === 'clear' ? '' : roleValue);
+      if (store) setConfig(store, `role:${input.projectRoot}`, roleValue);
       return { outcome: 'skipped' };
     }
 

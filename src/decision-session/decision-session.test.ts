@@ -2895,6 +2895,52 @@ describe('runDecisionSession — __FREQ__ sentinel handling', () => {
       store.db.close();
     }
   });
+
+  it('writes optimum when __FREQ__:optimum is returned', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/freq4', name: 'freq4' });
+      await runDecisionSession(
+        makeInput({ projectRoot: '/proj/freq4' }),
+        store,
+        mockSelect('__FREQ__:optimum'),
+      );
+      expect(getConfig(store.db, 'advisory_frequency:/proj/freq4')).toBe('optimum');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('writes the chosen role to config on __ROLE__:vibe_coder', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/role1', name: 'role1' });
+      const result = await runDecisionSession(
+        makeInput({ projectRoot: '/proj/role1' }),
+        store,
+        mockSelect('__ROLE__:vibe_coder'),
+      );
+      expect(result.outcome).toBe('skipped');
+      expect(getConfig(store.db, 'role:/proj/role1')).toBe('vibe_coder');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('writes the chosen role to config on __ROLE__:founder', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/role2', name: 'role2' });
+      await runDecisionSession(
+        makeInput({ projectRoot: '/proj/role2' }),
+        store,
+        mockSelect('__ROLE__:founder'),
+      );
+      expect(getConfig(store.db, 'role:/proj/role2')).toBe('founder');
+    } finally {
+      store.db.close();
+    }
+  });
 });
 
 // ── generatedOptions — runLevel and runDecisionSession ────────────────────────
