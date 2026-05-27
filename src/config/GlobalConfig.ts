@@ -22,11 +22,11 @@ export const OPTIMUM_LEVEL_CONFIG: Readonly<FrequencyLevelConfig> = {
   postAdvisoryCooldown:              2,
   sessionAdvisoryCapDefault:        20,
   sessionAdvisoryCapVibe:           30,
-  stage2MinConfidence:            0.30,
+  stage2MinConfidence:            0.40,
   stage2ContextWindow:               5,
   stage2S1LowConfidence:          0.25,
   signalAbsenceThresholdMultiplier: 0.25,
-  minStageChangeConfidence:         0.35,
+  minStageChangeConfidence:         0.50,
 };
 
 export const FREQUENCY_LEVEL_CONFIGS: Record<AdvisoryFrequencyLevel, FrequencyLevelConfig> = {
