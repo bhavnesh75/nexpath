@@ -138,6 +138,59 @@ describe('configSetAction', () => {
   });
 });
 
+describe('configSetAction — advisory_frequency validation', () => {
+  it('accepts all valid advisory_frequency values', async () => {
+    const validLevels = ['off', 'major_only', 'once_per_session', 'every_event', 'optimum'];
+    for (const level of validLevels) {
+      const { path, cleanup } = await tempDb();
+      const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      await configSetAction('advisory_frequency', level, path);
+      expect(spy.mock.calls[0][0]).toBe(`advisory_frequency = ${level}`);
+      cleanup();
+    }
+  });
+
+  it('rejects an invalid advisory_frequency value with console.error and process.exit(1)', async () => {
+    const { path, cleanup } = await tempDb();
+    const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as (code?: number) => never);
+    await expect(configSetAction('advisory_frequency', 'always', path)).rejects.toThrow('process.exit called');
+    expect(errSpy.mock.calls[0][0]).toContain('Invalid advisory_frequency "always"');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    cleanup();
+  });
+
+  it('accepts empty string for advisory_frequency (clears value)', async () => {
+    const { path, cleanup } = await tempDb();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await configSetAction('advisory_frequency', '', path);
+    expect(spy.mock.calls[0][0]).toBe('advisory_frequency = ');
+    cleanup();
+  });
+
+  it('validates project-scoped advisory_frequency key and rejects invalid value', async () => {
+    const { path, cleanup } = await tempDb();
+    const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as (code?: number) => never);
+    await expect(configSetAction('advisory_frequency:/some/project', 'always', path)).rejects.toThrow('process.exit called');
+    expect(errSpy.mock.calls[0][0]).toContain('Invalid advisory_frequency "always"');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    cleanup();
+  });
+
+  it('accepts "optimum" as a valid advisory_frequency level', async () => {
+    const { path, cleanup } = await tempDb();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await configSetAction('advisory_frequency', 'optimum', path);
+    expect(spy.mock.calls[0][0]).toBe('advisory_frequency = optimum');
+    cleanup();
+  });
+});
+
 describe('configSetAction — role validation', () => {
   it('accepts a valid role value and stores it', async () => {
     const { path, cleanup } = await tempDb();

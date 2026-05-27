@@ -55,7 +55,7 @@ describe('GlobalConfig — every_event backward compatibility', () => {
 
 describe('GlobalConfig — resolveFrequencyConfig', () => {
   it('returns the correct config object for each level', () => {
-    for (const level of ['off', 'major_only', 'once_per_session', 'every_event'] as const) {
+    for (const level of ['off', 'major_only', 'once_per_session', 'every_event', 'optimum'] as const) {
       expect(resolveFrequencyConfig(level)).toBe(FREQUENCY_LEVEL_CONFIGS[level]);
     }
   });
@@ -74,6 +74,29 @@ describe('GlobalConfig — resolveFrequencyConfig', () => {
 
   it('major_only level has postAdvisoryCooldown of 10', () => {
     expect(FREQUENCY_LEVEL_CONFIGS.major_only.postAdvisoryCooldown).toBe(10);
+  });
+});
+
+describe('GlobalConfig — optimum level activation', () => {
+  it('optimum is a selectable level in FREQUENCY_LEVEL_CONFIGS', () => {
+    expect(FREQUENCY_LEVEL_CONFIGS.optimum).toBeDefined();
+  });
+
+  it('FREQUENCY_LEVEL_CONFIGS.optimum values match OPTIMUM_LEVEL_CONFIG exactly', () => {
+    const cfg = FREQUENCY_LEVEL_CONFIGS.optimum;
+    expect(cfg.minPromptsBeforeAdvisory).toBe(OPTIMUM_LEVEL_CONFIG.minPromptsBeforeAdvisory);
+    expect(cfg.postAdvisoryCooldown).toBe(OPTIMUM_LEVEL_CONFIG.postAdvisoryCooldown);
+    expect(cfg.sessionAdvisoryCapDefault).toBe(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault);
+    expect(cfg.sessionAdvisoryCapVibe).toBe(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe);
+    expect(cfg.stage2MinConfidence).toBe(OPTIMUM_LEVEL_CONFIG.stage2MinConfidence);
+    expect(cfg.stage2ContextWindow).toBe(OPTIMUM_LEVEL_CONFIG.stage2ContextWindow);
+    expect(cfg.stage2S1LowConfidence).toBe(OPTIMUM_LEVEL_CONFIG.stage2S1LowConfidence);
+    expect(cfg.signalAbsenceThresholdMultiplier).toBe(OPTIMUM_LEVEL_CONFIG.signalAbsenceThresholdMultiplier);
+    expect(cfg.minStageChangeConfidence).toBe(OPTIMUM_LEVEL_CONFIG.minStageChangeConfidence);
+  });
+
+  it('resolveFrequencyConfig("optimum") returns the optimum config', () => {
+    expect(resolveFrequencyConfig('optimum')).toBe(FREQUENCY_LEVEL_CONFIGS.optimum);
   });
 });
 

@@ -14,10 +14,18 @@ export async function configGetAction(key: string, dbPath = DEFAULT_DB_PATH): Pr
 
 const VALID_ROLES = ['founder', 'indie_hacker', 'pm'] as const;
 
+const VALID_ADVISORY_FREQUENCY_LEVELS = ['off', 'major_only', 'once_per_session', 'every_event', 'optimum'] as const;
+
 export async function configSetAction(key: string, value: string, dbPath = DEFAULT_DB_PATH): Promise<void> {
   if (key === 'role' || key.startsWith('role:')) {
     if (value !== '' && !(VALID_ROLES as readonly string[]).includes(value)) {
       console.error(`Invalid role "${value}". Valid values: ${VALID_ROLES.join(', ')}`);
+      process.exit(1);
+    }
+  }
+  if (key === 'advisory_frequency' || key.startsWith('advisory_frequency:')) {
+    if (value !== '' && !(VALID_ADVISORY_FREQUENCY_LEVELS as readonly string[]).includes(value)) {
+      console.error(`Invalid advisory_frequency "${value}". Valid values: ${VALID_ADVISORY_FREQUENCY_LEVELS.join(', ')}`);
       process.exit(1);
     }
   }
