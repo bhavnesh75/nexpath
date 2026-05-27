@@ -1,4 +1,9 @@
 import { openStore, closeStore, DEFAULT_DB_PATH, getConfig, setConfig, deleteConfig } from '../../store/index.js';
+import {
+  ConfigValidationError,
+  setAdvisoryFrequency,
+  setRole,
+} from '../shared/config-setters.js';
 
 export async function configGetAction(key: string, dbPath = DEFAULT_DB_PATH): Promise<void> {
   const store = await openStore(dbPath);
@@ -12,25 +17,24 @@ export async function configGetAction(key: string, dbPath = DEFAULT_DB_PATH): Pr
   }
 }
 
-const VALID_ROLES = ['founder', 'indie_hacker', 'pm', 'vibe_coder'] as const;
-
-const VALID_ADVISORY_FREQUENCY_LEVELS = ['off', 'major_only', 'once_per_session', 'every_event', 'optimum'] as const;
-
 export async function configSetAction(key: string, value: string, dbPath = DEFAULT_DB_PATH): Promise<void> {
-  if (key === 'role' || key.startsWith('role:')) {
-    if (value !== '' && !(VALID_ROLES as readonly string[]).includes(value)) {
-      console.error(`Invalid role "${value}". Valid values: ${VALID_ROLES.join(', ')}`);
-      process.exit(1);
-    }
-  }
-  if (key === 'advisory_frequency' || key.startsWith('advisory_frequency:')) {
-    if (value !== '' && !(VALID_ADVISORY_FREQUENCY_LEVELS as readonly string[]).includes(value)) {
-      console.error(`Invalid advisory_frequency "${value}". Valid values: ${VALID_ADVISORY_FREQUENCY_LEVELS.join(', ')}`);
-      process.exit(1);
-    }
-  }
   const store = await openStore(dbPath);
-  setConfig(store, key, value);
+  try {
+    if (key === 'role' || key.startsWith('role:')) {
+      setRole(store, key, value);
+    } else if (key === 'advisory_frequency' || key.startsWith('advisory_frequency:')) {
+      setAdvisoryFrequency(store, key, value);
+    } else {
+      setConfig(store, key, value);
+    }
+  } catch (err) {
+    closeStore(store);
+    if (err instanceof ConfigValidationError) {
+      console.error(err.message);
+      process.exit(1);
+    }
+    throw err;
+  }
   closeStore(store);
   console.log(`${key} = ${value}`);
 }
