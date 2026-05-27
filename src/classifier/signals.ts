@@ -1869,6 +1869,62 @@ export const SIGNAL_DEFINITIONS: SignalDefinition[] = [
     absenceThreshold: 20,
     role: 'pm',
   },
+
+  // ── Phase 7 F1: Session-quality fatigue group ─────────────────────────────
+
+  {
+    key: 'decision_fatigue_pattern',
+    description: 'Baumeister ego-depletion / Kahneman System 1 — consecutive AI acceptance without critical review is a decision fatigue signature, not deliberate evaluation. Each unreviewed response compounds review debt. 8+ consecutive acceptances = apply deliberate critical review before continuing.',
+    expectedStages: ['implementation'],
+    detectionKeywords: [],
+    vibeKeywords: [],
+    absenceThreshold: 8,
+  },
+  {
+    key: 'work_rhythm_check',
+    description: 'Ericsson deliberate practice — quality requires slow, intentional engagement with feedback. Rapid-fire prompting without reading AI output is a flow-state trap: high throughput, low verification. Prompt velocity exceeding verification rate compounds undetected errors. Read and verify each response before the next prompt.',
+    expectedStages: ['implementation'],
+    detectionKeywords: [],
+    vibeKeywords: [],
+    absenceThreshold: 10,
+  },
+  {
+    key: 'focus_drift_detection',
+    description: 'Weinberg \'Psychology of Computer Programming\' — single-focus produces highest quality. Newport \'Deep Work\' — context switches carry 15-20 min cognitive residue cost. Allen GTD — open loops degrade current task performance. 5+ unfinished domains = context fragmentation, not parallelism. Complete one domain before opening the next.',
+    expectedStages: ['implementation'],
+    detectionKeywords: [],
+    vibeKeywords: [],
+    absenceThreshold: 5,
+  },
+
+  // ── Phase 7 F2: Session-quality context/drift group ───────────────────────
+
+  {
+    key: 'session_length_checkpoint',
+    description: 'XP navigator-driver model — solo AI-assisted dev requires the developer to perform the navigator role: periodic context reanchoring (\'here is where we are, here is what remains\') maintains shared mental model between developer and AI. Context drift is silent — it degrades output quality without warning. Reanchor at 25 prompts.',
+    expectedStages: ['implementation', 'review_testing'],
+    detectionKeywords: [
+      'here\'s a summary of what we\'ve built', 'context checkpoint',
+      'here\'s the current state', 'catching up on where we are',
+    ],
+    vibeKeywords: [
+      'so where we are is', 'recap:', 'to summarize what we have',
+    ],
+    absenceThreshold: 25,
+  },
+  {
+    key: 'progress_consolidation_gap',
+    description: 'Pragmatic Programmer \'knowledge portfolio\' — undocumented progress is a liability, not an asset. DeMarco \'Peopleware\' — writing forces thinking; consolidation is a second pass at the design. Project state must be explicit in the codebase, not implicit in AI conversation history. Consolidate at 20 implementation prompts.',
+    expectedStages: ['implementation'],
+    detectionKeywords: [
+      'summarizing what we built', 'documenting current state',
+      'here\'s what\'s been built', 'updating the README',
+    ],
+    vibeKeywords: [
+      'so we have', 'what we built was', 'summary of progress',
+    ],
+    absenceThreshold: 20,
+  },
 ];
 
 // ── Signal detection from prompt text ────────────────────────────────────────

@@ -933,6 +933,78 @@ export const ABSENCE_SPEC_BEFORE_CODE_BEGINNER: DecisionContent = {
   ],
 };
 
+// ── Phase 7 F1-F2 — session-quality signals (BEGINNER register) ───────────────
+
+export const ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER: DecisionContent = {
+  question:      'Accepting without reviewing — applied critical check recently?',
+  pinchFallback: 'Streak alert.',
+  L1: [
+    'You haven\'t questioned any of Claude\'s suggestions in a while.',
+  ],
+  L2: [
+    'Even good suggestions can be wrong or not quite right for your specific situation. It\'s healthy to occasionally say \'wait, is this actually correct?\' before accepting. Checking suggestions helps you catch mistakes before they build up.',
+  ],
+  L3: [
+    'Look back at the last few suggestions Claude made — is there anything you\'d like to double-check or question before continuing?',
+  ],
+};
+
+export const ABSENCE_WORK_RHYTHM_CHECK_BEGINNER: DecisionContent = {
+  question:      'Sending fast — read the last response fully before continuing?',
+  pinchFallback: 'Slow down.',
+  L1: [
+    'You\'re sending messages very quickly.',
+  ],
+  L2: [
+    'When you send messages faster than you have time to read the responses, it\'s easy to miss errors or misunderstand what Claude built. Taking a moment to read each response fully before sending the next one leads to better results and fewer mistakes to fix later.',
+  ],
+  L3: [
+    'Pause and read through Claude\'s last response before continuing.',
+  ],
+};
+
+export const ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER: DecisionContent = {
+  question:      'Working on many things — finished any of them yet?',
+  pinchFallback: 'Focus drift.',
+  L1: [
+    'You\'ve started a lot of different things in this session.',
+  ],
+  L2: [
+    'Working on too many different things at once without finishing any of them makes it harder to do any of them well. Every time you switch to something new, it takes time to get back into what you were doing before. Finishing one thing completely before starting the next leads to better results.',
+  ],
+  L3: [
+    'Pick the most important thing from this session and focus on finishing it before starting anything else.',
+  ],
+};
+
+export const ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER: DecisionContent = {
+  question:      'Working for a while — what have you built so far?',
+  pinchFallback: 'Checkpoint due.',
+  L1: [
+    'You\'ve been working for a while — what have you built so far?',
+  ],
+  L2: [
+    'After a long session, it\'s easy to lose track of what was done and what still needs doing. Writing a quick summary helps you and Claude stay in sync for the rest of the session.',
+  ],
+  L3: [
+    'Tell Claude: here\'s what we\'ve built so far, and here\'s what we still need to do.',
+  ],
+};
+
+export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER: DecisionContent = {
+  question:      'Built a lot — have you written down what you made?',
+  pinchFallback: 'Document now.',
+  L1: [
+    'You\'ve built a lot — have you written down what you made?',
+  ],
+  L2: [
+    'When you build a lot without documenting it, it gets hard to remember what was done and why it was done that way. A short README update or code comment keeps the project understandable later.',
+  ],
+  L3: [
+    'Take a moment to write down what you built in this session, even just a few sentences.',
+  ],
+};
+
 export const ABSENCE_CONTENT_BEGINNER: Partial<Record<string, DecisionContent>> = {
   test_creation:         ABSENCE_TEST_CREATION_BEGINNER,
   regression_check:      ABSENCE_REGRESSION_CHECK_BEGINNER,
@@ -988,6 +1060,11 @@ export const ABSENCE_CONTENT_BEGINNER: Partial<Record<string, DecisionContent>> 
   single_responsibility_prompting: ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   rollback_awareness:             ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
   build_vs_understand_ratio:      ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
+  decision_fatigue_pattern:       ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER,
+  work_rhythm_check:              ABSENCE_WORK_RHYTHM_CHECK_BEGINNER,
+  focus_drift_detection:          ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER,
+  session_length_checkpoint:      ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER,
+  progress_consolidation_gap:     ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER,
 };
 
 export const TRANSITION_CONTENT_BEGINNER: Partial<Record<Stage, DecisionContent>> = {

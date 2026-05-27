@@ -41,11 +41,12 @@ function makeState(overrides: Partial<SessionState> = {}): SessionState {
     promptHistory:          Array.from({ length: 15 }, (_, i) =>
       makePromptRecord(`implement the auth module step ${i + 1}`, i),
     ),
-    signalCounters:         {},
-    absenceFlags:           [],
-    firedDecisionSessions:  [],
-    profile:                null,
-    detectedLanguage:       undefined,
+    signalCounters:              {},
+    absenceFlags:                [],
+    firedDecisionSessions:       [],
+    profile:                     null,
+    detectedLanguage:            undefined,
+    consecutiveAcceptanceStreak: 0,
     ...overrides,
   };
 }

@@ -174,6 +174,16 @@ import {
   ABSENCE_RISK_FLAG_FORMAL,
   ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL,
   ABSENCE_RETROSPECTIVE_HABIT_FORMAL,
+  ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL,
+  ABSENCE_WORK_RHYTHM_CHECK_CASUAL,
+  ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL,
+  ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL,
+  ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL,
+  ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+  ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+  ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+  ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+  ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
 } from './options.js';
 import {
   ABSENCE_CONTENT_BEGINNER,
@@ -232,6 +242,11 @@ import {
   ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
   ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
+  ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER,
+  ABSENCE_WORK_RHYTHM_CHECK_BEGINNER,
+  ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER,
+  ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER,
+  ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER,
 } from './options-beginner.js';
 import type { UserProfile } from '../classifier/types.js';
 import {
@@ -4943,6 +4958,175 @@ describe('resolveDecisionContent — Phase 6 role-based signal routing', () => {
     for (const key of pmKeys) {
       const result = resolveDecisionContent('implementation', `absence:${key}`, makeRoleProfile('pm'));
       expect(result).toBeDefined();
+    }
+  });
+});
+
+// ── Phase 7 F1-F2 — session-quality content ───────────────────────────────────
+
+describe('Phase 7 content — CASUAL variants', () => {
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L1).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L2).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_WORK_RHYTHM_CHECK_CASUAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L1).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L2).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L1).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L2).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L1).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L2).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L1).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L2).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L3).toHaveLength(1);
+  });
+});
+
+describe('Phase 7 content — FORMAL variants', () => {
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L1).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L2).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_WORK_RHYTHM_CHECK_FORMAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L1).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L2).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L1).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L2).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L1).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L2).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L1).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L2).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L3).toHaveLength(1);
+  });
+});
+
+describe('Phase 7 content — BEGINNER variants', () => {
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L1).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_WORK_RHYTHM_CHECK_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L1).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L1).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L1).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L3).toHaveLength(1);
+  });
+
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L1).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L3).toHaveLength(1);
+  });
+});
+
+describe('Phase 7 content routing', () => {
+  function makeProfile(nature: import('../classifier/types.js').UserNature, role?: import('../classifier/types.js').UserRole): import('../classifier/types.js').UserProfile {
+    return {
+      nature,
+      precisionScore: 5, playfulnessScore: 5,
+      precisionOrdinal: 'medium', playfulnessOrdinal: 'medium',
+      mood: 'focused', depth: 'medium', depthScore: 5,
+      computedAt: 0,
+      role: role ?? null,
+    };
+  }
+
+  const phase7Keys = [
+    'decision_fatigue_pattern', 'work_rhythm_check', 'focus_drift_detection',
+    'session_length_checkpoint', 'progress_consolidation_gap',
+  ];
+
+  it('beginner profile gets BEGINNER content for all 5 Phase 7 signals', () => {
+    const profile = makeProfile('beginner');
+    for (const key of phase7Keys) {
+      const result = resolveDecisionContent('implementation', `absence:${key}`, profile);
+      expect(result).toBeDefined();
+    }
+  });
+
+  it('cool_geek profile gets CASUAL content for all 5 Phase 7 signals', () => {
+    const profile = makeProfile('cool_geek');
+    const expected = [
+      ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL,
+      ABSENCE_WORK_RHYTHM_CHECK_CASUAL,
+      ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL,
+      ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL,
+      ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL,
+    ];
+    for (let i = 0; i < phase7Keys.length; i++) {
+      const result = resolveDecisionContent('implementation', `absence:${phase7Keys[i]!}`, profile);
+      expect(result).toBe(expected[i]);
+    }
+  });
+
+  it('hardcore_pro profile gets FORMAL content for all 5 Phase 7 signals', () => {
+    const profile = makeProfile('hardcore_pro');
+    const expected = [
+      ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+      ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+      ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+      ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+      ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
+    ];
+    for (let i = 0; i < phase7Keys.length; i++) {
+      const result = resolveDecisionContent('implementation', `absence:${phase7Keys[i]!}`, profile);
+      expect(result).toBe(expected[i]);
+    }
+  });
+
+  it('pm role gets FORMAL content for all 5 Phase 7 signals', () => {
+    const profile = makeProfile('pro_geek_soul', 'pm');
+    const expected = [
+      ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+      ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+      ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+      ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+      ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
+    ];
+    for (let i = 0; i < phase7Keys.length; i++) {
+      const result = resolveDecisionContent('implementation', `absence:${phase7Keys[i]!}`, profile);
+      expect(result).toBe(expected[i]);
     }
   });
 });

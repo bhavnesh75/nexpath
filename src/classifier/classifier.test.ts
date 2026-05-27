@@ -18,21 +18,22 @@ function makeResult(stage: import('./types.js').Stage, confidence: number): Clas
 
 function makeState(overrides: Partial<SessionState> = {}): SessionState {
   return {
-    sessionId:              'test-session',
-    projectRoot:            '/test/project',
-    startedAt:              1000,
-    lastPromptAt:           1000,
-    currentStage:           'implementation',
-    stageConfidence:        0.80,
-    stageConfirmedAt:       0,
-    promptsInCurrentStage:  20,
-    promptCount:            20,
-    promptHistory:          [],
-    signalCounters:         initialSignalCounters(),
-    absenceFlags:           [],
-    firedDecisionSessions:  [],
-    profile:                null,
-    detectedLanguage:       undefined,
+    sessionId:                    'test-session',
+    projectRoot:                  '/test/project',
+    startedAt:                    1000,
+    lastPromptAt:                 1000,
+    currentStage:                 'implementation',
+    stageConfidence:              0.80,
+    stageConfirmedAt:             0,
+    promptsInCurrentStage:        20,
+    promptCount:                  20,
+    promptHistory:                [],
+    signalCounters:               initialSignalCounters(),
+    absenceFlags:                 [],
+    firedDecisionSessions:        [],
+    profile:                      null,
+    detectedLanguage:             undefined,
+    consecutiveAcceptanceStreak:  0,
     ...overrides,
   };
 }
@@ -574,9 +575,9 @@ describe('detectSignals', () => {
     expect(counters['behaviour_testing'].lastSeenAt).toBeNull();
   });
 
-  it('initialSignalCounters covers exactly 124 signals', () => {
+  it('initialSignalCounters covers exactly 129 signals', () => {
     const counters = initialSignalCounters();
-    expect(Object.keys(counters)).toHaveLength(124);
+    expect(Object.keys(counters)).toHaveLength(129);
   });
 
   // ── vibeKeywords — 0.5-weight detection ──────────────────────────────────────
@@ -3708,5 +3709,271 @@ describe('SessionStateManager — detectedLanguage survives session gap', () => 
     const mgr2 = SessionStateManager.load(store, '/project/gap-e', soonNow);
     expect(mgr2.current.detectedLanguage).toBe('de'); // session value preserved
     closeStore(store);
+  });
+});
+
+// ── Phase 7 F0 — consecutiveAcceptanceStreak ──────────────────────────────────
+
+describe('SessionStateManager — consecutiveAcceptanceStreak', () => {
+  it('initializes streak to 0 in new session', async () => {
+    const store = await openStore(':memory:');
+    upsertProject(store, { projectRoot: '/project/streak-a', name: 'A' });
+    const mgr = SessionStateManager.load(store, '/project/streak-a');
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(0);
+    closeStore(store);
+  });
+
+  it('increments streak on each non-correction-seeking prompt', async () => {
+    const store = await openStore(':memory:');
+    upsertProject(store, { projectRoot: '/project/streak-b', name: 'B' });
+    const mgr = SessionStateManager.load(store, '/project/streak-b');
+    await mgr.processPrompt(store, 'implement the login feature', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(1);
+    await mgr.processPrompt(store, 'add a signup page', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(2);
+    await mgr.processPrompt(store, 'create the dashboard', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(3);
+    closeStore(store);
+  });
+
+  it('resets streak to 0 when correction_seeking is detected', async () => {
+    const store = await openStore(':memory:');
+    upsertProject(store, { projectRoot: '/project/streak-c', name: 'C' });
+    const mgr = SessionStateManager.load(store, '/project/streak-c');
+    // Build up a streak
+    await mgr.processPrompt(store, 'add feature x', makeResult('implementation', 0.8));
+    await mgr.processPrompt(store, 'add feature y', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(2);
+    // correction_seeking keyword ('something is off') resets streak
+    await mgr.processPrompt(store, 'something is off here, this seems wrong', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(0);
+    closeStore(store);
+  });
+
+  it('streak resumes incrementing after a reset', async () => {
+    const store = await openStore(':memory:');
+    upsertProject(store, { projectRoot: '/project/streak-d', name: 'D' });
+    const mgr = SessionStateManager.load(store, '/project/streak-d');
+    await mgr.processPrompt(store, 'build the thing', makeResult('implementation', 0.8));
+    await mgr.processPrompt(store, 'wait that is wrong, let me rethink this', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(0);
+    await mgr.processPrompt(store, 'add another feature', makeResult('implementation', 0.8));
+    expect(mgr.current.consecutiveAcceptanceStreak).toBe(1);
+    closeStore(store);
+  });
+});
+
+// ── Phase 7 F1-F2 — signal definitions ───────────────────────────────────────
+
+describe('Phase 7 signals — SIGNAL_MAP and SIGNAL_DEFINITIONS', () => {
+  it('decision_fatigue_pattern exists in SIGNAL_MAP', () => {
+    expect(SIGNAL_MAP.has('decision_fatigue_pattern')).toBe(true);
+  });
+
+  it('decision_fatigue_pattern has empty detectionKeywords and absenceThreshold=8', () => {
+    const sig = SIGNAL_MAP.get('decision_fatigue_pattern');
+    expect(sig?.detectionKeywords).toHaveLength(0);
+    expect(sig?.absenceThreshold).toBe(8);
+    expect(sig?.expectedStages).toContain('implementation');
+  });
+
+  it('work_rhythm_check exists in SIGNAL_MAP', () => {
+    expect(SIGNAL_MAP.has('work_rhythm_check')).toBe(true);
+  });
+
+  it('work_rhythm_check has empty detectionKeywords and absenceThreshold=10', () => {
+    const sig = SIGNAL_MAP.get('work_rhythm_check');
+    expect(sig?.detectionKeywords).toHaveLength(0);
+    expect(sig?.absenceThreshold).toBe(10);
+    expect(sig?.expectedStages).toContain('implementation');
+  });
+
+  it('focus_drift_detection exists in SIGNAL_MAP', () => {
+    expect(SIGNAL_MAP.has('focus_drift_detection')).toBe(true);
+  });
+
+  it('focus_drift_detection has empty detectionKeywords and absenceThreshold=5', () => {
+    const sig = SIGNAL_MAP.get('focus_drift_detection');
+    expect(sig?.detectionKeywords).toHaveLength(0);
+    expect(sig?.absenceThreshold).toBe(5);
+    expect(sig?.expectedStages).toContain('implementation');
+  });
+
+  it('session_length_checkpoint exists in SIGNAL_MAP', () => {
+    expect(SIGNAL_MAP.has('session_length_checkpoint')).toBe(true);
+  });
+
+  it('session_length_checkpoint has detectionKeywords and absenceThreshold=25', () => {
+    const sig = SIGNAL_MAP.get('session_length_checkpoint');
+    expect(sig?.detectionKeywords.length).toBeGreaterThan(0);
+    expect(sig?.absenceThreshold).toBe(25);
+    expect(sig?.expectedStages).toContain('implementation');
+    expect(sig?.expectedStages).toContain('review_testing');
+  });
+
+  it('progress_consolidation_gap exists in SIGNAL_MAP', () => {
+    expect(SIGNAL_MAP.has('progress_consolidation_gap')).toBe(true);
+  });
+
+  it('progress_consolidation_gap has detectionKeywords and absenceThreshold=20', () => {
+    const sig = SIGNAL_MAP.get('progress_consolidation_gap');
+    expect(sig?.detectionKeywords.length).toBeGreaterThan(0);
+    expect(sig?.absenceThreshold).toBe(20);
+    expect(sig?.expectedStages).toContain('implementation');
+  });
+
+  it('session_length_checkpoint detected by keyword "context checkpoint"', () => {
+    expect(detectSignals('context checkpoint done')).toContain('session_length_checkpoint');
+  });
+
+  it('session_length_checkpoint detected by vibe keywords (2 hits)', () => {
+    expect(detectSignals('so where we are is good, recap: done')).toContain('session_length_checkpoint');
+  });
+
+  it('progress_consolidation_gap detected by keyword "summarizing what we built"', () => {
+    expect(detectSignals('summarizing what we built so far')).toContain('progress_consolidation_gap');
+  });
+
+  it('progress_consolidation_gap detected by vibe keywords (2 hits)', () => {
+    expect(detectSignals('so we have everything, summary of progress done')).toContain('progress_consolidation_gap');
+  });
+
+  it('decision_fatigue_pattern NOT detected by detectSignals (streak-based, no keywords)', () => {
+    expect(detectSignals('looks good, approved, next task please')).not.toContain('decision_fatigue_pattern');
+  });
+
+  it('work_rhythm_check NOT detected by detectSignals (velocity-based, no keywords)', () => {
+    expect(detectSignals('quick question: how do i do this')).not.toContain('work_rhythm_check');
+  });
+
+  it('focus_drift_detection NOT detected by detectSignals (domain-bucket-based, no keywords)', () => {
+    expect(detectSignals('login database component endpoint test deploy cache refactor')).not.toContain('focus_drift_detection');
+  });
+});
+
+// ── Phase 7 F1 — AbsenceDetector custom detection ────────────────────────────
+
+describe('AbsenceDetector — Phase 7 custom detection', () => {
+  it('decision_fatigue_pattern fires when consecutiveAcceptanceStreak >= 8', () => {
+    const state = makeState({
+      promptsInCurrentStage:       20,
+      consecutiveAcceptanceStreak: 8,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).toContain('decision_fatigue_pattern');
+  });
+
+  it('decision_fatigue_pattern does NOT fire when streak < 8', () => {
+    const state = makeState({
+      promptsInCurrentStage:       20,
+      consecutiveAcceptanceStreak: 7,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).not.toContain('decision_fatigue_pattern');
+  });
+
+  it('work_rhythm_check fires when avg inter-prompt interval < 30,000ms over last 10 prompts', () => {
+    const now = Date.now();
+    const history = Array.from({ length: 11 }, (_, i) => ({
+      index:           i,
+      text:            'quick prompt',
+      capturedAt:      now + i * 5_000,  // 5 seconds apart — way below 30,000ms threshold
+      classifiedStage: 'implementation' as const,
+      confidence:      0.8,
+    }));
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).toContain('work_rhythm_check');
+  });
+
+  it('work_rhythm_check does NOT fire when avg interval >= 30,000ms', () => {
+    const now = Date.now();
+    const history = Array.from({ length: 11 }, (_, i) => ({
+      index:           i,
+      text:            'deliberate prompt',
+      capturedAt:      now + i * 60_000,  // 60 seconds apart — above 30,000ms threshold
+      classifiedStage: 'implementation' as const,
+      confidence:      0.8,
+    }));
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).not.toContain('work_rhythm_check');
+  });
+
+  it('work_rhythm_check does NOT fire when fewer than 11 history entries', () => {
+    const now = Date.now();
+    const history = Array.from({ length: 5 }, (_, i) => ({
+      index:           i,
+      text:            'prompt',
+      capturedAt:      now + i * 1_000,
+      classifiedStage: 'implementation' as const,
+      confidence:      0.8,
+    }));
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).not.toContain('work_rhythm_check');
+  });
+
+  it('focus_drift_detection fires when >= 5 distinct domains active and no completion keyword', () => {
+    const domains = [
+      'login authentication jwt',        // auth
+      'database query migration schema',  // database
+      'component frontend react css',     // ui
+      'endpoint route rest graphql',      // api
+      'test spec mock jest',              // testing
+    ];
+    const history = domains.map((text, i) => ({
+      index:           i,
+      text,
+      capturedAt:      Date.now() + i * 1_000,
+      classifiedStage: 'implementation' as const,
+      confidence:      0.8,
+    }));
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).toContain('focus_drift_detection');
+  });
+
+  it('focus_drift_detection does NOT fire when completion keyword present', () => {
+    const history = [
+      { index: 0, text: 'login authentication jwt token',    capturedAt: Date.now(),         classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 1, text: 'database query migration schema',   capturedAt: Date.now() + 1_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 2, text: 'component frontend react css',      capturedAt: Date.now() + 2_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 3, text: 'endpoint route rest graphql fetch', capturedAt: Date.now() + 3_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 4, text: 'test spec mock jest done',          capturedAt: Date.now() + 4_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+    ];
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).not.toContain('focus_drift_detection');
+  });
+
+  it('focus_drift_detection does NOT fire when fewer than 5 distinct domains', () => {
+    const history = [
+      { index: 0, text: 'login authentication jwt',      capturedAt: Date.now(),         classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 1, text: 'database query migration',      capturedAt: Date.now() + 1_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 2, text: 'component frontend react',      capturedAt: Date.now() + 2_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+      { index: 3, text: 'endpoint route rest',           capturedAt: Date.now() + 3_000, classifiedStage: 'implementation' as const, confidence: 0.8 },
+    ];
+    const state = makeState({
+      promptsInCurrentStage: 20,
+      promptHistory:         history,
+    });
+    const flags = detectAbsenceFlags(state);
+    expect(flags.map((f) => f.signalKey)).not.toContain('focus_drift_detection');
   });
 });

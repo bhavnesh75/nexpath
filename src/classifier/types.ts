@@ -105,6 +105,12 @@ export interface SessionState {
    * Optional for backward compatibility with existing persisted state — read as 0 when absent.
    */
   advisoryCount?: number;
+  /**
+   * Number of consecutive prompts processed without a correction_seeking signal being detected.
+   * Resets to 0 whenever correction_seeking is detected in a prompt; increments on every other prompt.
+   * Used by the decision_fatigue_pattern signal detector.
+   */
+  consecutiveAcceptanceStreak: number;
 }
 
 // ── User nature / mood / depth (item 9) ───────────────────────────────────────

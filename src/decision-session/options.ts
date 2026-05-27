@@ -2878,6 +2878,150 @@ export const ABSENCE_RETROSPECTIVE_HABIT_FORMAL: DecisionContent = {
   ],
 };
 
+// ── Phase 7 F1-F2 — session-quality signals (CASUAL register) ─────────────────
+
+export const ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL: DecisionContent = {
+  question:      'Long acceptance streak — applied critical review recently?',
+  pinchFallback: 'Streak alert.',
+  L1: [
+    'Long acceptance streak — N prompts without any pushback.',
+  ],
+  L2: [
+    'Uncritical AI output acceptance compounds over time. Edge cases, off-by-one errors, and contextual assumptions hide in unreviewed responses. A streak this long is worth a deliberate pause — not because the suggestions are wrong, but because you haven\'t verified that they\'re right.',
+  ],
+  L3: [
+    'Review the last few AI responses critically — especially for edge cases and assumptions that haven\'t been explicitly validated.',
+  ],
+};
+
+export const ABSENCE_WORK_RHYTHM_CHECK_CASUAL: DecisionContent = {
+  question:      'Rapid prompting — verified each response before continuing?',
+  pinchFallback: 'Slow down.',
+  L1: [
+    'Prompting faster than you can verify output.',
+  ],
+  L2: [
+    'High prompt velocity without reading responses is a flow-state trap — throughput feels productive but review quality drops. Rapid-fire prompting compounds unverified output into bugs that are harder to debug than the original problem.',
+  ],
+  L3: [
+    'Read and verify the last response before sending the next prompt.',
+  ],
+};
+
+export const ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL: DecisionContent = {
+  question:      'Multiple areas open — completed any end-to-end?',
+  pinchFallback: 'Focus drift.',
+  L1: [
+    'N distinct areas touched this session without completing any.',
+  ],
+  L2: [
+    'Context switching between unrelated areas fragments attention — each switch costs roughly 15–20 minutes of cognitive recovery time. Touching 5+ domains without completing any is a quality risk for all of them: none get the focused attention they need.',
+  ],
+  L3: [
+    'Finish one area end-to-end before opening the next. What\'s the most important thing to complete right now?',
+  ],
+};
+
+export const ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL: DecisionContent = {
+  question:      '25+ prompts — context checkpoint done?',
+  pinchFallback: 'Checkpoint due.',
+  L1: [
+    '25+ prompts without a context checkpoint.',
+  ],
+  L2: [
+    'Long AI sessions drift — Claude\'s recall of earlier work degrades as the conversation grows. A quick reanchor (\'here\'s where we are: X done, Y remaining\') resets shared context and prevents compounding misalignment between you and the AI.',
+  ],
+  L3: [
+    'Drop a context checkpoint: what\'s been built, what\'s still needed, and what the current goal is.',
+  ],
+};
+
+export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL: DecisionContent = {
+  question:      '20+ implementation prompts — progress documented?',
+  pinchFallback: 'Document now.',
+  L1: [
+    '20+ implementation prompts without consolidation.',
+  ],
+  L2: [
+    'Progress built in an AI session exists implicitly in conversation history — which is non-persistent. Consolidating into documentation, comments, or a state summary makes what was built explicit and recoverable. Don\'t let the project state live only in the AI\'s context window.',
+  ],
+  L3: [
+    'Consolidate: update the README, write a brief description of what was built, or add clarifying comments before continuing.',
+  ],
+};
+
+// ── Phase 7 F1-F2 — session-quality signals (FORMAL register) ─────────────────
+
+export const ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL: DecisionContent = {
+  question:      'Long acceptance streak — applied critical review recently?',
+  pinchFallback: 'Streak alert.',
+  L1: [
+    'Consecutive AI acceptance streak: N prompts without critical review.',
+  ],
+  L2: [
+    'Decision fatigue in AI-assisted development manifests as uncritical output acceptance — each unreviewed response compounds review debt. Independent critical evaluation of AI output is a professional discipline: accepting suggestions without review is not the same as verifying correctness. The longer the acceptance streak, the higher the probability of an undetected error in the stack.',
+  ],
+  L3: [
+    'Apply deliberate critical review to the last N AI responses before continuing. Validate edge cases, check assumptions, confirm correctness independently.',
+  ],
+};
+
+export const ABSENCE_WORK_RHYTHM_CHECK_FORMAL: DecisionContent = {
+  question:      'Rapid prompting — verified each response before continuing?',
+  pinchFallback: 'Slow down.',
+  L1: [
+    'Prompt velocity exceeds verification rate.',
+  ],
+  L2: [
+    'Rapid-fire prompting without verifying AI output is a documented flow-state trap: subjective productivity (prompt throughput) is high while actual output quality (verified correctness) degrades. Deliberate practice requires intentional engagement with each response — the cost of review is always lower than the cost of debugging compounded unverified output.',
+  ],
+  L3: [
+    'Pause. Verify the last AI response before proceeding. If you haven\'t read it fully, read it now before sending the next prompt.',
+  ],
+};
+
+export const ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL: DecisionContent = {
+  question:      'Multiple areas open — completed any end-to-end?',
+  pinchFallback: 'Focus drift.',
+  L1: [
+    'Session context fragmentation: N distinct domains active, none complete.',
+  ],
+  L2: [
+    'Cognitive load theory establishes that simultaneous tracking of multiple unrelated concerns degrades reasoning quality for each. Context switching between unrelated development domains is not parallel productivity — it is serial underperformance. Each unfinished context is an open loop carrying cognitive residue. Single-focus task completion produces higher quality output and fewer integration defects.',
+  ],
+  L3: [
+    'Sequence your work: close one concern completely before opening the next. Define done for the current domain before moving to another.',
+  ],
+};
+
+export const ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL: DecisionContent = {
+  question:      '25+ prompts — context checkpoint done?',
+  pinchFallback: 'Checkpoint due.',
+  L1: [
+    'Session exceeds 25 prompts without context reanchoring.',
+  ],
+  L2: [
+    'Extended AI-pair-programming sessions suffer from context window degradation: the AI\'s recall of earlier architectural decisions, constraints, and completed work weakens as conversation depth grows. Periodic context reanchoring — summarizing current build state and remaining scope — is a documented best practice for maintaining alignment in AI-assisted development workflows.',
+  ],
+  L3: [
+    'Establish a context checkpoint: summarize current build state, outstanding decisions, and remaining scope before continuing.',
+  ],
+};
+
+export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL: DecisionContent = {
+  question:      '20+ implementation prompts — progress documented?',
+  pinchFallback: 'Document now.',
+  L1: [
+    'Implementation progress without consolidation checkpoint (20 prompts).',
+  ],
+  L2: [
+    'The project state must be explicit in the codebase, not implicit in the AI\'s session context. Documentation as practice: consolidating build progress into explicit documentation preserves decision context that would otherwise be lost to conversation history. AI conversation history is session-scoped and non-persistent — what was built must exist outside it.',
+  ],
+  L3: [
+    'Consolidate the current build state: update documentation, add implementation notes, or write a progress summary before continuing.',
+  ],
+};
+
 // ── Content resolution ─────────────────────────────────────────────────────────
 
 /**
@@ -2941,6 +3085,11 @@ const ABSENCE_CONTENT: Partial<Record<string, DecisionContent>> = {
   deployment_strategy_absence:   ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL,
   operational_runbook_gap:       ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL,
   slo_definition_gap:            ABSENCE_SLO_DEFINITION_GAP_FORMAL,
+  decision_fatigue_pattern:      ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+  work_rhythm_check:             ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+  focus_drift_detection:         ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+  session_length_checkpoint:     ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+  progress_consolidation_gap:    ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
 };
 
 const ABSENCE_CONTENT_CASUAL: Partial<Record<string, DecisionContent>> = {
@@ -3010,6 +3159,11 @@ const ABSENCE_CONTENT_CASUAL: Partial<Record<string, DecisionContent>> = {
   backwards_compatibility_check: ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL,
   self_review_habit:             ABSENCE_SELF_REVIEW_HABIT_CASUAL,
   performance_awareness:         ABSENCE_PERFORMANCE_AWARENESS_CASUAL,
+  decision_fatigue_pattern:      ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL,
+  work_rhythm_check:             ABSENCE_WORK_RHYTHM_CHECK_CASUAL,
+  focus_drift_detection:         ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL,
+  session_length_checkpoint:     ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL,
+  progress_consolidation_gap:    ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL,
 };
 
 const ABSENCE_CONTENT_FOUNDER: Partial<Record<string, DecisionContent>> = {
@@ -3054,6 +3208,11 @@ const ABSENCE_CONTENT_PM: Partial<Record<string, DecisionContent>> = {
   risk_flag:                      ABSENCE_RISK_FLAG_FORMAL,
   scope_change_impact_assessment: ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL,
   retrospective_habit:            ABSENCE_RETROSPECTIVE_HABIT_FORMAL,
+  decision_fatigue_pattern:       ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+  work_rhythm_check:              ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+  focus_drift_detection:          ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+  session_length_checkpoint:      ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+  progress_consolidation_gap:     ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
 };
 
 /**

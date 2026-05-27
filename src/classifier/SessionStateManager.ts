@@ -70,9 +70,10 @@ function newSession(projectRoot: string, now: number): SessionState {
     profile:                 null,
     mood:                    undefined,
     detectedLanguage:        undefined,
-    lastInjectedPrompt:      null,
-    lastAdvisoryPromptIndex: -1,
-    advisoryCount:           0,
+    lastInjectedPrompt:           null,
+    lastAdvisoryPromptIndex:      -1,
+    advisoryCount:                0,
+    consecutiveAcceptanceStreak:  0,
   };
 }
 
@@ -193,6 +194,13 @@ export class SessionStateManager {
         s.signalCounters[key].present    = true;
         s.signalCounters[key].lastSeenAt = promptIndex;
       }
+    }
+
+    // ── Consecutive acceptance streak ─────────────────────────────────────────
+    if (detected.includes('correction_seeking')) {
+      s.consecutiveAcceptanceStreak = 0;
+    } else {
+      s.consecutiveAcceptanceStreak = (s.consecutiveAcceptanceStreak ?? 0) + 1;
     }
 
     // ── Advance counter ───────────────────────────────────────────────────────
