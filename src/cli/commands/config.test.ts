@@ -155,7 +155,7 @@ describe('configSetAction — advisory_frequency validation', () => {
     const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called');
-    }) as (code?: number) => never);
+    }) as (code?: string | number | null | undefined) => never);
     await expect(configSetAction('advisory_frequency', 'always', path)).rejects.toThrow('process.exit called');
     expect(errSpy.mock.calls[0][0]).toContain('Invalid advisory_frequency "always"');
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -175,7 +175,7 @@ describe('configSetAction — advisory_frequency validation', () => {
     const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called');
-    }) as (code?: number) => never);
+    }) as (code?: string | number | null | undefined) => never);
     await expect(configSetAction('advisory_frequency:/some/project', 'always', path)).rejects.toThrow('process.exit called');
     expect(errSpy.mock.calls[0][0]).toContain('Invalid advisory_frequency "always"');
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -205,7 +205,7 @@ describe('configSetAction — role validation', () => {
     const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called');
-    }) as (code?: number) => never);
+    }) as (code?: string | number | null | undefined) => never);
     await expect(configSetAction('role', 'developer', path)).rejects.toThrow('process.exit called');
     expect(errSpy.mock.calls[0][0]).toContain('Invalid role "developer"');
     expect(exitSpy).toHaveBeenCalledWith(1);
@@ -225,7 +225,7 @@ describe('configSetAction — role validation', () => {
     const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
       throw new Error('process.exit called');
-    }) as (code?: number) => never);
+    }) as (code?: string | number | null | undefined) => never);
     await expect(configSetAction('role:/some/project', 'developer', path)).rejects.toThrow('process.exit called');
     expect(errSpy.mock.calls[0][0]).toContain('Invalid role "developer"');
     expect(exitSpy).toHaveBeenCalledWith(1);
