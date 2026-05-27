@@ -705,7 +705,7 @@ export const ABSENCE_LEARNING_CONSOLIDATION_BEGINNER: DecisionContent = {
   ],
 };
 
-export const ABSENCE_SIMPLE_SOLUTION_BEGINNER: DecisionContent = {
+export const ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER: DecisionContent = {
   question:      'About to build — is there a simpler way?',
   pinchFallback: 'Simplest first.',
   L1: [
@@ -720,7 +720,7 @@ export const ABSENCE_SIMPLE_SOLUTION_BEGINNER: DecisionContent = {
   ],
 };
 
-export const ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER: DecisionContent = {
+export const ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER: DecisionContent = {
   question:      'This prompt asks for a lot — should we split it?',
   pinchFallback: 'One thing first.',
   L1: [
@@ -750,7 +750,7 @@ export const ABSENCE_ROLLBACK_AWARENESS_BEGINNER: DecisionContent = {
   ],
 };
 
-export const ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER: DecisionContent = {
+export const ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER: DecisionContent = {
   question:      'Been building for a while — do you understand what was built?',
   pinchFallback: 'Understand the build.',
   L1: [
@@ -886,7 +886,7 @@ export const ABSENCE_USER_JOURNEY_CHECK_CASUAL: DecisionContent = {
   ],
 };
 
-export const ABSENCE_TECHNICAL_SPIKE_CASUAL: DecisionContent = {
+export const ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL: DecisionContent = {
   question:      'Explored a few approaches — is this a spike or production code?',
   pinchFallback: 'Spike vs. prod.',
   L1: [
@@ -920,7 +920,7 @@ export const ABSENCE_DEPENDENCY_ADVENTURE_CASUAL: DecisionContent = {
   ],
 };
 
-export const ABSENCE_RESTART_IMPULSE_CASUAL: DecisionContent = {
+export const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
   question:      'Tempted to start over — have you debugged the current approach?',
   pinchFallback: 'Debug first.',
   L1: [
@@ -937,7 +937,7 @@ export const ABSENCE_RESTART_IMPULSE_CASUAL: DecisionContent = {
   ],
 };
 
-export const ABSENCE_CREATIVE_VS_CORE_CASUAL: DecisionContent = {
+export const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
   question:      'Been building fun stuff — is the core still prioritised?',
   pinchFallback: 'Core first.',
   L1: [
@@ -1172,10 +1172,10 @@ export const ABSENCE_CONTENT_BEGINNER: Partial<Record<string, DecisionContent>> 
   copy_paste_awareness:           ABSENCE_COPY_PASTE_AWARENESS_BEGINNER,
   debugging_observation_gap:      ABSENCE_DEBUGGING_OBSERVATION_BEGINNER,
   learning_consolidation:         ABSENCE_LEARNING_CONSOLIDATION_BEGINNER,
-  simple_solution_first:          ABSENCE_SIMPLE_SOLUTION_BEGINNER,
-  single_responsibility_prompting: ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER,
+  simple_solution_first:          ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER,
+  single_responsibility_prompting: ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   rollback_awareness:             ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
-  build_vs_understand_ratio:      ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER,
+  build_vs_understand_ratio:      ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
   feature_completion_check:       ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
   finishing_line_awareness:       ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
   polish_vs_function:             ABSENCE_POLISH_VS_FUNCTION_CASUAL,
@@ -1183,10 +1183,10 @@ export const ABSENCE_CONTENT_BEGINNER: Partial<Record<string, DecisionContent>> 
   idea_to_spec_bridge:            ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
   demo_vs_product:                ABSENCE_DEMO_VS_PRODUCT_CASUAL,
   user_journey_check:             ABSENCE_USER_JOURNEY_CHECK_CASUAL,
-  technical_spike_treatment:      ABSENCE_TECHNICAL_SPIKE_CASUAL,
+  technical_spike_treatment:      ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
   dependency_adventure:           ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
-  restart_impulse_check:          ABSENCE_RESTART_IMPULSE_CASUAL,
-  creative_vs_core_ratio:         ABSENCE_CREATIVE_VS_CORE_CASUAL,
+  restart_impulse_check:          ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
+  creative_vs_core_ratio:         ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
 };
 
 export const TRANSITION_CONTENT_BEGINNER: Partial<Record<Stage, DecisionContent>> = {

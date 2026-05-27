@@ -113,7 +113,7 @@ import {
   ABSENCE_API_CONTRACT_DEFINITION_CASUAL,
   ABSENCE_ERROR_HANDLING_COVERAGE_CASUAL,
   ABSENCE_REFACTORING_CHECKPOINT_CASUAL,
-  ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL,
+  ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL,
   ABSENCE_SELF_REVIEW_HABIT_CASUAL,
   ABSENCE_PERFORMANCE_AWARENESS_CASUAL,
   ABSENCE_DECISION_RECORD_ABSENCE_FORMAL,
@@ -182,10 +182,10 @@ import {
   ABSENCE_COPY_PASTE_AWARENESS_BEGINNER,
   ABSENCE_DEBUGGING_OBSERVATION_BEGINNER,
   ABSENCE_LEARNING_CONSOLIDATION_BEGINNER,
-  ABSENCE_SIMPLE_SOLUTION_BEGINNER,
-  ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER,
+  ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER,
+  ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
-  ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER,
+  ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
   ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
   ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
   ABSENCE_POLISH_VS_FUNCTION_CASUAL,
@@ -193,10 +193,10 @@ import {
   ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
   ABSENCE_DEMO_VS_PRODUCT_CASUAL,
   ABSENCE_USER_JOURNEY_CHECK_CASUAL,
-  ABSENCE_TECHNICAL_SPIKE_CASUAL,
+  ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
   ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
-  ABSENCE_RESTART_IMPULSE_CASUAL,
-  ABSENCE_CREATIVE_VS_CORE_CASUAL,
+  ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
+  ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
 } from './options-beginner.js';
 import type { UserProfile } from '../classifier/types.js';
 import {
@@ -4038,32 +4038,32 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_LEARNING_CONSOLIDATION_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('absence:simple_solution_first, beginner → ABSENCE_SIMPLE_SOLUTION_BEGINNER', () => {
-    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('beginner'))).toBe(ABSENCE_SIMPLE_SOLUTION_BEGINNER);
+  it('absence:simple_solution_first, beginner → ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER', () => {
+    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('beginner'))).toBe(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER);
   });
 
-  it('absence:simple_solution_first, cool_geek → ABSENCE_SIMPLE_SOLUTION_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('cool_geek'))).toBe(ABSENCE_SIMPLE_SOLUTION_BEGINNER);
+  it('absence:simple_solution_first, cool_geek → ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('cool_geek'))).toBe(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER);
   });
 
-  it('ABSENCE_SIMPLE_SOLUTION_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
-    expect(ABSENCE_SIMPLE_SOLUTION_BEGINNER.L1).toHaveLength(2);
-    expect(ABSENCE_SIMPLE_SOLUTION_BEGINNER.L2).toHaveLength(1);
-    expect(ABSENCE_SIMPLE_SOLUTION_BEGINNER.L3).toHaveLength(1);
+  it('ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
+    expect(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER.L1).toHaveLength(2);
+    expect(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('absence:single_responsibility_prompting, beginner → ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER', () => {
-    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('beginner'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER);
+  it('absence:single_responsibility_prompting, beginner → ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER', () => {
+    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('beginner'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER);
   });
 
-  it('absence:single_responsibility_prompting, cool_geek → ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('cool_geek'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER);
+  it('absence:single_responsibility_prompting, cool_geek → ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('cool_geek'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER);
   });
 
-  it('ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
-    expect(ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER.L1).toHaveLength(2);
-    expect(ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER.L2).toHaveLength(1);
-    expect(ABSENCE_SINGLE_RESPONSIBILITY_BEGINNER.L3).toHaveLength(1);
+  it('ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
+    expect(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER.L1).toHaveLength(2);
+    expect(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER.L3).toHaveLength(1);
   });
 
   it('absence:rollback_awareness, beginner → ABSENCE_ROLLBACK_AWARENESS_BEGINNER', () => {
@@ -4080,18 +4080,18 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_ROLLBACK_AWARENESS_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('absence:build_vs_understand_ratio, beginner → ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER', () => {
-    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('beginner'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER);
+  it('absence:build_vs_understand_ratio, beginner → ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER', () => {
+    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('beginner'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER);
   });
 
-  it('absence:build_vs_understand_ratio, cool_geek → ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER);
+  it('absence:build_vs_understand_ratio, cool_geek → ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER);
   });
 
-  it('ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
-    expect(ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER.L1).toHaveLength(2);
-    expect(ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER.L2).toHaveLength(1);
-    expect(ABSENCE_BUILD_VS_UNDERSTAND_BEGINNER.L3).toHaveLength(1);
+  it('ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
+    expect(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER.L1).toHaveLength(2);
+    expect(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER.L2).toHaveLength(1);
+    expect(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER.L3).toHaveLength(1);
   });
 
   // ── Phase 5 D4-D6 — cool_geek signal routing (isVibe → BEGINNER map) ─────────
@@ -4166,14 +4166,14 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_USER_JOURNEY_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:technical_spike_treatment, cool_geek → ABSENCE_TECHNICAL_SPIKE_CASUAL (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:technical_spike_treatment', makeProfile('cool_geek'))).toBe(ABSENCE_TECHNICAL_SPIKE_CASUAL);
+  it('absence:technical_spike_treatment, cool_geek → ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:technical_spike_treatment', makeProfile('cool_geek'))).toBe(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL);
   });
 
-  it('ABSENCE_TECHNICAL_SPIKE_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
-    expect(ABSENCE_TECHNICAL_SPIKE_CASUAL.L1).toHaveLength(3);
-    expect(ABSENCE_TECHNICAL_SPIKE_CASUAL.L2).toHaveLength(2);
-    expect(ABSENCE_TECHNICAL_SPIKE_CASUAL.L3).toHaveLength(1);
+  it('ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
+    expect(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL.L2).toHaveLength(2);
+    expect(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL.L3).toHaveLength(1);
   });
 
   it('absence:dependency_adventure, cool_geek → ABSENCE_DEPENDENCY_ADVENTURE_CASUAL (isVibe)', () => {
@@ -4186,24 +4186,24 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_DEPENDENCY_ADVENTURE_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:restart_impulse_check, cool_geek → ABSENCE_RESTART_IMPULSE_CASUAL (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:restart_impulse_check', makeProfile('cool_geek'))).toBe(ABSENCE_RESTART_IMPULSE_CASUAL);
+  it('absence:restart_impulse_check, cool_geek → ABSENCE_RESTART_IMPULSE_CHECK_CASUAL (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:restart_impulse_check', makeProfile('cool_geek'))).toBe(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL);
   });
 
-  it('ABSENCE_RESTART_IMPULSE_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
-    expect(ABSENCE_RESTART_IMPULSE_CASUAL.L1).toHaveLength(3);
-    expect(ABSENCE_RESTART_IMPULSE_CASUAL.L2).toHaveLength(2);
-    expect(ABSENCE_RESTART_IMPULSE_CASUAL.L3).toHaveLength(1);
+  it('ABSENCE_RESTART_IMPULSE_CHECK_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
+    expect(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL.L2).toHaveLength(2);
+    expect(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:creative_vs_core_ratio, cool_geek → ABSENCE_CREATIVE_VS_CORE_CASUAL (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:creative_vs_core_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_CREATIVE_VS_CORE_CASUAL);
+  it('absence:creative_vs_core_ratio, cool_geek → ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL (isVibe)', () => {
+    expect(resolveDecisionContent('implementation', 'absence:creative_vs_core_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL);
   });
 
-  it('ABSENCE_CREATIVE_VS_CORE_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
-    expect(ABSENCE_CREATIVE_VS_CORE_CASUAL.L1).toHaveLength(3);
-    expect(ABSENCE_CREATIVE_VS_CORE_CASUAL.L2).toHaveLength(2);
-    expect(ABSENCE_CREATIVE_VS_CORE_CASUAL.L3).toHaveLength(1);
+  it('ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
+    expect(ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL.L2).toHaveLength(2);
+    expect(ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL.L3).toHaveLength(1);
   });
 
   // ── Phase 5 D7-D9 — pro_geek_soul signal routing ─────────────────────────────
@@ -4334,18 +4334,18 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_REFACTORING_CHECKPOINT_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:backwards_compatibility_check, no profile → ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL', () => {
-    expect(resolveDecisionContent('implementation', 'absence:backwards_compatibility_check')).toBe(ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL);
+  it('absence:backwards_compatibility_check, no profile → ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:backwards_compatibility_check')).toBe(ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL);
   });
 
-  it('absence:backwards_compatibility_check, pro_geek_soul → ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL', () => {
-    expect(resolveDecisionContent('implementation', 'absence:backwards_compatibility_check', makeProfile('pro_geek_soul'))).toBe(ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL);
+  it('absence:backwards_compatibility_check, pro_geek_soul → ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:backwards_compatibility_check', makeProfile('pro_geek_soul'))).toBe(ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL);
   });
 
-  it('ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
-    expect(ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL.L1).toHaveLength(3);
-    expect(ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL.L2).toHaveLength(2);
-    expect(ABSENCE_BACKWARDS_COMPAT_CHECK_CASUAL.L3).toHaveLength(1);
+  it('ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL has 3 L1, 2 L2, 1 L3 options', () => {
+    expect(ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL.L2).toHaveLength(2);
+    expect(ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
   it('absence:self_review_habit, no profile → ABSENCE_SELF_REVIEW_HABIT_CASUAL', () => {
