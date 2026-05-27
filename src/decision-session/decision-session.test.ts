@@ -2737,6 +2737,8 @@ describe('runLevel — help line injection', () => {
     expect(helpItem).toBeDefined();
     expect(helpItem?.label).toContain('Ctrl+X');
     expect(helpItem?.label).toContain('Ctrl+T');
+    expect(helpItem?.label).toContain('frequency or role');
+    expect(helpItem?.label).not.toContain('configure role');
   });
 
   it('does NOT inject help item when decisionSessionCount >= 12', async () => {

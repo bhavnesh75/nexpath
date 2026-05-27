@@ -61,7 +61,7 @@ const MOD_KEY = process.platform === 'darwin' ? 'Cmd' : 'Ctrl';
 
 const HELP_LABEL =
   `${ITALIC_DIM}  don't need nexpath here?  press ${RESET}${ITALIC_AMBER}${MOD_KEY}+X${RESET}${ITALIC_DIM} to disable for this project` +
-  `  ·  press ${RESET}${ITALIC_AMBER}${MOD_KEY}+T${RESET}${ITALIC_DIM} to adjust frequency or configure role${RESET}`;
+  `  ·  press ${RESET}${ITALIC_AMBER}${MOD_KEY}+T${RESET}${ITALIC_DIM} to adjust frequency or role${RESET}`;
 
 export function formatPinchLabel(label: string): string {
   return `${BOLD_CYAN}${label}${RESET}`;
