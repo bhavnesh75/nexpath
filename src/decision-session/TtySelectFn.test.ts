@@ -1306,6 +1306,22 @@ describe('runFrequencySubMenu (Unix path)', () => {
       store.db.close();
     }
   });
+
+  it('falls back to the global advisory_frequency value when no project-scoped value is set', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'advisory_frequency', 'major_only');
+      const { writes, streams } = makeFakeStreams();
+      const { iface } = makeFakeInterface();
+      runFrequencySubMenu(streams, iface, store, '/proj/freq5', vi.fn());
+      const rendered = writes.join('');
+      const majorLine = rendered.split('\n').find((line) => line.includes('Major transitions only'));
+      expect(majorLine).toBeDefined();
+      expect(majorLine).toContain('(current)');
+    } finally {
+      store.db.close();
+    }
+  });
 });
 
 describe('runRoleSubMenu (Unix path)', () => {
@@ -1384,6 +1400,42 @@ describe('runRoleSubMenu (Unix path)', () => {
       trigger('4'); // vibe_coder
       expect(getConfig(store.db, 'role:/proj/role5')).toBe('vibe_coder');
       expect(cleanup).toHaveBeenCalledWith(SKIP_NOW);
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('falls back to the global role value when no project-scoped value is set', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'role', 'pm');
+      const { writes, streams } = makeFakeStreams();
+      const { iface } = makeFakeInterface();
+      runRoleSubMenu(streams, iface, store, '/proj/role6', vi.fn());
+      const rendered = writes.join('');
+      const pmLine = rendered.split('\n').find((line) => line.includes('product manager'));
+      expect(pmLine).toBeDefined();
+      expect(pmLine).toContain('(current)');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('rejects an invalid stored role value and falls back to founder default', async () => {
+    const store = await openStore(':memory:');
+    try {
+      setConfig(store, 'role:/proj/role7', 'not_a_real_role');
+      const { writes, streams } = makeFakeStreams();
+      const { iface } = makeFakeInterface();
+      runRoleSubMenu(streams, iface, store, '/proj/role7', vi.fn());
+      const rendered = writes.join('');
+      const founderLine = rendered.split('\n').find((line) => line.includes('founder / product creator'));
+      expect(founderLine).toContain('(current)');
+      // None of the legitimate option lines should be tagged with (current) besides founder
+      const otherLines = rendered.split('\n').filter((line) =>
+        line.includes('(current)') && !line.includes('founder / product creator'),
+      );
+      expect(otherLines).toHaveLength(0);
     } finally {
       store.db.close();
     }
