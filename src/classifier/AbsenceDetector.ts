@@ -29,7 +29,7 @@ const FOCUS_COMPLETION_KEYWORDS = ['done', 'finished', 'merged', 'shipped', 'clo
 
 function detectWorkRhythmFlag(state: SessionState): boolean {
   const history = state.promptHistory;
-  if (history.length < WORK_RHYTHM_WINDOW + 1) return false;
+  if (history.length < WORK_RHYTHM_WINDOW) return false;
   const recent = history.slice(-WORK_RHYTHM_WINDOW);
   let totalInterval = 0;
   for (let i = 1; i < recent.length; i++) {

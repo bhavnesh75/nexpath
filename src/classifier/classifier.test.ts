@@ -3874,7 +3874,7 @@ describe('AbsenceDetector — Phase 7 custom detection', () => {
 
   it('work_rhythm_check fires when avg inter-prompt interval < 30,000ms over last 10 prompts', () => {
     const now = Date.now();
-    const history = Array.from({ length: 11 }, (_, i) => ({
+    const history = Array.from({ length: 10 }, (_, i) => ({
       index:           i,
       text:            'quick prompt',
       capturedAt:      now + i * 5_000,  // 5 seconds apart — way below 30,000ms threshold
@@ -3906,9 +3906,9 @@ describe('AbsenceDetector — Phase 7 custom detection', () => {
     expect(flags.map((f) => f.signalKey)).not.toContain('work_rhythm_check');
   });
 
-  it('work_rhythm_check does NOT fire when fewer than 11 history entries', () => {
+  it('work_rhythm_check does NOT fire when fewer than 10 history entries', () => {
     const now = Date.now();
-    const history = Array.from({ length: 5 }, (_, i) => ({
+    const history = Array.from({ length: 9 }, (_, i) => ({
       index:           i,
       text:            'prompt',
       capturedAt:      now + i * 1_000,

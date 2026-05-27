@@ -3215,6 +3215,14 @@ const ABSENCE_CONTENT_PM: Partial<Record<string, DecisionContent>> = {
   progress_consolidation_gap:     ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
 };
 
+const ABSENCE_CONTENT_PRO_GEEK_SOUL: Partial<Record<string, DecisionContent>> = {
+  decision_fatigue_pattern:   ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+  work_rhythm_check:          ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+  focus_drift_detection:      ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+  session_length_checkpoint:  ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+  progress_consolidation_gap: ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
+};
+
 /**
  * Stage transition content lookup.
  * Keyed by the DESTINATION stage (currentStage after transition).
@@ -3285,6 +3293,10 @@ export function resolveDecisionContent(
     const signalKey  = flagType.slice('absence:'.length);
     const roleHit    = roleMap?.[signalKey];
     if (roleHit) return roleHit;
+    if (profile?.nature === 'pro_geek_soul') {
+      const pgOverride = ABSENCE_CONTENT_PRO_GEEK_SOUL[signalKey];
+      if (pgOverride) return pgOverride;
+    }
     const override   = absenceMap[signalKey];
     if (override) return override;
   }

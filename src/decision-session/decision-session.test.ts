@@ -5129,5 +5129,26 @@ describe('Phase 7 content routing', () => {
       expect(result).toBe(expected[i]);
     }
   });
+
+  it('pro_geek_soul (no role) gets FORMAL content for all 5 Phase 7 signals', () => {
+    const profile = makeProfile('pro_geek_soul');
+    const expected = [
+      ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,
+      ABSENCE_WORK_RHYTHM_CHECK_FORMAL,
+      ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,
+      ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,
+      ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL,
+    ];
+    for (let i = 0; i < phase7Keys.length; i++) {
+      const result = resolveDecisionContent('implementation', `absence:${phase7Keys[i]!}`, profile);
+      expect(result).toBe(expected[i]);
+    }
+  });
+
+  it('pro_geek_soul (no role) still gets CASUAL for non-Phase-7 absence signals', () => {
+    const profile = makeProfile('pro_geek_soul');
+    const result = resolveDecisionContent('implementation', 'absence:test_creation', profile);
+    expect(result).toBe(ABSENCE_TEST_CREATION_CASUAL);
+  });
 });
 
