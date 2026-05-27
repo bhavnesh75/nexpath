@@ -1799,6 +1799,43 @@ describe('installAction — frequency and role prompts', () => {
     }
   });
 
+  it('interactive path with a cancelled role prompt does not write a new value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'role', 'vibe_coder');
+      closeStore(seedStore);
+
+      const freqPromptFn = vi.fn(async () => 'every_event');
+      // Cancel: return a Symbol so isCancel() picks it up
+      const rolePromptFn = vi.fn(async () => Symbol('cancel'));
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'role')).toBe('vibe_coder');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
   it('interactive path passes the founder default to the role prompt for legacy "clear" stored value', async () => {
     const { dir, cleanup: cleanupDir } = tmpDir();
     const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
