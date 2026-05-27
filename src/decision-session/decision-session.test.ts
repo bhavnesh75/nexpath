@@ -4962,6 +4962,50 @@ describe('resolveDecisionContent — Phase 6 role-based signal routing', () => {
   });
 });
 
+// ── vibe_coder role routing (nature fallback, no role-specific content) ──────
+
+describe('resolveDecisionContent — vibe_coder role routing', () => {
+  const makeVibeCoderProfile = (nature?: UserProfile['nature']) =>
+    ({ role: 'vibe_coder', nature } as UserProfile);
+
+  it('vibe_coder role does NOT trigger founder-keyed content for absence:user_value_check', () => {
+    const result = resolveDecisionContent('implementation', 'absence:user_value_check', makeVibeCoderProfile('cool_geek'));
+    expect(result).not.toBe(ABSENCE_USER_VALUE_CHECK_CASUAL);
+  });
+
+  it('vibe_coder + cool_geek + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL (nature fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('cool_geek'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_CASUAL);
+  });
+
+  it('vibe_coder + pro_geek_soul + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL (nature fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('pro_geek_soul'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_CASUAL);
+  });
+
+  it('vibe_coder + hardcore_pro + absence:test_creation → ABSENCE_TEST_CREATION (formal fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('hardcore_pro'));
+    expect(content).toBe(ABSENCE_TEST_CREATION);
+  });
+
+  it('vibe_coder + beginner + absence:test_creation → ABSENCE_TEST_CREATION_BEGINNER (beginner override wins)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('beginner'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_BEGINNER);
+  });
+
+  it('vibe_coder + cool_geek produces identical content to no-role + cool_geek (nature parity)', () => {
+    const vibeCoder = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('cool_geek'));
+    const noRole    = resolveDecisionContent('implementation', 'absence:test_creation', { nature: 'cool_geek' } as UserProfile);
+    expect(vibeCoder).toBe(noRole);
+  });
+
+  it('vibe_coder + hardcore_pro produces identical content to no-role + hardcore_pro (nature parity)', () => {
+    const vibeCoder = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('hardcore_pro'));
+    const noRole    = resolveDecisionContent('implementation', 'absence:test_creation', { nature: 'hardcore_pro' } as UserProfile);
+    expect(vibeCoder).toBe(noRole);
+  });
+});
+
 // ── Phase 7 F1-F2 — session-quality content ───────────────────────────────────
 
 describe('Phase 7 content — CASUAL variants', () => {
