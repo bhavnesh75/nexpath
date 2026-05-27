@@ -706,253 +706,65 @@ export const ABSENCE_LEARNING_CONSOLIDATION_BEGINNER: DecisionContent = {
 };
 
 export const ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER: DecisionContent = {
-  question:      'About to build — is there a simpler way?',
+  question:      'Building this — is there a simpler way to do it?',
   pinchFallback: 'Simplest first.',
   L1: [
-    '1. Before building this — is there a simple, direct way to do it that doesn\'t need a lot of moving parts?\n2. Share with me: what\'s the simplest thing that could work here?\n3. Then tell me: do we actually need something more complex, or would the simple version be good enough?',
-    'What\'s the simplest thing that could solve this problem? Share your answer with me — we\'ll start there and only add complexity if we really need to.',
+    '1. Before building something complex — ask: is there a simpler way to get the same result? The simplest solution that works is almost always the right one to start with.\n2. Share what you\'re trying to do in plain terms. Let\'s find the simple version first.',
+    'The KISS principle in engineering: if the simple solution works, use it. You can always make things more complex later — you can\'t unsimplify them. What\'s the simplest version of what you\'re building?',
   ],
   L2: [
-    'Is what you\'re about to build as simple as it could be, or are you adding complexity that might not be needed yet?',
+    'Is there a simpler way to do this? Describe what you need — let\'s find the smallest solution.',
   ],
   L3: [
-    'Is there a simpler way to do this that would still solve the problem?',
+    'What\'s the simplest way to get this done? Start there.',
   ],
 };
 
 export const ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER: DecisionContent = {
-  question:      'This prompt asks for a lot — should we split it?',
-  pinchFallback: 'One thing first.',
+  question:      'Asking a lot at once — let\'s do one thing at a time',
+  pinchFallback: 'One thing at a time.',
   L1: [
-    '1. Look at what you\'re about to ask me to do — are there multiple different things in that one request?\n2. Share with me: what\'s the most important single thing you want done first?\n3. Then we\'ll do just that one thing, check it works, and move on to the next.',
-    'Break your request into one thing at a time — share the first and most important thing you want done, and we\'ll check it before moving on to the next.',
+    '1. When you ask the AI to do several things at once, the results get messy and hard to check. Try focusing on just one thing per message.\n2. What\'s the most important thing to do right now? Start with that — then we\'ll move to the next.',
+    'One task per message works better than many — it\'s easier to see if it worked, easier to fix if it didn\'t, and easier to understand what happened. What\'s the single next step?',
   ],
   L2: [
-    'Is there more than one thing in what you\'re about to ask? Tell me the most important one — we\'ll do that first and check it before adding more.',
+    'What\'s the one thing to do right now? Focus on that first — we\'ll do the rest after.',
   ],
   L3: [
-    'What\'s the one most important thing you want done right now — before anything else?',
+    'One thing at a time — what\'s the most important next step?',
   ],
 };
 
 export const ABSENCE_ROLLBACK_AWARENESS_BEGINNER: DecisionContent = {
-  question:      'About to change something — do you know how to undo it?',
-  pinchFallback: 'Can you undo this?',
+  question:      'About to change things — do you know how to undo it?',
+  pinchFallback: 'Save before changing.',
   L1: [
-    '1. Before making this change — do you have a way to undo it if something breaks?\n2. Share with me: is there a git commit or backup of the current working state?\n3. If not, let\'s save the current state first before making the change.',
-    'Before changing this — can you go back to the working version if it breaks? Tell me what the safety net is before we make the change.',
+    '1. Before making a big change to your code — do a git commit first. This saves a snapshot you can always go back to if something breaks.\n2. Not sure how? Try: git add . then git commit -m \'working before change\'. Then make your change safely.',
+    'Git is your safety net. Always commit a working version of your code before changing something significant. If the change breaks everything, you can get back to where things worked with one command.',
   ],
   L2: [
-    'If this change breaks something, how would you undo it? Make sure you have a way back before we proceed.',
+    'Do a git commit before making this change — save a working snapshot first, then change.',
   ],
   L3: [
-    'Do you have a way to undo this change if something goes wrong?',
+    'Commit your current code before changing it — so you can get back if needed.',
   ],
 };
 
 export const ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER: DecisionContent = {
-  question:      'Been building for a while — do you understand what was built?',
-  pinchFallback: 'Understand the build.',
+  question:      'We\'ve been building — do you understand what we\'ve built?',
+  pinchFallback: 'Pause and understand.',
   L1: [
-    '1. We\'ve been building for a while — take a step back and think about what we\'ve made.\n2. Share with me: can you describe what each part does in your own words?\n3. If any part still feels like a black box, point it out and we\'ll go through it together.',
-    'Walk me through what we\'ve built so far — describe what each part does in plain words. Share anything you\'re not fully clear on and we\'ll go through it.',
+    '1. We\'ve added a lot of code — can you explain in your own words what it does? Even a rough description is fine.\n2. Understanding what you\'ve built is as important as building it. Code you don\'t understand becomes a problem you can\'t fix later.',
+    'Pick one part of what we just built and walk me through what it does. Not how I explained it — how YOU understand it. This is how you turn building into learning.',
   ],
   L2: [
-    'Is there any part of what we\'ve built that you couldn\'t explain to someone else right now? Share that part with me and we\'ll make sure you understand it.',
+    'Can you explain in your own words what the code we just wrote does? Take a moment.',
   ],
   L3: [
-    'Is there anything in what we\'ve built that still feels unclear or like a black box to you?',
+    'Walk me through what we just built — in your own words.',
   ],
 };
 
-// ── Phase 5 D4-D6 — cool_geek signals (CASUAL register in BEGINNER map) ───────
-
-export const ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL: DecisionContent = {
-  question:      'New idea forming — is the current feature actually done?',
-  pinchFallback: 'Finish it first.',
-  L1: [
-    'Before starting something new — is the current feature actually done end-to-end? Does it work, does it handle edge cases, is it tested? Finish this one before opening a new thread.',
-    'Check: is the feature you\'re in the middle of fully complete and working, or just mostly done? Ship the current one before starting another.',
-    'Take stock of what\'s in-progress before adding more: what features are currently half-built, and which one should be finished first?',
-  ],
-  L2: [
-    'Is the current feature done — like actually done and tested — or just "done enough to move on"? Close it out before starting the next one.',
-    'What\'s the most recently started feature, and what would it take to call it actually complete?',
-  ],
-  L3: [
-    'Is there anything started but not finished that should be completed before adding something new?',
-  ],
-};
-
-export const ABSENCE_FINISHING_LINE_AWARENESS_CASUAL: DecisionContent = {
-  question:      'Lots in progress — is anything actually shipped?',
-  pinchFallback: 'Ship something.',
-  L1: [
-    'Step back and look at the session: how many features are partially built vs. fully working end-to-end? Partially-built features deliver zero value — pick one and get it across the line.',
-    'What\'s closest to being done in what was built this session? Focus on finishing that one completely before picking up anything else.',
-    'Which of the in-progress features would take the least work to ship fully? Get that one to done before opening anything new.',
-  ],
-  L2: [
-    'Is there anything that was built in this session that\'s nearly done but not quite shipped? What would it take to finish it?',
-    'How many features started today are actually working end-to-end? If the answer is fewer than started, pick the most important and finish it.',
-  ],
-  L3: [
-    'Is there anything in this session that was started but never finished to a working, shippable state?',
-  ],
-};
-
-export const ABSENCE_POLISH_VS_FUNCTION_CASUAL: DecisionContent = {
-  question:      'Working on polish — does the core actually work?',
-  pinchFallback: 'Function first.',
-  L1: [
-    'Before polishing — does the core functionality actually work end-to-end? UI polish before functional completion is backwards. Get it working first, then make it pretty.',
-    'Check: is what\'s being styled or animated actually functional underneath? If the core doesn\'t work, visual improvements don\'t add value yet.',
-    'Call out the state clearly: what\'s the current functional completion vs. visual completion? If functional isn\'t at 100%, pause the polish and finish the core first.',
-  ],
-  L2: [
-    'Is the core of this feature working correctly before spending time on how it looks? Working ugly is more valuable than broken pretty.',
-    'What percentage of the core functionality is working vs. what percentage is visually polished? Which should be prioritised right now?',
-  ],
-  L3: [
-    'Does the core functionality work end-to-end before spending more time on visual improvements?',
-  ],
-};
-
-export const ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL: DecisionContent = {
-  question:      'Adding more — is this actually MVP scope?',
-  pinchFallback: 'MVP check.',
-  L1: [
-    'MVP check before building: is what\'s being added needed to test the core hypothesis, or is it a nice-to-have that can wait until the MVP is validated? If the latter, park it.',
-    'Is this addition minimum-viable or gold-plating? The MVP boundary isn\'t "the minimum I\'d be happy shipping" — it\'s "the minimum that tests whether this is worth building at all."',
-    'List what\'s been added since the original MVP scope. For each addition, answer: could the core hypothesis be tested without this? If yes, it\'s post-MVP scope — defer it.',
-  ],
-  L2: [
-    'Is what\'s being added truly needed for the MVP, or is it a feature that would be nice to have once the core is validated?',
-    'What\'s the MVP hypothesis? Does this addition help test it, or is it beyond the scope of what needs to be validated first?',
-  ],
-  L3: [
-    'Is this addition inside or outside the MVP scope? What would be cut if you had to ship the minimum possible version today?',
-  ],
-};
-
-export const ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL: DecisionContent = {
-  question:      'Got a new idea — spec it before building it?',
-  pinchFallback: 'Spec it first.',
-  L1: [
-    'Before building this idea — write a one-paragraph spec: what does it do, what does it not do, and how does it fit into the existing product? Even a rough spec is better than jumping straight to code.',
-    'Turn this idea into a spec before touching the keyboard: what\'s the input, what\'s the output, what\'s in scope, what\'s not? One paragraph, then build.',
-    'Define the boundaries of this idea before building: what problem does it solve, what\'s the minimum it needs to do, and what are you explicitly not building as part of it?',
-  ],
-  L2: [
-    'In one or two sentences, what does this idea do and what does it not do? Get that clear before starting to implement.',
-    'What\'s the scope of this idea — what does "done" look like, and what would be deferred to a future version?',
-  ],
-  L3: [
-    'Can you describe this idea clearly enough to build from before starting? What does it do and where does it stop?',
-  ],
-};
-
-export const ABSENCE_DEMO_VS_PRODUCT_CASUAL: DecisionContent = {
-  question:      'Is this demo code or production code?',
-  pinchFallback: 'Demo vs. prod.',
-  L1: [
-    'Call it clearly: is what was just built demo-quality (good enough to show) or production-ready (good enough to ship and maintain)? They have different standards — don\'t confuse them.',
-    'Check what was just built against the production-readiness bar: real data connected, edge cases handled, errors surfaced correctly, no hardcoded placeholder values. Is it there yet?',
-    'List the gaps between what was just built and something that could ship to real users: what\'s hardcoded, what\'s missing error handling, what would break under real usage?',
-  ],
-  L2: [
-    'What\'s the difference between what was just built and something that could run in production with real users? Name the gaps.',
-    'Is this code being written to demo or to ship? The answer changes what quality bar to apply right now.',
-  ],
-  L3: [
-    'Is what was just built production-quality, or is it demo/prototype quality that would need more work before shipping?',
-  ],
-};
-
-export const ABSENCE_USER_JOURNEY_CHECK_CASUAL: DecisionContent = {
-  question:      'Feature built — what\'s the full user journey?',
-  pinchFallback: 'Full journey.',
-  L1: [
-    'Walk the full user journey for what was just built: not just the happy path, but first-time empty state, error state, edge cases. Are all of those handled?',
-    'Think about a real user hitting this feature for the first time: what do they see, what can they do, what happens when something goes wrong? Map the full journey, not just the core path.',
-    'What happens in what was just built when: (1) the user has no data yet, (2) something goes wrong, (3) they do something unexpected? Check each of those before calling the feature done.',
-  ],
-  L2: [
-    'What does the user experience when what was just built goes wrong or there\'s nothing to show yet? Is that handled?',
-    'Describe the full user journey through this feature — not just the happy path but also empty states and error states.',
-  ],
-  L3: [
-    'Is the full user journey covered — including empty state, error state, and unexpected inputs — or just the happy path?',
-  ],
-};
-
-export const ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL: DecisionContent = {
-  question:      'Explored a few approaches — is this a spike or production code?',
-  pinchFallback: 'Spike vs. prod.',
-  L1: [
-    'If what was just built was exploratory — trying things, testing approaches — treat it as a spike. Extract the useful learning, discard the rest, and write the production version cleanly from that learning.',
-    'Spike code and production code are different things. What was just built: which is it? If it was exploratory, don\'t commit it as-is — extract the approach and rewrite clean.',
-    'What was the purpose of what was just built? If it was to learn whether something was feasible, that\'s a spike. Spikes get cleaned up or thrown away — not shipped as production features.',
-  ],
-  L2: [
-    'Was what was just built exploratory (spike) or the actual production implementation? If it was a spike, what\'s the clean version look like?',
-    'Is there any throwaway or experimental code in what was just built that shouldn\'t go into the production codebase as-is?',
-  ],
-  L3: [
-    'Is what was just built ready to go into the codebase, or was it exploratory code that needs to be cleaned up first?',
-  ],
-};
-
-export const ABSENCE_DEPENDENCY_ADVENTURE_CASUAL: DecisionContent = {
-  question:      'Adding a library — is it actually needed?',
-  pinchFallback: 'Do you need it?',
-  L1: [
-    'Before adding this library: what specific problem does it solve that couldn\'t be solved with what\'s already installed? If the answer is vague, that\'s a sign this dependency isn\'t justified.',
-    'Evaluate this library addition: is it actively maintained, is there an alternative already in the project, and does the long-term maintenance cost justify adding it?',
-    'For every library added to a project, you\'re committing to its updates, breaking changes, and security patches for the life of the project. Is this library worth that ongoing cost for what it solves?',
-  ],
-  L2: [
-    'What does adding this library solve, and could you solve it without the extra dependency? If yes, do that instead.',
-    'Is this library being added because it\'s needed or because it\'s interesting? "Needed" means there\'s no reasonable alternative.',
-  ],
-  L3: [
-    'Is this library actually necessary, or is there a way to solve the problem without adding another dependency?',
-  ],
-};
-
-export const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
-  question:      'Tempted to start over — have you debugged the current approach?',
-  pinchFallback: 'Debug first.',
-  L1: [
-    'Before starting over — diagnose what\'s actually wrong with the current approach. "It\'s not working" isn\'t a reason to restart. Figure out the specific failure, then decide whether to fix or rewrite.',
-    'The impulse to start fresh is usually frustration talking. Pause and identify the root cause: what specifically broke, and is that actually a fundamental flaw or a fixable bug?',
-    'What would restarting give you that debugging the current approach wouldn\'t? If you can\'t answer that specifically, debug first and restart only if you find a real architectural flaw.',
-  ],
-  L2: [
-    'What specifically is broken in the current approach? Name the root cause before deciding to restart — you might find it\'s fixable.',
-    'Is the problem with the current approach fundamental (wrong architecture) or tactical (a bug that can be fixed)? Only the first justifies starting over.',
-  ],
-  L3: [
-    'What exactly is wrong with the current approach? Diagnose the specific failure before deciding to restart.',
-  ],
-};
-
-export const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
-  question:      'Been building fun stuff — is the core still prioritised?',
-  pinchFallback: 'Core first.',
-  L1: [
-    'Step back and look at what was built in this session: what percentage of it is core product value vs. creative/bonus features? If it\'s tilting heavily toward extras, pull back to the core.',
-    'The core product is what delivers the main value to the user. How much of this session was spent on core features vs. interesting extras? Rebalance if needed.',
-    'List what was built today and classify each: core feature, supporting feature, or creative extra. Are the creative extras crowding out core work?',
-  ],
-  L2: [
-    'What\'s been built today that serves the core product value? What\'s been built that\'s fun but not core? Make sure the ratio is right.',
-    'Is the core of the product fully built and working before spending time on features that are interesting but not essential?',
-  ],
-  L3: [
-    'Is the time being spent on core features or on extras? Is the balance right?',
-  ],
-};
 
 // ── Sub-7 — beginner content sets ─────────────────────────────────────────────
 
@@ -1176,17 +988,6 @@ export const ABSENCE_CONTENT_BEGINNER: Partial<Record<string, DecisionContent>> 
   single_responsibility_prompting: ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   rollback_awareness:             ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
   build_vs_understand_ratio:      ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
-  feature_completion_check:       ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
-  finishing_line_awareness:       ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
-  polish_vs_function:             ABSENCE_POLISH_VS_FUNCTION_CASUAL,
-  mvp_scope_discipline:           ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL,
-  idea_to_spec_bridge:            ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
-  demo_vs_product:                ABSENCE_DEMO_VS_PRODUCT_CASUAL,
-  user_journey_check:             ABSENCE_USER_JOURNEY_CHECK_CASUAL,
-  technical_spike_treatment:      ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
-  dependency_adventure:           ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
-  restart_impulse_check:          ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
-  creative_vs_core_ratio:         ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
 };
 
 export const TRANSITION_CONTENT_BEGINNER: Partial<Record<Stage, DecisionContent>> = {

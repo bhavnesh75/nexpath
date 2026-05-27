@@ -1668,423 +1668,612 @@ const ABSENCE_INCREMENTAL_BUILD: DecisionContent = {
   ],
 };
 
+// ── Phase 5 D4-D6 — cool_geek signals (CASUAL register) ──────────────────────
+
+const ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL: DecisionContent = {
+  question:      'Adding more — is the previous feature actually done?',
+  pinchFallback: 'Finish before starting next.',
+  L1: [
+    'Checkpoint: what\'s the state of the last feature started? Is it done and tested end-to-end? Scrum\'s Definition of Done exists because partially-done features compound — starting new ones before previous ones meet DoD means carrying technical debt through every subsequent sprint.',
+    'Before adding the next thing — is the previous feature fully working end-to-end? Not \'mostly done\', not \'works here\', but actually complete and tested? Unfinished features accumulate and come back as bugs and edge cases.',
+    'How complete is the most recently started feature? Rate it honestly: \'done and tested\', \'works but untested\', \'partially built\'. Starting the next feature before the previous one meets DoD is the classic unfinished-work accumulation pattern.',
+  ],
+  L2: [
+    'Is the previous feature done and tested? That\'s the bar — fully built, verified end-to-end. Start the next only after meeting it.',
+    'What\'s the completion state of the last feature? Only move to the next after the previous is actually done.',
+  ],
+  L3: [
+    'Is the last feature actually done and tested before starting the next?',
+  ],
+};
+
+const ABSENCE_FINISHING_LINE_AWARENESS_CASUAL: DecisionContent = {
+  question:      'Multiple things in progress — how many are complete?',
+  pinchFallback: 'Finish one before starting next.',
+  L1: [
+    'Count check: how many features are currently in-progress vs. complete end-to-end? A partially-done feature delivers zero user value. Three features 40% each is worse than one feature 100% — the user can use one, and none of three.',
+    'In iterative delivery, value is delivered by reaching shippable state, not by making progress. How many features started this session have reached shippable state? Pick the one closest to completion — finish that before starting another.',
+    'Before starting something new — pick the feature closest to completion and push it to done. Lean delivery: finish items, don\'t accumulate WIP. What\'s the one thing to finish right now?',
+  ],
+  L2: [
+    'How many things are in-progress? Complete the one closest to done before starting anything new.',
+    'What would it take to bring the most-started feature to shippable state? Do that before adding more.',
+  ],
+  L3: [
+    'Which feature is closest to done? Finish that one before starting the next.',
+  ],
+};
+
+const ABSENCE_POLISH_VS_FUNCTION_CASUAL: DecisionContent = {
+  question:      'Working on the look — does the core work end-to-end?',
+  pinchFallback: 'Function before polish.',
+  L1: [
+    'Lean MVP principle: polish comes after function. Before spending more prompts on UI improvements — does the core functionality work end-to-end? \'MVP UI should be clean and usable, not museum-quality.\' Fix the working before fixing the looking.',
+    'Does the core user flow work without errors from start to finish? If not, visual polish is blocked by a non-working core. Function first: build the thing that works, then make it look good.',
+    'UI polish on a non-functional core creates maintenance debt — you\'ll redo the style when the function changes. Core functionality working end-to-end is the prerequisite for polish. Is it?',
+  ],
+  L2: [
+    'Does the core work end-to-end before going further with styling? Function first — polish after it works.',
+    'Is the working flow solid end-to-end? Lean MVP says polish after function. What\'s left to make the core work?',
+  ],
+  L3: [
+    'Get the core working end-to-end before focusing on how it looks.',
+  ],
+};
+
+const ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL: DecisionContent = {
+  question:      'Adding features — is each one actually MVP scope?',
+  pinchFallback: 'MVP discipline check.',
+  L1: [
+    'Eric Ries MVP heuristic: start with what you believe is needed, then eliminate half the features, then eliminate half again. Each addition should answer: does this test the core hypothesis? Is it the minimum needed to get real user feedback? If neither — it\'s gold-plating an unvalidated MVP.',
+    'MVP scope discipline: for each new feature, ask — is this the minimum needed to test the core assumption, or is it a nice-to-have that could wait until after first validation? \'Lean startup MVP requires strict discipline, focusing on the minimum feature set to test a specific assumption.\'',
+    'Before adding this — what specific hypothesis does it help validate? Features without a hypothesis-connection aren\'t MVP scope. List what\'s left to build and categorize: core hypothesis vs. nice-to-have.',
+  ],
+  L2: [
+    'Is this feature minimum-viable — needed to test the core hypothesis — or is it gold-plating? Scope check before building.',
+    'What hypothesis does this feature validate? If it doesn\'t test the core assumption, it\'s post-MVP scope.',
+  ],
+  L3: [
+    'Is this feature MVP scope? Does it test the core hypothesis or is it a nice-to-have?',
+  ],
+};
+
+const ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL: DecisionContent = {
+  question:      'New idea — defined what it does before building?',
+  pinchFallback: 'Spec the idea first.',
+  L1: [
+    'Spec-driven development principle: a feature idea is not a spec. Before building — write a one-paragraph description: what does this feature do? What does it NOT do? How does it fit into what already exists? The spec becomes the source of truth; code is its expression.',
+    'Jumping from idea to code skips the bridge. Quick spec for this idea: (1) what does it do — one sentence, (2) what are its boundaries — what it explicitly does not do, (3) how does it fit into the existing product — integration points. Five minutes of spec saves hours of rework.',
+    'An idea in your head is not a spec. A spec is a structured description of what the feature does and doesn\'t do, written before implementation. Write it, then build against it — this is the difference between directed building and creative wandering.',
+  ],
+  L2: [
+    'Spec this idea before building it: what does it do, what are its boundaries, and how does it fit into what already exists? One paragraph is enough.',
+    'Before implementing — write what it does and what it doesn\'t do. The spec is the source of truth; implementation is the verification.',
+  ],
+  L3: [
+    'Define what this idea does and doesn\'t do before writing any code for it.',
+  ],
+};
+
+const ABSENCE_DEMO_VS_PRODUCT_CASUAL: DecisionContent = {
+  question:      'Is this demo quality or production quality — explicit distinction?',
+  pinchFallback: 'Demo vs. production: name which.',
+  L1: [
+    'Production readiness check: what quality standard applies to what\'s being built? Demo code and production code have different requirements. If this is a demo — mark it explicitly: hardcoded data, no edge cases, visual-only. If it\'s the actual product — it needs real data connected, error states handled, and edge cases working.',
+    'The difference between demo and production: demo looks right; production works right under real conditions. Treating prototype code as production without explicit upgrade creates technical debt that compounds with every sprint. \'Low quality code contains 15x more defects and takes 124% longer to resolve.\' — name which standard applies right now.',
+    'Categorize explicitly what\'s being built: prototype (exploratory, disposable, no production quality required) or production (real data, real errors, edge cases, maintainable). If prototype — name it and plan the production upgrade path. If production — apply production standards now.',
+  ],
+  L2: [
+    'Is this demo-quality or production-quality? Name it explicitly. If demo — what\'s the plan to make it production-ready? If production — is it handling real data and real error states?',
+    'Demo code isn\'t wrong — treating it as production code is. What quality standard applies to what\'s being built right now?',
+  ],
+  L3: [
+    'Is this demo or production quality? Name which, explicitly.',
+  ],
+};
+
+const ABSENCE_USER_JOURNEY_CHECK_CASUAL: DecisionContent = {
+  question:      'Feature being built — is the full user journey mapped?',
+  pinchFallback: 'Map the user journey first.',
+  L1: [
+    'Jeff Patton User Story Mapping: once a basic happy path is in place, consider edge cases, alternatives, and exceptions. Before building more — answer: (1) what does the user see the first time they encounter this feature? (2) what happens when there\'s no data — the empty state? (3) what happens when something goes wrong — the error state? Each is a must-handle state.',
+    'Happy-path-only features feel complete in development but break user trust in production. \'Edge cases often reveal how thoughtful a product really is.\' Before marking this feature done — map the non-happy paths: empty state, error state, first-use experience. These are the normal user experience for many users.',
+    'User journey check — beyond the happy path, which of these states has been handled? (1) Empty state — no data yet. (2) Error state — something fails. (3) First-time experience — user sees this for the first time. (4) Edge case — unexpected input. Story mapping says: reveal the states the system must handle gracefully.',
+  ],
+  L2: [
+    'Has the full user journey been mapped? Beyond the happy path — what happens in the empty state, error state, and first-use experience?',
+    'The feature may work for you — does it work for users in non-ideal conditions? Empty state, error state, first-time experience — name each.',
+  ],
+  L3: [
+    'What\'s the empty state? The error state? The first-use experience? Name all three.',
+  ],
+};
+
+const ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL: DecisionContent = {
+  question:      'Exploring / experimenting — spike or production code?',
+  pinchFallback: 'Spike or production: name which.',
+  L1: [
+    'XP spike solution principle (Kent Beck / James Shore): \'Never copy spike code into production code. Even if it is exactly what you need, rewrite it using TDD so that it meets production standards.\' The purpose of exploratory code is knowledge, not shipping. Name what\'s being done: spike (to learn) or production (to ship)?',
+    'The output of a spike is not production code — it\'s knowledge. Time-box the exploration, answer the question it was meant to answer, then decide: throw the spike away and rewrite properly, or extract the validated pattern into clean production code. Right now — is this spike or production?',
+    'Exploratory code and production code have different standards by definition. Some practitioners keep a dedicated spikes/ directory to enforce this separation. Before committing what\'s been written — spike (throwaway, learning-focused) or production (clean, tested, maintainable)? Name which.',
+  ],
+  L2: [
+    'Is what\'s being written spike code (exploratory, throwaway, to learn) or production code (tested, maintainable, to ship)? Name which before committing.',
+    'The XP rule: never commit spike code directly as production. If this was a spike — extract the useful pattern and rewrite it cleanly before it enters the codebase.',
+  ],
+  L3: [
+    'Spike code or production code? Name which before committing.',
+  ],
+};
+
+const ABSENCE_DEPENDENCY_ADVENTURE_CASUAL: DecisionContent = {
+  question:      'Adding a dependency — evaluated the need and maintenance cost?',
+  pinchFallback: 'Evaluate before adding.',
+  L1: [
+    'Dependency management principle: \'Dependencies are not free and extract an ongoing maintenance cost.\' Every library added for interest rather than specific need becomes code you did not write but have localized responsibility for. Before adding this — what specific problem does it solve that you can\'t solve without it?',
+    '\'Dependency hell\' occurs when two libraries demand incompatible versions of the same dependency — resolving this can derail development schedules. Maintenance consumes 70-90% of total project costs. Before installing this package — have alternatives been evaluated? What specific problem does it solve?',
+    'Three questions before adding any dependency: (1) what specific problem does it solve? (2) have existing tools or a small custom solution been considered? (3) what is the ongoing maintenance cost — updates, security patches, version conflicts? Explore-first library additions become unmaintained technical debt.',
+  ],
+  L2: [
+    'What specific problem does this dependency solve? Have alternatives been evaluated? What\'s the maintenance cost? Answer all three before installing.',
+    'Dependencies are not free — they extract ongoing maintenance. What need does this library solve that justifies its long-term cost?',
+  ],
+  L3: [
+    'What specific problem does this library solve that justifies adding it as a permanent dependency?',
+  ],
+};
+
+const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
+  question:      'Hitting friction — debugged before considering a restart?',
+  pinchFallback: 'Debug before restarting.',
+  L1: [
+    'Joel Spolsky: \'When you start from scratch there is absolutely no reason to believe that you are going to do a better job than you did the first time. Each fixed bug took weeks or years of real-world usage to be discovered — when you throw away code, all the knowledge that went into it is lost.\' Before restarting: what specifically went wrong and why?',
+    'Root cause analysis principle: every restart impulse is a debugging failure. \'RCA explains why the system became vulnerable to the fault, how the fault was triggered, and what durable changes will reduce the probability of it happening again.\' Rewriting skips all three steps. Debug first — identify the root cause before deciding whether restart is warranted.',
+    'The restart impulse is almost always wrong. Problems in the current code are known. Problems in the rewrite are unknown — and most of the same issues will be reproduced without the bug knowledge that accumulated in the current version. What specifically is broken? Fix that.',
+  ],
+  L2: [
+    'Before rewriting — what specifically went wrong? Name the root cause. Debug first, then decide whether restart is actually warranted.',
+    'The current code has accumulated knowledge from real use. Rewriting discards that. What\'s the specific problem? Fix it.',
+  ],
+  L3: [
+    'What specifically is broken? Debug it before deciding to restart.',
+  ],
+};
+
+const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
+  question:      'Session balance — how much went to core vs. creative features?',
+  pinchFallback: 'Core value first.',
+  L1: [
+    'Value-driven development: \'features that generate the maximum value for the users without creating the maximum cost.\' Before the next creative or aesthetic feature — look at this session: what proportion of prompts went to core product functionality vs. creative/extra features? If more than 30-40% is creative, the core is under-served.',
+    'Value vs. effort check: creative features have effort cost but often low core-product value. \'Value-driven development prevents feature bloat — adding features that don\'t provide value.\' For each creative feature added this session — what core user need does it serve? If it doesn\'t serve a core need, it\'s future technical debt.',
+    'Session ratio check: count prompts on core features (things users actually need) vs. creative/extra features (things that are interesting to build). If creative is outweighing core — core first. Creative features compound maintenance cost without proportional user value.',
+  ],
+  L2: [
+    'What\'s the ratio of core product prompts to creative/extra feature prompts this session? If creative is outweighing core — prioritize core functionality first.',
+    'Every creative feature has a maintenance cost. Does this one serve a core user need, or is it a fun-to-build extra? Core first.',
+  ],
+  L3: [
+    'Has core product gotten more attention than creative extras this session? Check the ratio.',
+  ],
+};
+
 // ── Phase 5 D7 — pro_geek_soul cluster 1 (CASUAL register) ───────────────────
 
 const ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL: DecisionContent = {
-  question:      'Built it — are the non-obvious parts documented?',
-  pinchFallback: 'Docs gap.',
+  question:      'Complex logic added — documented the why?',
+  pinchFallback: 'Add the why comment.',
   L1: [
-    'Look at what was just built and find the parts that are non-obvious — the hidden invariant, the "why this approach", the constraint that only makes sense if you know the external system. Are those documented?',
-    'Walk through what was just built from the perspective of someone who joins the team next month. What would they have to figure out the hard way? Document those things now.',
-    'Identify the decisions embedded in what was just built that can\'t be inferred from the code alone — the ones that look arbitrary to a future reader. Add a comment for each that explains the why, not the what.',
+    'Clean Code principle: \'Don\'t use comments to explain WHAT the code is doing — use them to explain WHY you did it.\' For the non-obvious logic just added — add a comment explaining the reasoning, constraint, or edge case it handles. Future maintainers (including you) will need this context.',
+    'Two things to add for complex code: (1) an inline comment explaining WHY this approach was chosen — what constraint, edge case, or tradeoff it addresses; (2) a docstring for any public function that explains parameters, return value, and edge behavior. Complex code without this context becomes invisible debt.',
+    'The WHY behind non-obvious code is not preserved in the implementation — only a comment captures it. What\'s the reasoning behind what was just written? The algorithm choice, the edge case it handles, the tradeoff it makes — add that as an inline comment now before the context is gone.',
   ],
   L2: [
-    'What\'s the most non-obvious part of what was just built — the part that would take the longest for a new team member to understand without asking? Is it documented?',
-    'Is there anything in what was just built that documents the tradeoffs or constraints behind key decisions, or just the implementation?',
+    'For the complex logic just added — add an inline comment explaining WHY this approach was chosen. What constraint or edge case does it address?',
+    'Docstrings for public interfaces, inline comments for non-obvious logic. Add the \'why\' before moving on — it becomes invisible after the context is gone.',
   ],
   L3: [
-    'Is there anything in what was just built that carries a hidden assumption or constraint that should be documented?',
+    'Add an inline comment explaining why this logic works the way it does before continuing.',
   ],
 };
 
 const ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL: DecisionContent = {
-  question:      'Technical debt introduced — has it been flagged?',
-  pinchFallback: 'Flag the debt.',
+  question:      'Shortcut taken — tagged it as debt?',
+  pinchFallback: 'Tag the shortcut.',
   L1: [
-    'Look at what was just built — is there anything that was done the quick way instead of the right way? Name it explicitly and add a TODO that describes the proper solution, so future-you knows exactly what needs to be fixed.',
-    'Check for shortcuts taken in what was just built: workarounds, hardcoded values, skipped edge cases, or deliberate simplifications. Each one is debt. Flag it with a comment and estimated impact.',
-    'Technical debt that\'s acknowledged is manageable; debt that\'s invisible accumulates silently. Scan what was just built for anything that would surprise the person who maintains this in six months, and flag it explicitly.',
+    'Martin Fowler\'s Technical Debt Quadrant: \'Prudent Deliberate\' debt — acknowledged and added to the backlog — is acceptable. \'Reckless Deliberate\' — shortcuts taken without acknowledgment — compounds invisibly. Tag any shortcut with a TODO or FIXME comment before moving on.',
+    'Ward Cunningham\'s debt metaphor: taking a shortcut is a legitimate decision — not tagging it is the anti-pattern. Minimum: // TODO: [what needs fixing] — [why it was deferred]. Takes 10 seconds, prevents invisible accumulation across every subsequent sprint.',
+    'Shortcut taken without a debt tag means it\'s invisible — no backlog item, no reminder, no context for the next person who reads it. Add a // TODO: or // FIXME: with what needs to be fixed and why it was deferred. Then it\'s Prudent Deliberate debt, not Reckless.',
   ],
   L2: [
-    'Is there anything in what was just built that was done the quick way for now but should be revisited? Flag it with a comment before moving on.',
-    'What shortcuts or compromises were made in what was just built? Make them visible — unlabelled debt is the most dangerous kind.',
+    'Is the shortcut tagged with a TODO/FIXME? That\'s the minimum for Prudent Deliberate debt — acknowledge it so it\'s not forgotten.',
+    'Untagged shortcuts are invisible debt. Add // TODO: [what to fix] before continuing.',
   ],
   L3: [
-    'Is there any technical debt in what was just built that should be flagged before moving on?',
+    'Tag any shortcut with TODO/FIXME before moving on — untagged debt accumulates invisibly.',
   ],
 };
 
 const ABSENCE_TEST_DEPTH_CHECK_CASUAL: DecisionContent = {
-  question:      'Tests written — are they testing the right things?',
-  pinchFallback: 'Test depth check.',
+  question:      'Tests written — covering beyond the happy path?',
+  pinchFallback: 'Add edge and error path tests.',
   L1: [
-    'Review the tests that were just written: are they covering behaviour (what the code is supposed to do) or just implementation (that it ran without throwing)? Tests should fail when the behaviour is wrong, not just when the code crashes.',
-    'Look at the test suite for what was just built — are there edge cases, boundary conditions, and failure paths being tested, or only the happy path? Identify the most likely failure that the current tests wouldn\'t catch.',
-    'Check what the tests prove: if someone subtly changed the logic in what was just built, would the tests catch it? If the answer is "probably not", what cases are missing?',
+    'Testing pyramid (Mike Cohn, 2009): tests must cover happy paths, edge cases, and negative scenarios. \'Start with happy path tests, then add error cases that verify graceful failure handling.\' Happy-path-only tests provide false confidence — everything looks green but real-world conditions break the code.',
+    'Branch coverage over line coverage: every decision path needs a test. For what was just written — what are the edge cases? (empty input, null, boundary values). What are the error paths? (what happens when this fails). Add at least one test for each non-happy-path scenario.',
+    'Three test categories beyond the happy path: (1) boundary value tests — empty, null, max, min; (2) error path tests — what happens when the operation fails; (3) negative tests — invalid input, unexpected state. Without these, test coverage is misleadingly high.',
   ],
   L2: [
-    'What behavior would need to change in what was just built for the tests to fail? If the answer is "a lot", the tests might not be providing useful coverage.',
-    'Are there edge cases or failure paths in what was just built that aren\'t covered by the current tests?',
+    'Do the tests cover edge cases (empty, null, boundary values) and error paths (what happens when this fails)? Happy path only is false confidence.',
+    'Add at least one edge case test and one error path test for what was just implemented before the tests are considered adequate.',
   ],
   L3: [
-    'Do the tests for what was just built cover edge cases and failure paths, or just the happy path?',
+    'Add edge case and error path tests — happy path only is incomplete coverage.',
   ],
 };
 
 const ABSENCE_ARCHITECTURE_NOTE_ABSENCE_CASUAL: DecisionContent = {
-  question:      'Architecture decision made — is it recorded?',
-  pinchFallback: 'Record the call.',
+  question:      'Architecture decision made — noted the rationale?',
+  pinchFallback: 'Add an architecture note.',
   L1: [
-    'A significant architectural decision was made in what was just built. Record it: what options were considered, what was chosen, and why? The reasoning is more valuable than the decision — document both.',
-    'Look at what was just built for embedded design decisions: the choice of pattern, the data model shape, the external boundary drawn. These are architecture decisions. Are they recorded anywhere with their rationale?',
-    'Architecture decisions become invisible as time passes — the code shows what was chosen, not why. Document the most significant call in what was just built: what were the alternatives, what were the tradeoffs, what made this the right choice?',
+    'Architecture Decision Records (Michael Nygard, 2011): \'An ADR captures a single architectural decision and its rationale. People months or years later need to understand why the system is constructed the way that it is.\' For the structural decision just made — add a short note: context, decision, consequences. A code comment block or doc entry works.',
+    'The question future maintainers will ask: \'why was it built this way?\' Without a note, that question has no answer. Minimum viable ADR: what was decided, why, and what the tradeoffs are. Keep doc/adr/ in the repo for significant decisions.',
+    'Pattern choice, new abstraction layer, architectural tradeoff — these deserve a note. The code shows WHAT was done; only documentation shows WHY. Add a short rationale note before continuing — context disappears from memory faster than the code does.',
   ],
   L2: [
-    'What was the most significant architectural choice in what was just built? Is the reasoning behind it recorded anywhere?',
-    'Is there a decision embedded in what was just built that a future developer might reverse without realising it was deliberate? Document the constraint.',
+    'What was the rationale for the architectural decision just made? Add a short note — context, decision, and consequences. Even one paragraph captures what\'s needed.',
+    'Code shows what; only documentation shows why. Add an architecture note before the context is gone.',
   ],
   L3: [
-    'Is there an architecture-level decision in what was just built that should be documented along with the reasoning?',
+    'Add a brief rationale note for the architectural decision — why this approach was chosen.',
   ],
 };
 
 // ── Phase 5 D8 — pro_geek_soul cluster 2 (CASUAL register) ───────────────────
 
 const ABSENCE_DEPENDENCY_AUDIT_GAP_CASUAL: DecisionContent = {
-  question:      'New dependency added — has it been audited?',
-  pinchFallback: 'Audit the dependency.',
+  question:      'New dependency added — evaluated it before adopting?',
+  pinchFallback: 'Check the dependency before adding.',
   L1: [
-    'Before committing this dependency — audit it: when was it last updated, who maintains it, how many open issues does it have, and does its licence match what the project can use? A quick check now is cheaper than replacing it later.',
-    'Look at what was just added to the dependencies — is it actively maintained, does it have a track record, and is there a lighter alternative already in the project? Dependencies carry ongoing cost; audit before accepting them.',
-    'Check the dependency addition against three criteria: (1) is it the smallest thing that solves the problem, (2) is it well-maintained with recent activity, (3) is there no reasonable alternative already in the project? If any fail, reconsider.',
+    'NIST SSDF requires evaluating third-party components for maintenance status, license compatibility, and security properties before integration. For the dependency just added: Is it actively maintained (last release date, open issues trend)? Is the license compatible? Are there lighter-weight alternatives? A few minutes of evaluation now prevents being stuck with an abandoned or license-incompatible package later.',
+    'Three things to check before committing to a new dependency: (1) maintenance status — last release date, whether the repo is active; (2) license compatibility — MIT/Apache are generally safe, GPL has restrictions; (3) bundle size impact — what does this add to the build? The smaller the scope of what\'s needed, the more alternatives to compare. Evaluate first, install after.',
+    'Dependencies aren\'t free — they\'re ongoing maintenance commitments. Before adopting: check when it was last released, check whether there are lighter-weight alternatives that cover the needed scope, and confirm the license is compatible with the project. A package left unevaluated is a silent risk every time a security advisory hits.',
   ],
   L2: [
-    'Is the dependency that was just added actively maintained and appropriate for this use case? What\'s the fallback if it goes unmaintained?',
-    'What would it take to remove this dependency if it caused a problem? The harder the answer, the more important the audit before adding it.',
+    'Before committing to this dependency: check maintenance status (last release date, open issues), license compatibility, and whether alternatives exist.',
+    'Dependencies are ongoing maintenance commitments. Evaluate maintenance status, license, and alternatives before adopting.',
   ],
   L3: [
-    'Has the new dependency been audited for maintenance status and licence compatibility?',
+    'Check maintenance status, license compatibility, and alternatives before adding this dependency.',
   ],
 };
 
 const ABSENCE_SECURITY_REVIEW_GAP_CASUAL: DecisionContent = {
-  question:      'Security-sensitive code — reviewed for risks?',
-  pinchFallback: 'Security review gap.',
+  question:      'Security surface touched — applied security checks?',
+  pinchFallback: 'Apply security checks now.',
   L1: [
-    'The code that was just built handles user data, authentication, or external input — review it for security: is user input validated and sanitised, are errors surfacing internal state, are secrets handled through environment variables only?',
-    'Walk through what was just built as an attacker: what can be sent to this code, what can be manipulated, what assumptions are made that could be violated by a malicious input? Name the riskiest surface.',
-    'Check what was just built against the basics: SQL injection (if applicable), XSS, CSRF, improper authorisation checks, hardcoded credentials, and exposure of stack traces to clients. Are any of these applicable here?',
+    'OWASP Secure by Design: security must be designed in, not bolted on. For what was just implemented — what security surfaces were introduced? Input validation (are all inputs sanitized?), authorization (is access properly gated?), injection prevention (SQL, command, path traversal). These checks belong during implementation, not as a post-implementation audit. Shift-left: add the check when the surface is created.',
+    'Three security checks for implementation work: (1) input validation — all user-supplied values must be validated/sanitized before use; (2) authorization — is the action properly gated to the user who should be able to perform it; (3) injection prevention — SQL queries parameterized, shell commands avoided, file paths validated. Add these now while the code is in context, not after the feature is shipped.',
+    'Security surfaces introduced during implementation: auth endpoints, data storage, user input, file handling. For each: is input validated? Is access gated? Is there injection risk? OWASP Top 10 covers the categories — what was just built touches which of these? Add the check as part of completing the feature, not as a separate hardening pass.',
   ],
   L2: [
-    'What\'s the most security-sensitive part of what was just built — the place where a mistake would have the biggest impact? Has it been reviewed explicitly?',
-    'Is user input being validated and sanitised before use in what was just built? What about error messages — do they expose internal details?',
+    'For what was just implemented: is input validated, is access properly authorized, and is there injection risk? These are implementation-phase checks, not post-ship.',
+    'Security checks (input validation, authorization, injection) belong during implementation — add them now before moving on.',
   ],
   L3: [
-    'Has what was just built been reviewed for basic security risks — input validation, error exposure, credential handling?',
+    'Apply input validation, authorization checks, and injection prevention for what was just built.',
   ],
 };
 
 const ABSENCE_API_CONTRACT_DEFINITION_CASUAL: DecisionContent = {
-  question:      'Building an API endpoint — is the contract defined?',
-  pinchFallback: 'Define the contract.',
+  question:      'API being built — defined the contract first?',
+  pinchFallback: 'Define the interface before implementing.',
   L1: [
-    'Before building this API endpoint further — document the contract: request schema, response schema, error codes, and any authentication requirements. The contract is what consumers depend on — define it before building against it.',
-    'Is there a defined contract for the API that was just built — not just "it works" but: what are the valid inputs, what are the guaranteed outputs, what errors are possible, and what\'s the versioning story? Define that first.',
-    'Review what was just built against API contract requirements: are input types validated, are error responses structured consistently, are success responses shaped consistently? A well-defined contract enables independent development on both sides.',
+    'OpenAPI contract-first principle: define the API interface before writing the handler. For the endpoint being built — what does it accept (request schema: required fields, types, validation rules)? What does it return (response schema: success shape, error shape, status codes)? What is the error response format? Defining this first prevents implicit contracts that drift between callers and implementors — and makes mock servers and tests possible before the backend exists.',
+    'Contract-first API development: the request schema, response schema, and error response format must be defined before implementation. Three things to specify: (1) what the request body/params accept; (2) what a successful response returns; (3) what error responses look like and under what conditions. Write these as a schema or doc comment before writing the handler logic.',
+    'Building a route without a defined interface creates an implicit contract — the caller infers what to send and what to expect from the implementation, and both sides drift independently. Define the interface first: request shape, response shape, error cases. Minimum viable contract: a comment block with the schema above the handler.',
   ],
   L2: [
-    'What is the exact shape of the request and response for what was just built? Is that contract documented and enforced?',
-    'How does what was just built handle malformed input — what\'s the error response, and is it consistent with the rest of the API?',
+    'Before implementing the endpoint: define the request schema, response schema, and error response format. Interface-first prevents implicit contracts.',
+    'What does this API accept and return? Define the contract before writing the handler logic — implicit contracts drift between callers and implementors.',
   ],
   L3: [
-    'Is the API contract for what was just built defined — request schema, response schema, and error format?',
+    'Define the request schema, response schema, and error response format before writing the handler.',
   ],
 };
 
 const ABSENCE_ERROR_HANDLING_COVERAGE_CASUAL: DecisionContent = {
-  question:      'Feature built — are error cases handled?',
-  pinchFallback: 'Error coverage gap.',
+  question:      'Implementation done — covered the error paths?',
+  pinchFallback: 'Add error handling for failure cases.',
   L1: [
-    'Walk through what was just built and list every place a failure could occur: external API calls, database operations, file I/O, user input parsing. Is each one handled, or does the failure propagate silently?',
-    'Check what was just built for unhandled failure paths: what happens when the external dependency is down, when input is malformed, when the database returns an unexpected result? Each unhandled path is a production incident waiting to happen.',
-    'Review the error handling in what was just built: are failures caught at the right level, are errors logged with enough context to diagnose in production, and is the user shown a meaningful response or a raw exception?',
+    'McConnell\'s defensive programming (Code Complete): \'Defensive programming mandates covering all failure paths, not just happy paths.\' For what was just implemented — what are the error states? What happens when an external call fails? What happens when input is malformed? What happens when a database write fails? Each needs explicit handling: error state, fallback behavior, user-facing message. Code that only works on the happy path is incomplete by construction standards.',
+    'Three error-path categories for every implementation: (1) external service failures — what if the API call, database query, or file operation fails; (2) input validation failures — malformed data, missing required fields, out-of-range values; (3) edge state failures — empty result sets, concurrent writes, unexpected null. Add explicit handling for each category before the feature is considered done.',
+    'The happy path is the easy path — every real-world user hits an error case eventually. For what was just built: what error states exist? Is there an error boundary? Is there a fallback? Does the error surface as a useful message or as a silent failure? Add error handling now while the implementation is in context, not during the first production incident.',
   ],
   L2: [
-    'What happens when what was just built fails? Walk the error path: is it caught, logged, and surfaced appropriately?',
-    'Is there any failure mode in what was just built that would result in a silent error, a crash, or a confusing user-facing message?',
+    'Does the implementation cover error paths — external failures, malformed input, and edge states? Happy path only is incomplete by construction standards.',
+    'Add explicit error handling for failure cases before moving on — what happens when this breaks in production?',
   ],
   L3: [
-    'Are the error paths in what was just built handled — or would a failure result in an unhandled exception?',
+    'Add error handling for failure paths — external failures, malformed input, and edge states.',
   ],
 };
 
 // ── Phase 5 D9 — pro_geek_soul cluster 3 (CASUAL register) ───────────────────
 
 const ABSENCE_REFACTORING_CHECKPOINT_CASUAL: DecisionContent = {
-  question:      'Extended implementation — anything worth refactoring now?',
-  pinchFallback: 'Refactor check.',
+  question:      'Adding to messy code — refactored first?',
+  pinchFallback: 'Do a cleanup pass before extending.',
   L1: [
-    'Look at what was built in this session as a whole — is there anything that\'s grown messy, duplicated, or harder to read than it started? Flag the worst offender and decide whether to clean it up now or log it as acknowledged debt.',
-    'Check what was just built for code that\'s drifted from the original design: abstractions that no longer fit their usage, names that no longer match the behaviour, or logic that\'s been copy-pasted where a shared function would be cleaner.',
-    'Walk through the implementation and find the thing that would be hardest to change when the next feature arrives. That\'s the thing most worth refactoring now — while the context is fresh.',
+    'Boy Scout Rule (Clean Code): \'Leave the code cleaner than you found it.\' Before adding a feature to code that was already acknowledged as messy or complex — do a refactoring pass first. The alternative is adding features on top of complexity, which makes the next change harder, not the same difficulty. The refactoring pass before extending is the investment that prevents compound complexity debt.',
+    'Adding to messy code without cleaning it first means the next developer (including future you) inherits the original mess plus the new feature built on top of it. Before extending: extract repeated logic into helpers, simplify conditionals, rename confusing variables. The feature addition is then built on clean ground, not on accumulated complexity.',
+    'Three things to do before extending complex code: (1) extract any repeated logic into well-named helpers; (2) simplify long conditionals or deeply nested blocks; (3) rename anything that required a comment to explain. Then add the feature. The Boy Scout Rule applies here: leave the code cleaner than you found it, not messier than you found it.',
   ],
   L2: [
-    'What\'s the messiest part of what was just built? Is it worth a quick cleanup now, or is the mess small enough to flag and defer?',
-    'Is there anything duplicated or inconsistent in what was just built that would compound if left as-is?',
+    'Before adding to the existing messy or complex code: do a refactoring pass first. Extract, simplify, rename — then extend. Building on top of complexity doubles it.',
+    'The cleanup pass before the feature is the investment that prevents compound debt. What can be extracted, simplified, or renamed before adding to this?',
   ],
   L3: [
-    'Is there anything in what was just built that should be cleaned up before moving on?',
+    'Do a refactoring pass on the existing code before extending — leave it cleaner than you found it.',
   ],
 };
 
 const ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL: DecisionContent = {
-  question:      'Changed the interface — is it backwards compatible?',
-  pinchFallback: 'Compat check.',
+  question:      'Interface changed — checked existing consumers?',
+  pinchFallback: 'Check what calls this before changing.',
   L1: [
-    'Check what was changed in this feature against anything that consumes it: API endpoints, exported functions, data schema. Did anything change that existing callers depend on? If yes, what\'s the migration or compatibility story?',
-    'Walk through what was modified and identify any change that would break existing consumers if they haven\'t updated their code: renamed fields, removed parameters, changed response shapes. Each one needs an explicit decision — break it or maintain compatibility?',
-    'Review the changes in what was just built for backwards compatibility: are changes additive, or do they require callers to update? If they require updates — is that intentional, and has it been flagged as a breaking change?',
+    'Semantic Versioning (semver.org): MAJOR version = backwards-incompatible change. The formal rule: any change to an interface used by existing callers must enumerate those callers and assess the impact before implementation. For the function signature, API contract, or interface just changed — what calls it? What are the downstream effects? Have those callers been updated or is the change backwards-compatible?',
+    'Hyrum\'s Law: \'With a sufficient number of users of an API, it does not matter what you promise in the contract — all observable behaviors will be depended on by somebody.\' The practical implication: before changing any interface, find all callers (grep the codebase), assess what each expects, and either maintain compatibility or update each caller explicitly. Silent interface breaks cause runtime errors that show up later, not at the point of change.',
+    'Three steps before changing a function signature or API contract: (1) grep for all callers; (2) check whether the change is backwards-compatible or breaking; (3) if breaking — update all callers, or version the interface. A change made without step 1 is a change made blind. The downstream breakage shows up at runtime, not at compile.',
   ],
   L2: [
-    'Does anything in what was just built change the interface in a way that would break existing callers? If yes, is that intentional?',
-    'What was the interface before and what is it now? Is the delta backwards compatible, or is this a breaking change?',
+    'Before the interface change: enumerate all callers, assess whether the change is backwards-compatible, and update any affected consumers. Changes made blind cause silent runtime breaks.',
+    'What calls this? Grep for it before changing — then decide whether to maintain compatibility or update all callers explicitly.',
   ],
   L3: [
-    'Is what was just changed backwards compatible with existing callers, or does it introduce a breaking change?',
+    'Check all callers of this interface before changing it — update or version any that are affected.',
   ],
 };
 
 const ABSENCE_SELF_REVIEW_HABIT_CASUAL: DecisionContent = {
-  question:      'About to commit — has the diff been self-reviewed?',
-  pinchFallback: 'Self-review first.',
+  question:      'Long implementation run — done a review pass?',
+  pinchFallback: 'Read back through what was built.',
   L1: [
-    'Before committing — run git diff and read every change. Look for debug code, commented-out sections, leftover TODOs that shouldn\'t go in, and any changes that are larger in scope than what was intended.',
-    'Self-review the diff before sending: what was intended to change vs. what actually changed? Are there any unintended changes, any debug lines, any scope creep in the diff?',
-    'Read the diff as if you\'re reviewing someone else\'s work. Look for: is the change scoped correctly, is the commit message accurate, is there anything that shouldn\'t be there? Catch it now before someone else does.',
+    'Google Engineering Practices: \'The author is the first reviewer.\' Before submitting or continuing, read back through the diff: does the code do what was intended? Are there naming inconsistencies? Is anything more complex than it needs to be? Are tests missing? The self-review pass catches what was obvious in the context of writing but invisible in isolation — logic errors, naming drift, gaps in coverage.',
+    'A 15-prompt implementation run without a review pass is a run where each decision was made in context but never assessed as a whole. Read back through what was built: does the overall structure make sense? Are there inconsistencies between early and late decisions? Did anything get added that\'s redundant or conflicts with earlier code? The review pass is the quality gate that catches accumulated drift.',
+    'Three things to check in a self-review pass: (1) does the implementation match the original intent — were any assumptions made that drifted from the goal; (2) naming and structure coherence — do variable and function names still make sense given the full implementation; (3) coverage gaps — are there paths or states that were implemented but not tested. Read the diff before moving on.',
   ],
   L2: [
-    'Have the changes been self-reviewed before committing? Check the diff for unintended changes, debug code, or scope that shouldn\'t be in this commit.',
-    'Is the diff for this commit exactly what was intended — no more, no less?',
+    'Read back through the implementation before continuing: does it make sense as a whole? Check for naming drift, structural inconsistencies, and coverage gaps.',
+    'The self-review pass catches what was invisible in the context of writing. Read the diff — does this all hang together?',
   ],
   L3: [
-    'Has the diff been reviewed before committing — checking for unintended changes or debug code?',
+    'Do a review pass on what was built — read the diff and check for drift, gaps, and inconsistencies.',
   ],
 };
 
 const ABSENCE_PERFORMANCE_AWARENESS_CASUAL: DecisionContent = {
-  question:      'Feature built — any obvious performance concerns?',
-  pinchFallback: 'Performance check.',
+  question:      'Data-heavy operation — considered performance?',
+  pinchFallback: 'Check for performance implications.',
   L1: [
-    'Look at what was just built for obvious performance issues: N+1 queries, synchronous blocking operations, large payloads being serialised unnecessarily, or operations that scale linearly where a constant-time alternative exists. Flag anything that will be a problem at 10× the current load.',
-    'Think through the load characteristics of what was just built: what\'s the most expensive operation, what happens to that cost as the dataset grows, and is there a caching or indexing opportunity that should be considered now?',
-    'Check what was just built for performance anti-patterns: unbounded queries, missing indexes on foreign keys, repeated work that could be memoised, or synchronous calls that block a thread unnecessarily. Spot these now while the code is fresh.',
+    'Knuth (1974): \'We should not pass up our opportunities in that critical 3%.\' The full quote is not an excuse to avoid performance — it\'s a prioritization rule: ignore the 97% of noncritical paths, but act on the critical 3%. For what was just built — is this in the critical 3%? A full-table fetch, N+1 in a loop, or unthrottled list render qualifies. The check here is awareness, not micro-optimization: is there an obvious performance problem worth addressing before it ships?',
+    'Three data-heavy patterns that require a performance check before shipping: (1) N+1 queries — does this loop trigger a database call per iteration; (2) full-table fetches — is the query unbounded and potentially returning thousands of records; (3) expensive renders — is a large list rendering without virtualization, memoization, or lazy loading. These are not premature optimization targets — they\'re known problem patterns with well-understood solutions.',
+    'Performance awareness for this operation: what is the data volume? What happens at 10x, 100x the expected load? Is there an N+1 pattern? Is there pagination? Is there a memo or cache in front of an expensive computation? The question is not \'is this perfectly optimized?\' — it is \'is there an obvious performance problem that will hit in production that could be caught now?\'',
   ],
   L2: [
-    'What\'s the most expensive operation in what was just built, and does it scale acceptably as load grows?',
-    'Are there any obvious performance anti-patterns in what was just built — N+1 queries, missing indexes, or synchronous blocking operations?',
+    'For the data-heavy operation just built: check for N+1 queries, unbounded fetches, and expensive unthrottled renders before this ships.',
+    'Performance awareness at the right time — not micro-optimization, just checking: is there an obvious performance problem in what was just built?',
   ],
   L3: [
-    'Is there anything in what was just built that would have obvious performance issues under real load?',
+    'Check for N+1 queries, unbounded fetches, or expensive renders before this feature ships.',
   ],
 };
 
 // ── Phase 5 D10 — hardcore_pro cluster 1 (FORMAL register) ───────────────────
 
 const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
-  question:      'Significant decision made — decision record written?',
-  pinchFallback: 'Record the decision.',
+  question:      'Architectural decision made — ADR recorded?',
+  pinchFallback: 'Record the decision with context and consequences.',
   L1: [
-    'A significant design decision was embedded in what was just built. Write an ADR: document the context, the options considered, the decision made, and the consequences — including the tradeoffs accepted. The reasoning is what matters; the code only records the choice.',
-    'Review what was just built for architecture decisions that lack a decision record: the choice of data model, the service boundary drawn, the pattern selected. Each significant call should have a written record of the alternatives considered and the rationale for the selection.',
-    'Audit the decisions embedded in what was just built: which ones would a future team member be most likely to reverse without understanding the original constraints? Those are the decisions that require a record — document the constraint, the alternatives, and the reasoning.',
+    'Architecture Decision Records (Nygard, 2011): capture context, decision, and consequences for every significant architectural choice. The ADR format answers: What context makes this decision necessary? What was decided? What are the consequences and trade-offs accepted? Without a record, the rationale becomes invisible to future maintainers and cannot be revisited when requirements change. Write the ADR while the context is still loaded.',
+    'The value of an ADR is the rationale, not the decision. Document: (1) what alternatives were considered; (2) why this option was selected over them; (3) what constraints or forces drove the choice; (4) what the known consequences are. Future engineers need to determine whether the context that forced this decision has changed — without a record, that assessment is impossible.',
+    'Minimum viable ADR: a short doc or comment block — title, status, context, decision, consequences. ADRs do not need to be long; Nygard\'s originals are 1–2 pages. Keep them in doc/adr/ in the repository. A decision without a record is a decision that will be questioned repeatedly without ever being resolved, by everyone who inherits the codebase.',
   ],
   L2: [
-    'What was the most consequential design decision in what was just built, and is it documented with sufficient context for a future team member to understand why it was made?',
-    'Is there a decision record for the architectural choices in what was just built, or only the implementation?',
+    'For the architectural decision just made: record context, decision, and consequences in an ADR. Without a record, the rationale is invisible to every future maintainer — including the author six months from now.',
+    'What alternatives were considered, and why was this option chosen over them? Document the reasoning — it disappears from memory faster than the code does.',
   ],
   L3: [
-    'Is there an architecture decision in what was just built that requires a written record of the rationale before moving on?',
+    'Write an ADR for this decision: context, decision, consequences, and alternatives considered.',
   ],
 };
 
 const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
-  question:      'Complex implementation — is the complexity justified?',
-  pinchFallback: 'Complexity justified?',
+  question:      'Is this abstraction required by current requirements?',
+  pinchFallback: 'Apply YAGNI — build only what current requirements require.',
   L1: [
-    'Review what was just built for unjustified complexity: abstractions that exist for anticipated rather than actual requirements, generalisation that complicates the simple case, or indirection layers that add cognitive overhead without providing flexibility that is actually needed now.',
-    'Apply the simplicity check: what is the simplest implementation that satisfies the current requirements? Compare it to what was just built. Each layer of complexity above that floor requires explicit justification — identify them and confirm each is necessary.',
-    'Audit what was just built for over-engineering signals: interfaces with one implementation, factories for objects that don\'t need to vary, configuration for options that are never changed, or event systems for synchronous workflows. Each is a complexity cost paid in advance for uncertain future benefit.',
+    'YAGNI (You Aren\'t Gonna Need It — Kent Beck, XP 1999): implement things only when you actually need them, never when you foresee you might. Martin Fowler (2015): \'The cost of YAGNI is that you may need to refactor later, but that is usually less expensive than the cost of carrying unneeded complexity.\' YAGNI test: does a current user story, ticket, or requirement map to this abstraction? If not, remove it and implement the minimal solution. Refactor to the abstraction when the second use case arrives.',
+    'Over-engineering is a senior engineer trap: the abstractions appear reasonable because they are technically correct — \'we will need this extensibility eventually.\' Empirical counter: Kohavi et al. (Microsoft Research) found only 1/3 of shipped features improved intended metrics. Speculative development compounds carrying cost at the same rate as rushed development compounds defect cost. The YAGNI discipline: no current requirement, no implementation.',
+    'Three YAGNI violation indicators: (1) the phrase \'in case we need\' was used to justify the abstraction; (2) no current requirement maps to the extensibility being built; (3) the implementation would be simpler and still complete current requirements without the abstraction. If any apply — revert to the minimal implementation. The refactoring to the abstraction when the second use case arrives costs less than carrying unneeded complexity through every sprint until then.',
   ],
   L2: [
-    'What is the complexity that was introduced in what was just built, and what specific current requirement does it serve? If the answer is "anticipated future requirements", that is a red flag.',
-    'Is every abstraction in what was just built grounded in a current requirement, or were any added speculatively for anticipated flexibility?',
+    'Does a current requirement necessitate this abstraction? If not, apply YAGNI: implement the minimal solution that satisfies today\'s requirements. Refactor to the abstraction when the second concrete use case arrives.',
+    'YAGNI check: is there a ticket, story, or current requirement that requires this extensibility? \'We will need it eventually\' is the over-engineering justification — defer until needed.',
   ],
   L3: [
-    'Is there complexity in what was just built that is not justified by a current requirement?',
+    'Apply YAGNI — remove speculative abstraction and implement only what current requirements require.',
   ],
 };
 
 const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
-  question:      'High-risk change — reviewed by a second engineer?',
-  pinchFallback: 'Pair review gap.',
+  question:      'Critical implementation complete — review plan established?',
+  pinchFallback: 'Establish a review plan before merging.',
   L1: [
-    'What was just built is consequential enough to warrant a second set of eyes before it lands. Who should review this, and what specific aspects are highest risk — the ones where a mistake would not surface until production?',
-    'Identify the highest-risk elements of what was just built: the changes to shared state, the security-sensitive paths, the schema changes, the concurrent logic. These are the things that benefit most from a second reviewer before they are committed.',
-    'Before this change goes in — who else has context on this area of the codebase? A review by someone familiar with this component is more valuable than a general review. Identify the right reviewer and flag the highest-risk areas for their attention.',
+    'Code review effectiveness (Fagan Inspection; McConnell, Code Complete 2004): peer review catches 60–90% of defects vs. 25–45% for testing alone — the highest-ROI quality control mechanism in software engineering. For critical or complex features, a review plan is not optional. Establish: who reviews this, what the review checklist covers (design correctness, error handling completeness, security surface, test coverage), and what the merge gate is.',
+    'Google Engineering Practices: \'The author is the first reviewer, but not the only one.\' For critical paths — new service boundaries, auth flows, data model changes, infrastructure code — peer review before merge is mandatory. If no peer is available: a structured self-review covering design correctness, error handling completeness, and security surface is the minimum acceptable review artifact before merge.',
+    'Three review artifacts for critical implementations: (1) diff review for design correctness — does the implementation match the intended architecture and are there unintended side effects; (2) error handling completeness — are all documented failure modes handled; (3) security surface review — were attack surfaces introduced that require threat modeling. Establish which of these will be covered and by whom. Merging a critical implementation without a review plan is an SRE anti-pattern.',
   ],
   L2: [
-    'Has what was just built been reviewed by another engineer, or is it going straight in? For changes of this complexity, what is the case for or against a review before commit?',
-    'What are the two or three things in what was just built that a second reviewer should look at most carefully?',
+    'Establish a review plan before merging: who reviews it, what the checklist covers (design correctness, error handling, security surface), and what the merge gate is.',
+    'Peer review catches 60–90% of defects testing misses. Critical paths require a review plan — peer, pair, or structured self-review — before merge.',
   ],
   L3: [
-    'Is what was just built high-risk enough to warrant a second engineer\'s review before it is committed?',
+    'Establish and complete a review plan before merging — design correctness, error handling, security surface.',
   ],
 };
 
 // ── Phase 5 D11 — hardcore_pro cluster 2 (FORMAL register) ───────────────────
 
 const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
-  question:      'Feature built — will production failures be observable?',
-  pinchFallback: 'Observability gap.',
+  question:      'Feature shipping — observability instrumented?',
+  pinchFallback: 'Add logging, metrics, and tracing before shipping.',
   L1: [
-    'Audit what was just built for observability coverage: what structured log events, metrics, and traces are emitted? If this feature fails silently in production at 3am, what will the on-call engineer see? Define what "observable" means for this feature and verify it is in place.',
-    'Review what was just built against production observability requirements: what SLI would you define, what metric tracks it, and what alert condition would trigger before the failure propagates to users? If these are not wired, they need to be before this ships.',
-    'Check what was just built for the three pillars of observability: (1) structured logging at key events with request and correlation IDs, (2) metrics for the operations that could degrade, (3) tracing across service boundaries if applicable. Which are in place and which are missing?',
+    'Google SRE Book (Beyer et al., 2016): monitoring is non-negotiable infrastructure for production systems. Three pillars of observability: (1) logs — structured event records of what happened; (2) metrics — counters and gauges measuring how much and how fast; (3) traces — distributed spans showing where time was spent. A feature without all three is partially blind in production. Add instrumentation alongside the feature, not after the first incident.',
+    'Observability-first principle: you cannot manage what you cannot measure. For the feature just built — what are the key success metrics? (request count, error rate, latency p99) What are the logged events? (entry, exit, error cases) Is there a distributed trace covering the full request path? Define and instrument these before shipping. The cost of adding observability post-incident is an unknown production state plus a time-pressured instrumentation sprint.',
+    'Minimum viable observability for a production feature: (1) a structured log entry for every significant operation — success and failure paths; (2) a counter or histogram for the primary operation rate and error rate; (3) a trace span covering the feature\'s critical path. Without these, the SRE on-call has no signal when the feature degrades. Add them now while the feature\'s critical path is loaded.',
   ],
   L2: [
-    'If what was just built degraded silently in production — no exceptions thrown, just wrong results — what would detect it? Is that detection in place?',
-    'What structured logs, metrics, and alerts exist for what was just built? Are they sufficient to detect and diagnose a production incident without SSH access?',
+    'For the feature being shipped: are logs, metrics, and distributed traces in place? Observability must be instrumented alongside the feature — not added after the first production incident.',
+    'Three pillars before shipping: structured logs for success and failure paths, metrics for rate and error tracking, traces for the critical request path.',
   ],
   L3: [
-    'Is what was just built sufficiently observable that a production failure could be detected and diagnosed without access to the host?',
+    'Add logging, metrics, and tracing instrumentation before shipping — all three pillars required.',
   ],
 };
 
 const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
-  question:      'Implementation complete — failure modes analyzed?',
-  pinchFallback: 'Failure modes.',
+  question:      'External dependencies integrated — failure modes enumerated?',
+  pinchFallback: 'Enumerate failure modes for each dependency.',
   L1: [
-    'Walk through what was just built and enumerate the failure modes: what external dependencies can be down, what inputs can be malformed, what concurrent conditions can occur, what state can become inconsistent? For each, is there a handling strategy, a timeout, a circuit breaker, or a degraded-mode fallback?',
-    'Apply fault injection thinking to what was just built: what happens when the database is slow, the external API returns a 500, the queue is backed up, or the memory limit is hit? Is each failure mode an immediate crash, a silent bad result, a detected error, or a graceful degradation? All four need to be intentional.',
-    'Identify the failure modes in what was just built that are most likely to affect users: the external dependency failure, the timeout, the malformed-input path. For each, confirm there is an explicit handling strategy — not just an implicit assumption that it won\'t happen.',
+    'FMEA (MIL-STD-1629A) / Nygard Release It! (2007): every external dependency introduces failure modes requiring enumeration before implementation. For each dependency just integrated — enumerate: (1) what happens when it is completely unavailable; (2) what happens when it responds slowly (timeout scenario); (3) what happens when it returns partial or degraded data. Each failure mode maps to a stability pattern: circuit breaker, timeout, bulkhead, fallback. Without enumeration, these patterns are not applied.',
+    'Distributed systems fail in cascading ways — a single dependency failure becomes a system-wide outage when no isolation pattern is in place. Nygard\'s stability patterns address enumerated failure modes: circuit breakers isolate a failing dependency; timeouts prevent thread exhaustion; bulkheads limit blast radius; fallbacks provide degraded service. The question to answer for every integration: which failure modes exist, and which stability pattern addresses each one?',
+    'Three failure mode categories for every external dependency: (1) availability — the dependency is completely unreachable; (2) latency — the dependency responds but slowly, exhausting connection pools; (3) correctness — the dependency responds with invalid, partial, or unexpected data. Define the expected behavior in each category before implementing the integration. The missing behavior is the bug that hits in production at 3am.',
   ],
   L2: [
-    'What are the two or three most likely ways what was just built could fail in production, and what is the current handling strategy for each?',
-    'Is there any failure mode in what was just built that would result in silent data corruption or incorrect state, as opposed to an explicit error?',
+    'For each dependency just integrated: enumerate the failure modes (unavailable, slow, degraded) and specify which stability pattern addresses each — circuit breaker, timeout, fallback, or bulkhead.',
+    'What happens when this dependency is down, slow, or returning bad data? Enumerate before implementing — the unenumerated failure mode is the production incident.',
   ],
   L3: [
-    'Have the failure modes of what was just built been analyzed — specifically the external dependency failures and malformed input paths?',
+    'Enumerate failure modes for each dependency and specify the stability pattern for each before shipping.',
   ],
 };
 
 const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
-  question:      'Service integration built — contract tested?',
-  pinchFallback: 'Contract test gap.',
+  question:      'Service boundary established — contract tests defined?',
+  pinchFallback: 'Define consumer-driven contract tests for this boundary.',
   L1: [
-    'What was just built integrates with another service. Verify that the contract is tested — not just that the integration works in the current environment, but that both sides agree on the schema and can detect breaking changes independently. Is a consumer-driven contract test in place?',
-    'Audit the integration that was just built: are the request and response schemas validated at runtime, is there a contract test that would fail before a deployment if the provider changed incompatibly, and is the contract version tracked explicitly?',
-    'Review what was just built for integration contract coverage: what happens when the provider changes the response shape, drops a field, or changes a status code? Is there a test that would catch that before it reaches production?',
+    'Consumer-Driven Contracts (Ian Robinson, martinfowler.com, 2006): service boundaries require contract tests to survive independent deployment. Consumer-driven contracts shift contract definition to the consumer — the consumer specifies what it needs from the producer, and the producer verifies it satisfies those requirements in isolation, without requiring both services to be deployed together. Tools: Pact, Spring Cloud Contract. Without contract tests, integration regressions are caught only in staging.',
+    'The independent deployment problem: when consumer and producer deploy independently, there is no integration test run at deploy time. Contract tests solve this by running provider verification against consumer contracts in the producer\'s CI pipeline — catching contract breaks before they reach staging. For the service boundary just defined: write consumer contract tests that specify the exact shape of requests and responses the consumer depends on, then run provider verification in CI.',
+    'Three contract test artifacts for a service boundary: (1) consumer contract — specifies the request shape and response fields the consumer actually uses (not the full schema); (2) provider verification — the producer\'s CI step that validates it satisfies registered consumer contracts; (3) contract broker — a registry keeping consumer contracts accessible for verification (Pact Broker). Define these before the first independent deployment of either service.',
   ],
   L2: [
-    'Is the contract for the integration in what was just built tested — meaning a provider-side schema change would be detected before it reaches production?',
-    'What would happen if the service that what was just built depends on changed its response format? Would it fail loudly at contract test time, or silently in production?',
+    'For the service boundary just established: define consumer-driven contracts specifying the exact request/response shape each consumer requires, and add provider verification to the producer\'s CI pipeline.',
+    'Without contract tests, integration regressions surface only in staging. Consumer-driven contracts (Pact/Spring Cloud Contract) catch boundary breaks in CI before independent deployment.',
   ],
   L3: [
-    'Is the integration contract for what was just built tested — not just that it works today, but that it would detect breaking changes in the provider?',
+    'Define consumer-driven contract tests for this service boundary before independent deployment.',
   ],
 };
 
 // ── Phase 5 D12 — hardcore_pro clusters 3+4 (FORMAL register) ────────────────
 
 const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
-  question:      'Scalable feature — capacity plan written?',
-  pinchFallback: 'Capacity plan.',
+  question:      'Load-adding feature — capacity estimate done?',
+  pinchFallback: 'Complete a capacity estimate before shipping.',
   L1: [
-    'What was just built introduces a resource-intensive operation or a data store that will grow over time. Document the capacity plan: what is the current load, what is the growth projection, at what scale do the current decisions break down, and what is the mitigation strategy for when they do?',
-    'Audit what was just built for capacity assumptions: what database growth is expected, what query performance degrades at what row count, what throughput is the service designed to handle, and what happens when those limits are exceeded? Write down the assumptions before they become invisible.',
-    'Review the data and compute footprint of what was just built: what grows indefinitely, what will need pagination, partitioning, or archival, and at what scale does a redesign become necessary? Identify the first capacity cliff and the plan for reaching it safely.',
+    'Google SRE (Beyer et al., 2016): load-adding features require a capacity estimate before production deployment. Three required numbers: (1) peak RPS at expected traffic; (2) storage growth rate at 30/90/365 days; (3) downstream resource utilization headroom (DB connection pool, cache, dependent APIs). Without all three, the feature ships blind to its production cost.',
+    'Capacity estimate checklist for the feature being built: what is the steady-state RPS at expected traffic? What does storage growth look like over 90 days? Does the existing infrastructure have headroom — or does this feature require provisioning before it can ship safely? A back-of-envelope estimate takes 20 minutes; a production load surprise takes on-call hours.',
+    'Pre-ship capacity gate: (1) estimate peak RPS; (2) project storage growth curve; (3) confirm infrastructure headroom for dependent services. If any number is unknown, the feature is not ready to ship — it lacks the data to size infrastructure or set autoscaling thresholds. Provide all three before shipping.',
   ],
   L2: [
-    'What is the expected scale of what was just built — data volume, request volume, growth rate — and at what point do the current architectural decisions start to break down?',
-    'Has a capacity plan been written for what was just built, or are growth assumptions implicit in the current design?',
+    'Estimate three numbers before shipping: peak RPS at expected traffic, storage growth rate at 90 days, and infrastructure headroom on dependent services. These determine whether current capacity can absorb the feature.',
+    'Capacity planning gate: what RPS does this feature add at peak? What is the storage cost over 90 days? Does existing infrastructure have headroom? Answer all three before shipping.',
   ],
   L3: [
-    'Is there a capacity plan for what was just built — documenting the current scale assumptions and the point at which they would need to be revisited?',
+    'Capacity estimate required: RPS at peak, storage growth rate, infrastructure headroom. Provide all three before shipping.',
   ],
 };
 
 const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
-  question:      'Security-sensitive feature — threat model reviewed?',
-  pinchFallback: 'Threat model.',
+  question:      'Security-sensitive feature — STRIDE threat model completed?',
+  pinchFallback: 'Complete a STRIDE threat model before shipping.',
   L1: [
-    'What was just built handles sensitive data or authentication. Conduct a threat model: identify the trust boundaries, enumerate the threats at each boundary (spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege), and confirm a mitigation exists for each applicable threat.',
-    'Review what was just built using the STRIDE framework: what can be spoofed, what can be tampered with, what lacks a non-repudiation mechanism, what data could be disclosed inappropriately, what could be used to cause denial of service, and what could allow privilege escalation? Document the findings.',
-    'Audit what was just built for the highest-impact security risks: is the authentication surface complete, are all privileged operations authorisation-gated, is sensitive data encrypted at rest and in transit, and are audit logs written for operations that require non-repudiation?',
+    'STRIDE (Adam Shostack, \'Threat Modeling: Designing for Security\', Wiley 2014) requires systematic enumeration of Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege threats for every feature introducing a new attack surface. For each applicable STRIDE category: identify the attack vector, the trust boundary it crosses, and the mitigation control. This 30-minute structured pass prevents OWASP Top 10 vulnerabilities from reaching production.',
+    'OWASP Threat Modeling Process: Data Flow Diagram → trust boundary identification → threat enumeration per STRIDE → mitigation design. The output is a list of threats and their controls. For the feature being built — identify which STRIDE categories apply (minimum: Information Disclosure, Elevation of Privilege, Tampering for any auth-adjacent or data-handling feature) and define the mitigation for each.',
+    'Attack surface review required before shipping security-sensitive features: (1) identify trust boundaries crossed by the feature; (2) enumerate applicable STRIDE threats; (3) for each threat, define the mitigation control (input validation, rate limiting, authorization check, audit logging). A feature without a completed STRIDE pass is not production-ready by OWASP Secure by Design standards.',
   ],
   L2: [
-    'What is the highest-impact security risk in what was just built, and is there an explicit mitigation for it?',
-    'Has a threat model been reviewed for what was just built — covering the trust boundaries and the threats at each one?',
+    'Apply STRIDE to the feature: for each applicable category (Spoofing, Tampering, Repudiation, Information Disclosure, DoS, Elevation of Privilege) — what is the attack vector and what is the mitigation? This enumeration must be completed before shipping.',
+    'Threat model required: identify trust boundaries, enumerate applicable STRIDE threats, define mitigation controls. This prevents OWASP Top 10 vulnerabilities from shipping to production.',
   ],
   L3: [
-    'Has a threat model been reviewed for what was just built to identify and mitigate the highest-impact security risks?',
+    'STRIDE threat model required: enumerate applicable threats and define mitigation controls before shipping.',
   ],
 };
 
 const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
-  question:      'DB migration written — safe to run in production?',
-  pinchFallback: 'Migration safety.',
+  question:      'Schema change — expand-migrate-contract pattern applied?',
+  pinchFallback: 'Apply backwards-compatible phased migration.',
   L1: [
-    'Review the database migration that was just written against production safety criteria: is it reversible (does it have a down migration), does it run without a full table lock on large tables, is it tested against a production-scale dataset, and has the rollback procedure been documented?',
-    'Audit the migration for production risk: does it add a NOT NULL column without a default (will fail on a non-empty table), does it rename a column in use by running application code, or does it drop anything that might be needed for rollback? Each of these requires a multi-phase deployment strategy.',
-    'Check the migration against the deployment sequence: can the current application code run against both the pre- and post-migration schema? If not, the migration requires a coordinated cutover — document the deployment steps explicitly.',
+    'Evolutionary Database Design (Fowler/Sadalage, 2003/2016): schema changes must be backwards-compatible with both the current and new application versions running simultaneously. The expand-migrate-contract pattern: Phase 1 (expand) — add new columns/tables alongside existing; Phase 2 (migrate) — backfill data with both versions live; Phase 3 (contract) — remove old structures only after all application versions are updated. Never DROP, RENAME, or add NOT NULL constraints in a single migration deployment.',
+    'The backwards-compatibility invariant: a schema change that breaks the currently-running application version is an outage if the deployment fails or requires rollback. For every destructive migration operation — validate: does this work with application version N (currently running) AND version N+1 (being deployed)? If no — redesign as a phased migration across multiple deployments.',
+    'Pre-migration safety checklist: (1) is the migration backwards-compatible with the current application version? (2) can it be rolled back without data loss? (3) is this a multi-phase migration for any destructive operation (DROP, RENAME, type change, NOT NULL addition)? All three must be YES before deploying. Single-phase destructive migrations are an outage risk.',
   ],
   L2: [
-    'Is the migration reversible, and has the rollback procedure been defined? What happens if the migration needs to be rolled back mid-deployment?',
-    'Does the migration require a table lock on a large table, or will it run safely online? Has it been tested against a production-scale data volume?',
+    'Apply expand-migrate-contract: no DROP, RENAME, or NOT NULL constraint addition in a single deployment. Destructive migrations must be phased — expand first, migrate data with both versions live, contract only after old application code is fully retired.',
+    'Migration safety gate: is this backwards-compatible with the running application version? Can it be rolled back without data loss? If no to either, redesign as a phased migration.',
   ],
   L3: [
-    'Has the database migration been reviewed for production safety — reversibility, table lock risk, and deployment sequence compatibility?',
+    'Expand-migrate-contract required: no destructive schema changes in a single deployment. Phase across multiple deployments.',
   ],
 };
 
 const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
-  question:      'Ready to ship — deployment strategy defined?',
-  pinchFallback: 'Deploy strategy.',
+  question:      'Significant feature shipping — deployment strategy defined?',
+  pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
   L1: [
-    'Before shipping what was just built — document the deployment strategy: is this a rolling deploy, a blue-green, a canary, or a feature-flag ramp? Each has different rollback characteristics. Define which applies here and what the rollback procedure is if the deploy goes wrong.',
-    'Review what was just built against its deployment requirements: does it require a database migration to run first, does it require coordinated deployment of multiple services, does it have backward-compatibility requirements during rollout? Document the correct deployment sequence.',
-    'Audit the release plan for what was just built: what is the deployment order, what is the health check that confirms a successful deploy, what is the rollback trigger, and how long is the observation window before the deploy is considered stable?',
+    'Continuous Delivery (Humble/Farley, 2010): every production deployment requires a defined deployment mechanism and rollback plan. Options: (1) Feature flag — ship behind a flag, enable gradually, instant rollback by disabling; (2) Canary — route N% of traffic to new version, watch error rates and latency before full rollout; (3) Blue-green — maintain two environments, cut traffic; (4) Staged rollout — deploy to subset of regions/tenants. Choose one explicitly and define the rollback procedure before the deployment is executed.',
+    'Deploying without a strategy converts a planned deployment into improvised incident response if anything goes wrong. The rollback plan — what command, who runs it, what does it restore to, how long does it take — must be defined before deployment, not after a failure. For significant features: feature flag is the lowest-risk option (instant rollback, gradual exposure, dark launch capability).',
+    'Pre-deployment checklist: (1) is there a deployment mechanism that allows gradual rollout (canary, feature flag, staged rollout)? (2) is there a defined rollback procedure that can be executed under time pressure? (3) are monitoring thresholds set so a bad deployment is automatically detected before full rollout? All three are required for a production deployment of a significant feature.',
   ],
   L2: [
-    'What is the deployment strategy for what was just built — specifically the rollback procedure if something goes wrong after deploy?',
-    'Are there any sequencing requirements for deploying what was just built — migrations that must run first, services that must be deployed in a specific order?',
+    'Define before deploying: the rollout strategy (canary/feature flag/blue-green/staged) and the rollback plan (what reverts this, who runs it, how long does it take). Both must exist before the deployment is executed.',
+    'Deployment without a rollback plan is an incident waiting to happen. Define the strategy, the rollback procedure, and the monitoring threshold that triggers it.',
   ],
   L3: [
-    'Is the deployment strategy for what was just built defined — including the rollback procedure and any deployment sequencing requirements?',
+    'Define deployment strategy (canary/feature flag/blue-green/staged) and rollback plan before shipping.',
   ],
 };
 
 const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
-  question:      'Going to production — runbook written?',
-  pinchFallback: 'Runbook gap.',
+  question:      'New service/feature shipping — operational runbook written?',
+  pinchFallback: 'Write the runbook before shipping.',
   L1: [
-    'Before what was just built goes to production — write the operational runbook entry: what does this feature do, what are the most likely operational failure modes, how does an on-call engineer diagnose each one, and what are the remediation steps? Write it now while the context is fresh.',
-    'Audit the operational readiness of what was just built: is there runbook documentation for the failure modes that are most likely to page someone, do those runbooks include the relevant dashboards to check, the logs to query, and the remediation steps to follow?',
-    'Review what was just built from an on-call perspective: if this feature is the source of an incident at 3am, what does the responding engineer need to know? That knowledge needs to be in a runbook — not in the head of the engineer who built it.',
+    'Google SRE Book (Beyer et al., 2016): runbooks are required operational documentation for any production service. \'Runbooks capture the operational knowledge required to keep a service running — how to deploy, how to diagnose common failures, what the escalation path is.\' Without a runbook, the on-call engineer responding to a 3am alert has no guide to the service they\'re debugging.',
+    'Minimum viable runbook for a new service or significant feature: (1) what this service/feature does — one paragraph; (2) how to deploy and roll back; (3) common failure modes and how to diagnose each; (4) which metrics/dashboards are the key health indicators; (5) escalation path if automated remediation fails. A short wiki page suffices — the content matters more than the format.',
+    'Operational readiness gate: before any new service ships to production, define the answer to three on-call questions: what is this thing? How do I know it\'s broken? What do I do when it breaks? These three answers constitute the minimum viable runbook. A service without them cannot be supported by an on-call rotation.',
   ],
   L2: [
-    'Is there a runbook entry for what was just built that would allow an on-call engineer unfamiliar with this feature to diagnose and remediate the most likely failure modes?',
-    'What are the operational procedures for what was just built — not the happy path, but the degraded-mode, rollback, and incident-response procedures?',
+    'Write the runbook before shipping: what the service does, how to deploy and roll back, common failure modes and diagnostics, key health metrics, and escalation path. This is the minimum required for on-call supportability.',
+    'On-call operators need three things: how to know the service is healthy, how to diagnose it when it fails, and who to escalate to. Write these before shipping.',
   ],
   L3: [
-    'Is there operational runbook documentation for what was just built — covering the most likely failure scenarios an on-call engineer would face?',
+    'Write the runbook before shipping: what it does, how to debug failures, key metrics, and escalation path.',
   ],
 };
 
 const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
-  question:      'Feature shipping — SLOs defined?',
-  pinchFallback: 'SLO gap.',
+  question:      'User-facing feature/service — SLOs defined?',
+  pinchFallback: 'Define SLOs before shipping.',
   L1: [
-    'Before what was just built ships — define the SLOs: what is the availability target, what is the acceptable latency at the p95 and p99, and what is the error rate budget? Without defined SLOs, there is no objective signal for when the feature is degraded versus within normal operating parameters.',
-    'Review what was just built against SLO requirements: what SLIs would you define for this feature, what is the current baseline for each, and what threshold constitutes a degradation that warrants an alert? Document the SLOs before the feature ships.',
-    'Audit what was just built for SLO coverage: has an availability target been defined, has a latency budget been set, has an error rate threshold been established? These need to exist before the feature ships — without them, there is no agreed standard for what "working" means.',
+    'Google SRE Book (Beyer et al., 2016): \'SLOs are the key mechanism by which SRE and product teams agree on the required level of service reliability.\' Three required SLO dimensions: availability (% of requests succeeding), latency (% of requests completing within N ms at p99), and error rate budget (% of requests allowed to fail). Without defined SLOs, alerting thresholds are arbitrary and reliability trade-offs cannot be made with data.',
+    'Alex Hidalgo, \'Implementing Service Level Objectives\' (O\'Reilly, 2020): \'SLOs create a shared language for discussing reliability trade-offs between engineering and product.\' Before shipping a user-facing feature: define availability target (e.g., 99.9%), latency target (e.g., p99 < 500ms), and error rate budget (e.g., < 0.1% of requests return errors). These three numbers become the basis for alerts, error budgets, and go/no-go decisions for risky changes.',
+    'SLO definition before shipping protects against two failure modes: (1) shipping without alerting thresholds, so incidents are discovered by users not monitoring; (2) investing in reliability improvements with no data to justify the cost or define \'reliable enough.\' Define availability, latency, and error rate targets — these are not post-ship tasks, they are pre-ship gates.',
   ],
   L2: [
-    'What are the SLOs for what was just built — availability, latency, and error rate? If they have not been defined, define them before shipping.',
-    'Is there an agreed-upon definition of "this feature is working" in terms of measurable SLOs, or is the health of this feature currently subjective?',
+    'Define three SLO dimensions before shipping: availability target (% of requests succeeding), latency target (p99 response time), and error rate budget (% of requests allowed to fail). These become the basis for alerting thresholds and reliability trade-off decisions.',
+    'Without SLOs, alerting is arbitrary, error budgets don\'t exist, and there is no shared definition of \'reliable enough.\' Define availability, latency, and error rate targets before shipping.',
   ],
   L3: [
-    'Have SLOs been defined for what was just built — measurable targets for availability, latency, and error rate — before it ships?',
+    'Define SLOs before shipping: availability target, latency target (p99), and error rate budget.',
   ],
 };
 
@@ -2197,6 +2386,17 @@ const ABSENCE_CONTENT_CASUAL: Partial<Record<string, DecisionContent>> = {
   implementation_checkpoint:     ABSENCE_IMPLEMENTATION_CHECKPOINT_CASUAL,
   spec_before_code:              ABSENCE_SPEC_BEFORE_CODE_CASUAL,
   incremental_build:             ABSENCE_INCREMENTAL_BUILD_CASUAL,
+  feature_completion_check:      ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
+  finishing_line_awareness:      ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
+  polish_vs_function:            ABSENCE_POLISH_VS_FUNCTION_CASUAL,
+  mvp_scope_discipline:          ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL,
+  idea_to_spec_bridge:           ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
+  demo_vs_product:               ABSENCE_DEMO_VS_PRODUCT_CASUAL,
+  user_journey_check:            ABSENCE_USER_JOURNEY_CHECK_CASUAL,
+  technical_spike_treatment:     ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
+  dependency_adventure:          ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
+  restart_impulse_check:         ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
+  creative_vs_core_ratio:        ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
   code_documentation_gap:        ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL,
   technical_debt_acknowledgment: ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL,
   test_depth_check:              ABSENCE_TEST_DEPTH_CHECK_CASUAL,
@@ -2265,7 +2465,7 @@ export function resolveDecisionContent(
   prevStage?:   Stage,
 ): DecisionContent {
   const isBeginner    = profile?.nature === 'beginner';
-  const isVibe        = isBeginner || profile?.nature === 'cool_geek';
+  const isVibe        = isBeginner;
   const absenceMap    = isVibe ? ABSENCE_CONTENT_BEGINNER : selectAbsenceMap(profile?.nature);
   const transitionMap = isVibe ? TRANSITION_CONTENT_BEGINNER : TRANSITION_CONTENT;
 
@@ -2436,6 +2636,17 @@ export {
   ABSENCE_SPEC_BEFORE_CODE_CASUAL,
   ABSENCE_INCREMENTAL_BUILD,
   ABSENCE_INCREMENTAL_BUILD_CASUAL,
+  ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
+  ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
+  ABSENCE_POLISH_VS_FUNCTION_CASUAL,
+  ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL,
+  ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
+  ABSENCE_DEMO_VS_PRODUCT_CASUAL,
+  ABSENCE_USER_JOURNEY_CHECK_CASUAL,
+  ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
+  ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
+  ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
+  ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
   ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL,
   ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL,
   ABSENCE_TEST_DEPTH_CHECK_CASUAL,

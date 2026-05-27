@@ -104,6 +104,17 @@ import {
   ABSENCE_SPEC_BEFORE_CODE_CASUAL,
   ABSENCE_INCREMENTAL_BUILD,
   ABSENCE_INCREMENTAL_BUILD_CASUAL,
+  ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
+  ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
+  ABSENCE_POLISH_VS_FUNCTION_CASUAL,
+  ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL,
+  ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
+  ABSENCE_DEMO_VS_PRODUCT_CASUAL,
+  ABSENCE_USER_JOURNEY_CHECK_CASUAL,
+  ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
+  ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
+  ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
+  ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
   ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL,
   ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL,
   ABSENCE_TEST_DEPTH_CHECK_CASUAL,
@@ -186,17 +197,6 @@ import {
   ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER,
   ABSENCE_ROLLBACK_AWARENESS_BEGINNER,
   ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER,
-  ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL,
-  ABSENCE_FINISHING_LINE_AWARENESS_CASUAL,
-  ABSENCE_POLISH_VS_FUNCTION_CASUAL,
-  ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL,
-  ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL,
-  ABSENCE_DEMO_VS_PRODUCT_CASUAL,
-  ABSENCE_USER_JOURNEY_CHECK_CASUAL,
-  ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL,
-  ABSENCE_DEPENDENCY_ADVENTURE_CASUAL,
-  ABSENCE_RESTART_IMPULSE_CHECK_CASUAL,
-  ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL,
 } from './options-beginner.js';
 import type { UserProfile } from '../classifier/types.js';
 import {
@@ -633,10 +633,9 @@ describe('resolveDecisionContent — heuristic variant routing', () => {
     expect(content).toBe(TASK_REVIEW);
   });
 
-  it('cool_geek still uses beginner absence map — absence:test_creation → ABSENCE_TEST_CREATION_BEGINNER', () => {
-    // isVibe=true for cool_geek → absenceMap = ABSENCE_CONTENT_BEGINNER → test_creation → ABSENCE_TEST_CREATION_BEGINNER
+  it('cool_geek + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:test_creation', makeProfile('cool_geek'));
-    expect(content).toBe(ABSENCE_TEST_CREATION_BEGINNER);
+    expect(content).toBe(ABSENCE_TEST_CREATION_CASUAL);
   });
 
   it('pro_geek_soul + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL', () => {
@@ -2616,9 +2615,9 @@ describe('resolveDecisionContent — behaviour_testing absence profile routing (
     expect(content).toBe(BEHAVIOUR_TESTING);
   });
 
-  it('cool_geek + absence:behaviour_testing → BEHAVIOUR_TESTING_BEGINNER (via isVibe)', () => {
+  it('cool_geek + absence:behaviour_testing → BEHAVIOUR_TESTING_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:behaviour_testing', coolGeekProfile);
-    expect(content).toBe(ABSENCE_CONTENT_BEGINNER.behaviour_testing);
+    expect(content).toBe(BEHAVIOUR_TESTING_CASUAL);
   });
 
   it('beginner + absence:behaviour_testing → BEHAVIOUR_TESTING_BEGINNER (via isVibe)', () => {
@@ -2986,9 +2985,9 @@ describe('resolveDecisionContent — C-02 profile routing', () => {
     expect(content).toBe(TRANSITION_CONTENT_BEGINNER.prd);
   });
 
-  it('cool_geek profile routes to same beginner path as beginner', () => {
+  it('cool_geek + stage_transition to prd → IDEA_TO_PRD', () => {
     const content = resolveDecisionContent('prd', 'stage_transition', coolGeekProfile);
-    expect(content).toBe(TRANSITION_CONTENT_BEGINNER.prd);
+    expect(content).toBe(IDEA_TO_PRD);
   });
 
   it('hardcore_pro profile → existing pro content (IDEA_TO_PRD)', () => {
@@ -3772,9 +3771,9 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(content).toBe(ABSENCE_FEATURE_SCOPE_BEGINNER);
   });
 
-  it('absence:feature_scope_before_build, cool_geek → ABSENCE_FEATURE_SCOPE_BEGINNER (isVibe routing)', () => {
+  it('absence:feature_scope_before_build, cool_geek → ABSENCE_FEATURE_SCOPE_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:feature_scope_before_build', makeProfile('cool_geek'));
-    expect(content).toBe(ABSENCE_FEATURE_SCOPE_BEGINNER);
+    expect(content).toBe(ABSENCE_FEATURE_SCOPE_CASUAL);
   });
 
   // ── implementation_checkpoint routing ─────────────────────────────────────────
@@ -3799,9 +3798,9 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(content).toBe(ABSENCE_IMPLEMENTATION_CHECKPOINT_BEGINNER);
   });
 
-  it('absence:implementation_checkpoint, cool_geek → ABSENCE_IMPLEMENTATION_CHECKPOINT_BEGINNER (isVibe routing)', () => {
+  it('absence:implementation_checkpoint, cool_geek → ABSENCE_IMPLEMENTATION_CHECKPOINT_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:implementation_checkpoint', makeProfile('cool_geek'));
-    expect(content).toBe(ABSENCE_IMPLEMENTATION_CHECKPOINT_BEGINNER);
+    expect(content).toBe(ABSENCE_IMPLEMENTATION_CHECKPOINT_CASUAL);
   });
 
   // ── spec_before_code routing ──────────────────────────────────────────────────
@@ -3826,9 +3825,9 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(content).toBe(ABSENCE_SPEC_BEFORE_CODE_BEGINNER);
   });
 
-  it('absence:spec_before_code, cool_geek → ABSENCE_SPEC_BEFORE_CODE_BEGINNER (isVibe routing)', () => {
+  it('absence:spec_before_code, cool_geek → ABSENCE_SPEC_BEFORE_CODE_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:spec_before_code', makeProfile('cool_geek'));
-    expect(content).toBe(ABSENCE_SPEC_BEFORE_CODE_BEGINNER);
+    expect(content).toBe(ABSENCE_SPEC_BEFORE_CODE_CASUAL);
   });
 
   // ── Structure validation ──────────────────────────────────────────────────────
@@ -3915,9 +3914,9 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(content).toBe(ABSENCE_INCREMENTAL_BUILD_BEGINNER);
   });
 
-  it('absence:incremental_build, cool_geek → ABSENCE_INCREMENTAL_BUILD_BEGINNER (isVibe routing)', () => {
+  it('absence:incremental_build, cool_geek → ABSENCE_INCREMENTAL_BUILD_CASUAL', () => {
     const content = resolveDecisionContent('implementation', 'absence:incremental_build', makeProfile('cool_geek'));
-    expect(content).toBe(ABSENCE_INCREMENTAL_BUILD_BEGINNER);
+    expect(content).toBe(ABSENCE_INCREMENTAL_BUILD_CASUAL);
   });
 
   it('ABSENCE_INCREMENTAL_BUILD has 3 L1, 2 L2, 1 L3 options', () => {
@@ -3944,8 +3943,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:error_understanding', makeProfile('beginner'))).toBe(ABSENCE_ERROR_UNDERSTANDING_BEGINNER);
   });
 
-  it('absence:error_understanding, cool_geek → ABSENCE_ERROR_UNDERSTANDING_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:error_understanding', makeProfile('cool_geek'))).toBe(ABSENCE_ERROR_UNDERSTANDING_BEGINNER);
+  it('absence:error_understanding, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:error_understanding', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_ERROR_UNDERSTANDING_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -3958,8 +3957,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:documentation_before_ask', makeProfile('beginner'))).toBe(ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER);
   });
 
-  it('absence:documentation_before_ask, cool_geek → ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:documentation_before_ask', makeProfile('cool_geek'))).toBe(ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER);
+  it('absence:documentation_before_ask, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:documentation_before_ask', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -3972,8 +3971,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:output_verification', makeProfile('beginner'))).toBe(ABSENCE_OUTPUT_VERIFICATION_BEGINNER);
   });
 
-  it('absence:output_verification, cool_geek → ABSENCE_OUTPUT_VERIFICATION_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:output_verification', makeProfile('cool_geek'))).toBe(ABSENCE_OUTPUT_VERIFICATION_BEGINNER);
+  it('absence:output_verification, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:output_verification', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_OUTPUT_VERIFICATION_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -3986,8 +3985,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:requirement_clarity_before_ask', makeProfile('beginner'))).toBe(ABSENCE_REQUIREMENT_CLARITY_BEGINNER);
   });
 
-  it('absence:requirement_clarity_before_ask, cool_geek → ABSENCE_REQUIREMENT_CLARITY_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:requirement_clarity_before_ask', makeProfile('cool_geek'))).toBe(ABSENCE_REQUIREMENT_CLARITY_BEGINNER);
+  it('absence:requirement_clarity_before_ask, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:requirement_clarity_before_ask', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_REQUIREMENT_CLARITY_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4000,8 +3999,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:copy_paste_awareness', makeProfile('beginner'))).toBe(ABSENCE_COPY_PASTE_AWARENESS_BEGINNER);
   });
 
-  it('absence:copy_paste_awareness, cool_geek → ABSENCE_COPY_PASTE_AWARENESS_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:copy_paste_awareness', makeProfile('cool_geek'))).toBe(ABSENCE_COPY_PASTE_AWARENESS_BEGINNER);
+  it('absence:copy_paste_awareness, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:copy_paste_awareness', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_COPY_PASTE_AWARENESS_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4014,8 +4013,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:debugging_observation_gap', makeProfile('beginner'))).toBe(ABSENCE_DEBUGGING_OBSERVATION_BEGINNER);
   });
 
-  it('absence:debugging_observation_gap, cool_geek → ABSENCE_DEBUGGING_OBSERVATION_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:debugging_observation_gap', makeProfile('cool_geek'))).toBe(ABSENCE_DEBUGGING_OBSERVATION_BEGINNER);
+  it('absence:debugging_observation_gap, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:debugging_observation_gap', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_DEBUGGING_OBSERVATION_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4028,8 +4027,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:learning_consolidation', makeProfile('beginner'))).toBe(ABSENCE_LEARNING_CONSOLIDATION_BEGINNER);
   });
 
-  it('absence:learning_consolidation, cool_geek → ABSENCE_LEARNING_CONSOLIDATION_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:learning_consolidation', makeProfile('cool_geek'))).toBe(ABSENCE_LEARNING_CONSOLIDATION_BEGINNER);
+  it('absence:learning_consolidation, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:learning_consolidation', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_LEARNING_CONSOLIDATION_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4042,8 +4041,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('beginner'))).toBe(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER);
   });
 
-  it('absence:simple_solution_first, cool_geek → ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('cool_geek'))).toBe(ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER);
+  it('absence:simple_solution_first, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:simple_solution_first', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4056,8 +4055,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('beginner'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER);
   });
 
-  it('absence:single_responsibility_prompting, cool_geek → ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('cool_geek'))).toBe(ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER);
+  it('absence:single_responsibility_prompting, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:single_responsibility_prompting', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4070,8 +4069,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:rollback_awareness', makeProfile('beginner'))).toBe(ABSENCE_ROLLBACK_AWARENESS_BEGINNER);
   });
 
-  it('absence:rollback_awareness, cool_geek → ABSENCE_ROLLBACK_AWARENESS_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:rollback_awareness', makeProfile('cool_geek'))).toBe(ABSENCE_ROLLBACK_AWARENESS_BEGINNER);
+  it('absence:rollback_awareness, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:rollback_awareness', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_ROLLBACK_AWARENESS_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4084,8 +4083,8 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('beginner'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER);
   });
 
-  it('absence:build_vs_understand_ratio, cool_geek → ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER (isVibe)', () => {
-    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER);
+  it('absence:build_vs_understand_ratio, cool_geek → TASK_REVIEW_CASUAL', () => {
+    expect(resolveDecisionContent('implementation', 'absence:build_vs_understand_ratio', makeProfile('cool_geek'))).toBe(TASK_REVIEW_CASUAL);
   });
 
   it('ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER has 2 L1, 1 L2, 1 L3 options', () => {
@@ -4094,9 +4093,9 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER.L3).toHaveLength(1);
   });
 
-  // ── Phase 5 D4-D6 — cool_geek signal routing (isVibe → BEGINNER map) ─────────
+  // ── Phase 5 D4-D6 — cool_geek signal routing (CASUAL map) ──────────────────
 
-  it('absence:feature_completion_check, cool_geek → ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL (isVibe)', () => {
+  it('absence:feature_completion_check, cool_geek → ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:feature_completion_check', makeProfile('cool_geek'))).toBe(ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL);
   });
 
@@ -4106,7 +4105,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:finishing_line_awareness, cool_geek → ABSENCE_FINISHING_LINE_AWARENESS_CASUAL (isVibe)', () => {
+  it('absence:finishing_line_awareness, cool_geek → ABSENCE_FINISHING_LINE_AWARENESS_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:finishing_line_awareness', makeProfile('cool_geek'))).toBe(ABSENCE_FINISHING_LINE_AWARENESS_CASUAL);
   });
 
@@ -4116,7 +4115,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_FINISHING_LINE_AWARENESS_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:polish_vs_function, cool_geek → ABSENCE_POLISH_VS_FUNCTION_CASUAL (isVibe)', () => {
+  it('absence:polish_vs_function, cool_geek → ABSENCE_POLISH_VS_FUNCTION_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:polish_vs_function', makeProfile('cool_geek'))).toBe(ABSENCE_POLISH_VS_FUNCTION_CASUAL);
   });
 
@@ -4126,7 +4125,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_POLISH_VS_FUNCTION_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:mvp_scope_discipline, cool_geek → ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL (isVibe)', () => {
+  it('absence:mvp_scope_discipline, cool_geek → ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:mvp_scope_discipline', makeProfile('cool_geek'))).toBe(ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL);
   });
 
@@ -4136,7 +4135,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:idea_to_spec_bridge, cool_geek → ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL (isVibe)', () => {
+  it('absence:idea_to_spec_bridge, cool_geek → ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:idea_to_spec_bridge', makeProfile('cool_geek'))).toBe(ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL);
   });
 
@@ -4146,7 +4145,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:demo_vs_product, cool_geek → ABSENCE_DEMO_VS_PRODUCT_CASUAL (isVibe)', () => {
+  it('absence:demo_vs_product, cool_geek → ABSENCE_DEMO_VS_PRODUCT_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:demo_vs_product', makeProfile('cool_geek'))).toBe(ABSENCE_DEMO_VS_PRODUCT_CASUAL);
   });
 
@@ -4156,7 +4155,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_DEMO_VS_PRODUCT_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:user_journey_check, cool_geek → ABSENCE_USER_JOURNEY_CHECK_CASUAL (isVibe)', () => {
+  it('absence:user_journey_check, cool_geek → ABSENCE_USER_JOURNEY_CHECK_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:user_journey_check', makeProfile('cool_geek'))).toBe(ABSENCE_USER_JOURNEY_CHECK_CASUAL);
   });
 
@@ -4166,7 +4165,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_USER_JOURNEY_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:technical_spike_treatment, cool_geek → ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL (isVibe)', () => {
+  it('absence:technical_spike_treatment, cool_geek → ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:technical_spike_treatment', makeProfile('cool_geek'))).toBe(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL);
   });
 
@@ -4176,7 +4175,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:dependency_adventure, cool_geek → ABSENCE_DEPENDENCY_ADVENTURE_CASUAL (isVibe)', () => {
+  it('absence:dependency_adventure, cool_geek → ABSENCE_DEPENDENCY_ADVENTURE_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:dependency_adventure', makeProfile('cool_geek'))).toBe(ABSENCE_DEPENDENCY_ADVENTURE_CASUAL);
   });
 
@@ -4186,7 +4185,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_DEPENDENCY_ADVENTURE_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:restart_impulse_check, cool_geek → ABSENCE_RESTART_IMPULSE_CHECK_CASUAL (isVibe)', () => {
+  it('absence:restart_impulse_check, cool_geek → ABSENCE_RESTART_IMPULSE_CHECK_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:restart_impulse_check', makeProfile('cool_geek'))).toBe(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL);
   });
 
@@ -4196,7 +4195,7 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_RESTART_IMPULSE_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('absence:creative_vs_core_ratio, cool_geek → ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL (isVibe)', () => {
+  it('absence:creative_vs_core_ratio, cool_geek → ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL', () => {
     expect(resolveDecisionContent('implementation', 'absence:creative_vs_core_ratio', makeProfile('cool_geek'))).toBe(ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL);
   });
 
@@ -4498,16 +4497,12 @@ describe('resolveDecisionContent — Stream B universal signals', () => {
     expect(ABSENCE_SLO_DEFINITION_GAP_FORMAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_CONTENT_BEGINNER contains all 23 Phase 5 D1-D6 keys', () => {
+  it('ABSENCE_CONTENT_BEGINNER contains all 12 Phase 5 D1-D3 keys', () => {
     const expected = [
       'incremental_build', 'error_understanding', 'documentation_before_ask',
       'output_verification', 'requirement_clarity_before_ask', 'copy_paste_awareness',
       'debugging_observation_gap', 'learning_consolidation', 'simple_solution_first',
       'single_responsibility_prompting', 'rollback_awareness', 'build_vs_understand_ratio',
-      'feature_completion_check', 'finishing_line_awareness', 'polish_vs_function',
-      'mvp_scope_discipline', 'idea_to_spec_bridge', 'demo_vs_product',
-      'user_journey_check', 'technical_spike_treatment', 'dependency_adventure',
-      'restart_impulse_check', 'creative_vs_core_ratio',
     ];
     for (const key of expected) {
       expect(key in ABSENCE_CONTENT_BEGINNER).toBe(true);
