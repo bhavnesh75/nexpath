@@ -82,17 +82,8 @@ describe('GlobalConfig — optimum level activation', () => {
     expect(FREQUENCY_LEVEL_CONFIGS.optimum).toBeDefined();
   });
 
-  it('FREQUENCY_LEVEL_CONFIGS.optimum values match OPTIMUM_LEVEL_CONFIG exactly', () => {
-    const cfg = FREQUENCY_LEVEL_CONFIGS.optimum;
-    expect(cfg.minPromptsBeforeAdvisory).toBe(OPTIMUM_LEVEL_CONFIG.minPromptsBeforeAdvisory);
-    expect(cfg.postAdvisoryCooldown).toBe(OPTIMUM_LEVEL_CONFIG.postAdvisoryCooldown);
-    expect(cfg.sessionAdvisoryCapDefault).toBe(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault);
-    expect(cfg.sessionAdvisoryCapVibe).toBe(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe);
-    expect(cfg.stage2MinConfidence).toBe(OPTIMUM_LEVEL_CONFIG.stage2MinConfidence);
-    expect(cfg.stage2ContextWindow).toBe(OPTIMUM_LEVEL_CONFIG.stage2ContextWindow);
-    expect(cfg.stage2S1LowConfidence).toBe(OPTIMUM_LEVEL_CONFIG.stage2S1LowConfidence);
-    expect(cfg.signalAbsenceThresholdMultiplier).toBe(OPTIMUM_LEVEL_CONFIG.signalAbsenceThresholdMultiplier);
-    expect(cfg.minStageChangeConfidence).toBe(OPTIMUM_LEVEL_CONFIG.minStageChangeConfidence);
+  it('FREQUENCY_LEVEL_CONFIGS.optimum is the same object as OPTIMUM_LEVEL_CONFIG', () => {
+    expect(FREQUENCY_LEVEL_CONFIGS.optimum).toBe(OPTIMUM_LEVEL_CONFIG);
   });
 
   it('resolveFrequencyConfig("optimum") returns the optimum config', () => {
