@@ -315,6 +315,127 @@ describe('createChatHistoryWatcher', () => {
     expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
+  // ── Cross-extractor dedup (Cursor 3.x Composer↔Ask mirror) ──────────────
+  // Cursor 3.x writes Composer prompts to BOTH globalStorage cursorDiskKV
+  // (decoded as bubbleId rawSessionId) AND workspaceStorage aiService.prompts
+  // (decoded as 'ask-mode' rawSessionId). Different sourcePath|rawSessionId|prompt
+  // signatures bypass the primary dedup. The cross-extractor map dedups by
+  // prompt text alone within a 60s window.
+
+  it('cross-extractor dedup: same prompt text from two extractors within 60s emits once', async () => {
+    const t0 = new Date('2026-05-27T12:00:00Z');
+    // Same prompt text, but the two events arrive with different rawSessionIds
+    // and sourcePaths — mimicking Composer (bubbleId) + Ask (ask-mode) mirror.
+    const extractor = makeExtractor('mixed', [
+      ev('write a test', 'bubbleId-abc', '/global/state.vscdb'),
+      ev('write a test', 'ask-mode',     '/workspace/state.vscdb'),
+    ]);
+    readItemTableFn.mockResolvedValue([]); // prime empty
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/global/state.vscdb', extractor)],
+      onEvent,
+      watchFn: watchFn as never,
+      readItemTableFn,
+      nowFn: () => t0,
+      debounceMs: 1,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Now both mirror events arrive in one read.
+    readItemTableFn.mockResolvedValue([{ key: 'k', value: 'v' }]);
+    createdWatchers[0]!.emit('change', 'change', '/global/state.vscdb');
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Only ONE emit — the second event was suppressed by cross-extractor dedup.
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('cross-extractor dedup: same prompt text re-submitted after 60s passes through', async () => {
+    let clock = new Date('2026-05-27T12:00:00Z').getTime();
+    readItemTableFn.mockResolvedValue([]);
+    const extractor = makeExtractor('mixed', [
+      ev('write a test', 'session-a', '/p/state.vscdb'),
+    ]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb', extractor)],
+      onEvent,
+      watchFn: watchFn as never,
+      readItemTableFn,
+      nowFn: () => new Date(clock),
+      debounceMs: 1,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // First emission of the prompt.
+    readItemTableFn.mockResolvedValue([{ key: 'k', value: 'v' }]);
+    createdWatchers[0]!.emit('change', 'change', '/p/state.vscdb');
+    await new Promise((r) => setTimeout(r, 20));
+    expect(onEvent).toHaveBeenCalledTimes(1);
+
+    // Advance clock past 60s window + swap signature so primary dedup doesn't catch it.
+    clock += 65_000;
+    const reEmit = makeExtractor('mixed', [
+      ev('write a test', 'session-b', '/p/state.vscdb'),
+    ]);
+    // Replace the watcher's extractor lookup by mocking decodeRow via the
+    // single-extractor cache — easiest path is a second target with a fresh
+    // extractor pointing at the same prompt text.
+    readItemTableFn.mockImplementation(async () => [{ key: 'k', value: 'v' }]);
+    // Force the extractor decode to return the new rawSessionId by replacing
+    // the underlying mock; cursor target's per-row extractor is fed by
+    // extractorsToTry which uses target.extractor.
+    Object.assign(extractor, { decodeRow: reEmit.decodeRow });
+
+    createdWatchers[0]!.emit('change', 'change', '/p/state.vscdb');
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Window expired → second emission passes through.
+    expect(onEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('cross-extractor dedup: initial-pass priming does NOT block fresh emissions of same text', async () => {
+    // globalStorage state.vscdb is workspace-agnostic — initial-pass primes
+    // dedup with bubble rows from PRIOR workspaces. A fresh user prompt with
+    // matching text must still emit. Regression guard for the priming bug
+    // discovered during S01 manual run 2026-05-27: priming with NOW timestamp
+    // dropped legit P1 captures. Fix primes with timestamp 0 (far past).
+    const t0 = new Date('2026-05-27T12:00:00Z');
+    // Initial pass returns one historical row decoding to "write a test".
+    readItemTableFn.mockResolvedValue([{ key: 'historical', value: 'v' }]);
+    const extractor = makeExtractor('mixed', [
+      ev('write a test', 'historical-session', '/global/state.vscdb'),
+    ]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/global/state.vscdb', extractor)],
+      onEvent,
+      watchFn: watchFn as never,
+      readItemTableFn,
+      nowFn: () => t0,
+      debounceMs: 1,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 20));
+
+    // Initial pass primed the historical row silently — no emit yet.
+    expect(onEvent).toHaveBeenCalledTimes(0);
+
+    // Now the user submits a NEW prompt with identical text in the live session.
+    // Different rawSessionId so primary signature dedup does NOT match.
+    const liveExtractor = makeExtractor('mixed', [
+      ev('write a test', 'live-session', '/global/state.vscdb'),
+    ]);
+    Object.assign(extractor, { decodeRow: liveExtractor.decodeRow });
+    readItemTableFn.mockResolvedValue([{ key: 'live', value: 'v' }]);
+    createdWatchers[0]!.emit('change', 'change', '/global/state.vscdb');
+    await new Promise((r) => setTimeout(r, 20));
+
+    // MUST emit. If priming had used NOW timestamp, this would have been
+    // deduped inside the 60s window and the user's P1 prompt would vanish.
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('debounces a burst of change events into a single read', async () => {
     readItemTableFn.mockResolvedValue([]);
     const w = createChatHistoryWatcher({

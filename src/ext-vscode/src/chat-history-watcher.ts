@@ -297,8 +297,39 @@ export function createChatHistoryWatcher(
    */
   const primedTargets = new Set<string>();
 
+  /**
+   * Cross-extractor dedup. Cursor 3.x mirrors Composer prompts into BOTH
+   * globalStorage cursorDiskKV (decoded by cursor-composer-bubble) AND
+   * workspaceStorage ItemTable.aiService.prompts (decoded by cursor-v2024-q4
+   * as "ask-mode"). Without this map every Composer prompt is captured twice
+   * → Layer C's prompt_count grows at 2× rate → classifier fires at wrong
+   * positions. Discovered during S01 manual testing 2026-05-27.
+   *
+   * Keyed by trimmed prompt text → last-seen epoch ms. A prompt re-emitted
+   * within DEDUP_WINDOW_MS of its first sighting is dropped.
+   */
+  const recentPromptTimestamps = new Map<string, number>();
+  const DEDUP_WINDOW_MS = 60_000;
+
   function signatureOf(e: ChatHistoryEvent): string {
     return `${e.sourcePath}|${e.rawSessionId}|${e.prompt}`;
+  }
+
+  /** Returns true if this prompt text was already emitted in the dedup window. */
+  function isCrossExtractorDuplicate(promptText: string, now: number): boolean {
+    const key = promptText.trim();
+    const last = recentPromptTimestamps.get(key);
+    if (last !== undefined && now - last < DEDUP_WINDOW_MS) {
+      return true;
+    }
+    recentPromptTimestamps.set(key, now);
+    // Lazy GC: drop entries older than the window so the map doesn't grow forever.
+    if (recentPromptTimestamps.size > 200) {
+      for (const [k, t] of recentPromptTimestamps) {
+        if (now - t >= DEDUP_WINDOW_MS) recentPromptTimestamps.delete(k);
+      }
+    }
+    return false;
   }
 
   function reportError(err: unknown, path: string): void {
@@ -357,8 +388,20 @@ export function createChatHistoryWatcher(
             seenSignatures.add(sig);
             // Initial pass: prime dedup only. Subsequent fs.watch fires emit
             // only truly-new prompts. See primedTargets docstring.
-            if (isInitialPass) continue;
-            opts.onEvent({ ...ev, capturedAt: nowFn() });
+            if (isInitialPass) {
+              // Cross-extractor dedup is meant to catch Composer→Ask MIRROR
+              // emissions seconds apart, NOT historical prompts from prior
+              // sessions that happen to share text with a fresh user prompt.
+              // globalStorage state.vscdb is workspace-agnostic so initial
+              // pass sees bubbles from ALL prior workspaces. Priming with
+              // timestamp 0 ensures `now - 0 >> DEDUP_WINDOW_MS`, so any
+              // genuinely new emission of the same text passes through.
+              recentPromptTimestamps.set(ev.prompt.trim(), 0);
+              continue;
+            }
+            const now = nowFn();
+            if (isCrossExtractorDuplicate(ev.prompt, now.getTime())) continue;
+            opts.onEvent({ ...ev, capturedAt: now });
           }
         }
       }
@@ -378,8 +421,14 @@ export function createChatHistoryWatcher(
           const sig = signatureOf(ev);
           if (seenSignatures.has(sig)) continue;
           seenSignatures.add(sig);
-          if (isInitialPass) continue;
-          opts.onEvent({ ...ev, capturedAt: nowFn() });
+          if (isInitialPass) {
+            // See sqlite-target's comment on why timestamp=0 here.
+            recentPromptTimestamps.set(ev.prompt.trim(), 0);
+            continue;
+          }
+          const now = nowFn();
+          if (isCrossExtractorDuplicate(ev.prompt, now.getTime())) continue;
+          opts.onEvent({ ...ev, capturedAt: now });
         }
       }
     } catch (err) {
