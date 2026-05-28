@@ -2,9 +2,7 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import * as readline from 'node:readline';
 import { confirm, isCancel, select } from '@clack/prompts';
-import pc from 'picocolors';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { isConfigSet, setConfig, getConfig } from '../../store/config.js';
 import {
@@ -12,7 +10,7 @@ import {
   setAdvisoryFrequency,
   setRole,
 } from '../shared/config-setters.js';
-import { ROLE_OPTIONS, buildRoleMenuLines } from '../shared/role-description.js';
+import { ROLE_OPTIONS, ROLE_DESCRIPTION_TEXT } from '../shared/role-description.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -407,16 +405,12 @@ const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
     ],
   });
 
-const defaultRolePrompt: RolePromptFn = async (currentValue) => {
-  for (const line of buildRoleMenuLines(currentValue)) console.log(line);
-  const iface = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise<string>((res) => {
-    iface.question(`${pc.cyan('└')}  Select (1-4): `, res);
+const defaultRolePrompt: RolePromptFn = async (currentValue) =>
+  select({
+    message: `Project role\n\n${ROLE_DESCRIPTION_TEXT}`,
+    initialValue: currentValue,
+    options: ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
   });
-  iface.close();
-  const choice = ROLE_OPTIONS.find((o) => o.num === parseInt(answer.trim(), 10));
-  return choice ? choice.value : currentValue;
-};
 
 /** Read the currently configured advisory_frequency, default 'every_event'. */
 function readInstallFreq(db: import('sql.js').Database): string {
