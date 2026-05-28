@@ -11,22 +11,36 @@ export const ROLE_OPTIONS = [
 ] as const;
 
 /**
+ * Plain (un-styled) explanatory lines for the project role. Single source of
+ * truth so both the numbered /dev/tty menu and the new-window radio prompt show
+ * the same text. The goal phrase is emphasised in styled renderings because it
+ * is the single biggest factor in how nexpath guides the user.
+ */
+export const ROLE_DESCRIPTION_LINES = [
+  'Why a project role?',
+  "Your role tells nexpath what kind of project you're building",
+  'and your level of involvement, so it can assume your dev flow',
+  'and tailor its advisories. Most importantly, it tells nexpath',
+  `${GOAL_EMPHASIS} — the biggest factor in how it guides you.`,
+] as const;
+
+/** The role description as a single multi-line string (for prompt messages). */
+export const ROLE_DESCRIPTION_TEXT = ROLE_DESCRIPTION_LINES.join('\n');
+
+/**
  * Framed, gray explanatory block shown beneath the project-role options. Opens
  * with a question so the reader recognises it as the role's description; the
- * goal phrase is emphasised because it is the single biggest factor in how
- * nexpath guides the user. `colors` is injectable so a spawned window can force
- * ANSI output regardless of the parent process's color detection.
+ * goal phrase is emphasised. `colors` is injectable so a spawned window can
+ * force ANSI output regardless of the parent process's color detection.
  */
 export function buildRoleDescriptionLines(colors: ReturnType<typeof pc.createColors> = pc): string[] {
-  const bar  = colors.cyan('│');
-  const goal = colors.bold(GOAL_EMPHASIS);
-  return [
-    `${bar}  ${colors.gray('Why a project role?')}`,
-    `${bar}  ${colors.gray("Your role tells nexpath what kind of project you're building")}`,
-    `${bar}  ${colors.gray('and your level of involvement, so it can assume your dev flow')}`,
-    `${bar}  ${colors.gray('and tailor its advisories. Most importantly, it tells nexpath')}`,
-    `${bar}  ${goal}${colors.gray(' — the biggest factor in how it guides you.')}`,
-  ];
+  const bar = colors.cyan('│');
+  return ROLE_DESCRIPTION_LINES.map((line) => {
+    if (line.startsWith(GOAL_EMPHASIS)) {
+      return `${bar}  ${colors.bold(GOAL_EMPHASIS)}${colors.gray(line.slice(GOAL_EMPHASIS.length))}`;
+    }
+    return `${bar}  ${colors.gray(line)}`;
+  });
 }
 
 /** Numbered "Project role" menu: header, options (current value tagged), then the description. */

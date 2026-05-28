@@ -790,15 +790,17 @@ describe('createTtySelectFn — Linux new-window path', () => {
     expect(capturedRoleScript).toContain('founder / product creator');
     expect(capturedRoleScript).toContain('product manager');
     expect(capturedRoleScript).toContain('vibe coder');
-    // numbered menu with the gray "why" description below the options
+    // radio-button @clack select (not a numbered readline prompt), with the
+    // "why" description carried in the prompt message
+    expect(capturedRoleScript).toContain('select({');
+    expect(capturedRoleScript).not.toContain('Select (1-4)');
     expect(capturedRoleScript).toContain('Why a project role?');
     expect(capturedRoleScript).toContain('WHAT YOUR GOAL IS');
-    expect(capturedRoleScript).toContain('Select (1-4)');
     expect(capturedRoleScript).not.toContain('clear');
     expect(capturedRoleScript).not.toContain('Clear role');
   });
 
-  it('role script tags the current configured role (founder default) as current', async () => {
+  it('role script pre-selects the current role via initialValue (founder default)', async () => {
     let capturedRoleScript = '';
     let callCount = 0;
     (spawnSync as ReturnType<typeof vi.fn>).mockImplementation(
@@ -822,7 +824,8 @@ describe('createTtySelectFn — Linux new-window path', () => {
     );
     await createTtySelectFn()!(makeOpts());
     expect(capturedRoleScript).toContain('founder / product creator');
-    expect(capturedRoleScript).toContain('(current)');
+    expect(capturedRoleScript).toContain('initialValue:');
+    expect(capturedRoleScript).toContain('"founder"');
   });
 
   it('role flow path produces one role-window spawn and no freq-window spawn', async () => {

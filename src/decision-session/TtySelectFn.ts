@@ -7,13 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import * as rl from 'node:readline';
-import pc, { createColors } from 'picocolors';
+import pc from 'picocolors';
 import type { SelectFn } from './DecisionSession.js';
 import { CLIPBOARD_ONLY, OPTION_SEPARATOR, OPT_OUT_SENTINEL } from './DecisionSession.js';
 import { SKIP_NOW, SHOW_SIMPLER } from './options.js';
 import type { Store } from '../store/db.js';
 import { getConfig, setConfig } from '../store/config.js';
-import { ROLE_OPTIONS, buildRoleMenuLines } from '../cli/shared/role-description.js';
+import { ROLE_OPTIONS, ROLE_DESCRIPTION_TEXT, buildRoleMenuLines } from '../cli/shared/role-description.js';
 
 // ── New-window helpers: .mjs script builders ─────────────────────────────────
 
@@ -196,28 +196,23 @@ process.exit(0);
 `;
 }
 
-function buildRoleMjsScript(_clackUrl: string, resultFileFwd: string, currentRole: string): string {
-  const colors    = createColors(true);
-  const menuLines = buildRoleMenuLines(currentRole, colors);
-  const prompt    = `${colors.cyan('└')}  Select (1-4): `;
-  const numToValue: Record<string, string> = {};
-  for (const o of ROLE_OPTIONS) numToValue[String(o.num)] = o.value;
-  return `import { createInterface } from 'node:readline';
+function buildRoleMjsScript(clackUrl: string, resultFileFwd: string, currentRole: string): string {
+  const options = ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
+  const message = `Project role\n\n${ROLE_DESCRIPTION_TEXT}`;
+  return `import { select, isCancel } from '${clackUrl}';
 import { writeFileSync } from 'node:fs';
 
-const lines = ${JSON.stringify(menuLines)};
-for (const line of lines) console.log(line);
-
-const rl = createInterface({ input: process.stdin, output: process.stdout });
-rl.question(${JSON.stringify(prompt)}, (answer) => {
-  const numToValue = ${JSON.stringify(numToValue)};
-  const picked = numToValue[String(parseInt(answer.trim(), 10))];
-  if (picked) {
-    writeFileSync('${resultFileFwd}', \`__ROLE__:\${picked}\`, 'utf8');
-  }
-  rl.close();
-  process.exit(0);
+const picked = await select({
+  message: ${JSON.stringify(message)},
+  initialValue: ${JSON.stringify(currentRole)},
+  options: ${JSON.stringify(options)},
 });
+
+if (!isCancel(picked) && typeof picked === 'string') {
+  writeFileSync('${resultFileFwd}', \`__ROLE__:\${picked}\`, 'utf8');
+}
+
+process.exit(0);
 `;
 }
 
