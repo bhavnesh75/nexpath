@@ -790,9 +790,11 @@ describe('createTtySelectFn — Linux new-window path', () => {
     expect(capturedRoleScript).toContain('founder / product creator');
     expect(capturedRoleScript).toContain('product manager');
     expect(capturedRoleScript).toContain('vibe coder');
-    // radio-button @clack select (not a numbered readline prompt), with the
-    // "why" description carried in the prompt message
-    expect(capturedRoleScript).toContain('select({');
+    // radio-button SelectPrompt (not a numbered readline prompt), rendering the
+    // ●/○ markers and carrying the gray "why" description below the options
+    expect(capturedRoleScript).toContain('SelectPrompt');
+    expect(capturedRoleScript).toContain('●');
+    expect(capturedRoleScript).toContain('○');
     expect(capturedRoleScript).not.toContain('Select (1-4)');
     expect(capturedRoleScript).toContain('Why a project role?');
     expect(capturedRoleScript).toContain('WHAT YOUR GOAL IS');

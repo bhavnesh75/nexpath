@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { confirm, isCancel, select } from '@clack/prompts';
+import { SelectPrompt } from '@clack/core';
+import pc from 'picocolors';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { isConfigSet, setConfig, getConfig } from '../../store/config.js';
 import {
@@ -10,7 +12,7 @@ import {
   setAdvisoryFrequency,
   setRole,
 } from '../shared/config-setters.js';
-import { ROLE_OPTIONS, ROLE_DESCRIPTION_TEXT } from '../shared/role-description.js';
+import { ROLE_OPTIONS, buildRoleDescriptionLines } from '../shared/role-description.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -405,12 +407,33 @@ const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
     ],
   });
 
-const defaultRolePrompt: RolePromptFn = async (currentValue) =>
-  select({
-    message: `Project role\n\n${ROLE_DESCRIPTION_TEXT}`,
+// Radio-button role picker whose gray "why" description sits BELOW the options
+// (a plain select() only renders its message above them). Mirrors the popup.
+const defaultRolePrompt: RolePromptFn = async (currentValue) => {
+  const descLines = buildRoleDescriptionLines();
+  const p = new SelectPrompt<{ value: string; label: string }>({
+    options: ROLE_OPTIONS.map((o) => ({ value: o.value as string, label: o.label })),
     initialValue: currentValue,
-    options: ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    render() {
+      const sym = this.state === 'submit' ? pc.green('◇')
+                : this.state === 'cancel' ? pc.red('■')
+                : pc.cyan('◆');
+      const head = `${pc.gray('│')}\n${sym}  Project role\n`;
+      if (this.state === 'submit' || this.state === 'cancel') {
+        return `${head}${pc.gray('│')}  ${pc.dim(this.options[this.cursor].label)}`;
+      }
+      const optLines = this.options
+        .map((o, i) =>
+          i === this.cursor
+            ? `${pc.cyan('│')}  ${pc.green('●')} ${o.label}`
+            : `${pc.cyan('│')}  ${pc.dim('○')} ${pc.dim(o.label)}`,
+        )
+        .join('\n');
+      return `${head}${optLines}\n${pc.cyan('│')}\n${descLines.join('\n')}\n${pc.cyan('└')}\n`;
+    },
   });
+  return p.prompt();
+};
 
 /** Read the currently configured advisory_frequency, default 'every_event'. */
 function readInstallFreq(db: import('sql.js').Database): string {

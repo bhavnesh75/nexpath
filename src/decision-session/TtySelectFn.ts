@@ -7,13 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import * as rl from 'node:readline';
-import pc from 'picocolors';
+import pc, { createColors } from 'picocolors';
 import type { SelectFn } from './DecisionSession.js';
 import { CLIPBOARD_ONLY, OPTION_SEPARATOR, OPT_OUT_SENTINEL } from './DecisionSession.js';
 import { SKIP_NOW, SHOW_SIMPLER } from './options.js';
 import type { Store } from '../store/db.js';
 import { getConfig, setConfig } from '../store/config.js';
-import { ROLE_OPTIONS, ROLE_DESCRIPTION_TEXT, buildRoleMenuLines } from '../cli/shared/role-description.js';
+import { ROLE_OPTIONS, buildRoleDescriptionLines, buildRoleMenuLines } from '../cli/shared/role-description.js';
 
 // ── New-window helpers: .mjs script builders ─────────────────────────────────
 
@@ -196,22 +196,48 @@ process.exit(0);
 `;
 }
 
-function buildRoleMjsScript(clackUrl: string, resultFileFwd: string, currentRole: string): string {
-  const options = ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
-  const message = `Project role\n\n${ROLE_DESCRIPTION_TEXT}`;
-  return `import { select, isCancel } from '${clackUrl}';
+/**
+ * Role picker for the new window: a radio-button @clack/core SelectPrompt with a
+ * custom render that lists the roles, then shows the gray "why" description
+ * BELOW the options (a plain select() can only put its message above them). The
+ * description is pre-styled here so it matches the numbered /dev/tty menu.
+ */
+function buildRoleMjsScript(_clackUrl: string, resultFileFwd: string, currentRole: string): string {
+  const coreUrl   = resolveClackCoreEsmUrl();
+  const options   = ROLE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
+  const descLines = buildRoleDescriptionLines(createColors(true));
+  return `import { SelectPrompt, isCancel } from '${coreUrl}';
 import { writeFileSync } from 'node:fs';
 
-const picked = await select({
-  message: ${JSON.stringify(message)},
-  initialValue: ${JSON.stringify(currentRole)},
+const ESC = String.fromCharCode(27);
+const A = (c) => (s) => ESC + '[' + c + 'm' + s + ESC + '[0m';
+const gray = A('90'), cyan = A('36'), green = A('32'), dim = A('2'), red = A('31');
+const descLines = ${JSON.stringify(descLines)};
+
+const p = new SelectPrompt({
   options: ${JSON.stringify(options)},
+  initialValue: ${JSON.stringify(currentRole)},
+  render() {
+    const sym = this.state === 'submit' ? green('◇')
+              : this.state === 'cancel' ? red('■')
+              : cyan('◆');
+    const head = gray('│') + '\\n' + sym + '  Project role\\n';
+    if (this.state === 'submit' || this.state === 'cancel') {
+      return head + gray('│') + '  ' + dim(this.options[this.cursor].label);
+    }
+    const optLines = this.options.map((o, i) =>
+      i === this.cursor
+        ? cyan('│') + '  ' + green('●') + ' ' + o.label
+        : cyan('│') + '  ' + dim('○') + ' ' + dim(o.label)
+    ).join('\\n');
+    return head + optLines + '\\n' + cyan('│') + '\\n' + descLines.join('\\n') + '\\n' + cyan('└') + '\\n';
+  },
 });
 
+const picked = await p.prompt();
 if (!isCancel(picked) && typeof picked === 'string') {
   writeFileSync('${resultFileFwd}', \`__ROLE__:\${picked}\`, 'utf8');
 }
-
 process.exit(0);
 `;
 }
@@ -479,6 +505,17 @@ function resolveClackEsmUrl(): string {
   const clackEsmEntry = clackPkg.exports['.'].import;
   const clackEsmPath  = join(dirname(clackPkgPath), clackEsmEntry);
   return `file:///${clackEsmPath.replace(/\\/g, '/')}`;
+}
+
+/** Resolve the @clack/core ESM entry URL (for SelectPrompt) from nexpath's module context. */
+function resolveClackCoreEsmUrl(): string {
+  const _require = createRequire(import.meta.url);
+  const pkgPath  = _require.resolve('@clack/core/package.json');
+  const pkg      = JSON.parse(readFileSync(pkgPath, 'utf8')) as {
+    exports: { '.': { import: string } };
+  };
+  const esmPath = join(dirname(pkgPath), pkg.exports['.'].import);
+  return `file:///${esmPath.replace(/\\/g, '/')}`;
 }
 
 function commandExists(cmd: string): boolean {
