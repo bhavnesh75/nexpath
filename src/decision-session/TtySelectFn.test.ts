@@ -1349,6 +1349,13 @@ describe('runRoleSubMenu (Unix path)', () => {
       expect(rendered).toContain('vibe coder');
       expect(rendered).not.toContain('Clear role');
       expect(rendered).toContain('Select (1-4)');
+      // gray "why" description appears below the options
+      expect(rendered).toContain('Why a project role?');
+      expect(rendered).toContain('WHAT YOUR GOAL IS');
+      const lines = rendered.split('\n');
+      const lastOptionIdx = lines.findIndex((l) => l.includes('vibe coder'));
+      const descIdx = lines.findIndex((l) => l.includes('Why a project role?'));
+      expect(descIdx).toBeGreaterThan(lastOptionIdx);
     } finally {
       store.db.close();
     }

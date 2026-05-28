@@ -2,7 +2,9 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import * as readline from 'node:readline';
 import { confirm, isCancel, select } from '@clack/prompts';
+import pc from 'picocolors';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { isConfigSet, setConfig, getConfig } from '../../store/config.js';
 import {
@@ -10,6 +12,7 @@ import {
   setAdvisoryFrequency,
   setRole,
 } from '../shared/config-setters.js';
+import { buildRoleDescriptionLines } from '../shared/role-description.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -404,29 +407,38 @@ const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
     ],
   });
 
-export const ROLE_DESCRIPTION_LINES = [
-  '',
-  '  The role you select tells nexpath what type of project you are building,',
-  '  what your level of involvement is, and what your goal is. Based on the role,',
-  '  nexpath assumes how the built-in development flow of your project will work —',
-  '  what kinds of prompts you will send, how you will work — and tailors its',
-  '  advisories accordingly. Simply put: by selecting a role you tell nexpath your',
-  '  objective so it can assume your working flow and help your project\'s built-in',
-  '  development accordingly.',
-  '',
+const ROLE_OPTIONS = [
+  { num: 1, value: 'indie_hacker', label: 'indie hacker developer' },
+  { num: 2, value: 'founder',      label: 'founder / product creator' },
+  { num: 3, value: 'pm',           label: 'product manager' },
+  { num: 4, value: 'vibe_coder',   label: 'vibe coder' },
 ];
 
-const defaultRolePrompt: RolePromptFn = async (currentValue) =>
-  select({
-    message: 'Project role',
-    initialValue: currentValue,
-    options: [
-      { value: 'indie_hacker', label: 'indie hacker developer' },
-      { value: 'founder',      label: 'founder / product creator' },
-      { value: 'pm',           label: 'product manager' },
-      { value: 'vibe_coder',   label: 'vibe coder' },
-    ],
+/** Numbered role menu with the gray "why" description placed below the options. */
+export function buildRoleMenuLines(currentValue: string): string[] {
+  return [
+    pc.cyan('│'),
+    `${pc.cyan('◆')}  ${pc.bold('Project role')}`,
+    ...ROLE_OPTIONS.map((o) => {
+      const suffix = o.value === currentValue ? pc.dim(' (current)') : '';
+      return `${pc.cyan('│')}  ${pc.green(`${o.num})`)} ${o.label}${suffix}`;
+    }),
+    pc.cyan('│'),
+    ...buildRoleDescriptionLines(),
+    pc.cyan('│'),
+  ];
+}
+
+const defaultRolePrompt: RolePromptFn = async (currentValue) => {
+  for (const line of buildRoleMenuLines(currentValue)) console.log(line);
+  const iface = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((res) => {
+    iface.question(`${pc.cyan('└')}  Select (1-4): `, res);
   });
+  iface.close();
+  const choice = ROLE_OPTIONS.find((o) => o.num === parseInt(answer.trim(), 10));
+  return choice ? choice.value : currentValue;
+};
 
 /** Read the currently configured advisory_frequency, default 'every_event'. */
 function readInstallFreq(db: import('sql.js').Database): string {
@@ -563,9 +575,6 @@ export async function installAction(
         setRole(settingsStore, 'role', currentRole);
       }
     } else {
-      for (const line of ROLE_DESCRIPTION_LINES) {
-        console.log(line);
-      }
       const picked = await rolePromptFn(currentRole);
       if (!isCancel(picked) && typeof picked === 'string') {
         setRole(settingsStore, 'role', picked);

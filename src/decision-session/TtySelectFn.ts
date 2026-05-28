@@ -13,6 +13,7 @@ import { CLIPBOARD_ONLY, OPTION_SEPARATOR, OPT_OUT_SENTINEL } from './DecisionSe
 import { SKIP_NOW, SHOW_SIMPLER } from './options.js';
 import type { Store } from '../store/db.js';
 import { getConfig, setConfig } from '../store/config.js';
+import { buildRoleDescriptionLines } from '../cli/shared/role-description.js';
 
 // ── New-window helpers: .mjs script builders ─────────────────────────────────
 
@@ -781,6 +782,8 @@ export function runRoleSubMenu(
       const suffix = o.value === currentRole ? pc.dim(' (current)') : '';
       return `${pc.cyan('│')}  ${pc.green(`${o.num})`)} ${o.label}${suffix}`;
     }),
+    pc.cyan('│'),
+    ...buildRoleDescriptionLines(),
     pc.cyan('│'),
   ];
   streams.output.write(menuLines.join('\n') + '\n');

@@ -31,6 +31,7 @@ import {
   writeHookEntry,
   removeHookEntry,
   ensureLinuxClipboard,
+  buildRoleMenuLines,
 } from './install.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -1870,36 +1871,27 @@ describe('installAction — frequency and role prompts', () => {
     }
   });
 
-  it('interactive path prints role description text before the role prompt', async () => {
-    const { dir, cleanup: cleanupDir } = tmpDir();
-    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const freqPromptFn = vi.fn(async (current: string) => current);
-      const rolePromptFn = vi.fn(async (current: string) => current);
+  it('role menu renders the gray "why" description below the options', () => {
+    const lines = buildRoleMenuLines('founder');
+    const text = lines.join('\n');
+    // all four role options present
+    expect(text).toContain('indie hacker developer');
+    expect(text).toContain('founder / product creator');
+    expect(text).toContain('product manager');
+    expect(text).toContain('vibe coder');
+    // description opens with a question and emphasises the goal
+    expect(text).toContain('Why a project role?');
+    expect(text).toContain('WHAT YOUR GOAL IS');
+    // the description appears after the role options
+    const lastOptionIdx = lines.findIndex((l) => l.includes('vibe coder'));
+    const descIdx = lines.findIndex((l) => l.includes('Why a project role?'));
+    expect(lastOptionIdx).toBeGreaterThanOrEqual(0);
+    expect(descIdx).toBeGreaterThan(lastOptionIdx);
+  });
 
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction(
-        {},
-        {
-          paths,
-          isWin: false,
-          execFn: () => {},
-          confirmFn: async () => true,
-          freqPromptFn,
-          rolePromptFn,
-          dbPath,
-          skipClipboardCheck: true,
-        },
-      );
-
-      const printed = logSpy.mock.calls.map((c) => String(c[0])).join('\n');
-      expect(printed).toContain('The role you select tells nexpath');
-      expect(printed).toContain('tailors its');
-      expect(printed).toContain('advisories accordingly');
-    } finally {
-      cleanupDir();
-      cleanupDb();
-    }
+  it('role menu marks the current value with a (current) suffix', () => {
+    const text = buildRoleMenuLines('vibe_coder').join('\n');
+    const vibeLine = text.split('\n').find((l) => l.includes('vibe coder'));
+    expect(vibeLine).toContain('(current)');
   });
 });
