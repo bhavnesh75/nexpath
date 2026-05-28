@@ -112,6 +112,7 @@ describe('createChatHistoryWatcher', () => {
       targets: [cursorTarget('/p/state.vscdb', extractor)],
       onEvent,
       watchFn: watchFn as never,
+      readFileFn,
       readItemTableFn,
       debounceMs: 5,
     });
@@ -151,6 +152,7 @@ describe('createChatHistoryWatcher', () => {
       targets: [{ path: '/p/state.vscdb', kind: 'cursor-sqlite' }],
       onEvent,
       watchFn: watchFn as never,
+      readFileFn,
       readItemTableFn,
       debounceMs: 1,
     });
