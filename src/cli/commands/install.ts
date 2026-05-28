@@ -12,7 +12,7 @@ import {
   setAdvisoryFrequency,
   setRole,
 } from '../shared/config-setters.js';
-import { buildRoleDescriptionLines } from '../shared/role-description.js';
+import { ROLE_OPTIONS, buildRoleMenuLines } from '../shared/role-description.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -406,28 +406,6 @@ const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
       { value: 'off',              label: 'Off — disable all advisories' },
     ],
   });
-
-const ROLE_OPTIONS = [
-  { num: 1, value: 'indie_hacker', label: 'indie hacker developer' },
-  { num: 2, value: 'founder',      label: 'founder / product creator' },
-  { num: 3, value: 'pm',           label: 'product manager' },
-  { num: 4, value: 'vibe_coder',   label: 'vibe coder' },
-];
-
-/** Numbered role menu with the gray "why" description placed below the options. */
-export function buildRoleMenuLines(currentValue: string): string[] {
-  return [
-    pc.cyan('│'),
-    `${pc.cyan('◆')}  ${pc.bold('Project role')}`,
-    ...ROLE_OPTIONS.map((o) => {
-      const suffix = o.value === currentValue ? pc.dim(' (current)') : '';
-      return `${pc.cyan('│')}  ${pc.green(`${o.num})`)} ${o.label}${suffix}`;
-    }),
-    pc.cyan('│'),
-    ...buildRoleDescriptionLines(),
-    pc.cyan('│'),
-  ];
-}
 
 const defaultRolePrompt: RolePromptFn = async (currentValue) => {
   for (const line of buildRoleMenuLines(currentValue)) console.log(line);

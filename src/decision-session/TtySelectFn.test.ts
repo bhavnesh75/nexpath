@@ -750,19 +750,23 @@ describe('createTtySelectFn — Linux new-window path', () => {
       }),
     );
     await createTtySelectFn()!(makeOpts());
-    expect(capturedRoleScript).toContain("value: 'indie_hacker'");
-    expect(capturedRoleScript).toContain("value: 'founder'");
-    expect(capturedRoleScript).toContain("value: 'pm'");
-    expect(capturedRoleScript).toContain("value: 'vibe_coder'");
+    expect(capturedRoleScript).toContain('indie_hacker');
+    expect(capturedRoleScript).toContain('founder');
+    expect(capturedRoleScript).toContain('pm');
+    expect(capturedRoleScript).toContain('vibe_coder');
     expect(capturedRoleScript).toContain('indie hacker developer');
     expect(capturedRoleScript).toContain('founder / product creator');
     expect(capturedRoleScript).toContain('product manager');
     expect(capturedRoleScript).toContain('vibe coder');
-    expect(capturedRoleScript).not.toContain("value: 'clear'");
+    // numbered menu with the gray "why" description below the options
+    expect(capturedRoleScript).toContain('Why a project role?');
+    expect(capturedRoleScript).toContain('WHAT YOUR GOAL IS');
+    expect(capturedRoleScript).toContain('Select (1-4)');
+    expect(capturedRoleScript).not.toContain('clear');
     expect(capturedRoleScript).not.toContain('Clear role');
   });
 
-  it('role script embeds initialValue derived from the current configured role (founder default)', async () => {
+  it('role script tags the current configured role (founder default) as current', async () => {
     let capturedRoleScript = '';
     let callCount = 0;
     (spawnSync as ReturnType<typeof vi.fn>).mockImplementation(
@@ -785,8 +789,8 @@ describe('createTtySelectFn — Linux new-window path', () => {
       }),
     );
     await createTtySelectFn()!(makeOpts());
-    expect(capturedRoleScript).toContain('initialValue:');
-    expect(capturedRoleScript).toContain('"founder"');
+    expect(capturedRoleScript).toContain('founder / product creator');
+    expect(capturedRoleScript).toContain('(current)');
   });
 
   it('role flow path produces one role-window spawn and no freq-window spawn', async () => {

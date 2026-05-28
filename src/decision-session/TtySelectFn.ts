@@ -7,13 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import * as rl from 'node:readline';
-import pc from 'picocolors';
+import pc, { createColors } from 'picocolors';
 import type { SelectFn } from './DecisionSession.js';
 import { CLIPBOARD_ONLY, OPTION_SEPARATOR, OPT_OUT_SENTINEL } from './DecisionSession.js';
 import { SKIP_NOW, SHOW_SIMPLER } from './options.js';
 import type { Store } from '../store/db.js';
 import { getConfig, setConfig } from '../store/config.js';
-import { buildRoleDescriptionLines } from '../cli/shared/role-description.js';
+import { ROLE_OPTIONS, buildRoleMenuLines } from '../cli/shared/role-description.js';
 
 // ── New-window helpers: .mjs script builders ─────────────────────────────────
 
@@ -196,26 +196,28 @@ process.exit(0);
 `;
 }
 
-function buildRoleMjsScript(clackUrl: string, resultFileFwd: string, currentRole: string): string {
-  return `import { select, isCancel } from '${clackUrl}';
+function buildRoleMjsScript(_clackUrl: string, resultFileFwd: string, currentRole: string): string {
+  const colors    = createColors(true);
+  const menuLines = buildRoleMenuLines(currentRole, colors);
+  const prompt    = `${colors.cyan('└')}  Select (1-4): `;
+  const numToValue: Record<string, string> = {};
+  for (const o of ROLE_OPTIONS) numToValue[String(o.num)] = o.value;
+  return `import { createInterface } from 'node:readline';
 import { writeFileSync } from 'node:fs';
 
-const picked = await select({
-  message: 'Project role',
-  initialValue: ${JSON.stringify(currentRole)},
-  options: [
-    { value: 'indie_hacker', label: 'indie hacker developer' },
-    { value: 'founder',      label: 'founder / product creator' },
-    { value: 'pm',           label: 'product manager' },
-    { value: 'vibe_coder',   label: 'vibe coder' },
-  ],
+const lines = ${JSON.stringify(menuLines)};
+for (const line of lines) console.log(line);
+
+const rl = createInterface({ input: process.stdin, output: process.stdout });
+rl.question(${JSON.stringify(prompt)}, (answer) => {
+  const numToValue = ${JSON.stringify(numToValue)};
+  const picked = numToValue[String(parseInt(answer.trim(), 10))];
+  if (picked) {
+    writeFileSync('${resultFileFwd}', \`__ROLE__:\${picked}\`, 'utf8');
+  }
+  rl.close();
+  process.exit(0);
 });
-
-if (!isCancel(picked) && typeof picked === 'string') {
-  writeFileSync('${resultFileFwd}', \`__ROLE__:\${picked}\`, 'utf8');
-}
-
-process.exit(0);
 `;
 }
 
@@ -769,29 +771,13 @@ export function runRoleSubMenu(
   cleanup:     (value: string | symbol) => void,
 ): void {
   const currentRole = readCurrentRole(store, projectRoot);
-  const roleOptions = [
-    { num: 1, value: 'indie_hacker', label: 'indie hacker developer' },
-    { num: 2, value: 'founder',      label: 'founder / product creator' },
-    { num: 3, value: 'pm',           label: 'product manager' },
-    { num: 4, value: 'vibe_coder',   label: 'vibe coder' },
-  ];
-  const menuLines = [
-    pc.cyan('│'),
-    `${pc.cyan('◆')}  ${pc.bold('Project role')}`,
-    ...roleOptions.map((o) => {
-      const suffix = o.value === currentRole ? pc.dim(' (current)') : '';
-      return `${pc.cyan('│')}  ${pc.green(`${o.num})`)} ${o.label}${suffix}`;
-    }),
-    pc.cyan('│'),
-    ...buildRoleDescriptionLines(),
-    pc.cyan('│'),
-  ];
+  const menuLines = buildRoleMenuLines(currentRole);
   streams.output.write(menuLines.join('\n') + '\n');
   streams.output.write(`${pc.cyan('└')}  Select (1-4): `);
 
   iface.once('line', (answer) => {
     const num = parseInt(answer.trim(), 10);
-    const choice = roleOptions.find((o) => o.num === num);
+    const choice = ROLE_OPTIONS.find((o) => o.num === num);
     if (choice && store && projectRoot) {
       setConfig(store, `role:${projectRoot}`, choice.value);
       streams.output.write(

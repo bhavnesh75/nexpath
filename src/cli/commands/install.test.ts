@@ -31,8 +31,8 @@ import {
   writeHookEntry,
   removeHookEntry,
   ensureLinuxClipboard,
-  buildRoleMenuLines,
 } from './install.js';
+import { buildRoleMenuLines } from '../shared/role-description.js';
 
 afterEach(() => vi.restoreAllMocks());
 
