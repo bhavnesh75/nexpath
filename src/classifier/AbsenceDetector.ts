@@ -111,7 +111,7 @@ export function detectAbsenceFlags(
   const profileMultiplier = isVibeProfile ? 0.5 : 1.0;
 
   // Gate 2 — must have been in this stage long enough before checking
-  if (promptsInCurrentStage < 5) return [];
+  if (promptsInCurrentStage < absenceMinFloor) return [];
 
   const newFlags: AbsenceFlag[] = [];
 

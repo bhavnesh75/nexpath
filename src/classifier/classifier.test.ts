@@ -2874,6 +2874,42 @@ describe('AbsenceDetector', () => {
     expect(detectAbsenceFlags(state)).toHaveLength(0);
   });
 
+  it('Gate 2 respects absenceMinFloor — returns flags at promptsInCurrentStage=2 when absenceMinFloor=2', () => {
+    // At optimum level absenceMinFloor=2: Gate 2 passes when promptsInCurrentStage >= 2.
+    // test_creation threshold=15, cool_geek profileMultiplier=0.5, thresholdMultiplier=0.25:
+    // effectiveThreshold = max(2, ceil(15 × 0.5 × 0.25)) = 2 → Gate 3 passes too.
+    const profile: import('./types.js').UserProfile = {
+      nature: 'cool_geek', mood: 'casual', depth: 'low', role: null,
+      precisionOrdinal: 'low', playfulnessOrdinal: 'low',
+      precisionScore: 2, playfulnessScore: 2, depthScore: 1, computedAt: 0,
+    };
+    const state = makeState({
+      stageConfidence:       0.85,
+      promptsInCurrentStage: 2,
+      currentStage:          'implementation',
+      profile,
+    });
+    const flags = detectAbsenceFlags(state, state.profile, undefined, 0.25, 2);
+    expect(flags.length).toBeGreaterThan(0);
+  });
+
+  it('Gate 2 respects absenceMinFloor — returns no flags at promptsInCurrentStage=1 when absenceMinFloor=2', () => {
+    // promptsInCurrentStage=1 < absenceMinFloor=2 → Gate 2 still blocks
+    const profile: import('./types.js').UserProfile = {
+      nature: 'cool_geek', mood: 'casual', depth: 'low', role: null,
+      precisionOrdinal: 'low', playfulnessOrdinal: 'low',
+      precisionScore: 2, playfulnessScore: 2, depthScore: 1, computedAt: 0,
+    };
+    const state = makeState({
+      stageConfidence:       0.85,
+      promptsInCurrentStage: 1,
+      currentStage:          'implementation',
+      profile,
+    });
+    const flags = detectAbsenceFlags(state, state.profile, undefined, 0.25, 2);
+    expect(flags).toHaveLength(0);
+  });
+
   it('test_creation not flagged below its threshold (no profile, promptsInCurrentStage=9, threshold=15)', () => {
     // test_creation threshold=15; effectiveThreshold=15; 9 < 15 → Gate 3 blocks test_creation
     const state = makeState({
