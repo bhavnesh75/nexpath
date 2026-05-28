@@ -4,10 +4,10 @@ const GOAL_EMPHASIS = 'WHAT YOUR GOAL IS';
 
 /** The four predefined project roles, in display order. `num` is the key the user types. */
 export const ROLE_OPTIONS = [
-  { num: 1, value: 'indie_hacker', label: 'indie hacker developer' },
-  { num: 2, value: 'founder',      label: 'founder / product creator' },
-  { num: 3, value: 'pm',           label: 'product manager' },
-  { num: 4, value: 'vibe_coder',   label: 'vibe coder' },
+  { num: 1, value: 'founder',      label: 'founder / product creator' },
+  { num: 2, value: 'vibe_coder',   label: 'vibe coder' },
+  { num: 3, value: 'indie_hacker', label: 'indie hacker' },
+  { num: 4, value: 'pm',           label: 'product manager' },
 ] as const;
 
 /**

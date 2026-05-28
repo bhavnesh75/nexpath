@@ -1875,7 +1875,7 @@ describe('installAction — frequency and role prompts', () => {
     const lines = buildRoleMenuLines('founder');
     const text = lines.join('\n');
     // all four role options present
-    expect(text).toContain('indie hacker developer');
+    expect(text).toContain('indie hacker');
     expect(text).toContain('founder / product creator');
     expect(text).toContain('product manager');
     expect(text).toContain('vibe coder');
@@ -1883,7 +1883,7 @@ describe('installAction — frequency and role prompts', () => {
     expect(text).toContain('Why a project role?');
     expect(text).toContain('WHAT YOUR GOAL IS');
     // the description appears after the role options
-    const lastOptionIdx = lines.findIndex((l) => l.includes('vibe coder'));
+    const lastOptionIdx = lines.findIndex((l) => l.includes('product manager'));
     const descIdx = lines.findIndex((l) => l.includes('Why a project role?'));
     expect(lastOptionIdx).toBeGreaterThanOrEqual(0);
     expect(descIdx).toBeGreaterThan(lastOptionIdx);

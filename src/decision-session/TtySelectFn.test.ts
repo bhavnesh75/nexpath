@@ -754,7 +754,7 @@ describe('createTtySelectFn — Linux new-window path', () => {
     expect(capturedRoleScript).toContain('founder');
     expect(capturedRoleScript).toContain('pm');
     expect(capturedRoleScript).toContain('vibe_coder');
-    expect(capturedRoleScript).toContain('indie hacker developer');
+    expect(capturedRoleScript).toContain('indie hacker');
     expect(capturedRoleScript).toContain('founder / product creator');
     expect(capturedRoleScript).toContain('product manager');
     expect(capturedRoleScript).toContain('vibe coder');
@@ -1347,7 +1347,7 @@ describe('runRoleSubMenu (Unix path)', () => {
       const cleanup = vi.fn();
       runRoleSubMenu(streams, iface, store, '/proj/role', cleanup);
       const rendered = writes.join('');
-      expect(rendered).toContain('indie hacker developer');
+      expect(rendered).toContain('indie hacker');
       expect(rendered).toContain('founder / product creator');
       expect(rendered).toContain('product manager');
       expect(rendered).toContain('vibe coder');
@@ -1357,7 +1357,7 @@ describe('runRoleSubMenu (Unix path)', () => {
       expect(rendered).toContain('Why a project role?');
       expect(rendered).toContain('WHAT YOUR GOAL IS');
       const lines = rendered.split('\n');
-      const lastOptionIdx = lines.findIndex((l) => l.includes('vibe coder'));
+      const lastOptionIdx = lines.findIndex((l) => l.includes('product manager'));
       const descIdx = lines.findIndex((l) => l.includes('Why a project role?'));
       expect(descIdx).toBeGreaterThan(lastOptionIdx);
     } finally {
@@ -1418,7 +1418,7 @@ describe('runRoleSubMenu (Unix path)', () => {
       const { iface, trigger } = makeFakeInterface();
       const cleanup = vi.fn();
       runRoleSubMenu(streams, iface, store, '/proj/role5', cleanup);
-      trigger('4'); // vibe_coder
+      trigger('2'); // vibe_coder
       expect(getConfig(store.db, 'role:/proj/role5')).toBe('vibe_coder');
       expect(cleanup).toHaveBeenCalledWith(SKIP_NOW);
     } finally {
