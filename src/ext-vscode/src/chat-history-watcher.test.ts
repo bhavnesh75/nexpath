@@ -480,6 +480,36 @@ describe('createChatHistoryWatcher', () => {
     expect(onEvent).not.toHaveBeenCalled();
   });
 
+  it('emits onSchemaUnknown only once per path across repeated unknown reads', async () => {
+    // Windsurf's workspaceStorage state.vscdb never holds chat, so it stays
+    // unknown on every fs.watch fire. The watcher must keep re-checking (a
+    // fresh Cursor workspace gains chat keys later) but notify the user only
+    // once — otherwise the log + info toast re-fire endlessly.
+    readItemTableFn.mockResolvedValue([
+      { key: 'windsurf.cascadeViewContainerId.state', value: 'x' },
+    ]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p')], // no extractor — fingerprinted every read
+      onEvent,
+      onSchemaUnknown,
+      watchFn: watchFn as never,
+      readItemTableFn,
+      debounceMs: 1,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 15)); // initial read: unknown -> notify once
+    // Three more spaced fs.watch fires (beyond the debounce so they don't coalesce).
+    for (let i = 0; i < 3; i++) {
+      createdWatchers[0]!.emit('change', 'change', '/p');
+      await new Promise((r) => setTimeout(r, 15));
+    }
+    // Re-checked on every read (still unknown each time) ...
+    expect(readItemTableFn.mock.calls.length).toBeGreaterThanOrEqual(4);
+    // ... but surfaced to the user exactly once.
+    expect(onSchemaUnknown).toHaveBeenCalledTimes(1);
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
   it('forwards readItemTableFn errors to onError without crashing', async () => {
     readItemTableFn.mockRejectedValueOnce(new Error('sqlite parse error'));
     const w = createChatHistoryWatcher({

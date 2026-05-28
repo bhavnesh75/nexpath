@@ -298,6 +298,17 @@ export function createChatHistoryWatcher(
   const primedTargets = new Set<string>();
 
   /**
+   * Paths already surfaced via `onSchemaUnknown`. The unknown-schema branch
+   * does NOT cache an extractor (it must keep re-checking, because a fresh
+   * Cursor workspace's state.vscdb starts with no chat keys and only gains
+   * them once the user chats). But re-notifying on every fs.watch fire floods
+   * the log and re-pops the info toast — acutely visible on Windsurf, whose
+   * workspaceStorage state.vscdb never holds chat and so stays unknown forever.
+   * Notify once per path; keep re-checking silently thereafter.
+   */
+  const reportedUnknownPaths = new Set<string>();
+
+  /**
    * Cross-extractor dedup. Cursor 3.x mirrors Composer prompts into BOTH
    * globalStorage cursorDiskKV (decoded by cursor-composer-bubble) AND
    * workspaceStorage ItemTable.aiService.prompts (decoded by cursor-v2024-q4
@@ -370,10 +381,13 @@ export function createChatHistoryWatcher(
           // subsequent reads of this target skip the unknown-schema check.
           extractorCache.set(target.path, ALL_EXTRACTORS);
         } else {
-          opts.onSchemaUnknown?.({
-            path: target.path,
-            observedSampleKeys: fp.observedSampleKeys,
-          });
+          if (!reportedUnknownPaths.has(target.path)) {
+            reportedUnknownPaths.add(target.path);
+            opts.onSchemaUnknown?.({
+              path: target.path,
+              observedSampleKeys: fp.observedSampleKeys,
+            });
+          }
           return;
         }
       }
