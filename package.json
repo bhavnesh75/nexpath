@@ -1,6 +1,6 @@
 {
   "name": "nexpath",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Behaviour guidance system for vibe coders using AI coding agents",
   "type": "module",
   "bin": {

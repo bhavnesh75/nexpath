@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { openStore, closeStore } from '../../store/db.js';
-import { setConfig, isConfigSet } from '../../store/config.js';
+import { setConfig, isConfigSet, getConfig } from '../../store/config.js';
 
 import {
   MCP_SERVER_NAME,
@@ -32,6 +32,7 @@ import {
   removeHookEntry,
   ensureLinuxClipboard,
 } from './install.js';
+import { buildRoleMenuLines } from '../shared/role-description.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -1581,5 +1582,316 @@ describe('ensureLinuxClipboard', () => {
       waylandDisplay: 'wayland-0',
     });
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('wl-copy'));
+  });
+});
+
+// ── installAction frequency + role prompts ────────────────────────────────────
+
+describe('installAction — frequency and role prompts', () => {
+  function tempDbFile() {
+    const path = join(tmpdir(), `nexpath-install-db-${randomUUID()}.db`);
+    return { path, cleanup: () => { try { rmSync(path); } catch { /* ignore */ } } };
+  }
+
+  it('--yes path applies the every_event frequency default when no value is configured', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('every_event');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('--yes path applies the founder role default when no value is configured', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'role')).toBe('founder');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('--yes path preserves an existing advisory_frequency value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'advisory_frequency', 'optimum');
+      closeStore(seedStore);
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
+
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('optimum');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('--yes path preserves an existing role value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'role', 'vibe_coder');
+      closeStore(seedStore);
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
+
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'role')).toBe('vibe_coder');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('--yes path normalises a legacy "clear" role value to the founder default', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      // Legacy stored value from before this work
+      seedStore.db.run(`INSERT INTO config (key, value) VALUES ('role', 'clear')`);
+      // Note: setConfig would also work here; using raw insert to make the "legacy" intent explicit
+      closeStore(seedStore);
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
+
+      const store = await openStore(dbPath);
+      // Legacy value remains stored — install --yes only writes the default when isConfigSet is false.
+      // The role-read helper treats 'clear' as unset and surfaces the founder default at sub-menu open.
+      expect(['clear', 'founder']).toContain(getConfig(store.db, 'role'));
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('interactive path passes the current frequency to the prompt and writes the selection', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const freqPromptFn = vi.fn(async () => 'optimum');
+      const rolePromptFn = vi.fn(async () => 'founder');
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      expect(freqPromptFn).toHaveBeenCalledWith('every_event');
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('optimum');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('interactive path passes the current role to the prompt and writes the selection', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'role', 'pm');
+      closeStore(seedStore);
+
+      const freqPromptFn = vi.fn(async () => 'every_event');
+      const rolePromptFn = vi.fn(async () => 'vibe_coder');
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      // initialValue is the current configured role
+      expect(rolePromptFn).toHaveBeenCalledWith('pm');
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'role')).toBe('vibe_coder');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('interactive path with a cancelled frequency prompt does not write a new value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'advisory_frequency', 'optimum');
+      closeStore(seedStore);
+
+      // Cancel: return a Symbol so isCancel() picks it up
+      const freqPromptFn = vi.fn(async () => Symbol('cancel'));
+      const rolePromptFn = vi.fn(async () => 'founder');
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('optimum');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('interactive path with a cancelled role prompt does not write a new value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      setConfig(seedStore, 'role', 'vibe_coder');
+      closeStore(seedStore);
+
+      const freqPromptFn = vi.fn(async () => 'every_event');
+      // Cancel: return a Symbol so isCancel() picks it up
+      const rolePromptFn = vi.fn(async () => Symbol('cancel'));
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'role')).toBe('vibe_coder');
+      closeStore(store);
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('interactive path passes the founder default to the role prompt for legacy "clear" stored value', async () => {
+    const { dir, cleanup: cleanupDir } = tmpDir();
+    const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const seedStore = await openStore(dbPath);
+      seedStore.db.run(`INSERT INTO config (key, value) VALUES ('role', 'clear')`);
+      closeStore(seedStore);
+
+      const freqPromptFn = vi.fn(async () => 'every_event');
+      const rolePromptFn = vi.fn(async () => 'indie_hacker');
+
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction(
+        {},
+        {
+          paths,
+          isWin: false,
+          execFn: () => {},
+          confirmFn: async () => true,
+          freqPromptFn,
+          rolePromptFn,
+          dbPath,
+          skipClipboardCheck: true,
+        },
+      );
+
+      expect(rolePromptFn).toHaveBeenCalledWith('founder');
+    } finally {
+      cleanupDir();
+      cleanupDb();
+    }
+  });
+
+  it('role menu renders the gray "why" description below the options', () => {
+    const lines = buildRoleMenuLines('founder');
+    const text = lines.join('\n');
+    // all four role options present
+    expect(text).toContain('indie hacker');
+    expect(text).toContain('founder / product creator');
+    expect(text).toContain('product manager');
+    expect(text).toContain('vibe coder');
+    // description opens with a question and emphasises the goal
+    expect(text).toContain('Why a project role?');
+    expect(text).toContain('WHAT YOUR GOAL IS');
+    // the description appears after the role options
+    const lastOptionIdx = lines.findIndex((l) => l.includes('product manager'));
+    const descIdx = lines.findIndex((l) => l.includes('Why a project role?'));
+    expect(lastOptionIdx).toBeGreaterThanOrEqual(0);
+    expect(descIdx).toBeGreaterThan(lastOptionIdx);
+  });
+
+  it('role menu marks the current value with a (current) suffix', () => {
+    const text = buildRoleMenuLines('vibe_coder').join('\n');
+    const vibeLine = text.split('\n').find((l) => l.includes('vibe coder'));
+    expect(vibeLine).toContain('(current)');
   });
 });

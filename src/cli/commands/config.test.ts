@@ -200,6 +200,22 @@ describe('configSetAction — role validation', () => {
     cleanup();
   });
 
+  it('accepts "vibe_coder" as a valid role value and stores it', async () => {
+    const { path, cleanup } = await tempDb();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await configSetAction('role', 'vibe_coder', path);
+    expect(spy.mock.calls[0][0]).toBe('role = vibe_coder');
+    cleanup();
+  });
+
+  it('accepts "vibe_coder" for a project-scoped role key', async () => {
+    const { path, cleanup } = await tempDb();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await configSetAction('role:/some/project', 'vibe_coder', path);
+    expect(spy.mock.calls[0][0]).toBe('role:/some/project = vibe_coder');
+    cleanup();
+  });
+
   it('rejects an invalid role value with console.error and process.exit(1)', async () => {
     const { path, cleanup } = await tempDb();
     const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -208,6 +224,22 @@ describe('configSetAction — role validation', () => {
     }) as (code?: string | number | null | undefined) => never);
     await expect(configSetAction('role', 'developer', path)).rejects.toThrow('process.exit called');
     expect(errSpy.mock.calls[0][0]).toContain('Invalid role "developer"');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    cleanup();
+  });
+
+  it('error message for invalid role lists all four valid roles', async () => {
+    const { path, cleanup } = await tempDb();
+    const errSpy  = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {
+      throw new Error('process.exit called');
+    }) as (code?: string | number | null | undefined) => never);
+    await expect(configSetAction('role', 'developer', path)).rejects.toThrow('process.exit called');
+    const message = errSpy.mock.calls[0][0] as string;
+    expect(message).toContain('founder');
+    expect(message).toContain('indie_hacker');
+    expect(message).toContain('pm');
+    expect(message).toContain('vibe_coder');
     expect(exitSpy).toHaveBeenCalledWith(1);
     cleanup();
   });

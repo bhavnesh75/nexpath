@@ -249,6 +249,7 @@ import {
   ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER,
 } from './options-beginner.js';
 import type { UserProfile } from '../classifier/types.js';
+import { SIGNAL_DEFINITIONS } from '../classifier/signals.js';
 import {
   buildSelectMessage,
   formatPinchLabel,
@@ -2736,6 +2737,8 @@ describe('runLevel — help line injection', () => {
     expect(helpItem).toBeDefined();
     expect(helpItem?.label).toContain('Ctrl+X');
     expect(helpItem?.label).toContain('Ctrl+T');
+    expect(helpItem?.label).toContain('frequency or role');
+    expect(helpItem?.label).not.toContain('configure role');
   });
 
   it('does NOT inject help item when decisionSessionCount >= 12', async () => {
@@ -2890,6 +2893,52 @@ describe('runDecisionSession — __FREQ__ sentinel handling', () => {
         mockSelect('__FREQ__:off'),
       );
       expect(getConfig(store.db, 'advisory_frequency:/proj/freq3')).toBe('off');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('writes optimum when __FREQ__:optimum is returned', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/freq4', name: 'freq4' });
+      await runDecisionSession(
+        makeInput({ projectRoot: '/proj/freq4' }),
+        store,
+        mockSelect('__FREQ__:optimum'),
+      );
+      expect(getConfig(store.db, 'advisory_frequency:/proj/freq4')).toBe('optimum');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('writes the chosen role to config on __ROLE__:vibe_coder', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/role1', name: 'role1' });
+      const result = await runDecisionSession(
+        makeInput({ projectRoot: '/proj/role1' }),
+        store,
+        mockSelect('__ROLE__:vibe_coder'),
+      );
+      expect(result.outcome).toBe('skipped');
+      expect(getConfig(store.db, 'role:/proj/role1')).toBe('vibe_coder');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('writes the chosen role to config on __ROLE__:founder', async () => {
+    const store = await openStore(':memory:');
+    try {
+      upsertProject(store, { projectRoot: '/proj/role2', name: 'role2' });
+      await runDecisionSession(
+        makeInput({ projectRoot: '/proj/role2' }),
+        store,
+        mockSelect('__ROLE__:founder'),
+      );
+      expect(getConfig(store.db, 'role:/proj/role2')).toBe('founder');
     } finally {
       store.db.close();
     }
@@ -4959,6 +5008,55 @@ describe('resolveDecisionContent — Phase 6 role-based signal routing', () => {
       const result = resolveDecisionContent('implementation', `absence:${key}`, makeRoleProfile('pm'));
       expect(result).toBeDefined();
     }
+  });
+});
+
+// ── vibe_coder role routing (nature fallback, no role-specific content) ──────
+
+describe('resolveDecisionContent — vibe_coder role routing', () => {
+  const makeVibeCoderProfile = (nature?: UserProfile['nature']) =>
+    ({ role: 'vibe_coder', nature } as UserProfile);
+
+  it('vibe_coder role does NOT trigger founder-keyed content for absence:user_value_check', () => {
+    const result = resolveDecisionContent('implementation', 'absence:user_value_check', makeVibeCoderProfile('cool_geek'));
+    expect(result).not.toBe(ABSENCE_USER_VALUE_CHECK_CASUAL);
+  });
+
+  it('vibe_coder + cool_geek + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL (nature fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('cool_geek'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_CASUAL);
+  });
+
+  it('vibe_coder + pro_geek_soul + absence:test_creation → ABSENCE_TEST_CREATION_CASUAL (nature fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('pro_geek_soul'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_CASUAL);
+  });
+
+  it('vibe_coder + hardcore_pro + absence:test_creation → ABSENCE_TEST_CREATION (formal fallback)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('hardcore_pro'));
+    expect(content).toBe(ABSENCE_TEST_CREATION);
+  });
+
+  it('vibe_coder + beginner + absence:test_creation → ABSENCE_TEST_CREATION_BEGINNER (beginner override wins)', () => {
+    const content = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('beginner'));
+    expect(content).toBe(ABSENCE_TEST_CREATION_BEGINNER);
+  });
+
+  it('vibe_coder + cool_geek produces identical content to no-role + cool_geek (nature parity)', () => {
+    const vibeCoder = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('cool_geek'));
+    const noRole    = resolveDecisionContent('implementation', 'absence:test_creation', { nature: 'cool_geek' } as UserProfile);
+    expect(vibeCoder).toBe(noRole);
+  });
+
+  it('vibe_coder + hardcore_pro produces identical content to no-role + hardcore_pro (nature parity)', () => {
+    const vibeCoder = resolveDecisionContent('implementation', 'absence:test_creation', makeVibeCoderProfile('hardcore_pro'));
+    const noRole    = resolveDecisionContent('implementation', 'absence:test_creation', { nature: 'hardcore_pro' } as UserProfile);
+    expect(vibeCoder).toBe(noRole);
+  });
+
+  it('no SignalDefinition is keyed to role vibe_coder (fall-through guarantee)', () => {
+    const vibeCoderSignals = SIGNAL_DEFINITIONS.filter((s) => s.role === ('vibe_coder' as never));
+    expect(vibeCoderSignals).toHaveLength(0);
   });
 });
 

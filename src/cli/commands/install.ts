@@ -2,9 +2,17 @@ import { execSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
-import { confirm, isCancel } from '@clack/prompts';
+import { confirm, isCancel, select } from '@clack/prompts';
+import { SelectPrompt } from '@clack/core';
+import pc from 'picocolors';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
-import { isConfigSet, setConfig } from '../../store/config.js';
+import { isConfigSet, setConfig, getConfig } from '../../store/config.js';
+import {
+  VALID_ROLES,
+  setAdvisoryFrequency,
+  setRole,
+} from '../shared/config-setters.js';
+import { ROLE_OPTIONS, buildRoleDescriptionLines } from '../shared/role-description.js';
 
 export const MCP_SERVER_NAME = 'nexpath-prompt-store';
 
@@ -380,6 +388,66 @@ const defaultConfirm: ConfirmFn = async () => {
   return !isCancel(answer) && answer === true;
 };
 
+export type FreqPromptFn = (currentValue: string) => Promise<string | symbol>;
+export type RolePromptFn = (currentValue: string) => Promise<string | symbol>;
+
+const DEFAULT_FREQUENCY = 'every_event';
+const DEFAULT_ROLE      = 'founder';
+
+const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
+  select({
+    message: 'Advisory frequency — choose how often nexpath should surface advisories',
+    initialValue: currentValue,
+    options: [
+      { value: 'optimum',          label: 'Optimum — frequent advisories' },
+      { value: 'every_event',      label: 'Every qualifying event' },
+      { value: 'major_only',       label: 'Major transitions only' },
+      { value: 'once_per_session', label: 'Once per coding session' },
+      { value: 'off',              label: 'Off — disable all advisories' },
+    ],
+  });
+
+// Radio-button role picker whose gray "why" description sits BELOW the options
+// (a plain select() only renders its message above them). Mirrors the popup.
+const defaultRolePrompt: RolePromptFn = async (currentValue) => {
+  const descLines = buildRoleDescriptionLines();
+  const p = new SelectPrompt<{ value: string; label: string }>({
+    options: ROLE_OPTIONS.map((o) => ({ value: o.value as string, label: o.label })),
+    initialValue: currentValue,
+    render() {
+      const sym = this.state === 'submit' ? pc.green('◇')
+                : this.state === 'cancel' ? pc.red('■')
+                : pc.cyan('◆');
+      const head = `${pc.gray('│')}\n${sym}  ${pc.bold('Project role')}\n`;
+      if (this.state === 'submit' || this.state === 'cancel') {
+        return `${head}${pc.gray('│')}  ${pc.dim(this.options[this.cursor].label)}`;
+      }
+      const optLines = this.options
+        .map((o, i) =>
+          i === this.cursor
+            ? `${pc.cyan('│')}  ${pc.green('●')} ${o.label}`
+            : `${pc.cyan('│')}  ${pc.dim('○')} ${pc.dim(o.label)}`,
+        )
+        .join('\n');
+      return `${head}${optLines}\n${pc.cyan('│')}\n${descLines.join('\n')}\n${pc.cyan('└')}\n`;
+    },
+  });
+  return p.prompt();
+};
+
+/** Read the currently configured advisory_frequency, default 'every_event'. */
+function readInstallFreq(db: import('sql.js').Database): string {
+  const v = getConfig(db, 'advisory_frequency');
+  return v && v !== '' ? v : DEFAULT_FREQUENCY;
+}
+
+/** Read the currently configured role, default 'founder'; reject legacy 'clear' / ''. */
+function readInstallRole(db: import('sql.js').Database): string {
+  const v = getConfig(db, 'role');
+  if (!v || v === 'clear') return DEFAULT_ROLE;
+  return (VALID_ROLES as readonly string[]).includes(v) ? v : DEFAULT_ROLE;
+}
+
 export async function installAction(
   opts: { yes?: boolean } = {},
   {
@@ -387,6 +455,8 @@ export async function installAction(
     paths = resolveAgentPaths(),
     execFn,
     confirmFn = defaultConfirm,
+    freqPromptFn = defaultFreqPrompt,
+    rolePromptFn = defaultRolePrompt,
     dbPath = ':memory:',
     skipClipboardCheck = false,
   }: {
@@ -394,6 +464,8 @@ export async function installAction(
     paths?: AgentPaths;
     execFn?: ExecFn;
     confirmFn?: ConfirmFn;
+    freqPromptFn?: FreqPromptFn;
+    rolePromptFn?: RolePromptFn;
     dbPath?: string;
     skipClipboardCheck?: boolean;
   } = {},
@@ -474,6 +546,38 @@ export async function installAction(
     } catch (err) {
       console.log(`\u2717 ${agent.label.padEnd(12)} \u2014 failed: ${(err as Error).message}`);
     }
+  }
+
+  // ── Frequency + role prompts ───────────────────────────────────────────────
+  const settingsStore = await openStore(dbPath);
+  try {
+    const currentFreq = readInstallFreq(settingsStore.db);
+    if (opts.yes) {
+      if (!isConfigSet(settingsStore.db, 'advisory_frequency')) {
+        setAdvisoryFrequency(settingsStore, 'advisory_frequency', currentFreq);
+      }
+    } else {
+      const picked = await freqPromptFn(currentFreq);
+      if (!isCancel(picked) && typeof picked === 'string') {
+        setAdvisoryFrequency(settingsStore, 'advisory_frequency', picked);
+        console.log(`✓ advisory_frequency = ${picked}`);
+      }
+    }
+
+    const currentRole = readInstallRole(settingsStore.db);
+    if (opts.yes) {
+      if (!isConfigSet(settingsStore.db, 'role')) {
+        setRole(settingsStore, 'role', currentRole);
+      }
+    } else {
+      const picked = await rolePromptFn(currentRole);
+      if (!isCancel(picked) && typeof picked === 'string') {
+        setRole(settingsStore, 'role', picked);
+        console.log(`✓ role = ${picked}`);
+      }
+    }
+  } finally {
+    closeStore(settingsStore);
   }
 
   console.log('');
