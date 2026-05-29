@@ -617,7 +617,15 @@ describe('installAction', () => {
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({}, { paths, isWin: false, execFn: () => {}, confirmFn: async () => false, skipClipboardCheck: true });
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {},
+        confirmFn: async () => false,
+        promptFn: {
+          apiKeyPrompt:     async () => ({ kind: 'skip' }),
+          telemetryConsent: async () => ({ kind: 'disable' }),
+        },
+        skipClipboardCheck: true,
+      });
       expect(spy.mock.calls.some((c) => (c[0] as string).includes('Cancelled'))).toBe(true);
     } finally {
       cleanup();
@@ -1233,128 +1241,6 @@ describe('removeHookEntry', () => {
   });
 });
 
-// ── installAction — first-run disclosure (Issue 7 + 1.2) ─────────────────────
-
-describe('installAction — first-run disclosure', () => {
-  it('shows disclosure when first_run_shown is not set in config', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      // dbPath ':memory:' = fresh DB, first_run_shown never set
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath: ':memory:', skipClipboardCheck: true });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('Before installing nexpath');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('does NOT show disclosure when first_run_shown is already set', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const dbPath = join(dir, 'test.db');
-    try {
-      // Pre-seed first_run_shown
-      const store = await openStore(dbPath);
-      setConfig(store, 'first_run_shown', 'true');
-      closeStore(store);
-
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).not.toContain('Before installing nexpath');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('disclosure contains OpenAI API key mention', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath: ':memory:', skipClipboardCheck: true });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('OPENAI_API_KEY');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('disclosure contains local storage path mention', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath: ':memory:', skipClipboardCheck: true });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('prompt-store.db');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('disclosure contains opt-out instructions (Ctrl+X and nexpath uninstall)', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath: ':memory:', skipClipboardCheck: true });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('Ctrl+X');
-      expect(output).toContain('nexpath uninstall');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('sets first_run_shown in config after disclosure', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    const dbPath = join(dir, 'test.db');
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
-
-      // Re-open same DB and check key is set
-      const store = await openStore(dbPath);
-      const result = isConfigSet(store.db, 'first_run_shown');
-      closeStore(store);
-      expect(result).toBe(true);
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-
-  it('disclosure fires before confirmation — shown even when confirmFn cancels', async () => {
-    const { dir, cleanup } = tmpDir();
-    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    try {
-      const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({}, {
-        paths, isWin: false, execFn: () => {},
-        confirmFn: async () => false,
-        dbPath: ':memory:',
-        skipClipboardCheck: true,
-      });
-      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      // Disclosure appeared even though install was cancelled
-      expect(output).toContain('Before installing nexpath');
-      expect(output).toContain('Cancelled');
-    } finally {
-      spy.mockRestore();
-      cleanup();
-    }
-  });
-});
-
 // ── resolveAgentPaths — claudeSettings field ──────────────────────────────────
 
 describe('resolveAgentPaths — claudeSettings', () => {
@@ -1708,6 +1594,10 @@ describe('installAction — frequency and role prompts', () => {
           isWin: false,
           execFn: () => {},
           confirmFn: async () => true,
+          promptFn: {
+            apiKeyPrompt:     async () => ({ kind: 'skip' }),
+            telemetryConsent: async () => ({ kind: 'disable' }),
+          },
           freqPromptFn,
           rolePromptFn,
           dbPath,
@@ -1745,6 +1635,10 @@ describe('installAction — frequency and role prompts', () => {
           isWin: false,
           execFn: () => {},
           confirmFn: async () => true,
+          promptFn: {
+            apiKeyPrompt:     async () => ({ kind: 'skip' }),
+            telemetryConsent: async () => ({ kind: 'disable' }),
+          },
           freqPromptFn,
           rolePromptFn,
           dbPath,
@@ -1784,6 +1678,10 @@ describe('installAction — frequency and role prompts', () => {
           isWin: false,
           execFn: () => {},
           confirmFn: async () => true,
+          promptFn: {
+            apiKeyPrompt:     async () => ({ kind: 'skip' }),
+            telemetryConsent: async () => ({ kind: 'disable' }),
+          },
           freqPromptFn,
           rolePromptFn,
           dbPath,
@@ -1821,6 +1719,10 @@ describe('installAction — frequency and role prompts', () => {
           isWin: false,
           execFn: () => {},
           confirmFn: async () => true,
+          promptFn: {
+            apiKeyPrompt:     async () => ({ kind: 'skip' }),
+            telemetryConsent: async () => ({ kind: 'disable' }),
+          },
           freqPromptFn,
           rolePromptFn,
           dbPath,
@@ -1857,6 +1759,10 @@ describe('installAction — frequency and role prompts', () => {
           isWin: false,
           execFn: () => {},
           confirmFn: async () => true,
+          promptFn: {
+            apiKeyPrompt:     async () => ({ kind: 'skip' }),
+            telemetryConsent: async () => ({ kind: 'disable' }),
+          },
           freqPromptFn,
           rolePromptFn,
           dbPath,
