@@ -223,6 +223,7 @@ describe('buildStage2Prompt', () => {
     expect(prompt).toContain('signals_present');
     expect(prompt).toContain('signals_absent');
     expect(prompt).toContain('stage_confidence');
+    expect(prompt).toContain('selected_signal_key');
   });
 
   it('includes signal list for the detected stage', () => {
