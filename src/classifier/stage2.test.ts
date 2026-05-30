@@ -168,6 +168,20 @@ describe('buildStage2Prompt', () => {
     expect(prompt).not.toContain('Qualifying absence signals');
   });
 
+  it('qualifying signals block lists ALL qualifying flags — not just the first one', () => {
+    // Confirms Stage 2 is no longer forced to pre-select the first signal (e.g. problem_correction).
+    // When multiple signals qualify, all must appear so Stage 2 can pick the most relevant one.
+    const flags: AbsenceFlag[] = [
+      { signalKey: 'problem_correction', stage: 'implementation', raisedAtIndex: 20, cooldownUntil: 50 },
+      { signalKey: 'deployment_planning', stage: 'implementation', raisedAtIndex: 20, cooldownUntil: 50 },
+    ];
+    const input = makeStage2Input({ flagType: 'absence', qualifyingFlags: flags });
+    const prompt = buildStage2Prompt(input);
+    expect(prompt).toContain('Qualifying absence signals');
+    expect(prompt).toContain('problem_correction');
+    expect(prompt).toContain('deployment_planning');
+  });
+
   it('contains classifier confidence formatted to 2 decimal places', () => {
     const input = makeStage2Input({ confidence: 0.8500 });
     const prompt = buildStage2Prompt(input);

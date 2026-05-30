@@ -160,12 +160,13 @@ Return JSON only — no explanation, no markdown:
 /**
  * Determine whether Stage 2 should fire based on session state and new flags.
  *
- * Returns a FlagType string if Stage 2 should fire, null otherwise.
+ * Returns a Stage2TriggerResult — a discriminated union — or null if Stage 2 should not fire.
  *
  * Conditions (from research table):
- *   1. Stage transition detected → 'stage_transition'
- *   2. New absence flag raised   → 'absence:<signalKey>'
- *   3. S1 confidence < 0.50 AND an active absence flag exists → 'absence:<signalKey>'
+ *   1. Stage transition detected          → { kind: 'stage_transition' }
+ *   2. New absence flags raised           → { kind: 'absence', qualifyingFlags: newAbsenceFlags }
+ *   3. S1 confidence < 0.50 AND at least one active (non-dismissed, non-cooldown) absence flag
+ *                                         → { kind: 'absence', qualifyingFlags: activeFlags }
  */
 export function shouldFireStage2(
   state:            SessionState,
