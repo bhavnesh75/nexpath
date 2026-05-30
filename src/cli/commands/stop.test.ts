@@ -137,6 +137,13 @@ describe('runStop — no pending advisory', () => {
     const result = await runStop(makePayload(), store, mockSelect(SKIP_NOW));
     expect(result.outcome).toBe('no_pending');
   });
+
+  it('returns no_pending when advisory session_id does not match current session (cross-session guard)', async () => {
+    // makeAdvisory() uses hardcoded sessionId 'sess-001'; runStop loads a fresh session with a different UUID
+    upsertPendingAdvisory(store, makeAdvisory());
+    const result = await runStop(makePayload(), store);
+    expect(result.outcome).toBe('no_pending');
+  });
 });
 
 // ── runStop — user picks option ───────────────────────────────────────────────
