@@ -1586,3 +1586,75 @@ describe('runAuto — absence flag selective add', () => {
     }
   });
 });
+
+// ── SessionStateManager — applyStage2SignalUpdates ────────────────────────────
+
+describe('SessionStateManager — applyStage2SignalUpdates', () => {
+  let store: Store;
+
+  beforeEach(async () => { store = await openStore(':memory:'); });
+  afterEach(() => { store.db.close(); });
+
+  it('marks known signal as present with lastSeenAt = promptCount - 1', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const mgr = SessionStateManager.load(store, '/test/s2sig');
+
+    // Advance promptCount to 5 so the index is predictable
+    (mgr as unknown as { state: Record<string, unknown> }).state['promptCount'] = 5;
+    mgr.setDetectedLanguage(store, 'en'); // persists state
+
+    mgr.applyStage2SignalUpdates(store, ['test_creation']);
+
+    const mgr2 = SessionStateManager.load(store, '/test/s2sig');
+    const counter = mgr2.current.signalCounters['test_creation'];
+    expect(counter).toBeDefined();
+    expect(counter.present).toBe(true);
+    expect(counter.lastSeenAt).toBe(4); // promptCount(5) - 1
+  });
+
+  it('ignores unknown signal keys returned by LLM', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const mgr = SessionStateManager.load(store, '/test/s2sig-unknown');
+    // Should not throw even if LLM hallucinated a key
+    expect(() => {
+      mgr.applyStage2SignalUpdates(store, ['not_a_real_signal_key_xyz']);
+    }).not.toThrow();
+  });
+
+  it('updates multiple signals in one call', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const mgr = SessionStateManager.load(store, '/test/s2sig-multi');
+    (mgr as unknown as { state: Record<string, unknown> }).state['promptCount'] = 10;
+    mgr.setDetectedLanguage(store, 'en');
+
+    mgr.applyStage2SignalUpdates(store, ['test_creation', 'security_check']);
+
+    const mgr2 = SessionStateManager.load(store, '/test/s2sig-multi');
+    expect(mgr2.current.signalCounters['test_creation']?.present).toBe(true);
+    expect(mgr2.current.signalCounters['security_check']?.present).toBe(true);
+    expect(mgr2.current.signalCounters['test_creation']?.lastSeenAt).toBe(9);
+    expect(mgr2.current.signalCounters['security_check']?.lastSeenAt).toBe(9);
+  });
+
+  it('persists signal updates across SessionStateManager reloads', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const mgr = SessionStateManager.load(store, '/test/s2sig-persist');
+    (mgr as unknown as { state: Record<string, unknown> }).state['promptCount'] = 7;
+    mgr.setDetectedLanguage(store, 'en');
+
+    mgr.applyStage2SignalUpdates(store, ['test_creation']);
+
+    // Reload from store
+    const mgr2 = SessionStateManager.load(store, '/test/s2sig-persist');
+    expect(mgr2.current.signalCounters['test_creation']?.present).toBe(true);
+    expect(mgr2.current.signalCounters['test_creation']?.lastSeenAt).toBe(6);
+  });
+
+  it('does not throw when signalsPresent is empty', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const mgr = SessionStateManager.load(store, '/test/s2sig-empty');
+    expect(() => {
+      mgr.applyStage2SignalUpdates(store, []);
+    }).not.toThrow();
+  });
+});

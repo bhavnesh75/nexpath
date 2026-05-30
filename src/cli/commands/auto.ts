@@ -353,6 +353,9 @@ export async function runAuto(
     return { outcome: 'no_action' };
   }
 
+  // ── 7.5. Feed Stage 2 signal assessments back into signal counters ───────────
+  mgr.applyStage2SignalUpdates(store, stage2Output.signals_present);
+
   // ── 8. Compute effective flagType from Stage 2 selection, then mark as fired ─
   const effectiveFlagType: FlagType = triggerResult.kind === 'stage_transition'
     ? 'stage_transition'
