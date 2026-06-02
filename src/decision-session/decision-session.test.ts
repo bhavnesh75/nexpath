@@ -5060,6 +5060,88 @@ describe('Phase 7 content — BEGINNER variants', () => {
   });
 });
 
+// ── Phase 7 F1-F2 — content invariants ────────────────────────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans count-literal tokens
+// in the L1 / L2 / L3 option arrays for the 5 session-quality signals × 3 registers.
+
+describe('Phase 7 content — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    // FORMAL — 3 preserve question, 2 override (count-free)
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,   q: 'Long acceptance streak — applied critical review recently?',     pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_FORMAL',          c: ABSENCE_WORK_RHYTHM_CHECK_FORMAL,          q: 'Rapid prompting — verified each response before continuing?',    pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,      q: 'Multiple areas open — completed any end-to-end?',                pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,  q: 'Extended session — context checkpoint done?',                    pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL, q: 'Extended implementation — progress documented?',                 pf: 'Document now.' },
+    // CASUAL — same overrides for session_length / progress_consolidation
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL,   q: 'Long acceptance streak — applied critical review recently?',     pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_CASUAL',          c: ABSENCE_WORK_RHYTHM_CHECK_CASUAL,          q: 'Rapid prompting — verified each response before continuing?',    pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL,      q: 'Multiple areas open — completed any end-to-end?',                pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL,  q: 'Extended session — context checkpoint done?',                    pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL, q: 'Extended implementation — progress documented?',                 pf: 'Document now.' },
+    // BEGINNER — all 5 preserve question + pinchFallback (no count literals existed in BEGINNER questions)
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER',   c: ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER,   q: 'Accepting without reviewing — applied critical check recently?', pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_BEGINNER',          c: ABSENCE_WORK_RHYTHM_CHECK_BEGINNER,          q: 'Sending fast — read the last response fully before continuing?', pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER',      c: ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER,      q: 'Working on many things — finished any of them yet?',             pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER,  q: 'Working for a while — what have you built so far?',              pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER, q: 'Built a lot — have you written down what you made?',             pf: 'Document now.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question matches expected (preserved or count-free override)`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('Phase 7 content — no count-literal tokens in L1/L2/L3', () => {
+  const constants: Array<{ name: string; c: import('./options.js').DecisionContent }> = [
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_FORMAL',          c: ABSENCE_WORK_RHYTHM_CHECK_FORMAL },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL },
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_CASUAL',          c: ABSENCE_WORK_RHYTHM_CHECK_CASUAL },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL },
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER',   c: ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_BEGINNER',          c: ABSENCE_WORK_RHYTHM_CHECK_BEGINNER },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER',      c: ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER },
+  ];
+
+  // Forbidden tokens that previously appeared in the inverted-cascade L1/L2 content.
+  // Allowed: ordinary uses of "N" as a sentence-initial pronoun (none expected here), or
+  //          regular text that happens to contain the letter — patterns below use \b word
+  //          boundaries to avoid false positives.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    { pattern: /\bN prompts\b/,          description: 'unsubstituted "N prompts" placeholder' },
+    { pattern: /\bN AI\b/,               description: 'unsubstituted "N AI" placeholder' },
+    { pattern: /\bN distinct\b/,         description: 'unsubstituted "N distinct" placeholder' },
+    { pattern: /\b25\+\b/,               description: '"25+" hardcoded threshold' },
+    { pattern: /\b20\+\b/,               description: '"20+" hardcoded threshold' },
+    { pattern: /\b25 prompts\b/,         description: '"25 prompts" hardcoded count' },
+    { pattern: /\b20 prompts\b/,         description: '"20 prompts" hardcoded count' },
+  ];
+
+  for (const { name, c } of constants) {
+    it(`${name} L1/L2/L3 entries contain no count-literal tokens`, () => {
+      const all: string[] = [...c.L1, ...c.L2, ...c.L3];
+      for (let i = 0; i < all.length; i++) {
+        const text = all[i];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `entry index ${i} contains ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      }
+    });
+  }
+});
+
 describe('Phase 7 content routing', () => {
   function makeProfile(nature: import('../classifier/types.js').UserNature, role?: import('../classifier/types.js').UserRole): import('../classifier/types.js').UserProfile {
     return {
