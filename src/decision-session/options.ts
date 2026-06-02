@@ -2301,8 +2301,8 @@ export const ABSENCE_OUTCOME_DEFINITION_CASUAL: DecisionContent = {
   pinchFallback: 'Define the success metric before building starts.',
   L1: [
     'An output is something you ship. An outcome is the change in user behavior that justifies shipping it. The OKR discipline applied to product: before building, write one sentence that completes "This feature is successful if...". Without that sentence, you can\'t evaluate whether the feature worked, you can\'t communicate success criteria to teammates, and you can\'t decide when the feature is done enough to ship.',
-    'Success metrics don\'t need to be complex. "Feature is used at least once by 40% of active users in the first month" is a perfectly good key result. What makes it useful: it\'s observable after shipping, it has a timeframe, and it tells you whether the feature earned its engineering cost. Without a metric, shipping is the finish line — and shipping is an output, not an outcome.',
-    'Defining the outcome before building also prevents scope creep: if you know the feature succeeds when a specific user behavior changes, every addition should be evaluated against "does this help hit the outcome?" rather than "does this seem like a good idea?" The outcome definition is the scope boundary.',
+    'Write the success metric for this feature in observable form: name the user behaviour or system metric, the threshold that defines success, and the timeframe — e.g. "feature is used at least once by 40% of active users in the first month" — then state whether the current build can be evaluated against it.',
+    'Use the outcome definition as a scope filter: list every addition currently in this feature, evaluate each against the success metric, and flag any that do not contribute to hitting it for removal or deferral.',
   ],
   L2: [
     'Finish this sentence before coding: "This feature succeeds if X happens for Y users within Z timeframe." Without this, you can\'t measure whether the feature worked.',
@@ -2319,7 +2319,7 @@ export const ABSENCE_FEATURE_PRIORITIZATION_CASUAL: DecisionContent = {
   L1: [
     'Building what comes to mind next — rather than what has the highest impact — is the feature factory pattern. Every hour of engineering time spent on a lower-impact feature is an hour not spent on a higher-impact one. Backlog prioritization question: what evidence suggests this feature delivers more value to users than any alternative you could build with the same engineering time?',
     'A useful prioritization heuristic: impact-effort scoring. Impact = estimated positive change in a key metric if this ships. Effort = engineering days to implement. Highest impact-to-effort ratio wins. You don\'t need a formal matrix — a quick mental comparison against 2-3 alternatives is enough. The question is: is there a feature you\'re not building that would deliver more value for less effort?',
-    'If the answer to "why this over anything else?" is "it seemed like a good idea" or "we had a request for it" — those aren\'t prioritization decisions, they\'re reactions. Prioritization requires a comparison: this vs. the alternatives, and a reason this wins. Even a brief explicit rationale prevents the feature factory spiral.',
+    'State the explicit priority rationale for this feature in one sentence — why this over the alternatives — and name the next-highest-priority alternative that is being deferred. If no rationale exists beyond "it seemed like a good idea," draft one now or pause the build.',
   ],
   L2: [
     'Name the top 2 alternatives you\'re not building right now. Is this feature higher impact-to-effort than either of them? If yes, the prioritization is justified.',
@@ -2334,9 +2334,9 @@ export const ABSENCE_USER_PERSONA_CLARITY_CASUAL: DecisionContent = {
   question: 'Who specifically is this feature for?',
   pinchFallback: 'Name the specific user this feature is designed for.',
   L1: [
-    'Building for "users" in the abstract builds for no one in particular. Alan Cooper\'s persona principle: design decisions are only resolvable when you have a concrete user in scope. "Is this button label clear?" is answerable when you can ask "clear to whom? — Marcus, the first-time user who has never seen this interface." It\'s unanswerable when the answer is "users in general."',
-    'You don\'t need formal user research to have persona clarity. A 2-sentence description is enough: "This is for the freelance designer who manages 3-10 clients and doesn\'t use project management software." That\'s enough to make design decisions testable. The goal is to reduce the range of valid design choices to those that serve a concrete person, not every possible user.',
-    'Persona clarity also clarifies scope: if a feature request doesn\'t serve the defined user, it\'s out of scope by definition, not by preference. "For whom is this feature?" is both a design question and a scope question. Every feature should have a one-sentence user answer before build decisions begin.',
+    'Name the specific user this feature serves: 2 sentences describing who they are, what context they use the product in, and what they are trying to accomplish — concrete enough that a design decision can be tested against "would Marcus understand this?" rather than "would users in general?"',
+    'Write a 2-sentence persona description for this feature\'s primary user — who they are, their context, and what they are trying to do — then check every recent design decision against that persona and flag any that serve "users in general" instead.',
+    'Define the target user for this feature in one sentence, then re-check the feature scope: list any request, addition, or behaviour that does not serve that user and propose removing or deferring it.',
   ],
   L2: [
     'Name the specific user type this feature is for — 2 sentences about who they are and what they\'re trying to do. "For users" isn\'t an answer.',
@@ -2352,8 +2352,8 @@ export const ABSENCE_COMPETITIVE_AWARENESS_CASUAL: DecisionContent = {
   pinchFallback: 'Run a quick competitive check before committing to this build.',
   L1: [
     'Building a feature without knowing the competitive landscape means you\'re solving a problem that may already be solved — possibly better than you\'ll solve it. Before committing to any non-trivial feature, answer three questions: does a competitor already have this? If yes, how have they implemented it? And what would make your version a reason to switch rather than a reason to stay with the incumbent?',
-    'Competitive awareness isn\'t about copying — it\'s about knowing whether you\'re building table stakes (required to compete), a differentiator (reason to switch), or something users don\'t actually compare. These three categories require very different implementation strategies: table stakes need polish parity; differentiators need a clear wedge; irrelevant features shouldn\'t be built at all.',
-    'A 20-minute competitive audit is often enough: open 2-3 competitor products, find where they solve the same problem, screenshot the implementation, and note what they got right and wrong. Your implementation decision — and the differentiation angle — should come from that observation, not from building in a vacuum.',
+    'Classify this feature as table stakes (required to compete), a differentiator (reason to switch), or irrelevant to user comparison — then state the implementation implication: polish parity, a clear wedge, or do not build. Confirm the current build matches the classification.',
+    'Run a 20-minute competitive audit: list the top 2-3 competitor implementations of this feature, summarize what each got right and wrong, and propose the specific differentiation angle this build will use. If no differentiation is identified, propose what would need to change.',
   ],
   L2: [
     'What do the top 2 competitors do for this feature? And what would make your version a reason to choose you over them?',
@@ -2368,7 +2368,7 @@ export const ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL: DecisionContent = {
   question: 'Is this addition within MVP scope?',
   pinchFallback: 'Check whether this is needed to test the core hypothesis.',
   L1: [
-    'MVP stands for minimum viable product — minimum meaning the smallest version that can test the riskiest hypothesis. Every feature added beyond that minimum is scope that delays the learning loop and consumes engineering capacity that could run the next experiment instead. The failure mode isn\'t adding bad features — it\'s adding good features at the wrong time, before the core hypothesis is validated.',
+    'Apply MVP discipline to this addition: name the riskiest hypothesis the MVP is meant to test, then state whether this addition reduces uncertainty about that hypothesis. If it does not, propose deferring it to post-validation scope.',
     'The discipline question for every addition: does this help test what we\'re trying to learn, or does it just make the product feel more complete? "Feel more complete" is the scope creep justification. If the feature doesn\'t reduce the uncertainty about whether the core hypothesis is true, it\'s out of MVP scope — not permanently, just for this phase. Ship the minimum, learn, then add.',
     'Common MVP scope creep patterns: "nice to have" additions that don\'t affect hypothesis testing, polish passes that go beyond the minimum for usability, and "while we\'re in this area" additions. All three delay the learning loop without increasing its quality. Define the scope boundary explicitly: list the features that are in-hypothesis-scope and treat everything else as post-validation work.',
   ],
@@ -2386,8 +2386,8 @@ export const ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL: DecisionContent = {
   pinchFallback: 'Define the acquisition path before building.',
   L1: [
     'A feature\'s value is zero for any user who never encounters it. Distribution fit is as important as product-market fit — and it has to be designed in, not discovered after launch. Before committing to a feature build, answer: what is the specific path through which target users will find and start using this feature? SEO, referral loop, in-app discovery, sharing mechanic, onboarding hook, community post — name the channel.',
-    'Acquisition thinking during development isn\'t a marketing task — it\'s an engineering constraint. Features with a built-in sharing or referral mechanic get built differently than features that assume organic word-of-mouth. Features that depend on SEO need different URL structure and content than features that depend on in-app discovery. The acquisition path shapes the implementation.',
-    'If you can\'t name the acquisition path before building, that\'s a signal the feature may not be distribution-ready. The minimum acceptable answer: "Users reach this via X, and the first time they see it they\'re shown Y." Without that sentence, you\'re shipping into a distribution vacuum.',
+    'Name the specific acquisition mechanic for this feature — built-in sharing, referral hook, SEO surface, in-app discovery, onboarding placement — then confirm the implementation actually supports that mechanic. If the channel and the build are misaligned, flag what needs to change.',
+    'Write the acquisition-path sentence for this feature in the exact form: "Users reach this via [channel], and the first time they see it they are shown [first-encounter UX]." If either bracket is empty, propose what would fill it before more is built.',
   ],
   L2: [
     'Name the specific acquisition path: how do target users find out this feature exists, and how do they reach it for the first time?',
@@ -2403,7 +2403,7 @@ export const ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL: DecisionContent = {
   pinchFallback: 'Consider the retention angle before building.',
   L1: [
     'Features that acquire users but don\'t retain them have diminishing returns forever. Every significant feature should have an answer to: why does a user return to this feature after the first use, and how does using it once make the next use more likely? Without a retention angle, you\'re building acquisition features, not engagement features.',
-    'Retention mechanics don\'t have to be complex. The simplest versions: the feature saves something the user wants to come back to (a record, a result, a creation); the feature creates a loop where the output of one session becomes the input to the next; or the feature connects the user to other users, creating social pull. Any of these creates a reason to return. No retention mechanic = first-use feature.',
+    'Pick one of three retention mechanics for this feature and confirm it is built in: (1) it saves something users want to return to, (2) it creates a loop where one session\'s output is the next session\'s input, or (3) it connects users to other users. Name the chosen mechanic and where it lives in the current build, or propose what to add.',
     'Nir Eyal\'s Hook model: trigger → action → reward → investment. "Investment" is what makes the next trigger more effective — the user puts something into the product (data, preferences, connections, history) that increases the value of returning. Every feature should have an answer for what the "investment" is. If there isn\'t one, the feature has no retention loop.',
   ],
   L2: [
@@ -2420,7 +2420,7 @@ export const ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL: DecisionContent = {
   pinchFallback: 'Add a feedback mechanism before shipping.',
   L1: [
     'Shipping without a way to measure whether the feature worked means the engineering investment produces no validated learning. The Lean Startup loop: Build → Measure → Learn. Skipping the Measure step after Build means the loop stops at the most expensive point and never produces the insight that informs the next build. Define your measurement mechanism before shipping, not after.',
-    'Feedback mechanisms don\'t have to be complex. The minimum viable set: one analytics event that fires when the feature is used (confirms usage), one way to hear from users who struggled (support channel, in-product feedback button), and one indicator of whether the feature met its success metric. Three data points that tell you whether to iterate, expand, or kill the feature.',
+    'Specify the minimum viable feedback set for this feature: name the analytics event that fires on use, the user-feedback channel (in-product or support), and the indicator that ties to the defined success metric. Confirm each is in place or list what needs adding before shipping.',
     'Common shipping patterns that break the feedback loop: shipping with no analytics instrumentation, shipping with analytics but no defined success threshold, and shipping with a metric but no scheduled review. All three mean the feature will run for weeks without producing a learning decision. Define the mechanism, the metric, and the review date before the code ships.',
   ],
   L2: [
@@ -2436,9 +2436,9 @@ export const ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL: DecisionContent = {
   question: 'What hypothesis does this feature test?',
   pinchFallback: 'Define the hypothesis before starting the build.',
   L1: [
-    'Every feature build is an experiment. The question is whether it\'s a defined experiment or an undefined one. Defined experiment: "We believe adding X will cause Y for users of type Z. We will know this is true when [observable signal] appears within [timeframe]." Undefined experiment: build X, ship it, and see what happens. Both cost the same to build. Only one produces learnable outcomes.',
+    'Write the experiment hypothesis for this feature in the form: "We believe [feature/change] will cause [observable outcome] for [user type]. We will know this is true when [signal] appears within [timeframe]." If any bracket cannot be filled, propose what data or decision would resolve it before continuing.',
     'The hypothesis doesn\'t have to be certain — it has to be falsifiable. "Users will use the export feature at least once per week" is falsifiable. "Users will find this useful" is not. The falsifiability test: after shipping, can you look at a single data point and say definitively whether the hypothesis was proven or disproven? If not, refine the hypothesis until you can.',
-    'Writing the hypothesis before building also prevents post-hoc rationalization: the tendency to interpret any usage pattern as confirming the original idea. The hypothesis is a commitment made before the data exists — it\'s what makes the observation meaningful. Without it, every outcome is a success story in hindsight.',
+    'State the falsification condition for this feature\'s hypothesis: what specific data point, observed within the success window, would prove the hypothesis wrong? Commit to that condition now — and use it as the post-ship review trigger.',
   ],
   L2: [
     'Complete this before coding: "We believe [this feature] will [achieve outcome] for [user type]. We will know this is true when [observable signal]."',
@@ -2453,7 +2453,7 @@ export const ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL: DecisionContent =
   question: 'When did you last check product direction — not just implementation?',
   pinchFallback: 'Take a product perspective before continuing to build.',
   L1: [
-    'Founders who code face a structural bias toward technical work: implementation is visible, progresses in concrete steps, and produces something tangible. Product thinking — asking whether you\'re building the right thing, for the right users, toward the right goal — produces decisions, not artifacts. The result is that product thinking gets squeezed out of sessions that are nominally "product development" but are actually pure implementation.',
+    'Pause implementation and run a product-direction check: count the last 10-15 prompts by category (implementation instructions vs product-direction questions). If heavily skewed to implementation, answer one product question before continuing — is this still the right feature to be building for the right user toward the right outcome?',
     'A useful ratio check: in the last 10-15 prompts, how many were implementation instructions ("build this", "add this", "fix this") vs. product-direction questions ("should we build this at all", "is this the right user experience", "does this move our core metric")? Heavy implementation skew is a signal that product thinking has been suspended. Suspend it too long and you optimize the implementation of the wrong feature.',
     'Product check questions that take < 5 minutes: Is this feature still the highest-priority thing to build right now? Does the implementation direction still match the product goal? Is there a user I should talk to before the next build decision? Has anything changed about the problem I\'m solving? These questions don\'t interrupt implementation — they protect it from building in the wrong direction.',
   ],
@@ -2470,9 +2470,9 @@ export const ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL: DecisionContent = {
   question: 'How does this feature connect to your product\'s core metric?',
   pinchFallback: 'Check north star alignment before adding this feature.',
   L1: [
-    'The north star metric is the single number that best captures the value your product delivers to users. All product work should be traceable to movement in that number — either directly (this feature drives the metric) or indirectly (this feature enables other features that do). Features with no traceable connection to the north star consume engineering capacity without producing user value that scales.',
-    'North star alignment doesn\'t require every feature to directly move the metric. Infrastructure, DX improvements, and technical foundations are valid — but even these should have an articulated connection: "this reduces load time, which reduces churn, which improves our retention rate." If the connection can\'t be articulated in one or two steps, the feature may be noise.',
-    'The north star check is also a scope filter: if a feature doesn\'t connect to the north star, it either belongs in a later phase (when the north star itself evolves) or doesn\'t belong in the product at all. Making the connection explicit before building prevents scope inflation — the slow accumulation of technically reasonable features that collectively dilute the product\'s core value proposition.',
+    'Trace this feature to the product\'s north star metric in one or two steps: state how it moves the metric directly, or how it enables a downstream feature that does. If no traceable connection exists, propose deferring or removing it.',
+    'Articulate the north star connection for this feature: name the metric, name the chain of cause-and-effect from this feature to the metric (one or two intermediate steps allowed), and confirm the chain holds. If it does not, flag the feature as candidate for scope removal.',
+    'Apply the north star filter to this feature\'s scope: if the feature does not connect to the north star directly or via one intermediate step, decide whether it belongs in a later phase, belongs as foundation for a north-star feature still to come, or should be cut from this scope entirely.',
   ],
   L2: [
     'In one sentence: how does this feature move your north star metric? Direct path, or via which intermediate effect?',
