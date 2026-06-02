@@ -5378,6 +5378,30 @@ describe('Indie_hacker role — no opener-citation patterns in rewritten L1 slot
   }
 });
 
+// ── Phase 5 D7-D9 borderline — ABSENCE_TEST_DEPTH_CHECK_CASUAL invariant ──────
+// Single-slot surgical rewrite: L1[2] changed from an educational test-categories
+// list to a directive that produces a test per category. Locks the rewritten slot
+// against drift back to the educational form.
+
+describe('D7-D9 borderline — ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] invariant', () => {
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] starts with an action verb (Add)', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/^Add tests beyond the happy path/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] ends with the per-category write directive', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/Write at least one test per category for what was just built before moving on\.$/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] does NOT contain the original "misleadingly high" educational closer', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).not.toMatch(/misleadingly high/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[0] and L1[1] are unchanged from source (not touched by §12.10)', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[0]).toMatch(/Testing pyramid \(Mike Cohn, 2009\)/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[1]).toMatch(/Branch coverage over line coverage/);
+  });
+});
+
 describe('Phase 7 content routing', () => {
   function makeProfile(nature: import('../classifier/types.js').UserNature, role?: import('../classifier/types.js').UserRole): import('../classifier/types.js').UserProfile {
     return {

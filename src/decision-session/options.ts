@@ -1899,7 +1899,7 @@ const ABSENCE_TEST_DEPTH_CHECK_CASUAL: DecisionContent = {
   L1: [
     'Testing pyramid (Mike Cohn, 2009): tests must cover happy paths, edge cases, and negative scenarios. \'Start with happy path tests, then add error cases that verify graceful failure handling.\' Happy-path-only tests provide false confidence — everything looks green but real-world conditions break the code.',
     'Branch coverage over line coverage: every decision path needs a test. For what was just written — what are the edge cases? (empty input, null, boundary values). What are the error paths? (what happens when this fails). Add at least one test for each non-happy-path scenario.',
-    'Three test categories beyond the happy path: (1) boundary value tests — empty, null, max, min; (2) error path tests — what happens when the operation fails; (3) negative tests — invalid input, unexpected state. Without these, test coverage is misleadingly high.',
+    'Add tests beyond the happy path in three categories: (1) boundary values — empty, null, max, min; (2) error paths — what happens when the operation fails; (3) negative tests — invalid input, unexpected state. Write at least one test per category for what was just built before moving on.',
   ],
   L2: [
     'Do the tests cover edge cases (empty, null, boundary values) and error paths (what happens when this fails)? Happy path only is false confidence.',
