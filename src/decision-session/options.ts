@@ -2073,13 +2073,13 @@ const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
   question:      'Architectural decision made — ADR recorded?',
   pinchFallback: 'Record the decision with context and consequences.',
   L1: [
-    'Architecture Decision Records (Nygard, 2011): capture context, decision, and consequences for every significant architectural choice. The ADR format answers: What context makes this decision necessary? What was decided? What are the consequences and trade-offs accepted? Without a record, the rationale becomes invisible to future maintainers and cannot be revisited when requirements change. Write the ADR while the context is still loaded.',
-    'The value of an ADR is the rationale, not the decision. Document: (1) what alternatives were considered; (2) why this option was selected over them; (3) what constraints or forces drove the choice; (4) what the known consequences are. Future engineers need to determine whether the context that forced this decision has changed — without a record, that assessment is impossible.',
-    'Minimum viable ADR: a short doc or comment block — title, status, context, decision, consequences. ADRs do not need to be long; Nygard\'s originals are 1–2 pages. Keep them in doc/adr/ in the repository. A decision without a record is a decision that will be questioned repeatedly without ever being resolved, by everyone who inherits the codebase.',
+    'Write an architecture decision record for the key design decision made here: document the context (what problem was being solved), the decision made, the alternatives that were considered and rejected, and the consequences — so future engineers understand why this exists as it does.',
+    'Create an ADR capturing this architectural decision: what was decided, what were the alternatives, what tradeoffs were accepted, and what constraints or assumptions this decision depends on.',
+    'Record this architectural decision before the session ends: context, decision, consequences, alternatives considered — without this, the design rationale will be lost as team composition or memory changes.',
   ],
   L2: [
-    'For the architectural decision just made: record context, decision, and consequences in an ADR. Without a record, the rationale is invisible to every future maintainer — including the author six months from now.',
-    'What alternatives were considered, and why was this option chosen over them? Document the reasoning — it disappears from memory faster than the code does.',
+    'Write an ADR for this decision — context, decision, consequences, and alternatives considered.',
+    'Document the key architectural decision made here: what was decided and why, and what the main alternative was.',
   ],
   L3: [
     'Write an ADR for this decision: context, decision, consequences, and alternatives considered.',
@@ -2090,13 +2090,13 @@ const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
   question:      'Is this abstraction required by current requirements?',
   pinchFallback: 'Apply YAGNI — build only what current requirements require.',
   L1: [
-    'YAGNI (You Aren\'t Gonna Need It — Kent Beck, XP 1999): implement things only when you actually need them, never when you foresee you might. Martin Fowler (2015): \'The cost of YAGNI is that you may need to refactor later, but that is usually less expensive than the cost of carrying unneeded complexity.\' YAGNI test: does a current user story, ticket, or requirement map to this abstraction? If not, remove it and implement the minimal solution. Refactor to the abstraction when the second use case arrives.',
-    'Over-engineering is a senior engineer trap: the abstractions appear reasonable because they are technically correct — \'we will need this extensibility eventually.\' Empirical counter: Kohavi et al. (Microsoft Research) found only 1/3 of shipped features improved intended metrics. Speculative development compounds carrying cost at the same rate as rushed development compounds defect cost. The YAGNI discipline: no current requirement, no implementation.',
-    'Three YAGNI violation indicators: (1) the phrase \'in case we need\' was used to justify the abstraction; (2) no current requirement maps to the extensibility being built; (3) the implementation would be simpler and still complete current requirements without the abstraction. If any apply — revert to the minimal implementation. The refactoring to the abstraction when the second use case arrives costs less than carrying unneeded complexity through every sprint until then.',
+    'Apply YAGNI to what was just built: identify any abstraction, interface, or configuration option that was added speculatively — not required by a current story or use case — and remove or defer it.',
+    'Audit what was just built for speculative design: flag any abstraction layer, plugin interface, or extensibility mechanism that has no current consumer, and propose removing or simplifying it.',
+    'Apply YAGNI: for each abstraction in what was just built, confirm there is a current requirement that justifies it — if not, propose the simpler implementation that still satisfies the present use case.',
   ],
   L2: [
-    'Does a current requirement necessitate this abstraction? If not, apply YAGNI: implement the minimal solution that satisfies today\'s requirements. Refactor to the abstraction when the second concrete use case arrives.',
-    'YAGNI check: is there a ticket, story, or current requirement that requires this extensibility? \'We will need it eventually\' is the over-engineering justification — defer until needed.',
+    'Apply YAGNI to what was just built — identify and remove any abstraction not required by a current story or use case.',
+    'Is there any abstraction in what was just built that has no current consumer? If so, propose removing it.',
   ],
   L3: [
     'Apply YAGNI — remove speculative abstraction and implement only what current requirements require.',
@@ -2107,13 +2107,13 @@ const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
   question:      'Critical implementation complete — review plan established?',
   pinchFallback: 'Establish a review plan before merging.',
   L1: [
-    'Code review effectiveness (Fagan Inspection; McConnell, Code Complete 2004): peer review catches 60–90% of defects vs. 25–45% for testing alone — the highest-ROI quality control mechanism in software engineering. For critical or complex features, a review plan is not optional. Establish: who reviews this, what the review checklist covers (design correctness, error handling completeness, security surface, test coverage), and what the merge gate is.',
-    'Google Engineering Practices: \'The author is the first reviewer, but not the only one.\' For critical paths — new service boundaries, auth flows, data model changes, infrastructure code — peer review before merge is mandatory. If no peer is available: a structured self-review covering design correctness, error handling completeness, and security surface is the minimum acceptable review artifact before merge.',
-    'Three review artifacts for critical implementations: (1) diff review for design correctness — does the implementation match the intended architecture and are there unintended side effects; (2) error handling completeness — are all documented failure modes handled; (3) security surface review — were attack surfaces introduced that require threat modeling. Establish which of these will be covered and by whom. Merging a critical implementation without a review plan is an SRE anti-pattern.',
+    'Establish a review plan for this change before merging: define who reviews it, what the review checklist covers (design correctness, error handling, edge cases, security, performance implications), and what the merge gate is — confirm the plan is in place before the branch is merged.',
+    'Define a review checklist for this change: design correctness, error handling completeness, edge case coverage, security implications, and any performance concerns — then assign reviewers and set a merge gate before proceeding.',
+    'Complete a structured review of what was just built: verify the design decision, check error handling for every failure path, confirm edge cases are covered, and flag any security implications before this merges.',
   ],
   L2: [
-    'Establish a review plan before merging: who reviews it, what the checklist covers (design correctness, error handling, security surface), and what the merge gate is.',
-    'Peer review catches 60–90% of defects testing misses. Critical paths require a review plan — peer, pair, or structured self-review — before merge.',
+    'Set up a review plan for this change: define the checklist, assign reviewers, and set a merge gate before merging.',
+    'What is the review plan for this change? Who reviews it, what does the checklist cover, and what is the merge gate?',
   ],
   L3: [
     'Establish and complete a review plan before merging — design correctness, error handling, security surface.',
@@ -2126,13 +2126,13 @@ const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
   question:      'Feature shipping — observability instrumented?',
   pinchFallback: 'Add logging, metrics, and tracing before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): monitoring is non-negotiable infrastructure for production systems. Three pillars of observability: (1) logs — structured event records of what happened; (2) metrics — counters and gauges measuring how much and how fast; (3) traces — distributed spans showing where time was spent. A feature without all three is partially blind in production. Add instrumentation alongside the feature, not after the first incident.',
-    'Observability-first principle: you cannot manage what you cannot measure. For the feature just built — what are the key success metrics? (request count, error rate, latency p99) What are the logged events? (entry, exit, error cases) Is there a distributed trace covering the full request path? Define and instrument these before shipping. The cost of adding observability post-incident is an unknown production state plus a time-pressured instrumentation sprint.',
-    'Minimum viable observability for a production feature: (1) a structured log entry for every significant operation — success and failure paths; (2) a counter or histogram for the primary operation rate and error rate; (3) a trace span covering the feature\'s critical path. Without these, the SRE on-call has no signal when the feature degrades. Add them now while the feature\'s critical path is loaded.',
+    'Add observability to this feature before shipping: instrument all three pillars — structured logging at each significant event boundary, metrics for request rate, error rate, and latency, and distributed trace spans for every external call — so production behavior is visible from day one.',
+    'Define and implement the observability strategy for this feature before it ships: what events get logged (and at what level), what metrics are emitted, and what trace spans are added for every external dependency call.',
+    'Instrument this feature with logs, metrics, and traces before shipping: confirm all three observability pillars are in place, that the metrics are wired to dashboards, and that alerts are defined before launch.',
   ],
   L2: [
-    'For the feature being shipped: are logs, metrics, and distributed traces in place? Observability must be instrumented alongside the feature — not added after the first production incident.',
-    'Three pillars before shipping: structured logs for success and failure paths, metrics for rate and error tracking, traces for the critical request path.',
+    'Add logging, metrics, and distributed tracing to this feature before shipping — all three observability pillars required.',
+    'What logs, metrics, and trace spans does this feature emit? Confirm all three are in place before it ships.',
   ],
   L3: [
     'Add logging, metrics, and tracing instrumentation before shipping — all three pillars required.',
@@ -2143,13 +2143,13 @@ const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
   question:      'External dependencies integrated — failure modes enumerated?',
   pinchFallback: 'Enumerate failure modes for each dependency.',
   L1: [
-    'FMEA (MIL-STD-1629A) / Nygard Release It! (2007): every external dependency introduces failure modes requiring enumeration before implementation. For each dependency just integrated — enumerate: (1) what happens when it is completely unavailable; (2) what happens when it responds slowly (timeout scenario); (3) what happens when it returns partial or degraded data. Each failure mode maps to a stability pattern: circuit breaker, timeout, bulkhead, fallback. Without enumeration, these patterns are not applied.',
-    'Distributed systems fail in cascading ways — a single dependency failure becomes a system-wide outage when no isolation pattern is in place. Nygard\'s stability patterns address enumerated failure modes: circuit breakers isolate a failing dependency; timeouts prevent thread exhaustion; bulkheads limit blast radius; fallbacks provide degraded service. The question to answer for every integration: which failure modes exist, and which stability pattern addresses each one?',
-    'Three failure mode categories for every external dependency: (1) availability — the dependency is completely unreachable; (2) latency — the dependency responds but slowly, exhausting connection pools; (3) correctness — the dependency responds with invalid, partial, or unexpected data. Define the expected behavior in each category before implementing the integration. The missing behavior is the bug that hits in production at 3am.',
+    'Enumerate failure modes for every external dependency this feature relies on: for each dependency, name the failure mode (timeout, error response, partial data, unavailability), specify the stability pattern that handles it (circuit breaker, timeout + fallback, bulkhead, retry with backoff), and confirm the pattern is implemented before shipping.',
+    'Identify the top three external dependencies in this feature and define the failure behavior for each: what happens when each dependency is slow, returns an error, or is unavailable — and what stability pattern prevents cascading failure.',
+    'Audit every external call in this feature for failure handling: confirm each has a timeout, a defined error response, and a documented degradation path.',
   ],
   L2: [
-    'For each dependency just integrated: enumerate the failure modes (unavailable, slow, degraded) and specify which stability pattern addresses each — circuit breaker, timeout, fallback, or bulkhead.',
-    'What happens when this dependency is down, slow, or returning bad data? Enumerate before implementing — the unenumerated failure mode is the production incident.',
+    'For each external dependency in this feature: name the failure mode and confirm the stability pattern (circuit breaker, timeout, fallback) is in place.',
+    'What is the worst failure scenario for this feature\'s most critical external dependency, and is there a stability pattern preventing it?',
   ],
   L3: [
     'Enumerate failure modes for each dependency and specify the stability pattern for each before shipping.',
@@ -2160,13 +2160,13 @@ const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
   question:      'Service boundary established — contract tests defined?',
   pinchFallback: 'Define consumer-driven contract tests for this boundary.',
   L1: [
-    'Consumer-Driven Contracts (Ian Robinson, martinfowler.com, 2006): service boundaries require contract tests to survive independent deployment. Consumer-driven contracts shift contract definition to the consumer — the consumer specifies what it needs from the producer, and the producer verifies it satisfies those requirements in isolation, without requiring both services to be deployed together. Tools: Pact, Spring Cloud Contract. Without contract tests, integration regressions are caught only in staging.',
-    'The independent deployment problem: when consumer and producer deploy independently, there is no integration test run at deploy time. Contract tests solve this by running provider verification against consumer contracts in the producer\'s CI pipeline — catching contract breaks before they reach staging. For the service boundary just defined: write consumer contract tests that specify the exact shape of requests and responses the consumer depends on, then run provider verification in CI.',
-    'Three contract test artifacts for a service boundary: (1) consumer contract — specifies the request shape and response fields the consumer actually uses (not the full schema); (2) provider verification — the producer\'s CI step that validates it satisfies registered consumer contracts; (3) contract broker — a registry keeping consumer contracts accessible for verification (Pact Broker). Define these before the first independent deployment of either service.',
+    'Define consumer-driven contract tests for this service boundary before independent deployment: write the contract from the consumer\'s perspective, verify the provider satisfies it in isolation, and add provider verification to the CI pipeline.',
+    'Write contract tests that verify this service\'s API from the consumer\'s view: define the expected request/response shape, the error responses, and the versioning behavior — independently of the provider\'s implementation.',
+    'Establish a contract testing gate for this service boundary: define what the consumer expects, implement provider verification, and confirm the CI pipeline enforces it before any consumer or provider changes ship independently.',
   ],
   L2: [
-    'For the service boundary just established: define consumer-driven contracts specifying the exact request/response shape each consumer requires, and add provider verification to the producer\'s CI pipeline.',
-    'Without contract tests, integration regressions surface only in staging. Consumer-driven contracts (Pact/Spring Cloud Contract) catch boundary breaks in CI before independent deployment.',
+    'Write consumer-driven contract tests for this service boundary — define the contract from the consumer\'s perspective and verify the provider satisfies it in isolation.',
+    'Define the expected API contract for this service boundary and implement provider verification before independent deployment.',
   ],
   L3: [
     'Define consumer-driven contract tests for this service boundary before independent deployment.',
@@ -2179,13 +2179,13 @@ const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
   question:      'Load-adding feature — capacity estimate done?',
   pinchFallback: 'Complete a capacity estimate before shipping.',
   L1: [
-    'Google SRE (Beyer et al., 2016): load-adding features require a capacity estimate before production deployment. Three required numbers: (1) peak RPS at expected traffic; (2) storage growth rate at 30/90/365 days; (3) downstream resource utilization headroom (DB connection pool, cache, dependent APIs). Without all three, the feature ships blind to its production cost.',
-    'Capacity estimate checklist for the feature being built: what is the steady-state RPS at expected traffic? What does storage growth look like over 90 days? Does the existing infrastructure have headroom — or does this feature require provisioning before it can ship safely? A back-of-envelope estimate takes 20 minutes; a production load surprise takes on-call hours.',
-    'Pre-ship capacity gate: (1) estimate peak RPS; (2) project storage growth curve; (3) confirm infrastructure headroom for dependent services. If any number is unknown, the feature is not ready to ship — it lacks the data to size infrastructure or set autoscaling thresholds. Provide all three before shipping.',
+    'Estimate capacity requirements for this feature before shipping: project peak request rate (RPS), storage growth over 90 days, and required infrastructure headroom — then verify current infrastructure can serve the estimated peak load.',
+    'Define capacity targets for this feature: what is the expected RPS at launch and at 10× scale, what is the storage growth rate, and is current provisioning sufficient for each?',
+    'Audit infrastructure requirements for this feature: estimate peak load, define headroom thresholds, and confirm monitoring alerts are in place before any metric approaches the estimated saturation point.',
   ],
   L2: [
-    'Estimate three numbers before shipping: peak RPS at expected traffic, storage growth rate at 90 days, and infrastructure headroom on dependent services. These determine whether current capacity can absorb the feature.',
-    'Capacity planning gate: what RPS does this feature add at peak? What is the storage cost over 90 days? Does existing infrastructure have headroom? Answer all three before shipping.',
+    'Estimate peak RPS, storage growth over 90 days, and infrastructure headroom for this feature before shipping.',
+    'At what RPS does this feature saturate its current infrastructure, and is that load likely within the next 90 days?',
   ],
   L3: [
     'Capacity estimate required: RPS at peak, storage growth rate, infrastructure headroom. Provide all three before shipping.',
@@ -2196,13 +2196,13 @@ const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
   question:      'Security-sensitive feature — STRIDE threat model completed?',
   pinchFallback: 'Complete a STRIDE threat model before shipping.',
   L1: [
-    'STRIDE (Adam Shostack, \'Threat Modeling: Designing for Security\', Wiley 2014) requires systematic enumeration of Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege threats for every feature introducing a new attack surface. For each applicable STRIDE category: identify the attack vector, the trust boundary it crosses, and the mitigation control. This 30-minute structured pass prevents OWASP Top 10 vulnerabilities from reaching production.',
-    'OWASP Threat Modeling Process: Data Flow Diagram → trust boundary identification → threat enumeration per STRIDE → mitigation design. The output is a list of threats and their controls. For the feature being built — identify which STRIDE categories apply (minimum: Information Disclosure, Elevation of Privilege, Tampering for any auth-adjacent or data-handling feature) and define the mitigation for each.',
-    'Attack surface review required before shipping security-sensitive features: (1) identify trust boundaries crossed by the feature; (2) enumerate applicable STRIDE threats; (3) for each threat, define the mitigation control (input validation, rate limiting, authorization check, audit logging). A feature without a completed STRIDE pass is not production-ready by OWASP Secure by Design standards.',
+    'Enumerate applicable STRIDE threats for this feature and define a mitigation control per threat: Spoofing (identity verification), Tampering (input validation + integrity checks), Repudiation (audit logging), Information Disclosure (data exposure scope), Denial of Service (rate limiting + timeouts), Elevation of Privilege (authorization checks) — confirm each relevant threat has a control before shipping.',
+    'Apply STRIDE to this feature\'s threat surface: for each applicable threat category, name the attack vector, identify the data or component at risk, and define the control that mitigates it.',
+    'Threat-model this feature using STRIDE categories: enumerate threats, assign severity, and confirm each threat has a documented mitigation or an accepted-risk decision before shipping.',
   ],
   L2: [
-    'Apply STRIDE to the feature: for each applicable category (Spoofing, Tampering, Repudiation, Information Disclosure, DoS, Elevation of Privilege) — what is the attack vector and what is the mitigation? This enumeration must be completed before shipping.',
-    'Threat model required: identify trust boundaries, enumerate applicable STRIDE threats, define mitigation controls. This prevents OWASP Top 10 vulnerabilities from shipping to production.',
+    'Identify the top three STRIDE threats for this feature and define mitigation controls for each.',
+    'Apply STRIDE to this feature: for each applicable category, what is the threat and what control mitigates it?',
   ],
   L3: [
     'STRIDE threat model required: enumerate applicable threats and define mitigation controls before shipping.',
@@ -2213,13 +2213,13 @@ const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
   question:      'Schema change — expand-migrate-contract pattern applied?',
   pinchFallback: 'Apply backwards-compatible phased migration.',
   L1: [
-    'Evolutionary Database Design (Fowler/Sadalage, 2003/2016): schema changes must be backwards-compatible with both the current and new application versions running simultaneously. The expand-migrate-contract pattern: Phase 1 (expand) — add new columns/tables alongside existing; Phase 2 (migrate) — backfill data with both versions live; Phase 3 (contract) — remove old structures only after all application versions are updated. Never DROP, RENAME, or add NOT NULL constraints in a single migration deployment.',
-    'The backwards-compatibility invariant: a schema change that breaks the currently-running application version is an outage if the deployment fails or requires rollback. For every destructive migration operation — validate: does this work with application version N (currently running) AND version N+1 (being deployed)? If no — redesign as a phased migration across multiple deployments.',
-    'Pre-migration safety checklist: (1) is the migration backwards-compatible with the current application version? (2) can it be rolled back without data loss? (3) is this a multi-phase migration for any destructive operation (DROP, RENAME, type change, NOT NULL addition)? All three must be YES before deploying. Single-phase destructive migrations are an outage risk.',
+    'Apply the expand-migrate-contract sequence to this database change: confirm the schema change can be split into a backward-compatible add phase, a data migration phase, and a cleanup phase — so each phase deploys independently without downtime or rollback risk.',
+    'Verify this migration is reversible and safe under concurrent writes: confirm no destructive operation (DROP, NOT NULL without default, column rename) occurs in a single migration step, and that the expand-migrate-contract pattern applies.',
+    'Audit this database migration for safety: identify any destructive schema changes, verify backward compatibility during the migration window, and confirm rollback is possible at each step.',
   ],
   L2: [
-    'Apply expand-migrate-contract: no DROP, RENAME, or NOT NULL constraint addition in a single deployment. Destructive migrations must be phased — expand first, migrate data with both versions live, contract only after old application code is fully retired.',
-    'Migration safety gate: is this backwards-compatible with the running application version? Can it be rolled back without data loss? If no to either, redesign as a phased migration.',
+    'Verify this migration uses the expand-migrate-contract pattern — confirm no destructive schema operation happens in a single deployment step.',
+    'Is this migration reversible? Can it be rolled back without data loss if the deployment is reverted mid-migration?',
   ],
   L3: [
     'Expand-migrate-contract required: no destructive schema changes in a single deployment. Phase across multiple deployments.',
@@ -2230,13 +2230,13 @@ const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
   question:      'Significant feature shipping — deployment strategy defined?',
   pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
   L1: [
-    'Continuous Delivery (Humble/Farley, 2010): every production deployment requires a defined deployment mechanism and rollback plan. Options: (1) Feature flag — ship behind a flag, enable gradually, instant rollback by disabling; (2) Canary — route N% of traffic to new version, watch error rates and latency before full rollout; (3) Blue-green — maintain two environments, cut traffic; (4) Staged rollout — deploy to subset of regions/tenants. Choose one explicitly and define the rollback procedure before the deployment is executed.',
-    'Deploying without a strategy converts a planned deployment into improvised incident response if anything goes wrong. The rollback plan — what command, who runs it, what does it restore to, how long does it take — must be defined before deployment, not after a failure. For significant features: feature flag is the lowest-risk option (instant rollback, gradual exposure, dark launch capability).',
-    'Pre-deployment checklist: (1) is there a deployment mechanism that allows gradual rollout (canary, feature flag, staged rollout)? (2) is there a defined rollback procedure that can be executed under time pressure? (3) are monitoring thresholds set so a bad deployment is automatically detected before full rollout? All three are required for a production deployment of a significant feature.',
+    'Define the deployment strategy for this feature before shipping: choose the strategy (canary, feature flag, blue-green, staged rollout), define the rollback procedure, and confirm the rollback can be completed within the acceptable downtime window.',
+    'Establish a deployment plan for this feature: what strategy isolates risk (canary or staged rollout), what signals trigger an abort, and what the rollback procedure is if those signals are observed post-deploy.',
+    'Audit deployment readiness: confirm deployment strategy, verify rollback procedure, and check that monitoring is in place to detect a failed deploy before it reaches full traffic.',
   ],
   L2: [
-    'Define before deploying: the rollout strategy (canary/feature flag/blue-green/staged) and the rollback plan (what reverts this, who runs it, how long does it take). Both must exist before the deployment is executed.',
-    'Deployment without a rollback plan is an incident waiting to happen. Define the strategy, the rollback procedure, and the monitoring threshold that triggers it.',
+    'Define deployment strategy and rollback plan for this feature before shipping.',
+    'What is the deployment strategy for this feature, and what triggers a rollback if the deploy fails?',
   ],
   L3: [
     'Define deployment strategy (canary/feature flag/blue-green/staged) and rollback plan before shipping.',
@@ -2247,13 +2247,13 @@ const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
   question:      'New service/feature shipping — operational runbook written?',
   pinchFallback: 'Write the runbook before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): runbooks are required operational documentation for any production service. \'Runbooks capture the operational knowledge required to keep a service running — how to deploy, how to diagnose common failures, what the escalation path is.\' Without a runbook, the on-call engineer responding to a 3am alert has no guide to the service they\'re debugging.',
-    'Minimum viable runbook for a new service or significant feature: (1) what this service/feature does — one paragraph; (2) how to deploy and roll back; (3) common failure modes and how to diagnose each; (4) which metrics/dashboards are the key health indicators; (5) escalation path if automated remediation fails. A short wiki page suffices — the content matters more than the format.',
-    'Operational readiness gate: before any new service ships to production, define the answer to three on-call questions: what is this thing? How do I know it\'s broken? What do I do when it breaks? These three answers constitute the minimum viable runbook. A service without them cannot be supported by an on-call rotation.',
+    'Write the operational runbook for this feature before shipping: document what the feature does, how to deploy it, the key health metrics to monitor, how to diagnose the most likely failure scenarios, and the escalation path if on-call cannot resolve the issue.',
+    'Define the operational documentation for this feature: deployment steps, expected normal behavior, failure indicators, debug steps for the top three failure modes, and escalation contacts.',
+    'Write the runbook before this ships: what it does, how it is deployed, how to confirm it is healthy, how to debug it when it is not, and who to escalate to.',
   ],
   L2: [
-    'Write the runbook before shipping: what the service does, how to deploy and roll back, common failure modes and diagnostics, key health metrics, and escalation path. This is the minimum required for on-call supportability.',
-    'On-call operators need three things: how to know the service is healthy, how to diagnose it when it fails, and who to escalate to. Write these before shipping.',
+    'Write the runbook for this feature before shipping — cover deploy steps, health metrics, failure scenarios, and escalation path.',
+    'Document how to debug this feature when it is misbehaving in production — the top two or three failure modes and how to diagnose each.',
   ],
   L3: [
     'Write the runbook before shipping: what it does, how to debug failures, key metrics, and escalation path.',
@@ -2264,13 +2264,13 @@ const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
   question:      'User-facing feature/service — SLOs defined?',
   pinchFallback: 'Define SLOs before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): \'SLOs are the key mechanism by which SRE and product teams agree on the required level of service reliability.\' Three required SLO dimensions: availability (% of requests succeeding), latency (% of requests completing within N ms at p99), and error rate budget (% of requests allowed to fail). Without defined SLOs, alerting thresholds are arbitrary and reliability trade-offs cannot be made with data.',
-    'Alex Hidalgo, \'Implementing Service Level Objectives\' (O\'Reilly, 2020): \'SLOs create a shared language for discussing reliability trade-offs between engineering and product.\' Before shipping a user-facing feature: define availability target (e.g., 99.9%), latency target (e.g., p99 < 500ms), and error rate budget (e.g., < 0.1% of requests return errors). These three numbers become the basis for alerts, error budgets, and go/no-go decisions for risky changes.',
-    'SLO definition before shipping protects against two failure modes: (1) shipping without alerting thresholds, so incidents are discovered by users not monitoring; (2) investing in reliability improvements with no data to justify the cost or define \'reliable enough.\' Define availability, latency, and error rate targets — these are not post-ship tasks, they are pre-ship gates.',
+    'Define SLOs for this feature before shipping: specify the availability target, the latency p99 budget, and the error rate budget — then confirm alerting and on-call escalation are tied to each SLO before launch.',
+    'Establish service level objectives for this feature: what availability does the consumer depend on, what is the acceptable latency at p99, and what error rate triggers an incident — document these before any consumer dependency is established.',
+    'Set and document SLOs before this ships: availability %, latency p99, error rate budget, and the burn rate at which the error budget is exhausted — so on-call knows what to page on.',
   ],
   L2: [
-    'Define three SLO dimensions before shipping: availability target (% of requests succeeding), latency target (p99 response time), and error rate budget (% of requests allowed to fail). These become the basis for alerting thresholds and reliability trade-off decisions.',
-    'Without SLOs, alerting is arbitrary, error budgets don\'t exist, and there is no shared definition of \'reliable enough.\' Define availability, latency, and error rate targets before shipping.',
+    'Define availability, latency p99, and error rate SLOs for this feature before shipping.',
+    'What are the SLOs for this feature? Specify availability %, latency p99, and error rate budget.',
   ],
   L3: [
     'Define SLOs before shipping: availability target, latency target (p99), and error rate budget.',
