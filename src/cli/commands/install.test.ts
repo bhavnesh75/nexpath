@@ -16,6 +16,8 @@ import {
   getRooCodePath,
   resolveAgentPaths,
   detectAgents,
+  detectAgentsForCleanup,
+  SUPPORTED_AGENT_IDS,
   writeMcpEntry,
   removeMcpEntry,
   writeOpenCodeEntry,
@@ -223,14 +225,19 @@ describe('resolveAgentPaths', () => {
   });
 });
 
-// ── detectAgents ──────────────────────────────────────────────────────────────
+// ── detectAgentsForCleanup ────────────────────────────────────────────────────
+//
+// detectAgentsForCleanup returns every agent whose config directory exists on
+// disk, without applying the SUPPORTED_AGENT_IDS filter. It is the uninstall
+// flow's detection helper, so the per-agent path-presence assertions live
+// here; the filtered detectAgents() wrapper is exercised separately below.
 
-describe('detectAgents', () => {
+describe('detectAgentsForCleanup', () => {
   it('always includes Claude Code (home dir is always present)', () => {
     const { dir, cleanup } = tmpDir();
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'claude')).toBe(true);
     } finally { cleanup(); }
   });
@@ -239,7 +246,7 @@ describe('detectAgents', () => {
     const { dir, cleanup } = tmpDir();
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       const claude = agents.find((a) => a.id === 'claude')!;
       expect(claude.type).toBe('claude-cli');
     } finally { cleanup(); }
@@ -250,7 +257,7 @@ describe('detectAgents', () => {
     try {
       mkdirSync(join(dir, '.cursor'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'cursor')).toBe(true);
     } finally { cleanup(); }
   });
@@ -259,7 +266,7 @@ describe('detectAgents', () => {
     const { dir, cleanup } = tmpDir();
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'cursor')).toBe(false);
     } finally { cleanup(); }
   });
@@ -269,7 +276,7 @@ describe('detectAgents', () => {
     try {
       mkdirSync(join(dir, '.codeium', 'windsurf'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'windsurf')).toBe(true);
     } finally { cleanup(); }
   });
@@ -279,7 +286,7 @@ describe('detectAgents', () => {
     try {
       mkdirSync(join(dir, '.kilocode'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'kiloCode')).toBe(true);
     } finally { cleanup(); }
   });
@@ -288,7 +295,7 @@ describe('detectAgents', () => {
     const { dir, cleanup } = tmpDir();
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'kiloCode')).toBe(false);
     } finally { cleanup(); }
   });
@@ -298,7 +305,7 @@ describe('detectAgents', () => {
     try {
       mkdirSync(join(dir, '.config', 'opencode'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'openCode')).toBe(true);
     } finally { cleanup(); }
   });
@@ -308,7 +315,7 @@ describe('detectAgents', () => {
     try {
       writeFileSync(join(dir, 'opencode.json'), '{}');
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'openCode')).toBe(true);
     } finally { cleanup(); }
   });
@@ -317,7 +324,7 @@ describe('detectAgents', () => {
     const { dir, cleanup } = tmpDir();
     try {
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForCleanup(paths);
       expect(agents.some((a) => a.id === 'openCode')).toBe(false);
     } finally { cleanup(); }
   });
@@ -327,8 +334,73 @@ describe('detectAgents', () => {
     try {
       mkdirSync(join(dir, '.cursor'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const cursor = detectAgents(paths).find((a) => a.id === 'cursor')!;
+      const cursor = detectAgentsForCleanup(paths).find((a) => a.id === 'cursor')!;
       expect(cursor.type).toBe('standard');
+    } finally { cleanup(); }
+  });
+});
+
+// ── SUPPORTED_AGENT_IDS ───────────────────────────────────────────────────────
+
+describe('SUPPORTED_AGENT_IDS', () => {
+  it('includes Claude Code (the one officially supported agent in this version)', () => {
+    expect(SUPPORTED_AGENT_IDS.has('claude')).toBe(true);
+  });
+
+  it('does not yet include Cursor, Windsurf, Cline, Roo Code, KiloCode, or OpenCode', () => {
+    for (const id of ['cursor', 'windsurf', 'cline', 'rooCode', 'kiloCode', 'openCode']) {
+      expect(SUPPORTED_AGENT_IDS.has(id)).toBe(false);
+    }
+  });
+});
+
+// ── detectAgents (filtered wrapper) ───────────────────────────────────────────
+//
+// detectAgents applies SUPPORTED_AGENT_IDS to detectAgentsForCleanup's output.
+// These tests verify the filter is the only difference — every id NOT in the
+// supported set is dropped, regardless of on-disk presence.
+
+describe('detectAgents — SUPPORTED_AGENT_IDS filter', () => {
+  it('returns only Claude Code even when every other agent dir exists on disk', () => {
+    const { dir, cleanup } = tmpDir();
+    try {
+      mkdirSync(join(dir, '.cursor'),                                            { recursive: true });
+      mkdirSync(join(dir, '.codeium', 'windsurf'),                               { recursive: true });
+      mkdirSync(join(dir, '.config', 'Code', 'User', 'globalStorage',
+                'saoudrizwan.claude-dev', 'settings'),                           { recursive: true });
+      mkdirSync(join(dir, '.config', 'Code', 'User', 'globalStorage',
+                'rooveterinaryinc.roo-cline', 'settings'),                       { recursive: true });
+      mkdirSync(join(dir, '.kilocode'),                                          { recursive: true });
+      mkdirSync(join(dir, '.config', 'opencode'),                                { recursive: true });
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const agents = detectAgents(paths);
+      expect(agents.map((a) => a.id)).toEqual(['claude']);
+    } finally { cleanup(); }
+  });
+
+  it('preserves Claude Code DetectedAgent shape (id, label, type) when filtered', () => {
+    const { dir, cleanup } = tmpDir();
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const claude = detectAgents(paths).find((a) => a.id === 'claude')!;
+      expect(claude.label).toBe('Claude Code');
+      expect(claude.type).toBe('claude-cli');
+      expect(claude.configPath).toBe(paths.claudeJson);
+    } finally { cleanup(); }
+  });
+
+  it('detectAgents is a strict subset of detectAgentsForCleanup', () => {
+    const { dir, cleanup } = tmpDir();
+    try {
+      mkdirSync(join(dir, '.cursor'),              { recursive: true });
+      mkdirSync(join(dir, '.codeium', 'windsurf'), { recursive: true });
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const filtered = detectAgents(paths).map((a) => a.id);
+      const all      = detectAgentsForCleanup(paths).map((a) => a.id);
+      for (const id of filtered) {
+        expect(all).toContain(id);
+      }
+      expect(filtered.length).toBeLessThanOrEqual(all.length);
     } finally { cleanup(); }
   });
 });
