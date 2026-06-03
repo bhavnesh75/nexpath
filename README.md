@@ -21,20 +21,20 @@ Nexpath gives developers meaningful direction while they work with AI coding age
 
 ```mermaid
 flowchart TB
-    Agent["<b>AI Coding Agent</b><br/>Claude Code — fully supported"]
+    Agent["AI Coding Agent<br/>Claude Code — fully supported"]
     subgraph NS["nexpath-serve"]
         Capture["capture_prompt handler"]
     end
     DB[("prompt-store.db<br/>SQLite · ~/.nexpath/")]
     subgraph Pipeline["Advisory Pipeline — fires automatically after agent responds"]
-        S1["<b>Stage 1: Prompt Classifier</b><br/>Tier 1: Keyword Match (&lt;1ms)<br/>Tier 2: TF-IDF Scoring (&lt;5ms)"]
-        SM["<b>Session State Manager</b><br/>stage tracking · signal counters<br/>absence detection · user profile"]
+        S1["Stage 1: Prompt Classifier<br/>Tier 1: Keyword Match — under 1ms<br/>Tier 2: TF-IDF Scoring — under 5ms"]
+        SM["Session State Manager<br/>stage tracking · signal counters<br/>absence detection · user profile"]
         subgraph LLM["LLM Calls — gpt-4o-mini (only if Stage 2 approves)"]
-            S2["<b>Stage 2: Cross-Confirmation</b><br/>validate stage · decide if advisory fires"]
-            PL["<b>Pinch Label</b><br/>2–3 word header"]
-            OPT["<b>Option Adaptation</b><br/>vocabulary + feature embedding"]
+            S2["Stage 2: Cross-Confirmation<br/>validate stage · decide if advisory fires"]
+            PL["Pinch Label<br/>2–3 word header"]
+            OPT["Option Adaptation<br/>vocabulary + feature embedding"]
         end
-        DS["<b>Decision Session UI</b><br/>question → L1 / L2 / L3<br/>selected prompt → back to agent"]
+        DS["Decision Session UI<br/>question → L1 / L2 / L3<br/>selected prompt → back to agent"]
     end
     Agent --> NS
     NS --> DB
