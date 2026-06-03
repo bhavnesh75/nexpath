@@ -162,7 +162,7 @@ session leave your machine.
   PEM blocks are automatically stripped from prompts before storage.
 - **Install-time consent** — During `nexpath install`, telemetry is a separate consent step
   (defaults to enabled). Local prompt capture and remote telemetry are independent — disable
-  either anytime via `nexpath store disable` (if you do this, nothing will work) or
+  either anytime via `nexpath store disable`(if you do this, nothing will work) or
   `nexpath config set telemetry.enabled false`.
 
 ### Deleting Stored Prompts
