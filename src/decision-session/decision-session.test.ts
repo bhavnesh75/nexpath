@@ -5309,98 +5309,520 @@ describe('resolveDecisionContent — vibe_coder role routing', () => {
 // ── Phase 7 F1-F2 — session-quality content ───────────────────────────────────
 
 describe('Phase 7 content — CASUAL variants', () => {
-  it('ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L1).toHaveLength(1);
-    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L2).toHaveLength(1);
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L2).toHaveLength(2);
     expect(ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_WORK_RHYTHM_CHECK_CASUAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L1).toHaveLength(1);
-    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L2).toHaveLength(1);
+  it('ABSENCE_WORK_RHYTHM_CHECK_CASUAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L2).toHaveLength(2);
     expect(ABSENCE_WORK_RHYTHM_CHECK_CASUAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L1).toHaveLength(1);
-    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L2).toHaveLength(1);
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L2).toHaveLength(2);
     expect(ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L1).toHaveLength(1);
-    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L2).toHaveLength(1);
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L2).toHaveLength(2);
     expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L1).toHaveLength(1);
-    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L2).toHaveLength(1);
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L1).toHaveLength(3);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L2).toHaveLength(2);
     expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL.L3).toHaveLength(1);
   });
 });
 
 describe('Phase 7 content — FORMAL variants', () => {
-  it('ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L1).toHaveLength(1);
-    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L2).toHaveLength(1);
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L1).toHaveLength(3);
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L2).toHaveLength(2);
     expect(ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_WORK_RHYTHM_CHECK_FORMAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L1).toHaveLength(1);
-    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L2).toHaveLength(1);
+  it('ABSENCE_WORK_RHYTHM_CHECK_FORMAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L1).toHaveLength(3);
+    expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L2).toHaveLength(2);
     expect(ABSENCE_WORK_RHYTHM_CHECK_FORMAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L1).toHaveLength(1);
-    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L2).toHaveLength(1);
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L1).toHaveLength(3);
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L2).toHaveLength(2);
     expect(ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L1).toHaveLength(1);
-    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L2).toHaveLength(1);
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L1).toHaveLength(3);
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L2).toHaveLength(2);
     expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L1).toHaveLength(1);
-    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L2).toHaveLength(1);
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL has 3 L1, 2 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L1).toHaveLength(3);
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L2).toHaveLength(2);
     expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL.L3).toHaveLength(1);
   });
 });
 
 describe('Phase 7 content — BEGINNER variants', () => {
-  it('ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L1).toHaveLength(1);
+  it('ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER has 3 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L1).toHaveLength(3);
     expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L2).toHaveLength(1);
     expect(ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_WORK_RHYTHM_CHECK_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L1).toHaveLength(1);
+  it('ABSENCE_WORK_RHYTHM_CHECK_BEGINNER has 3 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L1).toHaveLength(3);
     expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L2).toHaveLength(1);
     expect(ABSENCE_WORK_RHYTHM_CHECK_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L1).toHaveLength(1);
+  it('ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER has 3 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L1).toHaveLength(3);
     expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L2).toHaveLength(1);
     expect(ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L1).toHaveLength(1);
+  it('ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER has 3 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L1).toHaveLength(3);
     expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L2).toHaveLength(1);
     expect(ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER.L3).toHaveLength(1);
   });
 
-  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER has 1 L1, 1 L2, 1 L3', () => {
-    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L1).toHaveLength(1);
+  it('ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER has 3 L1, 1 L2, 1 L3', () => {
+    expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L1).toHaveLength(3);
     expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L2).toHaveLength(1);
     expect(ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER.L3).toHaveLength(1);
+  });
+});
+
+// ── Phase 7 F1-F2 — content invariants ────────────────────────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans count-literal tokens
+// in the L1 / L2 / L3 option arrays for the 5 session-quality signals × 3 registers.
+
+describe('Phase 7 content — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    // FORMAL — 3 preserve question, 2 override (count-free)
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL,   q: 'Long acceptance streak — applied critical review recently?',     pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_FORMAL',          c: ABSENCE_WORK_RHYTHM_CHECK_FORMAL,          q: 'Rapid prompting — verified each response before continuing?',    pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL,      q: 'Multiple areas open — completed any end-to-end?',                pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL,  q: 'Extended session — context checkpoint done?',                    pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL, q: 'Extended implementation — progress documented?',                 pf: 'Document now.' },
+    // CASUAL — same overrides for session_length / progress_consolidation
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL,   q: 'Long acceptance streak — applied critical review recently?',     pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_CASUAL',          c: ABSENCE_WORK_RHYTHM_CHECK_CASUAL,          q: 'Rapid prompting — verified each response before continuing?',    pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL,      q: 'Multiple areas open — completed any end-to-end?',                pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL,  q: 'Extended session — context checkpoint done?',                    pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL, q: 'Extended implementation — progress documented?',                 pf: 'Document now.' },
+    // BEGINNER — all 5 preserve question + pinchFallback (no count literals existed in BEGINNER questions)
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER',   c: ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER,   q: 'Accepting without reviewing — applied critical check recently?', pf: 'Streak alert.' },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_BEGINNER',          c: ABSENCE_WORK_RHYTHM_CHECK_BEGINNER,          q: 'Sending fast — read the last response fully before continuing?', pf: 'Slow down.' },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER',      c: ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER,      q: 'Working on many things — finished any of them yet?',             pf: 'Focus drift.' },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER,  q: 'Working for a while — what have you built so far?',              pf: 'Checkpoint due.' },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER, q: 'Built a lot — have you written down what you made?',             pf: 'Document now.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question matches expected (preserved or count-free override)`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('Phase 7 content — no count-literal tokens in L1/L2/L3', () => {
+  const constants: Array<{ name: string; c: import('./options.js').DecisionContent }> = [
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_FORMAL',          c: ABSENCE_WORK_RHYTHM_CHECK_FORMAL },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL },
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL',   c: ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_CASUAL',          c: ABSENCE_WORK_RHYTHM_CHECK_CASUAL },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL',      c: ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL },
+    { name: 'ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER',   c: ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER },
+    { name: 'ABSENCE_WORK_RHYTHM_CHECK_BEGINNER',          c: ABSENCE_WORK_RHYTHM_CHECK_BEGINNER },
+    { name: 'ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER',      c: ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER },
+    { name: 'ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER',  c: ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER },
+    { name: 'ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER', c: ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER },
+  ];
+
+  // Forbidden tokens that previously appeared in the inverted-cascade L1/L2 content.
+  // Allowed: ordinary uses of "N" as a sentence-initial pronoun (none expected here), or
+  //          regular text that happens to contain the letter — patterns below use \b word
+  //          boundaries to avoid false positives.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    { pattern: /\bN prompts\b/,          description: 'unsubstituted "N prompts" placeholder' },
+    { pattern: /\bN AI\b/,               description: 'unsubstituted "N AI" placeholder' },
+    { pattern: /\bN distinct\b/,         description: 'unsubstituted "N distinct" placeholder' },
+    { pattern: /\b25\+\b/,               description: '"25+" hardcoded threshold' },
+    { pattern: /\b20\+\b/,               description: '"20+" hardcoded threshold' },
+    { pattern: /\b25 prompts\b/,         description: '"25 prompts" hardcoded count' },
+    { pattern: /\b20 prompts\b/,         description: '"20 prompts" hardcoded count' },
+  ];
+
+  for (const { name, c } of constants) {
+    it(`${name} L1/L2/L3 entries contain no count-literal tokens`, () => {
+      const all: string[] = [...c.L1, ...c.L2, ...c.L3];
+      for (let i = 0; i < all.length; i++) {
+        const text = all[i];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `entry index ${i} contains ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      }
+    });
+  }
+});
+
+// ── Phase 5 D10-D12 — academic-register content invariants ────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans academic-citation /
+// tool-callout patterns in the L1 / L2 option arrays for the 12 hardcore_pro
+// FORMAL signals rewritten under Sub-Issue 3.
+
+describe('D10-D12 academic-register — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    { name: 'ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL',      c: ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL,      q: 'External dependencies integrated — failure modes enumerated?', pf: 'Enumerate failure modes for each dependency.' },
+    { name: 'ABSENCE_CONTRACT_TESTING_GAP_FORMAL',       c: ABSENCE_CONTRACT_TESTING_GAP_FORMAL,       q: 'Service boundary established — contract tests defined?',      pf: 'Define consumer-driven contract tests for this boundary.' },
+    { name: 'ABSENCE_CAPACITY_PLANNING_GAP_FORMAL',      c: ABSENCE_CAPACITY_PLANNING_GAP_FORMAL,      q: 'Load-adding feature — capacity estimate done?',                pf: 'Complete a capacity estimate before shipping.' },
+    { name: 'ABSENCE_SECURITY_THREAT_MODELING_FORMAL',   c: ABSENCE_SECURITY_THREAT_MODELING_FORMAL,   q: 'Security-sensitive feature — STRIDE threat model completed?',  pf: 'Complete a STRIDE threat model before shipping.' },
+    { name: 'ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL',  c: ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL,  q: 'Schema change — expand-migrate-contract pattern applied?',     pf: 'Apply backwards-compatible phased migration.' },
+    { name: 'ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL', c: ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL, q: 'Significant feature shipping — deployment strategy defined?', pf: 'Define deployment strategy and rollback plan before shipping.' },
+    { name: 'ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL',    c: ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL,    q: 'New service/feature shipping — operational runbook written?',  pf: 'Write the runbook before shipping.' },
+    { name: 'ABSENCE_SLO_DEFINITION_GAP_FORMAL',         c: ABSENCE_SLO_DEFINITION_GAP_FORMAL,         q: 'User-facing feature/service — SLOs defined?',                  pf: 'Define SLOs before shipping.' },
+    { name: 'ABSENCE_DECISION_RECORD_ABSENCE_FORMAL',    c: ABSENCE_DECISION_RECORD_ABSENCE_FORMAL,    q: 'Architectural decision made — ADR recorded?',                  pf: 'Record the decision with context and consequences.' },
+    { name: 'ABSENCE_OVER_ENGINEERING_CHECK_FORMAL',     c: ABSENCE_OVER_ENGINEERING_CHECK_FORMAL,     q: 'Is this abstraction required by current requirements?',        pf: 'Apply YAGNI — build only what current requirements require.' },
+    { name: 'ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL',        c: ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL,        q: 'Critical implementation complete — review plan established?',  pf: 'Establish a review plan before merging.' },
+    { name: 'ABSENCE_OBSERVABILITY_FIRST_FORMAL',        c: ABSENCE_OBSERVABILITY_FIRST_FORMAL,        q: 'Feature shipping — observability instrumented?',               pf: 'Add logging, metrics, and tracing before shipping.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question is preserved verbatim`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('D10-D12 academic-register — no citation patterns or tool callouts in L1/L2', () => {
+  const constants: Array<{ name: string; c: import('./options.js').DecisionContent }> = [
+    { name: 'ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL',      c: ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL },
+    { name: 'ABSENCE_CONTRACT_TESTING_GAP_FORMAL',       c: ABSENCE_CONTRACT_TESTING_GAP_FORMAL },
+    { name: 'ABSENCE_CAPACITY_PLANNING_GAP_FORMAL',      c: ABSENCE_CAPACITY_PLANNING_GAP_FORMAL },
+    { name: 'ABSENCE_SECURITY_THREAT_MODELING_FORMAL',   c: ABSENCE_SECURITY_THREAT_MODELING_FORMAL },
+    { name: 'ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL',  c: ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL },
+    { name: 'ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL', c: ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL },
+    { name: 'ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL',    c: ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL },
+    { name: 'ABSENCE_SLO_DEFINITION_GAP_FORMAL',         c: ABSENCE_SLO_DEFINITION_GAP_FORMAL },
+    { name: 'ABSENCE_DECISION_RECORD_ABSENCE_FORMAL',    c: ABSENCE_DECISION_RECORD_ABSENCE_FORMAL },
+    { name: 'ABSENCE_OVER_ENGINEERING_CHECK_FORMAL',     c: ABSENCE_OVER_ENGINEERING_CHECK_FORMAL },
+    { name: 'ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL',        c: ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL },
+    { name: 'ABSENCE_OBSERVABILITY_FIRST_FORMAL',        c: ABSENCE_OBSERVABILITY_FIRST_FORMAL },
+  ];
+
+  // Forbidden patterns: opener citations, URL citations, et-al citations, MIL-STD
+  // identifiers, and standalone "Tools: " list-callouts. Regex set narrowed to avoid
+  // false positives on inline engineering terms (STRIDE, RPS, SLO, ADR, etc.) which
+  // are acceptable inside the action-first prose.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    // "(Nygard, 2011)" or "(Fowler/Sadalage, 2003)"-style paren-citation.
+    { pattern: /\([A-Z][a-z]+(?:\/[A-Z][a-z]+)?(?:,| et al\.,?) \d{4}\)/, description: 'opener paren-citation like (Author, year) or (Author et al., year)' },
+    // "Beyer et al., 2016"-style inline et-al citation.
+    { pattern: /\b[A-Z][a-z]+ et al\.,? \d{4}\b/, description: 'inline et-al citation like Author et al., year' },
+    // "Adam Shostack, 'Title' (Publisher YYYY)"-style attribution.
+    { pattern: /\b[A-Z][a-z]+ [A-Z][a-z]+, '[^']+' \(/, description: 'attribution like "First Last, \'Title\' (Publisher...)"' },
+    // Year-tag opener like "Author Name (2011):" — note the colon after the paren.
+    { pattern: /\b[A-Z][a-z]+(?: [A-Z][a-z]+)? \(\d{4}\):/, description: 'opener attribution like "Author (YYYY):"' },
+    // martinfowler.com URL citation.
+    { pattern: /martinfowler\.com/, description: 'martinfowler.com URL citation' },
+    // MIL-STD identifier (FMEA opener).
+    { pattern: /\bMIL-STD-\d+[A-Z]?\b/, description: 'MIL-STD identifier (citation)' },
+    // Standalone "Tools: X, Y, Z" list-callout at the start of a clause.
+    { pattern: /(?:^|\. )Tools: [A-Z]/, description: 'standalone "Tools: X, Y, Z" list-callout' },
+  ];
+
+  for (const { name, c } of constants) {
+    it(`${name} L1/L2 entries contain no academic citation or tool-callout patterns`, () => {
+      const checkable: string[] = [...c.L1, ...c.L2];
+      for (let i = 0; i < checkable.length; i++) {
+        const text = checkable[i];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `entry index ${i} matches ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      }
+    });
+  }
+});
+
+// ── Phase 6 E1-E3 — founder role content invariants ──────────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans the definitional /
+// attributional opener forms that the §12.7 rewrites removed. Inline references
+// to product-management concepts (MVP, OKR, north star, hypothesis) inside an
+// instruction remain acceptable; the original educational openers do not.
+
+describe('Founder role — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    { name: 'ABSENCE_OUTCOME_DEFINITION_CASUAL',                c: ABSENCE_OUTCOME_DEFINITION_CASUAL,                q: 'What does success look like for this feature?',                                    pf: 'Define the success metric before building starts.' },
+    { name: 'ABSENCE_FEATURE_PRIORITIZATION_CASUAL',            c: ABSENCE_FEATURE_PRIORITIZATION_CASUAL,            q: 'Why is this the highest-priority thing to build right now?',                       pf: 'Confirm this is the highest-impact item before building.' },
+    { name: 'ABSENCE_USER_PERSONA_CLARITY_CASUAL',              c: ABSENCE_USER_PERSONA_CLARITY_CASUAL,              q: 'Who specifically is this feature for?',                                            pf: 'Name the specific user this feature is designed for.' },
+    { name: 'ABSENCE_COMPETITIVE_AWARENESS_CASUAL',             c: ABSENCE_COMPETITIVE_AWARENESS_CASUAL,             q: 'Have you checked how competitors handle this?',                                    pf: 'Run a quick competitive check before committing to this build.' },
+    { name: 'ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL',           c: ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL,           q: 'Is this addition within MVP scope?',                                               pf: 'Check whether this is needed to test the core hypothesis.' },
+    { name: 'ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL',    c: ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL,    q: 'How will target users find and access this feature?',                              pf: 'Define the acquisition path before building.' },
+    { name: 'ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL',         c: ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL,         q: 'How does this feature bring users back?',                                          pf: 'Consider the retention angle before building.' },
+    { name: 'ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL',       c: ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL,       q: 'How will you know if this feature is working after you ship it?',                  pf: 'Add a feedback mechanism before shipping.' },
+    { name: 'ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL',           c: ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL,           q: 'What hypothesis does this feature test?',                                          pf: 'Define the hypothesis before starting the build.' },
+    { name: 'ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL', c: ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL, q: 'When did you last check product direction — not just implementation?',             pf: 'Take a product perspective before continuing to build.' },
+    { name: 'ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL',              c: ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL,              q: 'How does this feature connect to your product\'s core metric?',                    pf: 'Check north star alignment before adding this feature.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question is preserved verbatim`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('Founder role — no opener-attribution patterns in rewritten L1 slots', () => {
+  // Affected slots per analysis §12.7 / dev plan §5.1 table.
+  const affectedSlots: Array<{ name: string; c: import('./options.js').DecisionContent; slots: number[] }> = [
+    { name: 'ABSENCE_USER_PERSONA_CLARITY_CASUAL',              c: ABSENCE_USER_PERSONA_CLARITY_CASUAL,              slots: [0, 1, 2] },
+    { name: 'ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL',              c: ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL,              slots: [0, 1, 2] },
+    { name: 'ABSENCE_OUTCOME_DEFINITION_CASUAL',                c: ABSENCE_OUTCOME_DEFINITION_CASUAL,                slots: [1, 2] },
+    { name: 'ABSENCE_FEATURE_PRIORITIZATION_CASUAL',            c: ABSENCE_FEATURE_PRIORITIZATION_CASUAL,            slots: [2] },
+    { name: 'ABSENCE_COMPETITIVE_AWARENESS_CASUAL',             c: ABSENCE_COMPETITIVE_AWARENESS_CASUAL,             slots: [1, 2] },
+    { name: 'ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL',           c: ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL,           slots: [0] },
+    { name: 'ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL',    c: ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL,    slots: [1, 2] },
+    { name: 'ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL',         c: ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL,         slots: [1] },
+    { name: 'ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL',       c: ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL,       slots: [1] },
+    { name: 'ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL',           c: ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL,           slots: [0, 2] },
+    { name: 'ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL', c: ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL, slots: [0] },
+  ];
+
+  // Forbidden patterns: opener-attribution forms and definitional-statement openers
+  // that the §12.7 rewrites removed. Inline references to product-management
+  // concepts (the word "MVP", "OKR", "north star", "hypothesis") inside an
+  // instruction remain acceptable — these patterns target opener-style usage only.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    // Attribution openers like "Alan Cooper's persona principle:" or "Nir Eyal's Hook model:"
+    { pattern: /\b(?:Alan Cooper|Nir Eyal|Eric Ries|Steve Blank)'s [A-Z][a-z]+/, description: 'attribution opener referencing a named thinker' },
+    // Framework-as-opener like "Lean Startup core loop:"
+    { pattern: /\bLean Startup core loop\b/, description: 'Lean Startup framework opener' },
+    // Definitional opener form: "MVP stands for minimum viable product" / similar acronym expansion
+    { pattern: /\b[A-Z]{2,4} stands for [a-z]/, description: 'acronym-expansion definitional opener' },
+    // Observational opener about founders ("Founders who code face a structural bias...")
+    { pattern: /^Founders who code face a structural bias/, description: 'observational opener about founders\' bias' },
+    // Definitional opener about feature builds ("Every feature build is an experiment.")
+    { pattern: /^Every feature build is an experiment\b/, description: 'definitional opener about feature builds' },
+    // Definitional opener about the north star metric
+    { pattern: /^The north star metric is the single number\b/, description: 'definitional opener about the north star metric' },
+    // Definitional opener about persona principle
+    { pattern: /^Building for "users" in the abstract\b/, description: 'definitional opener about users in the abstract' },
+  ];
+
+  for (const { name, c, slots } of affectedSlots) {
+    for (const slotIndex of slots) {
+      it(`${name} L1[${slotIndex}] (rewritten) contains no opener-attribution patterns`, () => {
+        const text = c.L1[slotIndex];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      });
+    }
+  }
+});
+
+// ── Phase 6 E7-E9 — PM role content invariants ────────────────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans citation / framework
+// reference patterns in the affected L1 slots for the 12 PM-role FORMAL signals
+// where surgical slot rewrites were applied. Unaffected L1 slots, L2, and L3
+// are NOT covered by the sweep below (they may legitimately contain framework
+// references in casual prose); only the affected slots are locked.
+
+describe('PM role — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    { name: 'ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL',  c: ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL,  q: 'Are acceptance criteria defined for this story before development begins?',                                pf: 'Define acceptance criteria for this story before starting implementation.' },
+    { name: 'ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL',     c: ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL,     q: 'Have relevant stakeholders been aligned on this feature before development begins?',                       pf: 'Verify stakeholder alignment before proceeding with significant development work.' },
+    { name: 'ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL',     c: ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL,     q: 'Are there ambiguous quality attributes in these requirements that need a measurable definition?',          pf: 'Resolve ambiguous quality attributes to measurable criteria before implementation.' },
+    { name: 'ABSENCE_DEPENDENCY_MAPPING_FORMAL',              c: ABSENCE_DEPENDENCY_MAPPING_FORMAL,              q: 'Have upstream and downstream dependencies for this work been identified before starting?',                 pf: 'Map dependencies before beginning this work to prevent blocked integration.' },
+    { name: 'ABSENCE_DEFINITION_OF_DONE_FORMAL',              c: ABSENCE_DEFINITION_OF_DONE_FORMAL,              q: 'Is there an explicit Definition of Done for this sprint item?',                                            pf: 'Define the completion criteria for this item before starting work.' },
+    { name: 'ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL',         c: ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL,         q: 'Have teams affected by this change been notified before development begins?',                              pf: 'Identify and notify affected teams before building this change to shared systems.' },
+    { name: 'ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL',       c: ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL,       q: 'Is there a success metric defined for this feature before development begins?',                            pf: 'Define how success will be measured for this feature before starting implementation.' },
+    { name: 'ABSENCE_PRIORITY_JUSTIFICATION_FORMAL',          c: ABSENCE_PRIORITY_JUSTIFICATION_FORMAL,          q: 'Is there an explicit justification for why this item is the current highest priority?',                    pf: 'Articulate the priority justification for this item before beginning work.' },
+    { name: 'ABSENCE_USER_STORY_COMPLETENESS_FORMAL',         c: ABSENCE_USER_STORY_COMPLETENESS_FORMAL,         q: 'Is this work item expressed as a complete user story with who, what, and why?',                            pf: 'Reframe this work item as a user story — who benefits, what they need, why it matters.' },
+    { name: 'ABSENCE_RISK_FLAG_FORMAL',                       c: ABSENCE_RISK_FLAG_FORMAL,                       q: 'Have risks been identified for this decision or scope change before proceeding?',                          pf: 'Identify and document risks before proceeding with this significant decision.' },
+    { name: 'ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL',  c: ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL,  q: 'Has the impact of this scope change on the current sprint been assessed?',                                 pf: 'Assess sprint impact before accepting this scope change.' },
+    { name: 'ABSENCE_RETROSPECTIVE_HABIT_FORMAL',             c: ABSENCE_RETROSPECTIVE_HABIT_FORMAL,             q: 'Has this sprint or iteration been closed with a retrospective before starting the next?',                  pf: 'Run a retrospective on this sprint before moving to the next cycle.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question is preserved verbatim`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('PM role — no opener-citation or framework-only opener tokens in rewritten L1 entries', () => {
+  // Affected slots per analysis §12.8. Sweep ONLY these specific slot indices —
+  // unaffected L1 entries are out of scope (may legitimately contain framework
+  // references in casual prose).
+  const affectedSlots: Array<{ name: string; c: import('./options.js').DecisionContent; slots: number[] }> = [
+    { name: 'ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL',  c: ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL,  slots: [0, 1] },
+    { name: 'ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL',     c: ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL,     slots: [0, 1] },
+    { name: 'ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL',     c: ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL,     slots: [0, 1, 2] },
+    { name: 'ABSENCE_DEPENDENCY_MAPPING_FORMAL',              c: ABSENCE_DEPENDENCY_MAPPING_FORMAL,              slots: [1, 2] },
+    { name: 'ABSENCE_DEFINITION_OF_DONE_FORMAL',              c: ABSENCE_DEFINITION_OF_DONE_FORMAL,              slots: [0, 1, 2] },
+    { name: 'ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL',         c: ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL,         slots: [0, 1] },
+    { name: 'ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL',       c: ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL,       slots: [0, 2] },
+    { name: 'ABSENCE_PRIORITY_JUSTIFICATION_FORMAL',          c: ABSENCE_PRIORITY_JUSTIFICATION_FORMAL,          slots: [0] },
+    { name: 'ABSENCE_USER_STORY_COMPLETENESS_FORMAL',         c: ABSENCE_USER_STORY_COMPLETENESS_FORMAL,         slots: [0, 1] },
+    { name: 'ABSENCE_RISK_FLAG_FORMAL',                       c: ABSENCE_RISK_FLAG_FORMAL,                       slots: [0] },
+    { name: 'ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL',  c: ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL,  slots: [0] },
+    { name: 'ABSENCE_RETROSPECTIVE_HABIT_FORMAL',             c: ABSENCE_RETROSPECTIVE_HABIT_FORMAL,             slots: [0, 1, 2] },
+  ];
+
+  // Forbidden patterns: opener attributions and framework-only openers that the
+  // §12.8 rewrites removed. Inline references to a framework name (e.g. "Apply
+  // INVEST to..." or "SMART criteria" inside an instruction) are acceptable; the
+  // patterns below catch only opener-style citations and bare "(Wiegers, SEI)"-
+  // style citations.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    // "(Wiegers, SEI)" / "(Beyer et al., 2016)" paren-citations
+    { pattern: /\([A-Z][a-z]+(?:\/[A-Z][a-z]+)?(?:,| et al\.,?) [A-Z0-9]/, description: 'paren-citation like (Author, Org/Year)' },
+    // "PMBOK ... (Ch.NN)" framework-reference opener
+    { pattern: /\bPMBOK [a-z][a-z\s]+\(Ch\.\d+\)/, description: 'PMBOK chapter-reference opener' },
+    // "Scrum Guide 2020"-style version citation
+    { pattern: /\bScrum Guide \d{4}\b/, description: 'Scrum Guide year-version citation' },
+    // "Norm Kerth's Prime Directive framework" — opener attribution to a named person+framework
+    { pattern: /\bNorm Kerth's [A-Z][a-z]+ [A-Z][a-z]+\b/, description: 'Norm Kerth attribution opener' },
+    // Inline et-al style citation
+    { pattern: /\b[A-Z][a-z]+ et al\.,? \d{4}\b/, description: 'inline et-al citation' },
+  ];
+
+  for (const { name, c, slots } of affectedSlots) {
+    for (const slotIndex of slots) {
+      it(`${name} L1[${slotIndex}] (rewritten) contains no citation or framework-opener patterns`, () => {
+        const text = c.L1[slotIndex];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      });
+    }
+  }
+});
+
+// ── Phase 6 E4-E6 — indie_hacker role content invariants ─────────────────────
+// Locks pinch-UI labels (question + pinchFallback) and bans verbatim citations
+// of indie-hacker thought-leaders (37signals, Paul Graham, CV-driven dev) in the
+// rewritten L1 slots. Inline framework references inside instructions remain
+// acceptable; opener-citations are not.
+
+describe('Indie_hacker role — question + pinchFallback invariants', () => {
+  const pinchLabels: Array<{ name: string; c: import('./options.js').DecisionContent; q: string; pf: string }> = [
+    { name: 'ABSENCE_TIME_TO_VALUE_CHECK_CASUAL',         c: ABSENCE_TIME_TO_VALUE_CHECK_CASUAL,         q: 'Is this solution the right size for your current scale?',                       pf: 'Check whether this complexity is justified at current user count.' },
+    { name: 'ABSENCE_SHIP_READINESS_DEFINITION_CASUAL',   c: ABSENCE_SHIP_READINESS_DEFINITION_CASUAL,   q: 'What needs to be true for this to be ready to ship?',                            pf: 'Write ship criteria before continuing to build.' },
+    { name: 'ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL',      c: ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL,      q: 'Have you done this manually to confirm it works before automating?',             pf: 'Do it manually first, then automate the proven version.' },
+    { name: 'ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL', c: ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL, q: 'Can you maintain this architecture alone, at 2am, when it breaks?',              pf: 'Apply the solo maintainability test before adding this complexity.' },
+    { name: 'ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL',     c: ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL,     q: 'How are people going to find out this product exists when you launch?',          pf: 'Define a launch strategy before getting closer to ship date.' },
+    { name: 'ABSENCE_EARLY_USER_FEEDBACK_CASUAL',         c: ABSENCE_EARLY_USER_FEEDBACK_CASUAL,         q: 'When did you last get a real user\'s reaction to what you\'re building?',         pf: 'Show what you\'ve built to at least one real user before continuing.' },
+    { name: 'ABSENCE_SOLO_MAINTAINABILITY_CASUAL',        c: ABSENCE_SOLO_MAINTAINABILITY_CASUAL,        q: 'Is this addition maintainable by you alone, long-term?',                         pf: 'Run the solo maintainability check before adding this complexity.' },
+    { name: 'ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL',   c: ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL,   q: 'How does this feature connect to how the product makes money?',                  pf: 'Consider the monetization connection before building this feature.' },
+    { name: 'ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL', c: ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL, q: 'Is this a milestone worth sharing publicly?',                                     pf: 'Consider sharing this milestone publicly before moving to the next.' },
+    { name: 'ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL',         c: ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL,         q: 'Is the current scope still within your available time and energy?',              pf: 'Run a scope-vs-time check before adding more to the build.' },
+  ];
+
+  for (const { name, c, q, pf } of pinchLabels) {
+    it(`${name} question is preserved verbatim`, () => {
+      expect(c.question).toBe(q);
+    });
+    it(`${name} pinchFallback is preserved verbatim`, () => {
+      expect(c.pinchFallback).toBe(pf);
+    });
+  }
+});
+
+describe('Indie_hacker role — no opener-citation patterns in rewritten L1 slots', () => {
+  // Affected slots per analysis §12.9.
+  const affectedSlots: Array<{ name: string; c: import('./options.js').DecisionContent; slots: number[] }> = [
+    { name: 'ABSENCE_TIME_TO_VALUE_CHECK_CASUAL',         c: ABSENCE_TIME_TO_VALUE_CHECK_CASUAL,         slots: [0, 1] },
+    { name: 'ABSENCE_SHIP_READINESS_DEFINITION_CASUAL',   c: ABSENCE_SHIP_READINESS_DEFINITION_CASUAL,   slots: [0] },
+    { name: 'ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL',      c: ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL,      slots: [0] },
+    { name: 'ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL', c: ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL, slots: [1] },
+    { name: 'ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL',     c: ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL,     slots: [1] },
+    { name: 'ABSENCE_EARLY_USER_FEEDBACK_CASUAL',         c: ABSENCE_EARLY_USER_FEEDBACK_CASUAL,         slots: [0, 1] },
+    { name: 'ABSENCE_SOLO_MAINTAINABILITY_CASUAL',        c: ABSENCE_SOLO_MAINTAINABILITY_CASUAL,        slots: [1] },
+    { name: 'ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL',   c: ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL,   slots: [2] },
+    { name: 'ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL', c: ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL, slots: [0, 1, 2] },
+    { name: 'ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL',         c: ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL,         slots: [0] },
+  ];
+
+  // Forbidden patterns: opener attributions. Inline references like
+  // "Apply Paul Graham's 'do things that don't scale' rule" or "Apply the 37signals
+  // match-current-traffic rule" are acceptable — these are instructions that
+  // reference a named principle inline. Opener forms like "Paul Graham: 'quote'"
+  // or "37signals principle: ..." as the sentence-leading attribution are not.
+  const forbidden: Array<{ pattern: RegExp; description: string }> = [
+    // "Paul Graham: 'quote'..."-style attribution opener (proper name + colon at start of sentence)
+    { pattern: /^(?:Paul Graham|Joel Spolsky|Jason Fried|David Heinemeier Hansson|Nir Eyal|Eric Ries):/, description: 'attribution opener: "Author: ..."' },
+    // "37signals principle: ..."-style framework opener (where "principle:" is the slot opener)
+    { pattern: /^37signals principle:/, description: '37signals principle opener' },
+    // "CV-driven development trap: ..."-style trap opener
+    { pattern: /^CV-driven development trap:/, description: 'CV-driven development trap opener' },
+    // "Hook model: ..." style (Nir Eyal framework opener)
+    { pattern: /^(?:Nir Eyal's )?Hook model:/, description: 'Hook model opener' },
+  ];
+
+  for (const { name, c, slots } of affectedSlots) {
+    for (const slotIndex of slots) {
+      it(`${name} L1[${slotIndex}] (rewritten) contains no opener-citation patterns`, () => {
+        const text = c.L1[slotIndex];
+        for (const { pattern, description } of forbidden) {
+          expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
+        }
+      });
+    }
+  }
+});
+
+// ── Phase 5 D7-D9 borderline — ABSENCE_TEST_DEPTH_CHECK_CASUAL invariant ──────
+// Single-slot surgical rewrite: L1[2] changed from an educational test-categories
+// list to a directive that produces a test per category. Locks the rewritten slot
+// against drift back to the educational form.
+
+describe('D7-D9 borderline — ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] invariant', () => {
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] starts with an action verb (Add)', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/^Add tests beyond the happy path/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] ends with the per-category write directive', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/Write at least one test per category for what was just built before moving on\.$/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] does NOT contain the original "misleadingly high" educational closer', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).not.toMatch(/misleadingly high/);
+  });
+
+  it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[0] and L1[1] are unchanged from source (not touched by §12.10)', () => {
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[0]).toMatch(/Testing pyramid \(Mike Cohn, 2009\)/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[1]).toMatch(/Branch coverage over line coverage/);
   });
 });
 

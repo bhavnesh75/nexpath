@@ -1899,7 +1899,7 @@ const ABSENCE_TEST_DEPTH_CHECK_CASUAL: DecisionContent = {
   L1: [
     'Testing pyramid (Mike Cohn, 2009): tests must cover happy paths, edge cases, and negative scenarios. \'Start with happy path tests, then add error cases that verify graceful failure handling.\' Happy-path-only tests provide false confidence — everything looks green but real-world conditions break the code.',
     'Branch coverage over line coverage: every decision path needs a test. For what was just written — what are the edge cases? (empty input, null, boundary values). What are the error paths? (what happens when this fails). Add at least one test for each non-happy-path scenario.',
-    'Three test categories beyond the happy path: (1) boundary value tests — empty, null, max, min; (2) error path tests — what happens when the operation fails; (3) negative tests — invalid input, unexpected state. Without these, test coverage is misleadingly high.',
+    'Add tests beyond the happy path in three categories: (1) boundary values — empty, null, max, min; (2) error paths — what happens when the operation fails; (3) negative tests — invalid input, unexpected state. Write at least one test per category for what was just built before moving on.',
   ],
   L2: [
     'Do the tests cover edge cases (empty, null, boundary values) and error paths (what happens when this fails)? Happy path only is false confidence.',
@@ -2073,13 +2073,13 @@ const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
   question:      'Architectural decision made — ADR recorded?',
   pinchFallback: 'Record the decision with context and consequences.',
   L1: [
-    'Architecture Decision Records (Nygard, 2011): capture context, decision, and consequences for every significant architectural choice. The ADR format answers: What context makes this decision necessary? What was decided? What are the consequences and trade-offs accepted? Without a record, the rationale becomes invisible to future maintainers and cannot be revisited when requirements change. Write the ADR while the context is still loaded.',
-    'The value of an ADR is the rationale, not the decision. Document: (1) what alternatives were considered; (2) why this option was selected over them; (3) what constraints or forces drove the choice; (4) what the known consequences are. Future engineers need to determine whether the context that forced this decision has changed — without a record, that assessment is impossible.',
-    'Minimum viable ADR: a short doc or comment block — title, status, context, decision, consequences. ADRs do not need to be long; Nygard\'s originals are 1–2 pages. Keep them in doc/adr/ in the repository. A decision without a record is a decision that will be questioned repeatedly without ever being resolved, by everyone who inherits the codebase.',
+    'Write an architecture decision record for the key design decision made here: document the context (what problem was being solved), the decision made, the alternatives that were considered and rejected, and the consequences — so future engineers understand why this exists as it does.',
+    'Create an ADR capturing this architectural decision: what was decided, what were the alternatives, what tradeoffs were accepted, and what constraints or assumptions this decision depends on.',
+    'Record this architectural decision before the session ends: context, decision, consequences, alternatives considered — without this, the design rationale will be lost as team composition or memory changes.',
   ],
   L2: [
-    'For the architectural decision just made: record context, decision, and consequences in an ADR. Without a record, the rationale is invisible to every future maintainer — including the author six months from now.',
-    'What alternatives were considered, and why was this option chosen over them? Document the reasoning — it disappears from memory faster than the code does.',
+    'Write an ADR for this decision — context, decision, consequences, and alternatives considered.',
+    'Document the key architectural decision made here: what was decided and why, and what the main alternative was.',
   ],
   L3: [
     'Write an ADR for this decision: context, decision, consequences, and alternatives considered.',
@@ -2090,13 +2090,13 @@ const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
   question:      'Is this abstraction required by current requirements?',
   pinchFallback: 'Apply YAGNI — build only what current requirements require.',
   L1: [
-    'YAGNI (You Aren\'t Gonna Need It — Kent Beck, XP 1999): implement things only when you actually need them, never when you foresee you might. Martin Fowler (2015): \'The cost of YAGNI is that you may need to refactor later, but that is usually less expensive than the cost of carrying unneeded complexity.\' YAGNI test: does a current user story, ticket, or requirement map to this abstraction? If not, remove it and implement the minimal solution. Refactor to the abstraction when the second use case arrives.',
-    'Over-engineering is a senior engineer trap: the abstractions appear reasonable because they are technically correct — \'we will need this extensibility eventually.\' Empirical counter: Kohavi et al. (Microsoft Research) found only 1/3 of shipped features improved intended metrics. Speculative development compounds carrying cost at the same rate as rushed development compounds defect cost. The YAGNI discipline: no current requirement, no implementation.',
-    'Three YAGNI violation indicators: (1) the phrase \'in case we need\' was used to justify the abstraction; (2) no current requirement maps to the extensibility being built; (3) the implementation would be simpler and still complete current requirements without the abstraction. If any apply — revert to the minimal implementation. The refactoring to the abstraction when the second use case arrives costs less than carrying unneeded complexity through every sprint until then.',
+    'Apply YAGNI to what was just built: identify any abstraction, interface, or configuration option that was added speculatively — not required by a current story or use case — and remove or defer it.',
+    'Audit what was just built for speculative design: flag any abstraction layer, plugin interface, or extensibility mechanism that has no current consumer, and propose removing or simplifying it.',
+    'Apply YAGNI: for each abstraction in what was just built, confirm there is a current requirement that justifies it — if not, propose the simpler implementation that still satisfies the present use case.',
   ],
   L2: [
-    'Does a current requirement necessitate this abstraction? If not, apply YAGNI: implement the minimal solution that satisfies today\'s requirements. Refactor to the abstraction when the second concrete use case arrives.',
-    'YAGNI check: is there a ticket, story, or current requirement that requires this extensibility? \'We will need it eventually\' is the over-engineering justification — defer until needed.',
+    'Apply YAGNI to what was just built — identify and remove any abstraction not required by a current story or use case.',
+    'Is there any abstraction in what was just built that has no current consumer? If so, propose removing it.',
   ],
   L3: [
     'Apply YAGNI — remove speculative abstraction and implement only what current requirements require.',
@@ -2107,13 +2107,13 @@ const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
   question:      'Critical implementation complete — review plan established?',
   pinchFallback: 'Establish a review plan before merging.',
   L1: [
-    'Code review effectiveness (Fagan Inspection; McConnell, Code Complete 2004): peer review catches 60–90% of defects vs. 25–45% for testing alone — the highest-ROI quality control mechanism in software engineering. For critical or complex features, a review plan is not optional. Establish: who reviews this, what the review checklist covers (design correctness, error handling completeness, security surface, test coverage), and what the merge gate is.',
-    'Google Engineering Practices: \'The author is the first reviewer, but not the only one.\' For critical paths — new service boundaries, auth flows, data model changes, infrastructure code — peer review before merge is mandatory. If no peer is available: a structured self-review covering design correctness, error handling completeness, and security surface is the minimum acceptable review artifact before merge.',
-    'Three review artifacts for critical implementations: (1) diff review for design correctness — does the implementation match the intended architecture and are there unintended side effects; (2) error handling completeness — are all documented failure modes handled; (3) security surface review — were attack surfaces introduced that require threat modeling. Establish which of these will be covered and by whom. Merging a critical implementation without a review plan is an SRE anti-pattern.',
+    'Establish a review plan for this change before merging: define who reviews it, what the review checklist covers (design correctness, error handling, edge cases, security, performance implications), and what the merge gate is — confirm the plan is in place before the branch is merged.',
+    'Define a review checklist for this change: design correctness, error handling completeness, edge case coverage, security implications, and any performance concerns — then assign reviewers and set a merge gate before proceeding.',
+    'Complete a structured review of what was just built: verify the design decision, check error handling for every failure path, confirm edge cases are covered, and flag any security implications before this merges.',
   ],
   L2: [
-    'Establish a review plan before merging: who reviews it, what the checklist covers (design correctness, error handling, security surface), and what the merge gate is.',
-    'Peer review catches 60–90% of defects testing misses. Critical paths require a review plan — peer, pair, or structured self-review — before merge.',
+    'Set up a review plan for this change: define the checklist, assign reviewers, and set a merge gate before merging.',
+    'What is the review plan for this change? Who reviews it, what does the checklist cover, and what is the merge gate?',
   ],
   L3: [
     'Establish and complete a review plan before merging — design correctness, error handling, security surface.',
@@ -2126,13 +2126,13 @@ const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
   question:      'Feature shipping — observability instrumented?',
   pinchFallback: 'Add logging, metrics, and tracing before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): monitoring is non-negotiable infrastructure for production systems. Three pillars of observability: (1) logs — structured event records of what happened; (2) metrics — counters and gauges measuring how much and how fast; (3) traces — distributed spans showing where time was spent. A feature without all three is partially blind in production. Add instrumentation alongside the feature, not after the first incident.',
-    'Observability-first principle: you cannot manage what you cannot measure. For the feature just built — what are the key success metrics? (request count, error rate, latency p99) What are the logged events? (entry, exit, error cases) Is there a distributed trace covering the full request path? Define and instrument these before shipping. The cost of adding observability post-incident is an unknown production state plus a time-pressured instrumentation sprint.',
-    'Minimum viable observability for a production feature: (1) a structured log entry for every significant operation — success and failure paths; (2) a counter or histogram for the primary operation rate and error rate; (3) a trace span covering the feature\'s critical path. Without these, the SRE on-call has no signal when the feature degrades. Add them now while the feature\'s critical path is loaded.',
+    'Add observability to this feature before shipping: instrument all three pillars — structured logging at each significant event boundary, metrics for request rate, error rate, and latency, and distributed trace spans for every external call — so production behavior is visible from day one.',
+    'Define and implement the observability strategy for this feature before it ships: what events get logged (and at what level), what metrics are emitted, and what trace spans are added for every external dependency call.',
+    'Instrument this feature with logs, metrics, and traces before shipping: confirm all three observability pillars are in place, that the metrics are wired to dashboards, and that alerts are defined before launch.',
   ],
   L2: [
-    'For the feature being shipped: are logs, metrics, and distributed traces in place? Observability must be instrumented alongside the feature — not added after the first production incident.',
-    'Three pillars before shipping: structured logs for success and failure paths, metrics for rate and error tracking, traces for the critical request path.',
+    'Add logging, metrics, and distributed tracing to this feature before shipping — all three observability pillars required.',
+    'What logs, metrics, and trace spans does this feature emit? Confirm all three are in place before it ships.',
   ],
   L3: [
     'Add logging, metrics, and tracing instrumentation before shipping — all three pillars required.',
@@ -2143,13 +2143,13 @@ const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
   question:      'External dependencies integrated — failure modes enumerated?',
   pinchFallback: 'Enumerate failure modes for each dependency.',
   L1: [
-    'FMEA (MIL-STD-1629A) / Nygard Release It! (2007): every external dependency introduces failure modes requiring enumeration before implementation. For each dependency just integrated — enumerate: (1) what happens when it is completely unavailable; (2) what happens when it responds slowly (timeout scenario); (3) what happens when it returns partial or degraded data. Each failure mode maps to a stability pattern: circuit breaker, timeout, bulkhead, fallback. Without enumeration, these patterns are not applied.',
-    'Distributed systems fail in cascading ways — a single dependency failure becomes a system-wide outage when no isolation pattern is in place. Nygard\'s stability patterns address enumerated failure modes: circuit breakers isolate a failing dependency; timeouts prevent thread exhaustion; bulkheads limit blast radius; fallbacks provide degraded service. The question to answer for every integration: which failure modes exist, and which stability pattern addresses each one?',
-    'Three failure mode categories for every external dependency: (1) availability — the dependency is completely unreachable; (2) latency — the dependency responds but slowly, exhausting connection pools; (3) correctness — the dependency responds with invalid, partial, or unexpected data. Define the expected behavior in each category before implementing the integration. The missing behavior is the bug that hits in production at 3am.',
+    'Enumerate failure modes for every external dependency this feature relies on: for each dependency, name the failure mode (timeout, error response, partial data, unavailability), specify the stability pattern that handles it (circuit breaker, timeout + fallback, bulkhead, retry with backoff), and confirm the pattern is implemented before shipping.',
+    'Identify the top three external dependencies in this feature and define the failure behavior for each: what happens when each dependency is slow, returns an error, or is unavailable — and what stability pattern prevents cascading failure.',
+    'Audit every external call in this feature for failure handling: confirm each has a timeout, a defined error response, and a documented degradation path.',
   ],
   L2: [
-    'For each dependency just integrated: enumerate the failure modes (unavailable, slow, degraded) and specify which stability pattern addresses each — circuit breaker, timeout, fallback, or bulkhead.',
-    'What happens when this dependency is down, slow, or returning bad data? Enumerate before implementing — the unenumerated failure mode is the production incident.',
+    'For each external dependency in this feature: name the failure mode and confirm the stability pattern (circuit breaker, timeout, fallback) is in place.',
+    'What is the worst failure scenario for this feature\'s most critical external dependency, and is there a stability pattern preventing it?',
   ],
   L3: [
     'Enumerate failure modes for each dependency and specify the stability pattern for each before shipping.',
@@ -2160,13 +2160,13 @@ const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
   question:      'Service boundary established — contract tests defined?',
   pinchFallback: 'Define consumer-driven contract tests for this boundary.',
   L1: [
-    'Consumer-Driven Contracts (Ian Robinson, martinfowler.com, 2006): service boundaries require contract tests to survive independent deployment. Consumer-driven contracts shift contract definition to the consumer — the consumer specifies what it needs from the producer, and the producer verifies it satisfies those requirements in isolation, without requiring both services to be deployed together. Tools: Pact, Spring Cloud Contract. Without contract tests, integration regressions are caught only in staging.',
-    'The independent deployment problem: when consumer and producer deploy independently, there is no integration test run at deploy time. Contract tests solve this by running provider verification against consumer contracts in the producer\'s CI pipeline — catching contract breaks before they reach staging. For the service boundary just defined: write consumer contract tests that specify the exact shape of requests and responses the consumer depends on, then run provider verification in CI.',
-    'Three contract test artifacts for a service boundary: (1) consumer contract — specifies the request shape and response fields the consumer actually uses (not the full schema); (2) provider verification — the producer\'s CI step that validates it satisfies registered consumer contracts; (3) contract broker — a registry keeping consumer contracts accessible for verification (Pact Broker). Define these before the first independent deployment of either service.',
+    'Define consumer-driven contract tests for this service boundary before independent deployment: write the contract from the consumer\'s perspective, verify the provider satisfies it in isolation, and add provider verification to the CI pipeline.',
+    'Write contract tests that verify this service\'s API from the consumer\'s view: define the expected request/response shape, the error responses, and the versioning behavior — independently of the provider\'s implementation.',
+    'Establish a contract testing gate for this service boundary: define what the consumer expects, implement provider verification, and confirm the CI pipeline enforces it before any consumer or provider changes ship independently.',
   ],
   L2: [
-    'For the service boundary just established: define consumer-driven contracts specifying the exact request/response shape each consumer requires, and add provider verification to the producer\'s CI pipeline.',
-    'Without contract tests, integration regressions surface only in staging. Consumer-driven contracts (Pact/Spring Cloud Contract) catch boundary breaks in CI before independent deployment.',
+    'Write consumer-driven contract tests for this service boundary — define the contract from the consumer\'s perspective and verify the provider satisfies it in isolation.',
+    'Define the expected API contract for this service boundary and implement provider verification before independent deployment.',
   ],
   L3: [
     'Define consumer-driven contract tests for this service boundary before independent deployment.',
@@ -2179,13 +2179,13 @@ const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
   question:      'Load-adding feature — capacity estimate done?',
   pinchFallback: 'Complete a capacity estimate before shipping.',
   L1: [
-    'Google SRE (Beyer et al., 2016): load-adding features require a capacity estimate before production deployment. Three required numbers: (1) peak RPS at expected traffic; (2) storage growth rate at 30/90/365 days; (3) downstream resource utilization headroom (DB connection pool, cache, dependent APIs). Without all three, the feature ships blind to its production cost.',
-    'Capacity estimate checklist for the feature being built: what is the steady-state RPS at expected traffic? What does storage growth look like over 90 days? Does the existing infrastructure have headroom — or does this feature require provisioning before it can ship safely? A back-of-envelope estimate takes 20 minutes; a production load surprise takes on-call hours.',
-    'Pre-ship capacity gate: (1) estimate peak RPS; (2) project storage growth curve; (3) confirm infrastructure headroom for dependent services. If any number is unknown, the feature is not ready to ship — it lacks the data to size infrastructure or set autoscaling thresholds. Provide all three before shipping.',
+    'Estimate capacity requirements for this feature before shipping: project peak request rate (RPS), storage growth over 90 days, and required infrastructure headroom — then verify current infrastructure can serve the estimated peak load.',
+    'Define capacity targets for this feature: what is the expected RPS at launch and at 10× scale, what is the storage growth rate, and is current provisioning sufficient for each?',
+    'Audit infrastructure requirements for this feature: estimate peak load, define headroom thresholds, and confirm monitoring alerts are in place before any metric approaches the estimated saturation point.',
   ],
   L2: [
-    'Estimate three numbers before shipping: peak RPS at expected traffic, storage growth rate at 90 days, and infrastructure headroom on dependent services. These determine whether current capacity can absorb the feature.',
-    'Capacity planning gate: what RPS does this feature add at peak? What is the storage cost over 90 days? Does existing infrastructure have headroom? Answer all three before shipping.',
+    'Estimate peak RPS, storage growth over 90 days, and infrastructure headroom for this feature before shipping.',
+    'At what RPS does this feature saturate its current infrastructure, and is that load likely within the next 90 days?',
   ],
   L3: [
     'Capacity estimate required: RPS at peak, storage growth rate, infrastructure headroom. Provide all three before shipping.',
@@ -2196,13 +2196,13 @@ const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
   question:      'Security-sensitive feature — STRIDE threat model completed?',
   pinchFallback: 'Complete a STRIDE threat model before shipping.',
   L1: [
-    'STRIDE (Adam Shostack, \'Threat Modeling: Designing for Security\', Wiley 2014) requires systematic enumeration of Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege threats for every feature introducing a new attack surface. For each applicable STRIDE category: identify the attack vector, the trust boundary it crosses, and the mitigation control. This 30-minute structured pass prevents OWASP Top 10 vulnerabilities from reaching production.',
-    'OWASP Threat Modeling Process: Data Flow Diagram → trust boundary identification → threat enumeration per STRIDE → mitigation design. The output is a list of threats and their controls. For the feature being built — identify which STRIDE categories apply (minimum: Information Disclosure, Elevation of Privilege, Tampering for any auth-adjacent or data-handling feature) and define the mitigation for each.',
-    'Attack surface review required before shipping security-sensitive features: (1) identify trust boundaries crossed by the feature; (2) enumerate applicable STRIDE threats; (3) for each threat, define the mitigation control (input validation, rate limiting, authorization check, audit logging). A feature without a completed STRIDE pass is not production-ready by OWASP Secure by Design standards.',
+    'Enumerate applicable STRIDE threats for this feature and define a mitigation control per threat: Spoofing (identity verification), Tampering (input validation + integrity checks), Repudiation (audit logging), Information Disclosure (data exposure scope), Denial of Service (rate limiting + timeouts), Elevation of Privilege (authorization checks) — confirm each relevant threat has a control before shipping.',
+    'Apply STRIDE to this feature\'s threat surface: for each applicable threat category, name the attack vector, identify the data or component at risk, and define the control that mitigates it.',
+    'Threat-model this feature using STRIDE categories: enumerate threats, assign severity, and confirm each threat has a documented mitigation or an accepted-risk decision before shipping.',
   ],
   L2: [
-    'Apply STRIDE to the feature: for each applicable category (Spoofing, Tampering, Repudiation, Information Disclosure, DoS, Elevation of Privilege) — what is the attack vector and what is the mitigation? This enumeration must be completed before shipping.',
-    'Threat model required: identify trust boundaries, enumerate applicable STRIDE threats, define mitigation controls. This prevents OWASP Top 10 vulnerabilities from shipping to production.',
+    'Identify the top three STRIDE threats for this feature and define mitigation controls for each.',
+    'Apply STRIDE to this feature: for each applicable category, what is the threat and what control mitigates it?',
   ],
   L3: [
     'STRIDE threat model required: enumerate applicable threats and define mitigation controls before shipping.',
@@ -2213,13 +2213,13 @@ const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
   question:      'Schema change — expand-migrate-contract pattern applied?',
   pinchFallback: 'Apply backwards-compatible phased migration.',
   L1: [
-    'Evolutionary Database Design (Fowler/Sadalage, 2003/2016): schema changes must be backwards-compatible with both the current and new application versions running simultaneously. The expand-migrate-contract pattern: Phase 1 (expand) — add new columns/tables alongside existing; Phase 2 (migrate) — backfill data with both versions live; Phase 3 (contract) — remove old structures only after all application versions are updated. Never DROP, RENAME, or add NOT NULL constraints in a single migration deployment.',
-    'The backwards-compatibility invariant: a schema change that breaks the currently-running application version is an outage if the deployment fails or requires rollback. For every destructive migration operation — validate: does this work with application version N (currently running) AND version N+1 (being deployed)? If no — redesign as a phased migration across multiple deployments.',
-    'Pre-migration safety checklist: (1) is the migration backwards-compatible with the current application version? (2) can it be rolled back without data loss? (3) is this a multi-phase migration for any destructive operation (DROP, RENAME, type change, NOT NULL addition)? All three must be YES before deploying. Single-phase destructive migrations are an outage risk.',
+    'Apply the expand-migrate-contract sequence to this database change: confirm the schema change can be split into a backward-compatible add phase, a data migration phase, and a cleanup phase — so each phase deploys independently without downtime or rollback risk.',
+    'Verify this migration is reversible and safe under concurrent writes: confirm no destructive operation (DROP, NOT NULL without default, column rename) occurs in a single migration step, and that the expand-migrate-contract pattern applies.',
+    'Audit this database migration for safety: identify any destructive schema changes, verify backward compatibility during the migration window, and confirm rollback is possible at each step.',
   ],
   L2: [
-    'Apply expand-migrate-contract: no DROP, RENAME, or NOT NULL constraint addition in a single deployment. Destructive migrations must be phased — expand first, migrate data with both versions live, contract only after old application code is fully retired.',
-    'Migration safety gate: is this backwards-compatible with the running application version? Can it be rolled back without data loss? If no to either, redesign as a phased migration.',
+    'Verify this migration uses the expand-migrate-contract pattern — confirm no destructive schema operation happens in a single deployment step.',
+    'Is this migration reversible? Can it be rolled back without data loss if the deployment is reverted mid-migration?',
   ],
   L3: [
     'Expand-migrate-contract required: no destructive schema changes in a single deployment. Phase across multiple deployments.',
@@ -2230,13 +2230,13 @@ const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
   question:      'Significant feature shipping — deployment strategy defined?',
   pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
   L1: [
-    'Continuous Delivery (Humble/Farley, 2010): every production deployment requires a defined deployment mechanism and rollback plan. Options: (1) Feature flag — ship behind a flag, enable gradually, instant rollback by disabling; (2) Canary — route N% of traffic to new version, watch error rates and latency before full rollout; (3) Blue-green — maintain two environments, cut traffic; (4) Staged rollout — deploy to subset of regions/tenants. Choose one explicitly and define the rollback procedure before the deployment is executed.',
-    'Deploying without a strategy converts a planned deployment into improvised incident response if anything goes wrong. The rollback plan — what command, who runs it, what does it restore to, how long does it take — must be defined before deployment, not after a failure. For significant features: feature flag is the lowest-risk option (instant rollback, gradual exposure, dark launch capability).',
-    'Pre-deployment checklist: (1) is there a deployment mechanism that allows gradual rollout (canary, feature flag, staged rollout)? (2) is there a defined rollback procedure that can be executed under time pressure? (3) are monitoring thresholds set so a bad deployment is automatically detected before full rollout? All three are required for a production deployment of a significant feature.',
+    'Define the deployment strategy for this feature before shipping: choose the strategy (canary, feature flag, blue-green, staged rollout), define the rollback procedure, and confirm the rollback can be completed within the acceptable downtime window.',
+    'Establish a deployment plan for this feature: what strategy isolates risk (canary or staged rollout), what signals trigger an abort, and what the rollback procedure is if those signals are observed post-deploy.',
+    'Audit deployment readiness: confirm deployment strategy, verify rollback procedure, and check that monitoring is in place to detect a failed deploy before it reaches full traffic.',
   ],
   L2: [
-    'Define before deploying: the rollout strategy (canary/feature flag/blue-green/staged) and the rollback plan (what reverts this, who runs it, how long does it take). Both must exist before the deployment is executed.',
-    'Deployment without a rollback plan is an incident waiting to happen. Define the strategy, the rollback procedure, and the monitoring threshold that triggers it.',
+    'Define deployment strategy and rollback plan for this feature before shipping.',
+    'What is the deployment strategy for this feature, and what triggers a rollback if the deploy fails?',
   ],
   L3: [
     'Define deployment strategy (canary/feature flag/blue-green/staged) and rollback plan before shipping.',
@@ -2247,13 +2247,13 @@ const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
   question:      'New service/feature shipping — operational runbook written?',
   pinchFallback: 'Write the runbook before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): runbooks are required operational documentation for any production service. \'Runbooks capture the operational knowledge required to keep a service running — how to deploy, how to diagnose common failures, what the escalation path is.\' Without a runbook, the on-call engineer responding to a 3am alert has no guide to the service they\'re debugging.',
-    'Minimum viable runbook for a new service or significant feature: (1) what this service/feature does — one paragraph; (2) how to deploy and roll back; (3) common failure modes and how to diagnose each; (4) which metrics/dashboards are the key health indicators; (5) escalation path if automated remediation fails. A short wiki page suffices — the content matters more than the format.',
-    'Operational readiness gate: before any new service ships to production, define the answer to three on-call questions: what is this thing? How do I know it\'s broken? What do I do when it breaks? These three answers constitute the minimum viable runbook. A service without them cannot be supported by an on-call rotation.',
+    'Write the operational runbook for this feature before shipping: document what the feature does, how to deploy it, the key health metrics to monitor, how to diagnose the most likely failure scenarios, and the escalation path if on-call cannot resolve the issue.',
+    'Define the operational documentation for this feature: deployment steps, expected normal behavior, failure indicators, debug steps for the top three failure modes, and escalation contacts.',
+    'Write the runbook before this ships: what it does, how it is deployed, how to confirm it is healthy, how to debug it when it is not, and who to escalate to.',
   ],
   L2: [
-    'Write the runbook before shipping: what the service does, how to deploy and roll back, common failure modes and diagnostics, key health metrics, and escalation path. This is the minimum required for on-call supportability.',
-    'On-call operators need three things: how to know the service is healthy, how to diagnose it when it fails, and who to escalate to. Write these before shipping.',
+    'Write the runbook for this feature before shipping — cover deploy steps, health metrics, failure scenarios, and escalation path.',
+    'Document how to debug this feature when it is misbehaving in production — the top two or three failure modes and how to diagnose each.',
   ],
   L3: [
     'Write the runbook before shipping: what it does, how to debug failures, key metrics, and escalation path.',
@@ -2264,13 +2264,13 @@ const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
   question:      'User-facing feature/service — SLOs defined?',
   pinchFallback: 'Define SLOs before shipping.',
   L1: [
-    'Google SRE Book (Beyer et al., 2016): \'SLOs are the key mechanism by which SRE and product teams agree on the required level of service reliability.\' Three required SLO dimensions: availability (% of requests succeeding), latency (% of requests completing within N ms at p99), and error rate budget (% of requests allowed to fail). Without defined SLOs, alerting thresholds are arbitrary and reliability trade-offs cannot be made with data.',
-    'Alex Hidalgo, \'Implementing Service Level Objectives\' (O\'Reilly, 2020): \'SLOs create a shared language for discussing reliability trade-offs between engineering and product.\' Before shipping a user-facing feature: define availability target (e.g., 99.9%), latency target (e.g., p99 < 500ms), and error rate budget (e.g., < 0.1% of requests return errors). These three numbers become the basis for alerts, error budgets, and go/no-go decisions for risky changes.',
-    'SLO definition before shipping protects against two failure modes: (1) shipping without alerting thresholds, so incidents are discovered by users not monitoring; (2) investing in reliability improvements with no data to justify the cost or define \'reliable enough.\' Define availability, latency, and error rate targets — these are not post-ship tasks, they are pre-ship gates.',
+    'Define SLOs for this feature before shipping: specify the availability target, the latency p99 budget, and the error rate budget — then confirm alerting and on-call escalation are tied to each SLO before launch.',
+    'Establish service level objectives for this feature: what availability does the consumer depend on, what is the acceptable latency at p99, and what error rate triggers an incident — document these before any consumer dependency is established.',
+    'Set and document SLOs before this ships: availability %, latency p99, error rate budget, and the burn rate at which the error budget is exhausted — so on-call knows what to page on.',
   ],
   L2: [
-    'Define three SLO dimensions before shipping: availability target (% of requests succeeding), latency target (p99 response time), and error rate budget (% of requests allowed to fail). These become the basis for alerting thresholds and reliability trade-off decisions.',
-    'Without SLOs, alerting is arbitrary, error budgets don\'t exist, and there is no shared definition of \'reliable enough.\' Define availability, latency, and error rate targets before shipping.',
+    'Define availability, latency p99, and error rate SLOs for this feature before shipping.',
+    'What are the SLOs for this feature? Specify availability %, latency p99, and error rate budget.',
   ],
   L3: [
     'Define SLOs before shipping: availability target, latency target (p99), and error rate budget.',
@@ -2301,8 +2301,8 @@ export const ABSENCE_OUTCOME_DEFINITION_CASUAL: DecisionContent = {
   pinchFallback: 'Define the success metric before building starts.',
   L1: [
     'An output is something you ship. An outcome is the change in user behavior that justifies shipping it. The OKR discipline applied to product: before building, write one sentence that completes "This feature is successful if...". Without that sentence, you can\'t evaluate whether the feature worked, you can\'t communicate success criteria to teammates, and you can\'t decide when the feature is done enough to ship.',
-    'Success metrics don\'t need to be complex. "Feature is used at least once by 40% of active users in the first month" is a perfectly good key result. What makes it useful: it\'s observable after shipping, it has a timeframe, and it tells you whether the feature earned its engineering cost. Without a metric, shipping is the finish line — and shipping is an output, not an outcome.',
-    'Defining the outcome before building also prevents scope creep: if you know the feature succeeds when a specific user behavior changes, every addition should be evaluated against "does this help hit the outcome?" rather than "does this seem like a good idea?" The outcome definition is the scope boundary.',
+    'Write the success metric for this feature in observable form: name the user behaviour or system metric, the threshold that defines success, and the timeframe — e.g. "feature is used at least once by 40% of active users in the first month" — then state whether the current build can be evaluated against it.',
+    'Use the outcome definition as a scope filter: list every addition currently in this feature, evaluate each against the success metric, and flag any that do not contribute to hitting it for removal or deferral.',
   ],
   L2: [
     'Finish this sentence before coding: "This feature succeeds if X happens for Y users within Z timeframe." Without this, you can\'t measure whether the feature worked.',
@@ -2319,7 +2319,7 @@ export const ABSENCE_FEATURE_PRIORITIZATION_CASUAL: DecisionContent = {
   L1: [
     'Building what comes to mind next — rather than what has the highest impact — is the feature factory pattern. Every hour of engineering time spent on a lower-impact feature is an hour not spent on a higher-impact one. Backlog prioritization question: what evidence suggests this feature delivers more value to users than any alternative you could build with the same engineering time?',
     'A useful prioritization heuristic: impact-effort scoring. Impact = estimated positive change in a key metric if this ships. Effort = engineering days to implement. Highest impact-to-effort ratio wins. You don\'t need a formal matrix — a quick mental comparison against 2-3 alternatives is enough. The question is: is there a feature you\'re not building that would deliver more value for less effort?',
-    'If the answer to "why this over anything else?" is "it seemed like a good idea" or "we had a request for it" — those aren\'t prioritization decisions, they\'re reactions. Prioritization requires a comparison: this vs. the alternatives, and a reason this wins. Even a brief explicit rationale prevents the feature factory spiral.',
+    'State the explicit priority rationale for this feature in one sentence — why this over the alternatives — and name the next-highest-priority alternative that is being deferred. If no rationale exists beyond "it seemed like a good idea," draft one now or pause the build.',
   ],
   L2: [
     'Name the top 2 alternatives you\'re not building right now. Is this feature higher impact-to-effort than either of them? If yes, the prioritization is justified.',
@@ -2334,9 +2334,9 @@ export const ABSENCE_USER_PERSONA_CLARITY_CASUAL: DecisionContent = {
   question: 'Who specifically is this feature for?',
   pinchFallback: 'Name the specific user this feature is designed for.',
   L1: [
-    'Building for "users" in the abstract builds for no one in particular. Alan Cooper\'s persona principle: design decisions are only resolvable when you have a concrete user in scope. "Is this button label clear?" is answerable when you can ask "clear to whom? — Marcus, the first-time user who has never seen this interface." It\'s unanswerable when the answer is "users in general."',
-    'You don\'t need formal user research to have persona clarity. A 2-sentence description is enough: "This is for the freelance designer who manages 3-10 clients and doesn\'t use project management software." That\'s enough to make design decisions testable. The goal is to reduce the range of valid design choices to those that serve a concrete person, not every possible user.',
-    'Persona clarity also clarifies scope: if a feature request doesn\'t serve the defined user, it\'s out of scope by definition, not by preference. "For whom is this feature?" is both a design question and a scope question. Every feature should have a one-sentence user answer before build decisions begin.',
+    'Name the specific user this feature serves: 2 sentences describing who they are, what context they use the product in, and what they are trying to accomplish — concrete enough that a design decision can be tested against "would Marcus understand this?" rather than "would users in general?"',
+    'Write a 2-sentence persona description for this feature\'s primary user — who they are, their context, and what they are trying to do — then check every recent design decision against that persona and flag any that serve "users in general" instead.',
+    'Define the target user for this feature in one sentence, then re-check the feature scope: list any request, addition, or behaviour that does not serve that user and propose removing or deferring it.',
   ],
   L2: [
     'Name the specific user type this feature is for — 2 sentences about who they are and what they\'re trying to do. "For users" isn\'t an answer.',
@@ -2352,8 +2352,8 @@ export const ABSENCE_COMPETITIVE_AWARENESS_CASUAL: DecisionContent = {
   pinchFallback: 'Run a quick competitive check before committing to this build.',
   L1: [
     'Building a feature without knowing the competitive landscape means you\'re solving a problem that may already be solved — possibly better than you\'ll solve it. Before committing to any non-trivial feature, answer three questions: does a competitor already have this? If yes, how have they implemented it? And what would make your version a reason to switch rather than a reason to stay with the incumbent?',
-    'Competitive awareness isn\'t about copying — it\'s about knowing whether you\'re building table stakes (required to compete), a differentiator (reason to switch), or something users don\'t actually compare. These three categories require very different implementation strategies: table stakes need polish parity; differentiators need a clear wedge; irrelevant features shouldn\'t be built at all.',
-    'A 20-minute competitive audit is often enough: open 2-3 competitor products, find where they solve the same problem, screenshot the implementation, and note what they got right and wrong. Your implementation decision — and the differentiation angle — should come from that observation, not from building in a vacuum.',
+    'Classify this feature as table stakes (required to compete), a differentiator (reason to switch), or irrelevant to user comparison — then state the implementation implication: polish parity, a clear wedge, or do not build. Confirm the current build matches the classification.',
+    'Run a 20-minute competitive audit: list the top 2-3 competitor implementations of this feature, summarize what each got right and wrong, and propose the specific differentiation angle this build will use. If no differentiation is identified, propose what would need to change.',
   ],
   L2: [
     'What do the top 2 competitors do for this feature? And what would make your version a reason to choose you over them?',
@@ -2368,7 +2368,7 @@ export const ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL: DecisionContent = {
   question: 'Is this addition within MVP scope?',
   pinchFallback: 'Check whether this is needed to test the core hypothesis.',
   L1: [
-    'MVP stands for minimum viable product — minimum meaning the smallest version that can test the riskiest hypothesis. Every feature added beyond that minimum is scope that delays the learning loop and consumes engineering capacity that could run the next experiment instead. The failure mode isn\'t adding bad features — it\'s adding good features at the wrong time, before the core hypothesis is validated.',
+    'Apply MVP discipline to this addition: name the riskiest hypothesis the MVP is meant to test, then state whether this addition reduces uncertainty about that hypothesis. If it does not, propose deferring it to post-validation scope.',
     'The discipline question for every addition: does this help test what we\'re trying to learn, or does it just make the product feel more complete? "Feel more complete" is the scope creep justification. If the feature doesn\'t reduce the uncertainty about whether the core hypothesis is true, it\'s out of MVP scope — not permanently, just for this phase. Ship the minimum, learn, then add.',
     'Common MVP scope creep patterns: "nice to have" additions that don\'t affect hypothesis testing, polish passes that go beyond the minimum for usability, and "while we\'re in this area" additions. All three delay the learning loop without increasing its quality. Define the scope boundary explicitly: list the features that are in-hypothesis-scope and treat everything else as post-validation work.',
   ],
@@ -2386,8 +2386,8 @@ export const ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL: DecisionContent = {
   pinchFallback: 'Define the acquisition path before building.',
   L1: [
     'A feature\'s value is zero for any user who never encounters it. Distribution fit is as important as product-market fit — and it has to be designed in, not discovered after launch. Before committing to a feature build, answer: what is the specific path through which target users will find and start using this feature? SEO, referral loop, in-app discovery, sharing mechanic, onboarding hook, community post — name the channel.',
-    'Acquisition thinking during development isn\'t a marketing task — it\'s an engineering constraint. Features with a built-in sharing or referral mechanic get built differently than features that assume organic word-of-mouth. Features that depend on SEO need different URL structure and content than features that depend on in-app discovery. The acquisition path shapes the implementation.',
-    'If you can\'t name the acquisition path before building, that\'s a signal the feature may not be distribution-ready. The minimum acceptable answer: "Users reach this via X, and the first time they see it they\'re shown Y." Without that sentence, you\'re shipping into a distribution vacuum.',
+    'Name the specific acquisition mechanic for this feature — built-in sharing, referral hook, SEO surface, in-app discovery, onboarding placement — then confirm the implementation actually supports that mechanic. If the channel and the build are misaligned, flag what needs to change.',
+    'Write the acquisition-path sentence for this feature in the exact form: "Users reach this via [channel], and the first time they see it they are shown [first-encounter UX]." If either bracket is empty, propose what would fill it before more is built.',
   ],
   L2: [
     'Name the specific acquisition path: how do target users find out this feature exists, and how do they reach it for the first time?',
@@ -2403,7 +2403,7 @@ export const ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL: DecisionContent = {
   pinchFallback: 'Consider the retention angle before building.',
   L1: [
     'Features that acquire users but don\'t retain them have diminishing returns forever. Every significant feature should have an answer to: why does a user return to this feature after the first use, and how does using it once make the next use more likely? Without a retention angle, you\'re building acquisition features, not engagement features.',
-    'Retention mechanics don\'t have to be complex. The simplest versions: the feature saves something the user wants to come back to (a record, a result, a creation); the feature creates a loop where the output of one session becomes the input to the next; or the feature connects the user to other users, creating social pull. Any of these creates a reason to return. No retention mechanic = first-use feature.',
+    'Pick one of three retention mechanics for this feature and confirm it is built in: (1) it saves something users want to return to, (2) it creates a loop where one session\'s output is the next session\'s input, or (3) it connects users to other users. Name the chosen mechanic and where it lives in the current build, or propose what to add.',
     'Nir Eyal\'s Hook model: trigger → action → reward → investment. "Investment" is what makes the next trigger more effective — the user puts something into the product (data, preferences, connections, history) that increases the value of returning. Every feature should have an answer for what the "investment" is. If there isn\'t one, the feature has no retention loop.',
   ],
   L2: [
@@ -2420,7 +2420,7 @@ export const ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL: DecisionContent = {
   pinchFallback: 'Add a feedback mechanism before shipping.',
   L1: [
     'Shipping without a way to measure whether the feature worked means the engineering investment produces no validated learning. The Lean Startup loop: Build → Measure → Learn. Skipping the Measure step after Build means the loop stops at the most expensive point and never produces the insight that informs the next build. Define your measurement mechanism before shipping, not after.',
-    'Feedback mechanisms don\'t have to be complex. The minimum viable set: one analytics event that fires when the feature is used (confirms usage), one way to hear from users who struggled (support channel, in-product feedback button), and one indicator of whether the feature met its success metric. Three data points that tell you whether to iterate, expand, or kill the feature.',
+    'Specify the minimum viable feedback set for this feature: name the analytics event that fires on use, the user-feedback channel (in-product or support), and the indicator that ties to the defined success metric. Confirm each is in place or list what needs adding before shipping.',
     'Common shipping patterns that break the feedback loop: shipping with no analytics instrumentation, shipping with analytics but no defined success threshold, and shipping with a metric but no scheduled review. All three mean the feature will run for weeks without producing a learning decision. Define the mechanism, the metric, and the review date before the code ships.',
   ],
   L2: [
@@ -2436,9 +2436,9 @@ export const ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL: DecisionContent = {
   question: 'What hypothesis does this feature test?',
   pinchFallback: 'Define the hypothesis before starting the build.',
   L1: [
-    'Every feature build is an experiment. The question is whether it\'s a defined experiment or an undefined one. Defined experiment: "We believe adding X will cause Y for users of type Z. We will know this is true when [observable signal] appears within [timeframe]." Undefined experiment: build X, ship it, and see what happens. Both cost the same to build. Only one produces learnable outcomes.',
+    'Write the experiment hypothesis for this feature in the form: "We believe [feature/change] will cause [observable outcome] for [user type]. We will know this is true when [signal] appears within [timeframe]." If any bracket cannot be filled, propose what data or decision would resolve it before continuing.',
     'The hypothesis doesn\'t have to be certain — it has to be falsifiable. "Users will use the export feature at least once per week" is falsifiable. "Users will find this useful" is not. The falsifiability test: after shipping, can you look at a single data point and say definitively whether the hypothesis was proven or disproven? If not, refine the hypothesis until you can.',
-    'Writing the hypothesis before building also prevents post-hoc rationalization: the tendency to interpret any usage pattern as confirming the original idea. The hypothesis is a commitment made before the data exists — it\'s what makes the observation meaningful. Without it, every outcome is a success story in hindsight.',
+    'State the falsification condition for this feature\'s hypothesis: what specific data point, observed within the success window, would prove the hypothesis wrong? Commit to that condition now — and use it as the post-ship review trigger.',
   ],
   L2: [
     'Complete this before coding: "We believe [this feature] will [achieve outcome] for [user type]. We will know this is true when [observable signal]."',
@@ -2453,7 +2453,7 @@ export const ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL: DecisionContent =
   question: 'When did you last check product direction — not just implementation?',
   pinchFallback: 'Take a product perspective before continuing to build.',
   L1: [
-    'Founders who code face a structural bias toward technical work: implementation is visible, progresses in concrete steps, and produces something tangible. Product thinking — asking whether you\'re building the right thing, for the right users, toward the right goal — produces decisions, not artifacts. The result is that product thinking gets squeezed out of sessions that are nominally "product development" but are actually pure implementation.',
+    'Pause implementation and run a product-direction check: count the last 10-15 prompts by category (implementation instructions vs product-direction questions). If heavily skewed to implementation, answer one product question before continuing — is this still the right feature to be building for the right user toward the right outcome?',
     'A useful ratio check: in the last 10-15 prompts, how many were implementation instructions ("build this", "add this", "fix this") vs. product-direction questions ("should we build this at all", "is this the right user experience", "does this move our core metric")? Heavy implementation skew is a signal that product thinking has been suspended. Suspend it too long and you optimize the implementation of the wrong feature.',
     'Product check questions that take < 5 minutes: Is this feature still the highest-priority thing to build right now? Does the implementation direction still match the product goal? Is there a user I should talk to before the next build decision? Has anything changed about the problem I\'m solving? These questions don\'t interrupt implementation — they protect it from building in the wrong direction.',
   ],
@@ -2470,9 +2470,9 @@ export const ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL: DecisionContent = {
   question: 'How does this feature connect to your product\'s core metric?',
   pinchFallback: 'Check north star alignment before adding this feature.',
   L1: [
-    'The north star metric is the single number that best captures the value your product delivers to users. All product work should be traceable to movement in that number — either directly (this feature drives the metric) or indirectly (this feature enables other features that do). Features with no traceable connection to the north star consume engineering capacity without producing user value that scales.',
-    'North star alignment doesn\'t require every feature to directly move the metric. Infrastructure, DX improvements, and technical foundations are valid — but even these should have an articulated connection: "this reduces load time, which reduces churn, which improves our retention rate." If the connection can\'t be articulated in one or two steps, the feature may be noise.',
-    'The north star check is also a scope filter: if a feature doesn\'t connect to the north star, it either belongs in a later phase (when the north star itself evolves) or doesn\'t belong in the product at all. Making the connection explicit before building prevents scope inflation — the slow accumulation of technically reasonable features that collectively dilute the product\'s core value proposition.',
+    'Trace this feature to the product\'s north star metric in one or two steps: state how it moves the metric directly, or how it enables a downstream feature that does. If no traceable connection exists, propose deferring or removing it.',
+    'Articulate the north star connection for this feature: name the metric, name the chain of cause-and-effect from this feature to the metric (one or two intermediate steps allowed), and confirm the chain holds. If it does not, flag the feature as candidate for scope removal.',
+    'Apply the north star filter to this feature\'s scope: if the feature does not connect to the north star directly or via one intermediate step, decide whether it belongs in a later phase, belongs as foundation for a north-star feature still to come, or should be cut from this scope entirely.',
   ],
   L2: [
     'In one sentence: how does this feature move your north star metric? Direct path, or via which intermediate effect?',
@@ -2489,8 +2489,8 @@ export const ABSENCE_TIME_TO_VALUE_CHECK_CASUAL: DecisionContent = {
   question: 'Is this solution the right size for your current scale?',
   pinchFallback: 'Check whether this complexity is justified at current user count.',
   L1: [
-    'The most common indie hacker time sink: building complex infrastructure for a product with zero users. Queue systems, caching layers, microservices, and distributed architectures are solutions to scale problems — and before you have users, the scale problem doesn\'t exist. Every hour spent building infrastructure for hypothetical scale is an hour not spent on the user problem you actually have right now.',
-    '37signals principle: your solution should match your current traffic, not your hoped-for traffic. The complexity you add today must be maintained indefinitely — before, during, and after finding product-market fit. A solution that works for 100 users and is easily replaceable when you hit 10,000 is better than a solution designed for 10,000 that adds maintenance cost from day one.',
+    'Right-size this solution for current scale: name the current user count, name the simplest technology that solves the problem at that scale (a database query, a single API call, a flat file), and propose using it. Defer infrastructure complexity until scale actually requires it.',
+    'Apply the 37signals match-current-traffic rule: confirm this solution fits today\'s traffic rather than hoped-for traffic. If you are reaching for a queue, cache, or distributed component before having users, propose the simpler version that will work at current scale and is easily replaceable later.',
     'Right-sizing heuristic: if a simple database query, a single API call, or a flat file solves the problem — and you\'re reaching for a queue system, caching layer, or distributed component — ask whether your current user count justifies the complexity. "Not yet but it will eventually" is the premature optimization justification. Build the simple version, ship it, and complicate it when scale actually demands it.',
   ],
   L2: [
@@ -2506,7 +2506,7 @@ export const ABSENCE_SHIP_READINESS_DEFINITION_CASUAL: DecisionContent = {
   question: 'What needs to be true for this to be ready to ship?',
   pinchFallback: 'Write ship criteria before continuing to build.',
   L1: [
-    'The "not ready yet" trap is the most common indie hacker failure mode. Without a clear definition of what "ready" means, every addition is rational in isolation — "just one more thing" — while collectively they make the launch date recede indefinitely. The fix: write down what must be true for this to ship, before building. That list is your Definition of Done, and it has two functions: it tells you when to stop adding, and it tells you exactly when you\'re done.',
+    'Write the ship criteria for this build before more is added: list the specific, binary conditions that must be true to ship — "users can sign up", "the core workflow completes end-to-end", etc. This list is your Definition of Done; everything beyond it is post-launch scope.',
     'Ship criteria should be binary: each item is objectively true or false. "Users can sign up and complete the core workflow" is a valid ship criterion. "The design feels polished" is not. Criteria that can\'t be evaluated as pass/fail don\'t function as ship gates — they become "not ready yet" justifications that can always be renegotiated. Write criteria you can check off with a yes or a no.',
     'A useful constraint: limit your ship criteria to what\'s needed for the first user to get value from the product. Everything beyond that is post-launch scope. Add it to a backlog, not the ship gate. The ship gate is about minimum viable launch, not minimum viable polish.',
   ],
@@ -2523,7 +2523,7 @@ export const ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL: DecisionContent = {
   question: 'Have you done this manually to confirm it works before automating?',
   pinchFallback: 'Do it manually first, then automate the proven version.',
   L1: [
-    'Paul Graham: "Do things that don\'t scale." The insight: manual execution validates the process before engineering time is committed to automating it. If you automate a workflow before doing it manually, you build automation for a process you haven\'t confirmed is correct, efficient, or actually wanted by users. Manual first costs one manual execution. Automating first costs the engineering time plus the cost of discovering the manual version was wrong.',
+    'Apply Paul Graham\'s "do things that don\'t scale" rule: do this workflow manually for the first users before automating it. Run the process by hand, capture what users actually need vs what you assumed, and only then automate the validated version.',
     'The manual-before-automate discipline: do the process manually for the first users, watch what actually happens — what\'s needed, what\'s not, what users ask for that you didn\'t anticipate — then automate the validated version. Every time automation is built for an unvalidated process, there\'s a real chance of needing to rebuild the automation after discovering the manual version was wrong.',
     'Questions to ask before automating: have you done this manually at least once? Did it work as expected? Did users respond as expected? If any answer is no — do it manually first. Automation is optimization. Optimization of an unvalidated process is premature spend.',
   ],
@@ -2541,7 +2541,7 @@ export const ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL: DecisionContent = {
   pinchFallback: 'Apply the solo maintainability test before adding this complexity.',
   L1: [
     'Every technology choice for a solo indie project is a choice you\'ll maintain alone — debugging it at 2am, extending it when requirements change, understanding it after 3 months away. Complexity that would be distributed across a team of engineers is complexity a solo builder pays in full. The right lens: "is this the simplest stack I can maintain alone, or is this the most impressive stack I can technically justify?"',
-    'CV-driven development trap: adding architectural complexity appropriate for a team is inappropriate for a solo operator who must maintain it indefinitely. Microservices, event sourcing, and distributed architectures provide real benefits at scale with a team. For a solo builder at early scale, they add maintenance surface without adding user value. The user doesn\'t see the architecture — they see the product.',
+    'Run the CV-driven-development check on this stack choice: if the architecture is team-grade complexity for a solo build, propose the simpler stack that solves the same user problem. The user sees the product, not the architecture — choose the stack you can debug alone at 2 a.m.',
     'Solo maintainability benchmark: if a production issue hit this system tonight, how long would it take you to find and fix it alone, without documentation? A simpler stack answers that in minutes. A complex one answers it in hours — and that difference is paid by you, every time something breaks. Simpler stack = lower maintenance tax = more time shipping.',
   ],
   L2: [
@@ -2558,7 +2558,7 @@ export const ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL: DecisionContent = {
   pinchFallback: 'Define a launch strategy before getting closer to ship date.',
   L1: [
     'Shipping without a launch plan means launching into silence. Good products do not attract users by themselves — distribution is a discipline that must be planned and executed, not discovered. The minimum viable launch strategy: name one specific channel where you will announce this product, write the post before launch day, and identify who in your network or community should see it. That\'s a launch plan.',
-    'Distribution channels that indie hackers actually use: Product Hunt (works for dev/productivity tools, requires scheduling and upvote coordination), Hacker News Show HN (write the Show HN post before launch day), relevant subreddits, Twitter/X announcement, personal email list, niche community Slack/Discord, cold outreach to 5-10 target users. One channel executed well beats five channels half-heartedly attempted on launch day.',
+    'Pick one specific launch channel and execute it well: Product Hunt (write the listing and schedule), Hacker News Show HN (draft the post), a targeted subreddit, a niche community, or cold outreach to 5-10 target users. One channel done properly beats five attempted on launch day — name the channel and start the announcement draft now.',
     'The launch plan question: when you ship, who specifically is going to see it, and how? If the answer is "people will find it" — that\'s not a plan, that\'s a hope. Name the channel, identify the audience, and write the announcement before you\'re in launch-day mode.',
   ],
   L2: [
@@ -2574,8 +2574,8 @@ export const ABSENCE_EARLY_USER_FEEDBACK_CASUAL: DecisionContent = {
   question: 'When did you last get a real user\'s reaction to what you\'re building?',
   pinchFallback: 'Show what you\'ve built to at least one real user before continuing.',
   L1: [
-    'Building in a silo is the primary cause of product-market fit failure. Every prompt you spend building without external user input is a prompt where you\'re confirming your own assumptions rather than testing them. The assumptions that feel most certain — "users obviously want this", "this UX is clearly better" — are the ones most likely to be wrong, because certainty removes the impulse to test.',
-    'Early user feedback doesn\'t require a polished product. A screenshot, a Loom walkthrough, a live screen share, or a rough prototype shown to 2-3 people produces feedback that changes build direction more than any amount of self-review. The goal is not approval — it\'s friction: finding the things that confuse, the steps that feel wrong, the value that isn\'t landing.',
+    'Break out of silo-building before more is built: identify one real user to show the current build to today — for a 10-minute screen-share, a Loom walk-through, or a screenshot review. Capture their actual reaction, not your interpretation, and adjust direction based on what you see.',
+    'Get rough early feedback before the next polish pass: show 2-3 real users the current build via screenshot, Loom, or live demo — the goal is not approval, it is friction (where they get confused, what they ignore, what they ask about). Capture each piece of friction and decide what to address before continuing.',
     'A practical minimum: before finishing any significant feature, show a working or near-working version to one real user and watch them interact with it without explaining anything. What they struggle with, what they don\'t notice, what they ask about — that\'s the feedback that matters. You don\'t need a survey. You need one real person trying to use the thing.',
   ],
   L2: [
@@ -2592,7 +2592,7 @@ export const ABSENCE_SOLO_MAINTAINABILITY_CASUAL: DecisionContent = {
   pinchFallback: 'Run the solo maintainability check before adding this complexity.',
   L1: [
     'Every integration, service, or abstraction you add to a solo project is complexity you\'ll maintain alone — debugging it in production, extending it when requirements change, understanding it after weeks away. The solo maintainability question is not "does this work?" but "can I own the full blast radius of this when it breaks, by myself, without help?" If the answer requires reading documentation for 30 minutes every time something goes wrong, the complexity cost is real and ongoing.',
-    'The solo tax compounds: each addition increases the total maintenance surface area paid by one person. A third-party integration that saves a day of development costs a day of debugging every time its API changes, its documentation is wrong, or its behavior is unexpected. The rule: only add an integration if the long-term maintenance cost is clearly lower than the long-term development cost of building it yourself or finding a simpler alternative.',
+    'Apply the solo-tax test before adding this integration: estimate the long-term maintenance cost (debugging, version churn, documentation drift) and compare to the long-term cost of building the simpler equivalent yourself. Adopt only if the maintenance cost is clearly lower.',
     'Before adding any new service, integration, or complex abstraction: name the failure mode that\'s most likely to wake you up at 3am. Can you diagnose and fix that failure alone, in under 30 minutes, with the logs you\'ll have available? If not, the complexity is not solo-sustainable.',
   ],
   L2: [
@@ -2627,7 +2627,7 @@ export const ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL: DecisionContent = {
   L1: [
     'Building features without monetization awareness builds a free product by default — regardless of intent. Every significant feature should have an articulated answer to "how does this connect to the revenue model?" It doesn\'t need to be direct: "this is a retention feature that reduces churn, which improves LTV" is a valid connection. "This makes the product better" is not — it\'s the answer that leads to technically excellent, commercially unsustainable products.',
     'Revenue model options for indie products: paid tier (freemium gate), usage-based pricing, one-time purchase, SaaS subscription, affiliate revenue, API access tier. For each feature, ask: is this in the free tier (acquisition) or the paid tier (monetization)? If free, why — what acquisition or retention goal does it serve that connects back to paid conversion? If paid, what makes it worth paying for? These questions don\'t slow development — they prevent building the wrong tier.',
-    'The risk of deferred monetization thinking: every feature added without a business model connection narrows the future monetization options. Features that train users to expect something for free are hard to move behind a paywall later. Revenue model decisions made during development are lower cost than revenue model decisions made after launch.',
+    'Lock the monetization decision for this feature now, before users learn to expect it for free: place it explicitly in the free tier (and name the acquisition or retention goal it serves) or the paid tier (and name what makes it worth paying for). Document the choice and the rationale.',
   ],
   L2: [
     'Is this feature in the free or paid tier? What\'s the explicit reason — acquisition, retention, conversion, or direct revenue?',
@@ -2642,9 +2642,9 @@ export const ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL: DecisionContent = {
   question: 'Is this a milestone worth sharing publicly?',
   pinchFallback: 'Consider sharing this milestone publicly before moving to the next.',
   L1: [
-    'Every milestone you reach while building in silence is a distribution opportunity permanently lost. Build-in-public isn\'t just social media content — it\'s a parallel audience-building track that runs alongside development. The people who follow your progress become your first customers, your first promoters, and your first feedback providers. Building without sharing means you\'re building toward a cold launch: no audience, no early users, no feedback loop until the product is shipped.',
-    'What makes a milestone worth sharing: first working version of a core feature, reaching a significant technical milestone, shipping something users can try, hitting a number (first 10 users, first revenue, first 100 signups), or learning something worth teaching. The bar is lower than it feels — people follow progress, not perfection. A rough demo shared early generates more signal than a polished demo shared at launch.',
-    'The format doesn\'t need to be a polished post. A short tweet ("just shipped X — here\'s what it does and what I learned"), a Loom walkthrough posted to a community, or a one-paragraph update in a relevant forum. The goal is consistent presence during the build, not a single launch-day announcement. Audiences built over months survive launch-day logistics failures; audiences built in the last week don\'t.',
+    'Share this milestone publicly today before continuing: draft a short post (tweet, Loom, community update) describing what you just shipped and what you learned. Audiences built during the build survive launch-day failures; audiences built launch-week do not.',
+    'Pick the milestone type and write the share: first working core feature, first technical milestone, first 10 users, first revenue, or one specific lesson worth teaching. Draft a one-paragraph post (no polish required) and identify the audience — your followers, a relevant community, or a niche forum.',
+    'Pick the lowest-friction share format and ship it: a short tweet, a 60-second Loom walk-through, or a one-paragraph forum update. Frequency over polish — consistent presence during the build is what compounds into a launch-day audience.',
   ],
   L2: [
     'What\'s the simplest format to share this milestone today — a tweet, a short post, a screen share? Who specifically should see it?',
@@ -2659,7 +2659,7 @@ export const ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL: DecisionContent = {
   question: 'Is the current scope still within your available time and energy?',
   pinchFallback: 'Run a scope-vs-time check before adding more to the build.',
   L1: [
-    'The most common reason indie projects are abandoned is not technical failure — it\'s scope that expanded past available time and energy without anyone acknowledging it. Every "also want to add" is individually reasonable. Collectively, they make the project feel endless, which makes shipping feel impossible, which makes abandonment feel rational. Scope hammering — consciously limiting scope to what fits available time — is the discipline that prevents this.',
+    'Run the scope-vs-time check on this build before more is added: name the current scope, estimate the shipping date at current pace, and compare to the original target. If the date has slipped twice in a row, cut scope to fit the original timeline — list specifically what gets deferred to post-launch.',
     'Time-box check: at the current scope, how long will it take to ship something a real user can use? If the answer is "a few more weeks" and it was "a few more weeks" last session too — scope has grown past the original timeline without acknowledgment. The fix is not to work faster; it\'s to cut scope to fit the original timeline, not to extend the timeline to fit the expanded scope.',
     'A useful constraint: define the minimum version that\'s still shippable given the time you have available this week or this month. Everything beyond that goes to a post-launch backlog. The constraint is productive: it forces the prioritization decision that scope expansion defers indefinitely.',
   ],
@@ -2678,8 +2678,8 @@ export const ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL: DecisionContent = {
   question: 'Are acceptance criteria defined for this story before development begins?',
   pinchFallback: 'Define acceptance criteria for this story before starting implementation.',
   L1: [
-    'Scrum\'s Definition of Ready requires that acceptance criteria exist before a story enters development. AC serves two functions: it tells developers what "done" means (reducing implementation ambiguity), and it gives the product owner testable conditions to evaluate the work against. Without AC, developers build to their imagination and product owners evaluate against their expectations — and these rarely match. Rework caused by missing AC is one of the most expensive and preventable failure modes in sprint delivery.',
-    'Well-formed acceptance criteria follow the INVEST model\'s testability requirement: each criterion should be independently verifiable. AC format options: Given/When/Then (BDD-style, most precise for testable behavior); bulleted completion conditions ("This story is done when: [a], [b], [c]"); or user-facing outcomes ("A user can [accomplish X] without [friction Y]"). The format matters less than the testability: if a tester cannot write a test case from the AC, the AC is too vague.',
+    'Write the acceptance criteria for this story before any implementation prompt: state each criterion as an independently verifiable condition, in Given/When/Then or "this is done when [X]" form. List at least three covering the primary scenario and the most likely edge case.',
+    'Apply the INVEST testability rule to this story\'s acceptance criteria: for each criterion, confirm a tester could write a test case from it. Rewrite any criterion that is too vague to be testable — use Given/When/Then or completion-condition form.',
     'Before writing any implementation prompt: name the acceptance criteria. One sentence minimum: "This is done when [condition]." This 30-second discipline prevents the most expensive rework scenario: building the wrong thing correctly.',
   ],
   L2: [
@@ -2695,8 +2695,8 @@ export const ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL: DecisionContent = {
   question: 'Have relevant stakeholders been aligned on this feature before development begins?',
   pinchFallback: 'Verify stakeholder alignment before proceeding with significant development work.',
   L1: [
-    'PMBOK stakeholder management (Ch.13) requires continuous engagement, not point-in-time sign-off. For PMs using AI coding tools, the risk is speed: AI reduces the effort to build features to minutes, which means significant decisions that previously required stakeholder conversations before implementation can now be implemented before the conversation happens. Speed is the mechanism that converts alignment assumptions into demo-time surprises.',
-    'The cost asymmetry of stakeholder alignment: a 15-minute conversation before development costs one scheduled touchpoint. Discovery at demo that a feature doesn\'t match stakeholder expectations costs rework time, relationship repair, potential sprint replanning, and a process culture that has learned building before aligning is acceptable. The last cost is the most expensive — process culture is set by what PMs do under time pressure.',
+    'Identify every stakeholder with a legitimate opinion on this feature, name the alignment touchpoint required for each (sign-off, design review, security review, eng-lead consult), and confirm each is completed or scheduled before implementation begins. Document the date and outcome.',
+    'Run a 15-minute stakeholder alignment pass for this feature before implementation: list the stakeholders, send the alignment request, capture responses, and document the result in the sprint item. State explicitly any assumption being made about a stakeholder\'s position.',
     'Alignment threshold: not every feature requires formal sign-off. The question is: who has a legitimate opinion about this feature that, if unvalidated, could cause rejection at demo? If the answer is "anyone," alignment before development is required. Document who was aligned and when.',
   ],
   L2: [
@@ -2712,9 +2712,9 @@ export const ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL: DecisionContent = {
   question: 'Are there ambiguous quality attributes in these requirements that need a measurable definition?',
   pinchFallback: 'Resolve ambiguous quality attributes to measurable criteria before implementation.',
   L1: [
-    'Requirements ambiguity is the leading cause of rework in software development (Wiegers, SEI). Words like "better," "faster," "more intuitive," "improved," and "user-friendly" are quality attribute placeholders — they communicate direction without specifying a testable target. They survive into implementation because they feel precise enough to build toward, but fail at acceptance because no test condition exists. The PM who builds on ambiguous requirements is building toward a subjective evaluation that will always be wrong for someone.',
-    'Ambiguity resolution is a one-time cost: 15 minutes to define "faster" as "API response time under 200ms at P95" before development. The measurable definition can be referenced in acceptance criteria, automated in tests, and communicated to stakeholders without interpretation. The alternative — building "faster" as-is — generates a post-implementation negotiation about whether the improvement was sufficient, which is always slower and more expensive than the 15-minute definition cost.',
-    'SMART criteria applied to requirements: Specific (quantifiable), Measurable (testable), Achievable (within scope), Relevant (connected to user value), Time-bound (when measured). Every quality attribute should pass SMART before implementation begins. SMART is not process overhead — it is the difference between requirements that can be accepted and requirements that cannot.',
+    'Audit this feature\'s requirements for ambiguity: identify every quality-attribute placeholder ("better", "faster", "improved", "user-friendly") and replace each with a measurable target — name the metric, the measurement method, and the success threshold.',
+    'Convert every ambiguous phrase in this requirement set to a measurable equivalent before implementation begins. Example: "faster" → "API p95 response time under 200 ms"; "intuitive" → "primary task completed by a new user in under 90 seconds without help." List the rewrites.',
+    'Apply SMART to every quality attribute in this feature\'s requirements: confirm each is Specific, Measurable, Achievable, Relevant, Time-bound. Reject or rewrite any criterion that does not pass all five before development starts.',
   ],
   L2: [
     'Replace each quality attribute placeholder ("better," "faster," "improved") with a specific, measurable target. State the measurement method and success threshold.',
@@ -2730,8 +2730,8 @@ export const ABSENCE_DEPENDENCY_MAPPING_FORMAL: DecisionContent = {
   pinchFallback: 'Map dependencies before beginning this work to prevent blocked integration.',
   L1: [
     'Dependency identification is a foundational project management discipline (WBS, critical path method). Before any work begins: what does this work depend on (upstream), and what depends on this work completing (downstream)? Unmapped upstream dependencies create blocked work discovered mid-sprint; unmapped downstream dependencies create integration surprises at the worst time — when another team has built against an unstated assumption.',
-    'Agile dependency taxonomy: technical dependencies (APIs, data, infrastructure that must exist); team dependencies (work being done by another squad); external dependencies (third-party services, vendor deliverables); knowledge dependencies (decisions not yet made that block implementation). Each type has a different resolution path. Technical and team dependencies require coordination; external require timeline negotiation; knowledge dependencies require a decision before development can begin.',
-    'Dependency mapping cost asymmetry: typically 30-60 minutes distributed across relevant teams. Discovery cost when unmapped dependencies surface at integration: typically 2-5x the original estimate for affected work, plus timeline impact on dependent items. The PM\'s role is to have the 30-minute conversation before development, not the 5x recovery conversation after.',
+    'Classify every dependency for this work item: technical, team, external, or knowledge. For each, name the specific dependency, its current status, and the resolution path (coordination, timeline negotiation, decision needed). Flag the longest-resolution dependency for immediate attention.',
+    'Run the 30-minute dependency-mapping conversation now for this work item: convene the relevant teams, list upstream and downstream items, capture each in the sprint item with owner and resolution date. The alternative is the 2-5× recovery cost when a dependency surfaces mid-sprint — pre-empt it.',
   ],
   L2: [
     'List all upstream dependencies (what this work requires to proceed) and downstream impacts (what depends on this work completing). Who needs to be notified?',
@@ -2746,9 +2746,9 @@ export const ABSENCE_DEFINITION_OF_DONE_FORMAL: DecisionContent = {
   question: 'Is there an explicit Definition of Done for this sprint item?',
   pinchFallback: 'Define the completion criteria for this item before starting work.',
   L1: [
-    'The Scrum Definition of Done is the shared understanding of what "complete" means for a sprint item. Without it, done is subjective: the developer, the QA, and the PM all have different implicit definitions — and sprint review becomes a negotiation about whether work is finished rather than a verification against agreed criteria. A DoD converts subjective completion into an objective check.',
-    'DoD composition for a PM-managed sprint item: (1) functional acceptance — the behavior the system should exhibit; (2) quality gate — what testing or review must pass; (3) documentation requirement — what must be documented or updated; (4) deployment state — what environment must the change reach. Not every item requires all four — but each element should be explicitly addressed or explicitly excluded.',
-    'One-line DoD minimum: "This item is done when [functional condition] AND [quality gate]." The one-line DoD is better than no DoD. It creates a shared target, surfaces disagreement before work starts, and makes sprint review a verification rather than a debate.',
+    'Write the Definition of Done for this sprint item before work begins: state the functional condition, the quality gate (testing or review pass), the documentation requirement, and the target deployment state. Use the form "this item is done when [X] AND [Y]."',
+    'Compose this item\'s DoD with all four required elements: (1) functional acceptance — what the system should do, (2) quality gate — what testing or review must pass, (3) documentation requirement, (4) deployment state. Address or explicitly exclude each before development starts.',
+    'Write the one-line DoD for this item now: "This item is done when [functional condition] AND [quality gate]." Add it to the sprint item — a one-line DoD prevents the sprint-review debate over whether work is finished.',
   ],
   L2: [
     'Write the Definition of Done for this item now — "this is done when [condition]." State both the functional condition and the quality gate.',
@@ -2763,8 +2763,8 @@ export const ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL: DecisionContent = {
   question: 'Have teams affected by this change been notified before development begins?',
   pinchFallback: 'Identify and notify affected teams before building this change to shared systems.',
   L1: [
-    'Changes to shared infrastructure, APIs, or data models have downstream effects on every team that depends on those systems. The cost of notification before the change is a Slack message and a brief alignment conversation. The cost of discovering the impact after the change is built — through a broken integration, a failed deployment, or a downstream sprint disrupted — is measured in team-days of recovery work.',
-    'Cross-team impact taxonomy: API contract changes (endpoint behavior, response schema, authentication) affect all API consumers; database schema changes affect all services reading or writing those tables; shared service behavior changes affect all callers; infrastructure changes affect deployment pipelines across teams. Each category requires a different notification path — the API contract change requires consumer teams, the schema change requires the data team and downstream services.',
+    'Identify every team affected by this change to a shared system (API, schema, infrastructure), draft the notification message, send it, and document delivery in the sprint item before implementation begins. A pre-change Slack message costs minutes; a post-change broken integration costs team-days.',
+    'Classify this shared-system change by impact category — API contract, database schema, shared service behaviour, infrastructure — then route the notification to the affected consumers for each category. Confirm each team has received and acknowledged the change before this work proceeds.',
     'Minimum notification standard: before building any change to a shared system, name the affected teams, send a notification, and document that notification in the sprint item. "Notified Team X on [date] — no blocking concerns raised" is sufficient. The documentation creates accountability and a paper trail for sprint retrospectives.',
   ],
   L2: [
@@ -2780,9 +2780,9 @@ export const ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL: DecisionContent = {
   question: 'Is there a success metric defined for this feature before development begins?',
   pinchFallback: 'Define how success will be measured for this feature before starting implementation.',
   L1: [
-    'Outcome-driven development (OKRs, product management best practice) requires that the outcome be defined before the output is built. A feature without a success metric is a feature whose value cannot be evaluated after it ships — it exists in an evaluation vacuum where users may or may not use it and metrics may or may not move, with no basis for the post-ship retrospective conversation.',
+    'Define the success metric for this feature before development: name the metric, the measurement method, the success threshold, and the measurement timeline — e.g. "feature adoption rate, tracked via feature_used analytics event, threshold 30% of active users within 30 days." Add to the sprint item.',
     'Success metric format: name the metric, the measurement method, the success threshold, and the measurement timeline. Example: "Success metric: feature adoption rate. Method: track feature_used events in analytics. Threshold: 30% of active users within 30 days of launch. Timeline: 60-day measurement window." A metric without a threshold is not a metric — it\'s an observation. A metric without a timeline is not actionable.',
-    'The pre-development success metric serves three functions: it aligns the team on what value the feature is supposed to deliver; it creates the basis for the post-ship evaluation; and it forces the product question before development: if we can\'t define how success would be measured, should we be building this at all?',
+    'Confirm the three pre-ship functions of this feature\'s success metric are in place: (1) team alignment on what value the feature delivers, (2) the basis for the post-ship retrospective, (3) the forcing question — "if we cannot measure success, should we build this at all?" Resolve any of the three that is missing.',
   ],
   L2: [
     'Define the success metric now: name the metric, measurement method, success threshold, and measurement timeline. Write it in the sprint item before coding begins.',
@@ -2797,7 +2797,7 @@ export const ABSENCE_PRIORITY_JUSTIFICATION_FORMAL: DecisionContent = {
   question: 'Is there an explicit justification for why this item is the current highest priority?',
   pinchFallback: 'Articulate the priority justification for this item before beginning work.',
   L1: [
-    'Every sprint item that enters development displaces something else that didn\'t. Agile backlog prioritization (WSJF, MoSCoW, impact-vs-effort) exists because without explicit priority reasoning, teams default to prioritizing whatever is easiest to implement, most recently requested, or most loudly advocated for. These implicit priority signals consistently produce suboptimal backlog ordering — high-value, high-effort items get perpetually deferred in favor of low-effort, low-value items.',
+    'State the priority justification for this sprint item in one sentence before development begins: name the user or business value, the urgency or time criticality, the risk reduction or strategic alignment — and the next-highest-priority alternative being deferred to make room for this item.',
     'Priority justification components: user or business value (who benefits and how much?); urgency or time criticality (does delay reduce value?); risk reduction (does doing this now prevent a future problem?); effort estimate (relative cost). WSJF combines these: (Value + Time Criticality + Risk Reduction) / Effort. The formula is less important than the discipline — before committing to any item, articulate why this item over the alternatives.',
     'One-sentence priority justification minimum: "This item is highest priority because [specific reason — user impact / time constraint / risk / strategic alignment]." This 30-second discipline makes backlog prioritization decisions explicit, reversible, and legible to the team. It prevents the silent drift toward whatever is easiest.',
   ],
@@ -2814,8 +2814,8 @@ export const ABSENCE_USER_STORY_COMPLETENESS_FORMAL: DecisionContent = {
   question: 'Is this work item expressed as a complete user story with who, what, and why?',
   pinchFallback: 'Reframe this work item as a user story — who benefits, what they need, why it matters.',
   L1: [
-    'The Connextra user story format — "As a [user type], I want [action], so that [value]" — is not ceremonial. Each element carries work that technical task definitions skip: "who" identifies whose problem is being solved and surfaces conflicting needs across user types; "what" defines the capability required; "why" aligns the team on the value being delivered and enables trade-off decisions. Technical task definitions ("add the button") skip all three and produce features that are technically complete and value-ambiguous.',
-    'The "so that" is the most valuable element. Without it, the team has no basis for evaluating implementation alternatives — they build the first thing that works rather than the simplest thing that delivers the value. With it, the PM can validate any implementation by asking: does this approach achieve the "so that"? The "so that" is the acceptance test for the product decision.',
+    'Rewrite this work item in Connextra format before implementation: "As a [specific user type], I want [the capability this feature enables], so that [the value or outcome delivered]." If the "so that" cannot be completed, that is the most important thing to resolve — propose what stakeholder conversation closes it.',
+    'For this user story, validate the proposed implementation approach against the "so that" clause: does the chosen approach deliver the stated value, or does it deliver a technically-correct artifact that misses the outcome? Propose adjustments if the latter.',
     'Reframe now: "As a [specific user type], I want [the action this feature enables], so that [the outcome they can achieve]." If you cannot complete the "so that," the feature\'s value is not yet understood — and that is the most important thing to resolve before implementation begins.',
   ],
   L2: [
@@ -2831,7 +2831,7 @@ export const ABSENCE_RISK_FLAG_FORMAL: DecisionContent = {
   question: 'Have risks been identified for this decision or scope change before proceeding?',
   pinchFallback: 'Identify and document risks before proceeding with this significant decision.',
   L1: [
-    'Risk management (PMBOK Ch.11) requires that risks be identified before significant decisions are made. In agile PM, this is lightweight and continuous — not a formal risk register review at every decision point. The minimum obligation is to name the uncertainty before proceeding: what could go wrong, how likely, and what the impact would be. Unnamed risks are assumed risks, and assumed risks become unplanned work.',
+    'Identify the risks for this decision before proceeding: for each risk category (technical, scope, stakeholder, dependency, timeline), name the specific risk, estimate likelihood (H/M/L) and impact (H/M/L), and state the mitigation or acceptance decision. Document each in the sprint item.',
     'Risk categories relevant to PM + AI development: technical risk (the implementation approach may not work as designed or may have performance characteristics that break under load); scope risk (the feature may be more complex than the current estimate); stakeholder risk (a decision-maker may reject the direction at demo); dependency risk (an upstream team or external service may not deliver on time); timeline risk (effort estimates may be wrong). Each category should be briefly evaluated before proceeding.',
     'Risk naming format: "[Risk]: [description] — [likelihood: H/M/L] — [impact: H/M/L] — [mitigation: action or accepted]." A one-sentence risk identification is better than no identification. It converts an assumption into a monitored uncertainty, which is the prerequisite for doing anything about it.',
   ],
@@ -2848,7 +2848,7 @@ export const ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL: DecisionContent = {
   question: 'Has the impact of this scope change on the current sprint been assessed?',
   pinchFallback: 'Assess sprint impact before accepting this scope change.',
   L1: [
-    'Scope change mid-sprint is acceptable in agile — responsiveness to change is a core value. What is not acceptable is accepting scope change without assessing what it displaces. The sprint is a time-boxed commitment. Every item added mid-sprint either displaces a previously committed item, extends the sprint (breaking the timebox), or is absorbed by reducing quality. None of these outcomes is free, and all require an explicit decision.',
+    'Before accepting this mid-sprint scope change, complete the four-point impact assessment: (1) what existing in-progress item is displaced, (2) does the sprint end date shift, (3) which downstream teams have a date dependency on what this change affects, (4) what is explicitly removed or deferred to make room. Document all four answers in the sprint item before the change enters scope.',
     'Four-point impact assessment for any mid-sprint scope change: (1) Timeline impact — does this change the sprint end date? (2) In-progress item impact — what currently in-flight work is affected or displaced? (3) Downstream dependency impact — do other teams have a date dependency on something this change affects? (4) Trade-off decision — what is explicitly removed or deferred to make room for this change? All four must be answered before the change enters the sprint.',
     'Scope change governance minimum: "Accepting [change X]. Impact: [timeline +N days / no change]. Displaces: [item Y — deferred to next sprint]. Downstream: [Team Z notified / no downstream impact]. Trade-off: [accepted — deferred item Y is lower priority]." This 60-second assessment prevents sprint failure and creates a paper trail for the retrospective.',
   ],
@@ -2865,9 +2865,9 @@ export const ABSENCE_RETROSPECTIVE_HABIT_FORMAL: DecisionContent = {
   question: 'Has this sprint or iteration been closed with a retrospective before starting the next?',
   pinchFallback: 'Run a retrospective on this sprint before moving to the next cycle.',
   L1: [
-    'The Sprint Retrospective (Scrum Guide 2020) is the mechanism that converts team experience into process improvement. Without it, teams repeat the same process mistakes because mistakes are never explicitly surfaced, discussed, or resolved. Each skipped retrospective is a compounding debt: the process errors from Sprint N carry into Sprint N+1 unchanged, and the team wonders why performance doesn\'t improve despite effort.',
-    'Effective retrospective structure (Norm Kerth\'s Prime Directive framework): (1) What went well — identify practices to preserve and reinforce; (2) What didn\'t go well — identify process problems without blame; (3) What to try next sprint — one or two specific, actionable process changes that can be implemented in the next cycle. The retrospective takes 30-60 minutes and produces one to two process change commitments. That is the entire obligation.',
-    'The most common retrospective failure mode is confusing a retrospective with a post-mortem. A retrospective is forward-looking: it produces specific, actionable commitments for the next sprint. "We should communicate better" is not a retrospective action item — it is a platitude. "We will use a shared Slack channel for async decisions instead of email, starting next sprint" is a retrospective action item.',
+    'Run the sprint retrospective now before the next sprint begins: list what went well (preserve and reinforce), what did not go well (process problems without blame), and one or two specific, actionable process changes to try in the next sprint. Document the chosen action items.',
+    'Structure the retrospective in three parts: (1) what went well — name 2-3 practices to preserve, (2) what did not go well — name 2-3 process problems, (3) what to try next sprint — commit to one or two specific changes. Capture the commitments in the sprint board.',
+    'Draft the retrospective action items as specific, executable commitments — not platitudes. Reject "we should communicate better"; accept "we will use a shared Slack channel for async decisions, starting next sprint." Write 1-2 such commitments and assign owners.',
   ],
   L2: [
     'Before starting the next sprint: run the retrospective — what went well, what didn\'t, and one specific process change to try next cycle. Document the action item.',
@@ -2884,13 +2884,16 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL: DecisionContent = {
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
   L1: [
-    'Long acceptance streak — N prompts without any pushback.',
+    'Review the last few AI responses critically — especially for edge cases, hidden assumptions, and anything that was accepted without being read carefully.',
+    'Push back on the last significant AI suggestion: what would you question if you were reviewing this code rather than writing it?',
+    'Check recent AI output for anything that looks right at a glance but might fail — edge cases, incorrect assumptions, or logic that was never validated.',
   ],
   L2: [
-    'Uncritical AI output acceptance compounds over time. Edge cases, off-by-one errors, and contextual assumptions hide in unreviewed responses. A streak this long is worth a deliberate pause — not because the suggestions are wrong, but because you haven\'t verified that they\'re right.',
+    'Look at the last AI response with fresh eyes — is there anything you would question or verify before continuing?',
+    'Pick one thing from recent AI output to double-check before the next prompt.',
   ],
   L3: [
-    'Review the last few AI responses critically — especially for edge cases and assumptions that haven\'t been explicitly validated.',
+    'Is there anything in the last AI response worth questioning before continuing?',
   ],
 };
 
@@ -2898,13 +2901,16 @@ export const ABSENCE_WORK_RHYTHM_CHECK_CASUAL: DecisionContent = {
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
-    'Prompting faster than you can verify output.',
+    'Read and verify the last AI response before continuing — check for anything that looks right at a glance but might be wrong: logic gaps, unchecked edge cases, incomplete error handling.',
+    'Before the next prompt: read the last response fully, identify anything not yet verified, and confirm the generated code is actually correct.',
+    'Slow down: read the last AI output in full and check for anything unverified before the next message.',
   ],
   L2: [
-    'High prompt velocity without reading responses is a flow-state trap — throughput feels productive but review quality drops. Rapid-fire prompting compounds unverified output into bugs that are harder to debug than the original problem.',
+    'Read the last AI response fully before continuing — has everything been verified?',
+    'Is there anything in the last response that was accepted without being read carefully?',
   ],
   L3: [
-    'Read and verify the last response before sending the next prompt.',
+    'Read the last response before sending the next message.',
   ],
 };
 
@@ -2912,41 +2918,50 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL: DecisionContent = {
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
   L1: [
-    'N distinct areas touched this session without completing any.',
+    'Finish one thing before starting another: identify what is open right now, pick the most important one, and close it completely before touching anything else.',
+    'List the open concerns in this session, pick the most critical one, and complete it — resist starting anything new until that one is done.',
+    'Close one open thread end-to-end before continuing: what is the most important unfinished thing right now?',
   ],
   L2: [
-    'Context switching between unrelated areas fragments attention — each switch costs roughly 15–20 minutes of cognitive recovery time. Touching 5+ domains without completing any is a quality risk for all of them: none get the focused attention they need.',
+    'What is the most important open concern to complete right now, before anything else?',
+    'Pick one thing to finish completely before starting something new.',
   ],
   L3: [
-    'Finish one area end-to-end before opening the next. What\'s the most important thing to complete right now?',
+    'Complete one thing before opening another.',
   ],
 };
 
 export const ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL: DecisionContent = {
-  question:      '25+ prompts — context checkpoint done?',
+  question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
   L1: [
-    '25+ prompts without a context checkpoint.',
+    'Drop a context checkpoint before continuing: what has been built, what decisions were made, what is still open, and what the current goal is.',
+    'Summarize where things stand: what got done, what decisions were made, and what is still open — so the next part of the session starts with clear state.',
+    'What is the current build state — what works, what is in progress, and what is the next step?',
   ],
   L2: [
-    'Long AI sessions drift — Claude\'s recall of earlier work degrades as the conversation grows. A quick reanchor (\'here\'s where we are: X done, Y remaining\') resets shared context and prevents compounding misalignment between you and the AI.',
+    'What has been built this session — what is working and what is still in progress?',
+    'What is the most important decision made this session that needs to carry forward?',
   ],
   L3: [
-    'Drop a context checkpoint: what\'s been built, what\'s still needed, and what the current goal is.',
+    'What is the one most important thing to not lose track of before continuing?',
   ],
 };
 
 export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL: DecisionContent = {
-  question:      '20+ implementation prompts — progress documented?',
+  question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
   L1: [
-    '20+ implementation prompts without consolidation.',
+    'Consolidate: update the README, write a brief description of what was built, or add clarifying comments before continuing.',
+    'Lock in the current state: write down what was built, any key decisions made, and what is still open — before the session context is lost.',
+    'Write a quick progress note — what was built, what decisions were made, and what comes next.',
   ],
   L2: [
-    'Progress built in an AI session exists implicitly in conversation history — which is non-persistent. Consolidating into documentation, comments, or a state summary makes what was built explicit and recoverable. Don\'t let the project state live only in the AI\'s context window.',
+    'Add a brief note or comment documenting what was just built before moving on.',
+    'Write one sentence about the key decision made in this implementation run.',
   ],
   L3: [
-    'Consolidate: update the README, write a brief description of what was built, or add clarifying comments before continuing.',
+    'Write a one-sentence note on what was built before continuing.',
   ],
 };
 
@@ -2956,13 +2971,16 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL: DecisionContent = {
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
   L1: [
-    'Consecutive AI acceptance streak: N prompts without critical review.',
+    'Apply deliberate critical review to the most recent AI responses: identify any assumptions that have not been validated, logic that could fail under edge cases, and changes made without explicit verification.',
+    'Self-review the last set of AI-generated changes: flag any hallucinated functions, plausible-but-incorrect logic, or unhandled edge cases before accepting the next response.',
+    'Audit recent AI output for correctness: check any state or data assumptions, verify control flow, and identify anything that was accepted without being read carefully.',
   ],
   L2: [
-    'Decision fatigue in AI-assisted development manifests as uncritical output acceptance — each unreviewed response compounds review debt. Independent critical evaluation of AI output is a professional discipline: accepting suggestions without review is not the same as verifying correctness. The longer the acceptance streak, the higher the probability of an undetected error in the stack.',
+    'Review recent AI responses critically — what would you flag if reviewing this as a senior engineer rather than as the author?',
+    'Pick the most significant recent AI response and push back on one aspect of it before continuing.',
   ],
   L3: [
-    'Apply deliberate critical review to the last N AI responses before continuing. Validate edge cases, check assumptions, confirm correctness independently.',
+    'Identify one thing in recent AI output to verify or question before accepting the next response.',
   ],
 };
 
@@ -2970,13 +2988,16 @@ export const ABSENCE_WORK_RHYTHM_CHECK_FORMAL: DecisionContent = {
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
-    'Prompt velocity exceeds verification rate.',
+    'Read and verify the last AI response in full before sending the next prompt: check any logic or state assumptions, confirm any generated code is complete and correct, and identify anything that was not explicitly validated.',
+    'Audit the last AI-generated change for correctness before proceeding: trace any control flow, check any state transitions, and verify all assumptions are grounded.',
+    'Pause and review the last response before continuing: identify any part that was generated but not read, any assumption that was not confirmed, and any error handling that may be missing.',
   ],
   L2: [
-    'Rapid-fire prompting without verifying AI output is a documented flow-state trap: subjective productivity (prompt throughput) is high while actual output quality (verified correctness) degrades. Deliberate practice requires intentional engagement with each response — the cost of review is always lower than the cost of debugging compounded unverified output.',
+    'Read the last AI response carefully before sending the next prompt — is there anything unread or unverified?',
+    'Check the last generated output for any assumptions or errors before continuing.',
   ],
   L3: [
-    'Pause. Verify the last AI response before proceeding. If you haven\'t read it fully, read it now before sending the next prompt.',
+    'Pause — read the last response before sending the next message.',
   ],
 };
 
@@ -2984,41 +3005,50 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL: DecisionContent = {
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
   L1: [
-    'Session context fragmentation: N distinct domains active, none complete.',
+    'Sequence your work: identify the highest-priority open concern in this session, complete it end-to-end, and define done for that domain before opening any additional concerns.',
+    'Close one open concern completely before touching another: list the current open concerns, pick the most critical, and do not touch the others until it is resolved.',
+    'Audit the current session\'s open concerns: name them all, rank them by criticality, and commit to completing the top one before any other context switch.',
   ],
   L2: [
-    'Cognitive load theory establishes that simultaneous tracking of multiple unrelated concerns degrades reasoning quality for each. Context switching between unrelated development domains is not parallel productivity — it is serial underperformance. Each unfinished context is an open loop carrying cognitive residue. Single-focus task completion produces higher quality output and fewer integration defects.',
+    'Pick the single most important open concern in this session and complete it before starting anything else.',
+    'What is the one thing in this session that must be finished before anything else can be safely started?',
   ],
   L3: [
-    'Sequence your work: close one concern completely before opening the next. Define done for the current domain before moving to another.',
+    'Complete one open concern end-to-end before opening another.',
   ],
 };
 
 export const ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL: DecisionContent = {
-  question:      '25+ prompts — context checkpoint done?',
+  question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
   L1: [
-    'Session exceeds 25 prompts without context reanchoring.',
+    'Summarize the current state of what was just built: what decisions have been made, what is working, what remains incomplete, and what has changed since the session started — use this as a re-anchor before continuing.',
+    'Reconstruct the decision log for this session: what tradeoffs were made, what constraints were identified, and what is still unresolved — so the next phase starts with explicit context, not implicit state.',
+    'Audit the current build state against the original goal: what was actually completed, what was deferred, and what decisions may need revisiting before continuing.',
   ],
   L2: [
-    'Extended AI-pair-programming sessions suffer from context window degradation: the AI\'s recall of earlier architectural decisions, constraints, and completed work weakens as conversation depth grows. Periodic context reanchoring — summarizing current build state and remaining scope — is a documented best practice for maintaining alignment in AI-assisted development workflows.',
+    'What is the current state of what was just built — what is working, what is still in progress, and what is the immediate next step?',
+    'What is the most important technical decision made this session that must be explicitly carried forward before continuing?',
   ],
   L3: [
-    'Establish a context checkpoint: summarize current build state, outstanding decisions, and remaining scope before continuing.',
+    'What is the one piece of context about this project that must not be lost before continuing — the single most important thing to anchor right now?',
   ],
 };
 
 export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL: DecisionContent = {
-  question:      '20+ implementation prompts — progress documented?',
+  question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
   L1: [
-    'Implementation progress without consolidation checkpoint (20 prompts).',
+    'Consolidate the current build state: document what has been implemented, capture the key decisions made, and record any outstanding work before continuing.',
+    'Update the project documentation to reflect the current state: what was built, why it was designed this way, and what has been deferred — make the implicit state explicit.',
+    'Write a progress summary covering what was built in this session, what technical decisions were made, and what remains before the feature is complete.',
   ],
   L2: [
-    'The project state must be explicit in the codebase, not implicit in the AI\'s session context. Documentation as practice: consolidating build progress into explicit documentation preserves decision context that would otherwise be lost to conversation history. AI conversation history is session-scoped and non-persistent — what was built must exist outside it.',
+    'Update documentation or comments to reflect the current implementation state before continuing.',
+    'Write a brief note on what was built and what key technical decisions were made.',
   ],
   L3: [
-    'Consolidate the current build state: update documentation, add implementation notes, or write a progress summary before continuing.',
+    'Write one sentence documenting the most important thing about what was just built before continuing.',
   ],
 };
 
