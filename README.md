@@ -56,6 +56,15 @@ Built during AI Hackfest 2026 by MLH.
 
 ---
 
+## The Decision Session — How It Works
+
+1. **Detection** — As you work, Nexpath captures each prompt and classifies your development stage.
+2. **Trigger** — On a stage transition, a lightweight LLM call confirms before the decision session fires. The session is shown by the Stop hook **after** the agent has fully responded — never mid-response.
+3. **Presentation** — A 2–3 word creative label appears (e.g., "Before coding.", "Quick check."), followed by a question and pre-filled options across three levels.
+4. **Selection** — Pick an option to send it straight to your agent, copy it to your clipboard to edit before sending, or choose "Show simpler options" for lighter alternatives.
+
+---
+
 ![Nexpath CLI demo](assets/nexpath.gif)
 
 ---
