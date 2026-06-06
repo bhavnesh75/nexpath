@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import type { SpawnOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { bringPopupToFront } from './popup-foreground.js';
 
 /**
  * IPC layer between the VS Code extension (Layer B) and the existing nexpath
@@ -203,6 +204,13 @@ export function spawnStop(
   const args = buildArgs('stop', opts.dbPath);
   const spawner = opts.spawnFn ?? spawn;
   const child = spawner(bin, args, buildSpawnOptions(opts));
+
+  // Layer C's `nexpath stop` opens the advisory popup as a separate OS window.
+  // macOS/Windows foreground it at launch; Linux/gnome-terminal can't, so under
+  // GNOME focus-stealing prevention it opens behind Cursor. Bring it to the front
+  // ourselves (Linux-only, graceful no-op otherwise). Only in the real spawn path
+  // — tests inject `spawnFn` and don't want us shelling out to wmctrl.
+  if (!opts.spawnFn) bringPopupToFront();
 
   return new Promise<DecisionSessionPayload | null>((resolve, reject) => {
     let stdout = '';
