@@ -1,4 +1,4 @@
-# Nexpath CLI — Build Fast. Skip Nothing.
+# Nexpath CLI — Build Fast. Skip Nothing. 
 
 > **A behaviour guidance layer for builders working with AI coding agents — vibe coders, indie hackers, founders, and product managers.**
 
