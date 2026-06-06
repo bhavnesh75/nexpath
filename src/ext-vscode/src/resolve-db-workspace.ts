@@ -1,6 +1,30 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * Canonicalize a workspace path so it matches what `nexpath auto` records as
+ * `project_root`. `auto` writes `project_root = process.cwd()` of its spawned
+ * process, which the OS canonicalizes — it resolves symlinks (macOS `/tmp` is a
+ * symlink to `/private/tmp`) and normalizes Windows drive-letter case. If the
+ * extension hands `stop` a NON-canonical path, `stop`'s exact-match
+ * `WHERE project_root = ?` misses the row `auto` wrote → `stop_no_pending` → the
+ * advisory popup never opens (root cause of "advisory fires but no popup" on
+ * macOS, where the throwaway workspace lives under `/tmp`). Canonicalizing the
+ * cwd we pass to BOTH `auto` and `stop` guarantees they agree. Falls back to the
+ * input string if realpath fails (e.g. the path isn't on disk yet).
+ */
+export function canonicalizeCwd(p: string): string {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    try {
+      return realpathSync(p);
+    } catch {
+      return p;
+    }
+  }
+}
 
 /**
  * Resolve the actual workspace folder fsPath for a given `state.vscdb` file

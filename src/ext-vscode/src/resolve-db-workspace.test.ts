@@ -1,8 +1,42 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { mkdtempSync, symlinkSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   resolveWorkspaceFromDbPath,
   _resetResolveDbWorkspaceCache,
+  canonicalizeCwd,
 } from './resolve-db-workspace.js';
+
+describe('canonicalizeCwd', () => {
+  it('resolves a symlinked path to its real path (the /tmp→/private/tmp class of mac bug)', () => {
+    const real = mkdtempSync(join(realpathSync(tmpdir()), 'nexpath-canon-real-'));
+    const link = real + '-link';
+    try {
+      symlinkSync(real, link, 'dir');
+      // auto records project_root = realpath(cwd); stop must look up the same.
+      expect(canonicalizeCwd(link)).toBe(realpathSync(link));
+      expect(canonicalizeCwd(link)).toBe(real);
+    } finally {
+      try { rmSync(link); } catch { /* ignore */ }
+      rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  it('is idempotent on an already-canonical path', () => {
+    const real = mkdtempSync(join(realpathSync(tmpdir()), 'nexpath-canon-idem-'));
+    try {
+      expect(canonicalizeCwd(real)).toBe(real);
+    } finally {
+      rmSync(real, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back to the input string when the path does not exist', () => {
+    const missing = join(tmpdir(), 'nexpath-canon-does-not-exist-zzz');
+    expect(canonicalizeCwd(missing)).toBe(missing);
+  });
+});
 
 /**
  * Unit coverage for the R4.3 multi-workspace defect fix. The watcher pipeline

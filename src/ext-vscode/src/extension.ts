@@ -22,7 +22,7 @@ import {
 } from './chat-history-watcher.js';
 import { createChatEventHandler } from './chat-pipeline.js';
 import { spawnAuto, spawnStop } from './ipc.js';
-import { resolveWorkspaceFromDbPath } from './resolve-db-workspace.js';
+import { resolveWorkspaceFromDbPath, canonicalizeCwd } from './resolve-db-workspace.js';
 import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
 
 /**
@@ -215,8 +215,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // filter above). For every captured prompt, derive cwd from the db that
   // fired the event — NOT the extension instance's workspaceCwd. Falls
   // back to instance cwd when workspace.json is missing / multi-root.
+  // Canonicalize so the cwd we hand `auto` and `stop` matches the project_root
+  // `auto` records (= its process.cwd(), which the OS canonicalizes). Without
+  // this, on macOS the throwaway workspace under `/tmp` (a symlink to
+  // `/private/tmp`) makes `auto` write project_root=/private/tmp/… while `stop`
+  // looks up /tmp/… → no match → `stop_no_pending` → the popup never opens.
   const cwdForEvent = (event: ChatHistoryEvent): string =>
-    resolveWorkspaceFromDbPath(event.sourcePath) ?? workspaceCwd;
+    canonicalizeCwd(resolveWorkspaceFromDbPath(event.sourcePath) ?? workspaceCwd);
   const handleChatEvent = createChatEventHandler({
     spawnAuto: (prompt, sid, event) =>
       spawnAuto(prompt, sid, { cwd: cwdForEvent(event) }),
