@@ -49,7 +49,18 @@ function readTargetElectron() {
 function run(label, cmd, args, opts = {}) {
   console.log(`▸ ${label}`);
   console.log(`  $ ${cmd} ${args.join(' ')}`);
-  const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: subPkgRoot, ...opts });
+  // On Windows, `npx` / `npm` / `vsce` are `.cmd` shims. Node's spawn (esp. on
+  // recent versions, post CVE-2024-27980) refuses to execute `.cmd`/`.bat`
+  // without a shell, so `spawnSync('npx', …)` fails with exit 1 BEFORE the tool
+  // even runs — which aborted packaging and left no .vsix (then
+  // `code --install-extension` failed with ENOENT). Running through the shell
+  // lets Windows resolve the `.cmd` shim. POSIX is unaffected (shell stays false).
+  const useShell = process.platform === 'win32';
+  const r = spawnSync(cmd, args, { stdio: 'inherit', cwd: subPkgRoot, shell: useShell, ...opts });
+  if (r.error) {
+    // Surface the underlying spawn error (was swallowed → opaque "exit 1").
+    console.error(`  ✗ spawn failed: ${r.error.message}`);
+  }
   return r.status ?? 1;
 }
 
