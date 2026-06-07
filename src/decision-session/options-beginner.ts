@@ -279,11 +279,11 @@ export const ABSENCE_NO_PUSHBACK_BEGINNER: DecisionContent = {
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
   L1: [
-    '1. Look at the last few things the AI suggested while building this feature.\n2. Share with me: is there anything you accepted just because it sounded right, without checking if it was really the best option?\n3. Then pick one and tell me: why did you go with that suggestion over other ways of doing it?',
-    'Walk me through the last AI suggestion used in what was just built — do you actually agree with it, or did you just go with it because the AI seemed confident? Share your thoughts with me.',
+    '1. Look at the last few suggestions made while building this feature.\n2. Share with me: is there anything you accepted just because it sounded right, without checking if it was really the best option?\n3. Then pick one and tell me: why did you go with that suggestion over other ways of doing it?',
+    'Walk me through the last suggestion used in what was just built — do you actually agree with it, or did you just go with it because it seemed confident? Share your thoughts with me.',
   ],
   L2: [
-    'Is there anything the AI suggested for what was just built that you said yes to without really thinking about whether it was the right choice? Share that with me.',
+    'Is there anything suggested for what was just built that you said yes to without really thinking about whether it was the right choice? Share that with me.',
   ],
   L3: [
     'Is there any AI suggestion used in what was just built that you accepted without questioning whether it was actually the best approach?',
@@ -939,15 +939,15 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER: DecisionContent = {
   question:      'Accepting without reviewing — applied critical check recently?',
   pinchFallback: 'Streak alert.',
   L1: [
-    'Look back at the last few things Claude suggested — is there anything that looks right but you have not double-checked?',
-    'Review what Claude built recently and identify one thing to verify or question before continuing.',
-    'Check the last few Claude responses: is there anything you would like to confirm is correct before continuing?',
+    'Look back at the last few suggestions made — is there anything that looks right but you have not double-checked?',
+    'Review what was built recently and identify one thing to verify or question before continuing.',
+    'Check the last few responses: is there anything you would like to confirm is correct before continuing?',
   ],
   L2: [
-    'Is there anything in Claude\'s recent suggestions you would like to double-check before continuing?',
+    'Is there anything in the recent suggestions you would like to double-check before continuing?',
   ],
   L3: [
-    'Pick one thing from Claude\'s recent responses to verify before continuing.',
+    'Pick one thing from the recent responses to verify before continuing.',
   ],
 };
 
@@ -955,12 +955,12 @@ export const ABSENCE_WORK_RHYTHM_CHECK_BEGINNER: DecisionContent = {
   question:      'Sending fast — read the last response fully before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
-    'Read Claude\'s last response carefully before continuing — is there anything that looks right but you have not actually checked?',
-    'Go back and read the last thing Claude wrote — does everything look correct?',
-    'Before continuing: read the last Claude response and verify that everything there is correct.',
+    'Read the last response carefully before continuing — is there anything that looks right but you have not actually checked?',
+    'Go back and read the last response — does everything look correct?',
+    'Before continuing: read the last response and verify that everything there is correct.',
   ],
   L2: [
-    'Read Claude\'s last response carefully before sending the next message.',
+    'Read the last response carefully before sending the next message.',
   ],
   L3: [
     'Pause and read the last response before continuing.',

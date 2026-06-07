@@ -396,9 +396,9 @@ const ABSENCE_NO_PUSHBACK: DecisionContent = {
   question:      'AI suggesting — are you evaluating critically?',
   pinchFallback: 'No pushback.',
   L1: [
-    'Review the AI-generated outputs used in what was just built: identify any decisions, implementations, or suggestions you accepted without explicitly verifying the reasoning, checking for alternatives, or questioning the assumptions embedded in the response.',
+    'Review the recent generated outputs used in what was just built: identify any decisions, implementations, or suggestions you accepted without explicitly verifying the reasoning, checking for alternatives, or questioning the assumptions embedded in the response.',
     'Audit your acceptance pattern while building this feature: for each significant AI output, ask whether you evaluated it independently or accepted it because it was confident and plausible. Flag any output where you would struggle to justify the implementation choice to a peer reviewer.',
-    'Cross-confirm the most recent AI suggestion used in what was just built: what assumptions did the AI make that were not in your prompt, what alternatives did it not consider, and is the approach it chose actually the best fit for this project?',
+    'Cross-confirm the most recent suggestion used in what was just built: what assumptions were made that were not in your prompt, what alternatives were not considered, and is the approach chosen actually the best fit for this project?',
   ],
   L2: [
     'Take the last significant AI output used in what was just built and evaluate it critically: do you agree with the approach, and if so, can you explain why it is better than the alternatives?',
@@ -774,13 +774,13 @@ const ABSENCE_NO_PUSHBACK_CASUAL: DecisionContent = {
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
   L1: [
-    'Look at the AI responses that produced what was just built — is there anything you accepted without really thinking about whether it was the right call? Pick the one you\'re least sure about and push back on it now.',
+    'Look at the recent responses that produced what was just built — is there anything you accepted without really thinking about whether it was the right call? Pick the one you\'re least sure about and push back on it now.',
     'Check how you\'ve been accepting AI suggestions for this feature — have you been approving them because they look reasonable, or because you\'ve actually thought through the alternatives? Flag the ones where you\'re not sure.',
     'Take the most recent AI suggestion used in what was just built and challenge it: what assumptions did it make, what did it not consider, and is this actually the best way to do it for this project?',
   ],
   L2: [
     'What\'s the last AI output used in what was just built that you accepted without questioning it? Push back on it now and see if it holds up.',
-    'Is there anything in what was just built where you accepted what the AI said because it sounded confident, not because you verified it yourself?',
+    'Is there anything in what was just built where you accepted a recent suggestion because it sounded confident, not because you verified it yourself?',
   ],
   L3: [
     'Is there any AI suggestion used in what was just built that you accepted without actually evaluating whether it was the right approach?',
