@@ -51,4 +51,16 @@ describe('styler — line-kind contract + pass-through function', () => {
     const ansi = '\x1b[31mred\x1b[0m';
     expect(styler(ansi, 'question')).toBe(ansi);
   });
+
+  it('styler() returns the line unchanged for an unrecognised kind (graceful-fallback contract)', () => {
+    // Forward-looking invariant: if a new LineKind is added in the future
+    // and the dispatch table is not yet updated, the styler must still
+    // return the input unchanged rather than throw or strip content. The
+    // pass-through body satisfies this trivially today; this test pins
+    // the contract so the future per-kind dispatch keeps the default
+    // branch intact.
+    const unknownKind = 'future-kind-not-yet-locked' as unknown as LineKind;
+    const sample = 'unchanged content';
+    expect(styler(sample, unknownKind)).toBe(sample);
+  });
 });

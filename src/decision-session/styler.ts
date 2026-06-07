@@ -48,6 +48,11 @@ export const ALL_LINE_KINDS: readonly LineKind[] = [
  * @param kind  The line-kind tag.
  * @returns     The styled string ready to write to stdout.
  */
-export function styler(line: string, _kind: LineKind): string {
+export function styler(line: string, kind: LineKind): string {
+  // Pass-through initial body. The styling implementation pass replaces
+  // this body with per-kind ANSI / picocolors mapping; `kind` is named (not
+  // underscored) per the documented function-signature contract so the
+  // future implementation reads kind directly without renaming.
+  void kind;
   return line;
 }
