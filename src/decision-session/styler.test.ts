@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { ALL_LINE_KINDS, styler, type LineKind } from './styler.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { ALL_LINE_KINDS, isStylerPassthroughActive, STYLER_PASSTHROUGH_ENV, styler, type LineKind } from './styler.js';
 
 describe('styler — line-kind contract + pass-through function', () => {
   it('ALL_LINE_KINDS contains exactly the 7 locked kinds', () => {
@@ -62,5 +62,65 @@ describe('styler — line-kind contract + pass-through function', () => {
     const unknownKind = 'future-kind-not-yet-locked' as unknown as LineKind;
     const sample = 'unchanged content';
     expect(styler(sample, unknownKind)).toBe(sample);
+  });
+});
+
+describe('styler — NEXPATH_STYLER_PASSTHROUGH diagnostic bypass', () => {
+  let saved: string | undefined;
+
+  beforeEach(() => {
+    saved = process.env[STYLER_PASSTHROUGH_ENV];
+  });
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env[STYLER_PASSTHROUGH_ENV];
+    else                     process.env[STYLER_PASSTHROUGH_ENV] = saved;
+  });
+
+  it('exports STYLER_PASSTHROUGH_ENV as the dev-plan-locked env-var key', () => {
+    expect(STYLER_PASSTHROUGH_ENV).toBe('NEXPATH_STYLER_PASSTHROUGH');
+  });
+
+  it('isStylerPassthroughActive() returns true when env-var === "1"', () => {
+    process.env[STYLER_PASSTHROUGH_ENV] = '1';
+    expect(isStylerPassthroughActive()).toBe(true);
+  });
+
+  it('isStylerPassthroughActive() returns false for unset / empty / non-"1" values', () => {
+    delete process.env[STYLER_PASSTHROUGH_ENV];
+    expect(isStylerPassthroughActive()).toBe(false);
+    process.env[STYLER_PASSTHROUGH_ENV] = '';
+    expect(isStylerPassthroughActive()).toBe(false);
+    process.env[STYLER_PASSTHROUGH_ENV] = '0';
+    expect(isStylerPassthroughActive()).toBe(false);
+    process.env[STYLER_PASSTHROUGH_ENV] = 'true';
+    expect(isStylerPassthroughActive()).toBe(false);
+  });
+
+  it('styler() returns input unchanged for every LineKind when bypass is active', () => {
+    process.env[STYLER_PASSTHROUGH_ENV] = '1';
+    const sample = 'sample bypass content';
+    for (const kind of ALL_LINE_KINDS) {
+      expect(styler(sample, kind)).toBe(sample);
+    }
+  });
+
+  it('styler() bypass survives multi-line + ANSI inputs (defensive contract)', () => {
+    process.env[STYLER_PASSTHROUGH_ENV] = '1';
+    const multiline = 'one\ntwo\nthree';
+    const ansi      = '\x1b[31mred\x1b[0m';
+    expect(styler(multiline, 'option-label')).toBe(multiline);
+    expect(styler(ansi,      'question')).toBe(ansi);
+  });
+
+  it('unset env-var falls through to the normal styler dispatch body', () => {
+    delete process.env[STYLER_PASSTHROUGH_ENV];
+    const sample = 'normal path';
+    // With the current pass-through body, both branches produce the same
+    // output; this test pins the structural contract that the unset path
+    // exercises the normal dispatch (verified once the body grows per-kind
+    // ANSI mapping by Bhavnesh — at that point this test asserts that the
+    // styler emits styled output when bypass is OFF).
+    expect(styler(sample, 'question')).toBe(sample);
   });
 });

@@ -8,6 +8,12 @@
 // the layout and the styler must update together. The default styler
 // behavior for an unknown kind is to return the line unchanged (graceful
 // fallback).
+//
+// Debug bypass: setting NEXPATH_STYLER_PASSTHROUGH=1 makes the styler
+// return the input line unchanged regardless of LineKind, even after the
+// styling implementation pass fills in the per-kind ANSI mapping. Useful
+// for diagnosing whether a rendering bug is in layout (which shows even
+// with bypass) or in styling (which disappears with bypass).
 
 export type LineKind =
   | 'popup-why-help'
@@ -48,7 +54,24 @@ export const ALL_LINE_KINDS: readonly LineKind[] = [
  * @param kind  The line-kind tag.
  * @returns     The styled string ready to write to stdout.
  */
+/**
+ * Env-var key for the styler-bypass diagnostic toggle. Set to the
+ * value `'1'` to make the styler return its input unchanged regardless
+ * of LineKind.
+ */
+export const STYLER_PASSTHROUGH_ENV = 'NEXPATH_STYLER_PASSTHROUGH';
+
+/** Returns true when the styler-bypass env-var is currently set to `'1'`. */
+export function isStylerPassthroughActive(): boolean {
+  return process.env[STYLER_PASSTHROUGH_ENV] === '1';
+}
+
 export function styler(line: string, kind: LineKind): string {
+  // Debug bypass — returns the input line verbatim regardless of LineKind.
+  // No-op while the body below is still pass-through; becomes the diagnostic
+  // toggle once the body grows the per-kind ANSI mapping.
+  if (isStylerPassthroughActive()) return line;
+
   // Pass-through initial body. The styling implementation pass replaces
   // this body with per-kind ANSI / picocolors mapping; `kind` is named (not
   // underscored) per the documented function-signature contract so the
