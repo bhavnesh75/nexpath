@@ -14,6 +14,7 @@ import {
   f4EnforceLengthCap,
   f5DeduplicatePrompts,
   f7DetectL2Triggers,
+  f7DetectL2TriggerMatches,
   buildRewritePrompt,
   calculateUserVocabConcentration,
   meetsConcentrationThreshold,
@@ -311,6 +312,47 @@ describe('r5-injection — F7 L2 sensitive-action trigger detection', () => {
     ];
     const triggers = f7DetectL2Triggers(history);
     expect(triggers.filter((t) => t === 'deployment')).toHaveLength(1);
+  });
+});
+
+describe('r5-injection — f7DetectL2TriggerMatches() literal-text variant', () => {
+  it('returns the literal matched text and prompt index for each detection', () => {
+    const matches = f7DetectL2TriggerMatches([
+      makePrompt('Please rm -rf /tmp/garbage now', 0),
+      makePrompt('Migrate the users table to add the new column', 1),
+    ]);
+    const fs = matches.find((m) => m.name === 'destructive-fs');
+    const sm = matches.find((m) => m.name === 'schema-migration');
+    expect(fs?.matchedText).toBe('rm -rf');
+    expect(fs?.promptIndex).toBe(0);
+    expect(sm?.matchedText.toLowerCase()).toBe('migrate');
+    expect(sm?.promptIndex).toBe(1);
+  });
+
+  it('preserves prompt order and pattern iteration order — first prompt\'s first matching category appears first', () => {
+    const matches = f7DetectL2TriggerMatches([
+      makePrompt('Need to deploy and also migrate later', 0),
+      makePrompt('rm -rf the temp folder', 1),
+    ]);
+    // Prompt 0 matches deployment + schema-migration (in pattern-table order),
+    // prompt 1 matches destructive-fs. The first element comes from prompt 0.
+    expect(matches[0].promptIndex).toBe(0);
+  });
+
+  it('normalises whitespace inside the matched span', () => {
+    const matches = f7DetectL2TriggerMatches([
+      makePrompt('please force  push the branch', 0),  // double space inside match
+    ]);
+    const fp = matches.find((m) => m.name === 'force-push');
+    expect(fp?.matchedText).toBe('force push');  // single space after normalisation
+  });
+
+  it('returns an empty array when no triggers match', () => {
+    const matches = f7DetectL2TriggerMatches([
+      makePrompt('I am refactoring the parser', 0),
+      makePrompt('Adding tests for the new branch', 1),
+    ]);
+    expect(matches).toEqual([]);
   });
 });
 
@@ -613,21 +655,30 @@ describe('r5-injection — per-set total length budget (§10.1.2)', () => {
 });
 
 describe('r5-injection — F7 helpers', () => {
-  it('buildL2SafeguardSentence emits the locked safeguard phrasing for known triggers', () => {
-    expect(buildL2SafeguardSentence(['destructive-fs'])).toBe(
-      'Still, before you perform any destructive filesystem operation you must ask me for go-ahead confirmation.',
-    );
-    expect(buildL2SafeguardSentence(['schema-migration'])).toBe(
-      'Still, before you run any schema migration you must ask me for go-ahead confirmation.',
-    );
-    expect(buildL2SafeguardSentence(['deployment'])).toBe(
-      'Still, before you deploy or release you must ask me for go-ahead confirmation.',
-    );
+  it('buildL2SafeguardSentence plugs the literal user-prompt matched text into the <action> slot', () => {
+    expect(
+      buildL2SafeguardSentence([{ name: 'destructive-fs', matchedText: 'rm -rf', promptIndex: 0 }]),
+    ).toBe('Still, before you do this rm -rf you must ask me for go-ahead confirmation.');
+    expect(
+      buildL2SafeguardSentence([{ name: 'schema-migration', matchedText: 'migrate', promptIndex: 0 }]),
+    ).toBe('Still, before you do this migrate you must ask me for go-ahead confirmation.');
+    expect(
+      buildL2SafeguardSentence([{ name: 'deployment', matchedText: 'deploy', promptIndex: 0 }]),
+    ).toBe('Still, before you do this deploy you must ask me for go-ahead confirmation.');
   });
 
-  it('buildL2SafeguardSentence falls back to a generic phrase for unknown trigger names', () => {
-    expect(buildL2SafeguardSentence(['unknown-trigger-xyz'])).toBe(
-      'Still, before you this sensitive action you must ask me for go-ahead confirmation.',
+  it('buildL2SafeguardSentence uses ONLY the first match when multiple matches are passed', () => {
+    expect(
+      buildL2SafeguardSentence([
+        { name: 'deployment',       matchedText: 'deploy',   promptIndex: 0 },
+        { name: 'schema-migration', matchedText: 'migrate',  promptIndex: 1 },
+      ]),
+    ).toBe('Still, before you do this deploy you must ask me for go-ahead confirmation.');
+  });
+
+  it('buildL2SafeguardSentence falls back to a generic phrase only when match list is empty', () => {
+    expect(buildL2SafeguardSentence([])).toBe(
+      'Still, before you do this this sensitive action you must ask me for go-ahead confirmation.',
     );
   });
 
@@ -642,22 +693,26 @@ describe('r5-injection — F7 helpers', () => {
     expect(stripped[1].text).not.toMatch(/production/i);
   });
 
-  it('appendL2Safeguard inserts the sentence before {R4_CLOSE} when present', () => {
+  it('appendL2Safeguard inserts the sentence (with literal action) before {R4_CLOSE} when present', () => {
     const desc = 'body line\n{R4_CLOSE}';
-    const out  = appendL2Safeguard(desc, ['destructive-fs']);
-    expect(out).toContain('Still, before you perform any destructive filesystem operation');
+    const out  = appendL2Safeguard(desc, [
+      { name: 'destructive-fs', matchedText: 'rm -rf', promptIndex: 0 },
+    ]);
+    expect(out).toContain('Still, before you do this rm -rf you must ask me for go-ahead confirmation.');
     // R4_CLOSE remains on its own trailing line.
     expect(out.endsWith('{R4_CLOSE}')).toBe(true);
   });
 
   it('appendL2Safeguard appends at the end when {R4_CLOSE} is not present', () => {
     const desc = 'body line only';
-    const out  = appendL2Safeguard(desc, ['deployment']);
+    const out  = appendL2Safeguard(desc, [
+      { name: 'deployment', matchedText: 'deploy', promptIndex: 0 },
+    ]);
     expect(out.startsWith('body line only\n')).toBe(true);
-    expect(out).toContain('Still, before you deploy or release');
+    expect(out).toContain('Still, before you do this deploy');
   });
 
-  it('appendL2Safeguard returns the desc-base unchanged when no triggers are detected', () => {
+  it('appendL2Safeguard returns the desc-base unchanged when no matches are passed', () => {
     expect(appendL2Safeguard('body\n{R4_CLOSE}', [])).toBe('body\n{R4_CLOSE}');
   });
 });
@@ -675,7 +730,7 @@ describe('r5-injection — F7 two-tier orchestration (§10.6.1)', () => {
     rewrite: async () => 'refactoring invoice building rendering service today.',
   };
 
-  it('path (a) — appends the safeguard sentence when triggers present AND static is L2-clean', async () => {
+  it('path (a) — appends the safeguard sentence with the literal user-prompt L2 verb when triggers present AND static is L2-clean', async () => {
     const out = await injectR5(
       SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
       l2History,
@@ -688,7 +743,8 @@ describe('r5-injection — F7 two-tier orchestration (§10.6.1)', () => {
         // l2SafeguardRequired omitted — i.e. static is L2-clean → escalate.
       },
     );
-    expect(out).toContain('Still, before you deploy or release you must ask me for go-ahead confirmation.');
+    // The literal "deploy" word from the user's prompt fills the <action> slot.
+    expect(out).toContain('Still, before you do this deploy you must ask me for go-ahead confirmation.');
   });
 
   it('path (b) — does NOT append safeguard when static is already L2-flagged', async () => {
@@ -754,8 +810,8 @@ describe('r5-injection — F7 two-tier orchestration (§10.6.1)', () => {
       'formal',
       { lengthBudget: 'HEAVY' },  // no client → Strategy D
     );
-    // D-fallback substituted the R5 placeholder AND the safeguard appended.
+    // D-fallback substituted the R5 placeholder AND the literal-action safeguard appended.
     expect(out).not.toContain('{R5_INJECT');
-    expect(out).toContain('Still, before you deploy or release');
+    expect(out).toContain('Still, before you do this deploy');
   });
 });

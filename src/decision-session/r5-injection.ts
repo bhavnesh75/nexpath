@@ -149,13 +149,19 @@ export async function injectR5(
 
   // (5) F7 — detect L2 sensitive-action triggers in the prompt history.
   // Runs AFTER F2 masking but BEFORE deterministic vocab extraction.
-  const triggers = f7DetectL2Triggers(deduped);
+  // Capture both deduplicated category names (for the stripping decision)
+  // and the per-match list with literal user-prompt text (for the
+  // safeguard sentence per dev-plan §10.6.1).
+  const triggerMatches = f7DetectL2TriggerMatches(deduped);
 
   // For vocab extraction, strip L2 trigger phrases so sensitive verbs
   // never flow into the LLM rewrite output. This is the path-(b) drop
   // behaviour applied uniformly — appending the safeguard sentence
-  // (path a) is handled separately in finalize().
-  const promptsForVocab = triggers.length > 0 ? stripL2TriggerText(deduped) : deduped;
+  // (path a) is handled separately in finalize(). Documented dev-plan
+  // deviation: the literal §10.6.1 model is (a) XOR (b); we apply (b)
+  // always for content-sensitivity safety per the high-risk content
+  // rule, and append (a) on top when applicable.
+  const promptsForVocab = triggerMatches.length > 0 ? stripL2TriggerText(deduped) : deduped;
 
   // (6) — deterministic vocab extraction.
   const rawVocab = extractVocab(promptsForVocab);
@@ -163,14 +169,14 @@ export async function injectR5(
   // (7) — step-4.5 voice-rule filter.
   const filteredVocab = applyVoiceRuleFilter(rawVocab);
   if (filteredVocab.length < 2) {
-    return finalize(strategyDFallback(descBase, signalType, register), triggers);
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
   }
 
   // (8) — LLM rewrite, only when a client is bound. Without a client,
   // the runtime falls back to Strategy D — this keeps the path
   // production-safe in environments that haven't provisioned an LLM.
   if (!options.client) {
-    return finalize(strategyDFallback(descBase, signalType, register), triggers);
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
   }
   const summary = await rewriteViaLLM(
     filteredVocab,
@@ -180,24 +186,24 @@ export async function injectR5(
     options.client,
   );
   if (summary.trim().length === 0) {
-    return finalize(strategyDFallback(descBase, signalType, register), triggers);
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
   }
 
   // (9) — F4 per-substitution length cap.
   const capped = f4EnforceLengthCap(summary);
   if (capped === null) {
-    return finalize(strategyDFallback(descBase, signalType, register), triggers);
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
   }
 
   // (10) — 70-80% concentration check on the user-grounded vocab.
   if (!meetsConcentrationThreshold(capped, filteredVocab)) {
-    return finalize(strategyDFallback(descBase, signalType, register), triggers);
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
   }
 
   const substituted = substituteR5Placeholder(descBase, capped);
-  return finalize(substituted, triggers);
+  return finalize(substituted, triggerMatches);
 
-  function finalize(out: string, detected: readonly string[]): string {
+  function finalize(out: string, detected: ReadonlyArray<L2TriggerMatch>): string {
     // Path (a) — escalate to L2 when triggers detected AND static
     // desc-base is currently L2-clean. Skip when static is already
     // L2-flagged (l2SafeguardRequired === true) since the static
@@ -548,31 +554,21 @@ const L2_TRIGGER_PATTERNS: readonly { name: string; re: RegExp }[] = [
 ];
 
 /**
- * Human-readable verb-phrase for each L2 trigger category, used to fill
- * the `<action>` slot in the runtime confirmation-seek safeguard
- * sentence. Categorical labels (not user-prompt text) avoid leaking
- * potentially-sensitive prompt content back into the substituted
- * desc-base.
+ * Build the runtime L2 escalation safeguard sentence. Plugs the FIRST
+ * detected trigger's literal user-prompt span into the `<action>`
+ * slot of the locked template. Per dev-plan §10.6.1, the safeguard
+ * sentence is user-grounded — the actual phrasing the user typed (as
+ * matched by the trigger regex) fills the slot, preserving the
+ * specificity of what the runtime is flagging.
+ *
+ * Falls back to a generic 'this sensitive action' phrase only when
+ * `matches` is empty (defensive — callers should never invoke this
+ * with an empty list).
  */
-const L2_ACTION_PHRASES: Readonly<Record<string, string>> = {
-  'destructive-fs':   'perform any destructive filesystem operation',
-  'schema-migration': 'run any schema migration',
-  'dep-install':      'install or upgrade any dependency',
-  'secret-env':       'read or write any secret or env value',
-  'force-push':       'force-push',
-  'deployment':       'deploy or release',
-  'multi-file-mod':   'make multi-file changes outside the immediate task',
-};
-
-/**
- * Build the runtime L2 escalation safeguard sentence. Uses the first
- * detected trigger's categorical phrase; falls back to a generic
- * phrase for unknown trigger names.
- */
-export function buildL2SafeguardSentence(triggerNames: readonly string[]): string {
-  const first  = triggerNames[0];
-  const phrase = (first && L2_ACTION_PHRASES[first]) ?? 'this sensitive action';
-  return `Still, before you ${phrase} you must ask me for go-ahead confirmation.`;
+export function buildL2SafeguardSentence(matches: ReadonlyArray<L2TriggerMatch>): string {
+  const first  = matches[0];
+  const action = first ? first.matchedText : 'this sensitive action';
+  return `Still, before you do this ${action} you must ask me for go-ahead confirmation.`;
 }
 
 /**
@@ -597,11 +593,11 @@ export function stripL2TriggerText(history: readonly PromptRecord[]): PromptReco
  * Append the L2 safeguard sentence to a substituted desc-base. The
  * placement is at the end of the body (just before any trailing
  * `{R4_CLOSE}` placeholder so the bookend stays on the final line).
- * Returns the input unchanged when `triggerNames` is empty.
+ * Returns the input unchanged when `matches` is empty.
  */
-export function appendL2Safeguard(descBase: string, triggerNames: readonly string[]): string {
-  if (triggerNames.length === 0) return descBase;
-  const sentence = buildL2SafeguardSentence(triggerNames);
+export function appendL2Safeguard(descBase: string, matches: ReadonlyArray<L2TriggerMatch>): string {
+  if (matches.length === 0) return descBase;
+  const sentence = buildL2SafeguardSentence(matches);
   // If the desc-base still carries an unsubstituted `{R4_CLOSE}` placeholder,
   // insert before it; otherwise append at the end.
   if (descBase.includes('{R4_CLOSE}')) {
@@ -624,6 +620,42 @@ export function f7DetectL2Triggers(history: readonly PromptRecord[]): string[] {
     }
   }
   return Array.from(hits);
+}
+
+/** Per-match record returned by `f7DetectL2TriggerMatches`. */
+export interface L2TriggerMatch {
+  /** Category name (e.g. 'destructive-fs', 'deployment'). */
+  name:        string;
+  /** Literal text from the user prompt that satisfied the trigger regex (whitespace-normalised). */
+  matchedText: string;
+  /** 0-based index of the prompt where the match was found (history order). */
+  promptIndex: number;
+}
+
+/**
+ * F7 — return the FIRST matched-text occurrence per (prompt, category)
+ * pair, preserving prompt + pattern order. Distinct from
+ * `f7DetectL2Triggers` which deduplicates to category names — this
+ * variant surfaces the literal user-prompt text so the runtime can
+ * fill the `<specific sensitive action>` slot in the safeguard
+ * sentence with the actual user phrasing (per dev-plan §10.6.1).
+ */
+export function f7DetectL2TriggerMatches(history: readonly PromptRecord[]): L2TriggerMatch[] {
+  const out: L2TriggerMatch[] = [];
+  for (let i = 0; i < history.length; i++) {
+    const text = history[i].text;
+    for (const { name, re } of L2_TRIGGER_PATTERNS) {
+      const m = text.match(re);
+      if (m) {
+        out.push({
+          name,
+          matchedText: m[0].replace(/\s+/g, ' ').trim(),
+          promptIndex: i,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 // ─── Haiku LLM rewrite wrapper + 70-80% concentration rule ────────────
