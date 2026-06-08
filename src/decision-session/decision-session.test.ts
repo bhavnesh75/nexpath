@@ -2410,6 +2410,60 @@ describe('buildSelectMessage', () => {
       });
       expect(msg).toContain((c8.content as { founder_casual: string }).founder_casual);
     });
+
+    // §11.3 C3 lock — single `\n` separator between question and why-help.
+    it('puts EXACTLY one `\\n` between the question and the R4_USER_OPEN of the why-help block (C3 adjacency)', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Is the plan written?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+      });
+      // Find the question line in the composed message — it has formatQuestion's
+      // BOLD_WHITE wrapper, so search for the inner text + the closing reset code.
+      const questionPlain = 'Is the plan written?';
+      const questionStart = msg.indexOf(questionPlain);
+      expect(questionStart).toBeGreaterThan(-1);
+      // The end of the question line is wherever the BOLD_WHITE reset closes; pick the
+      // first newline AFTER questionStart and assert the substring immediately following
+      // it (up to R4_USER_OPEN) contains zero blank rows.
+      const firstNlAfterQ = msg.indexOf('\n', questionStart);
+      const r4OpenStart   = msg.indexOf(R4_USER_OPEN, firstNlAfterQ);
+      expect(firstNlAfterQ).toBeGreaterThan(-1);
+      expect(r4OpenStart).toBeGreaterThan(-1);
+      // Between the first `\n` after the question and the start of R4_USER_OPEN there
+      // must be NO additional characters (including no extra `\n`).
+      expect(msg.slice(firstNlAfterQ + 1, r4OpenStart)).toBe('');
+    });
+
+    // §11.2 why-help block decomposition — verify the composed block emits the
+    // dev-plan 3-or-4 sub-element structure (R4 open / R6 content / [mood] /
+    // R4 close), each as its own line within the composed message.
+    it('composed why-help block contains 3 sub-element lines (open / content / close) when no mood', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'formal',
+      });
+      const openIdx   = msg.indexOf(R4_USER_OPEN);
+      const closeText = '— review the options below to determine the next step.';
+      const closeIdx  = msg.indexOf(closeText);
+      const slice     = msg.slice(openIdx, closeIdx + closeText.length);
+      expect(slice.split('\n')).toHaveLength(3);
+    });
+
+    it('composed why-help block contains 4 sub-element lines (open / content / mood / close) when mood is rushed', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+        mood:         'rushed',
+      });
+      const openIdx   = msg.indexOf(R4_USER_OPEN);
+      const closeText = '— pick from the options below to keep moving.';
+      const closeIdx  = msg.indexOf(closeText);
+      const slice     = msg.slice(openIdx, closeIdx + closeText.length);
+      expect(slice.split('\n')).toHaveLength(4);
+    });
   });
 });
 
