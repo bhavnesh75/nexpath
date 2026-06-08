@@ -809,16 +809,56 @@ const ABSENCE_SPEC_ACCEPTANCE: DecisionContent = {
   question:      'Implementation done — spec checked?',
   pinchFallback: 'Check the spec.',
   L1: [
-    { option: 'Review what was just built against the spec and acceptance criteria: go through each requirement and confirm whether it is fully implemented, partially implemented, or missing from what was just built.', descBase: '' },
-    { option: 'Cross-confirm what was just built against the original requirements: does the implementation match what was specified? List any deviations, missing behaviour, or scope creep introduced.', descBase: '' },
-    { option: 'Audit what was just built for spec compliance: check input validation, edge cases, and error handling against the acceptance criteria — flag anything that passes the happy path but fails under edge conditions.', descBase: '' },
+    {
+      option: 'Review what was just built against the spec and acceptance criteria: go through each requirement and confirm whether it is fully implemented, partially implemented, or missing from what was just built.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: feature implementation. No spec-compliance audit performed."}
+Compliance against the spec hasn't been audited for what was just built.
+Per requirement: fully / partially / not implemented. Don't fix gaps in this pass.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm what was just built against the original requirements: does the implementation match what was specified? List any deviations, missing behaviour, or scope creep introduced.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; deviation/scope-creep check vs spec not done."}
+The spec-compliance comparison hasn't been done.
+List deviations, missing behaviour, scope creep. Don't fix yet.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit what was just built for spec compliance: check input validation, edge cases, and error handling against the acceptance criteria — flag anything that passes the happy path but fails under edge conditions.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; edge-case spec coverage not audited."}
+The edge-case + error-handling audit against acceptance criteria hasn't been run.
+Audit input validation, edge cases, error handling per criteria. List findings only.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Check what was just built against the spec: does it fully satisfy the acceptance criteria, or are there gaps?', descBase: '' },
-    { option: 'Does what was just built match what was specified? List any differences between the implementation and the original requirements.', descBase: '' },
+    {
+      option: 'Check what was just built against the spec: does it fully satisfy the acceptance criteria, or are there gaps?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; spec gap check not done."}
+Lighter: does it satisfy the acceptance criteria, or are there gaps?
+List gaps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Does what was just built match what was specified? List any differences between the implementation and the original requirements.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; implementation-vs-spec diff not enumerated."}
+Narrower: implementation vs spec diff — what differs.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t match the spec or acceptance criteria?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t match the spec or acceptance criteria?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented."}
+Minimum next step: any spec or acceptance criterion not met.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -827,16 +867,55 @@ const ABSENCE_CROSS_CONFIRMING: DecisionContent = {
   question:      'AI generated it — have you verified it?',
   pinchFallback: 'Verify the output.',
   L1: [
-    { option: 'Review what was just built critically: identify any hallucinated functions or APIs, logic that looks plausible but is incorrect, edge cases not handled, and any code that was generated but not verified against the actual system it will run in.', descBase: '' },
-    { option: 'Cross-confirm what was just built: does the generated code actually do what you expect, or does it contain plausible-sounding logic that is subtly wrong? Trace the main path through the code and verify each step.', descBase: '' },
-    { option: 'Audit what was just built for AI generation artifacts: check for made-up function names, incorrect assumptions about the codebase, missing error handling that a human would have caught, and any logic that looks correct but hasn\'t been manually verified.', descBase: '' },
+    {
+      option: 'Review what was just built critically: identify any hallucinated functions or APIs, logic that looks plausible but is incorrect, edge cases not handled, and any code that was generated but not verified against the actual system it will run in.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: AI-generated implementation. No verification pass on the generated content."}
+AI-generated code in recent prompts hasn't been verified.
+Identify hallucinated functions/APIs, plausible-but-wrong logic, missed edge cases, unverified system assumptions.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm what was just built: does the generated code actually do what you expect, or does it contain plausible-sounding logic that is subtly wrong? Trace the main path through the code and verify each step.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "AI output present; execution-path verification not performed."}
+The generated code's execution path hasn't been traced and verified.
+Trace the main path; verify each step does what's expected.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit what was just built for AI generation artifacts: check for made-up function names, incorrect assumptions about the codebase, missing error handling that a human would have caught, and any logic that looks correct but hasn\'t been manually verified.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "AI output present; generation-artifact audit not done."}
+Generation artifacts (hallucinated names, wrong assumptions, missing error handling) haven't been audited.
+Audit for these specifically; list findings.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Review what was just built for correctness: is there anything that looks right at a glance but would fail when actually run or tested?', descBase: '' },
-    { option: 'Does what was just built actually do what you think it does? Trace the main execution path and verify the logic is sound.', descBase: '' },
+    {
+      option: 'Review what was just built for correctness: is there anything that looks right at a glance but would fail when actually run or tested?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "AI output present; look-vs-actually-work check not done."}
+Lighter: anything that looks right but fails when actually run.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Does what was just built actually do what you think it does? Trace the main execution path and verify the logic is sound.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "AI output present; main-path verification not done."}
+Narrower: trace the main path and verify logic is sound.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that was generated but not verified — anything you haven\'t manually checked for correctness?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that was generated but not verified — anything you haven\'t manually checked for correctness?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "AI output present."}
+Minimum next step: anything generated but not manually verified.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1382,16 +1461,55 @@ const ABSENCE_ARCH_CONFLICT: DecisionContent = {
   question:      'Feature added — architecture consistency checked?',
   pinchFallback: 'Arch conflict.',
   L1: [
-    { option: 'Review what was just built for architectural consistency: does this feature follow the same patterns, abstractions, and conventions established in the existing codebase, or does it introduce a parallel approach that will diverge over time and increase maintenance cost?', descBase: '' },
-    { option: 'Audit what was just built for architecture conflicts: identify any module boundaries crossed without justification, any shared state accessed in ways inconsistent with the existing data flow, and any new dependencies introduced that conflict with the project\'s existing dependency strategy.', descBase: '' },
-    { option: 'Cross-confirm what was just built against the architectural decisions documented for this project: does this feature respect the layering, separation of concerns, and interface contracts that were established? Flag any violations and determine whether they require a refactor or an architecture decision update.', descBase: '' },
+    {
+      option: 'Review what was just built for architectural consistency: does this feature follow the same patterns, abstractions, and conventions established in the existing codebase, or does it introduce a parallel approach that will diverge over time and increase maintenance cost?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: new feature implementation. Consistency with existing codebase patterns not checked."}
+Whether what was just built follows existing patterns and conventions hasn't been audited.
+Identify deviations; flag parallel-approach risks that'll diverge over time.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit what was just built for architecture conflicts: identify any module boundaries crossed without justification, any shared state accessed in ways inconsistent with the existing data flow, and any new dependencies introduced that conflict with the project\'s existing dependency strategy.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; boundary-crossing and dep-strategy not audited."}
+The boundary-crossing + dependency-strategy audit hasn't been done.
+Flag module boundaries crossed without justification, inconsistent shared-state access, new conflicting deps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm what was just built against the architectural decisions documented for this project: does this feature respect the layering, separation of concerns, and interface contracts that were established? Flag any violations and determine whether they require a refactor or an architecture decision update.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; alignment against documented arch decisions not checked."}
+Alignment against documented architecture decisions hasn't been confirmed.
+Flag violations + decide: refactor needed or arch-decision update needed.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built follow the same patterns and conventions as the rest of the codebase, or does it introduce a new approach that conflicts with the existing architecture?', descBase: '' },
-    { option: 'Is there anything in what was just built that violates a design decision or architectural convention established earlier in this project?', descBase: '' },
+    {
+      option: 'Does what was just built follow the same patterns and conventions as the rest of the codebase, or does it introduce a new approach that conflicts with the existing architecture?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; pattern match not checked."}
+Lighter: does it follow the same patterns as the rest of the codebase?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in what was just built that violates a design decision or architectural convention established earlier in this project?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; design-decision violations not flagged."}
+Narrower: anything that violates an earlier design decision in this project.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t fit the patterns or structure of the existing codebase?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t fit the patterns or structure of the existing codebase?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented."}
+Minimum next step: anything that doesn't fit the existing codebase's structure.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1399,16 +1517,55 @@ const ABSENCE_PROMPT_CONTEXT: DecisionContent = {
   question:      'Prompts sent — spec and arch referenced?',
   pinchFallback: 'Missing context.',
   L1: [
-    { option: 'Review the prompts used to build this feature: are they grounded in the project\'s spec, architecture decisions, and task breakdown, or are they ad hoc instructions that you are implementing without access to the full planning context? If context is missing, inject it now before the next prompt.', descBase: '' },
-    { option: 'Audit the context richness of the prompts used to build this feature: do you have access to the current spec, the established architecture, and the specific acceptance criteria for what was just built, or are you making assumptions that a context-rich prompt would have resolved?', descBase: '' },
-    { option: 'Cross-confirm that what was just built is aligned with the project\'s planning artifacts: paste the relevant spec section, architecture diagram, or task definition into the conversation and verify that your implementation matches what was planned.', descBase: '' },
+    {
+      option: 'Review the prompts used to build this feature: are they grounded in the project\'s spec, architecture decisions, and task breakdown, or are they ad hoc instructions that you are implementing without access to the full planning context? If context is missing, inject it now before the next prompt.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: ad-hoc instructions, no explicit spec/arch context injection."}
+The spec / architecture / task-breakdown context hasn't been confirmed in recent prompts.
+Inject the relevant planning context now before the next prompt — paste spec section, arch diagram, or task definition.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit the context richness of the prompts used to build this feature: do you have access to the current spec, the established architecture, and the specific acceptance criteria for what was just built, or are you making assumptions that a context-rich prompt would have resolved?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: assumption-driven instead of context-rich."}
+The context richness of recent prompts hasn't been audited.
+Identify what context (spec / arch / criteria) is missing; inject it before continuing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm that what was just built is aligned with the project\'s planning artifacts: paste the relevant spec section, architecture diagram, or task definition into the conversation and verify that your implementation matches what was planned.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature built; alignment with planning artifacts not verified."}
+Alignment with planning artifacts hasn't been confirmed.
+Paste relevant spec/arch/task context; verify implementation matches plan.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Do you have the spec and architecture context needed to build this feature correctly, or have you been working from ad hoc instructions? Inject the relevant planning context before continuing.', descBase: '' },
-    { option: 'Paste the spec or acceptance criteria for this feature into the conversation and check whether what was just built matches what was planned.', descBase: '' },
+    {
+      option: 'Do you have the spec and architecture context needed to build this feature correctly, or have you been working from ad hoc instructions? Inject the relevant planning context before continuing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Recent prompts: ad-hoc; full picture not present."}
+Lighter: spec + arch context needed for correctness — inject now.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Paste the spec or acceptance criteria for this feature into the conversation and check whether what was just built matches what was planned.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature built; spec-match not checked."}
+Narrower: paste spec / acceptance criteria; check match against build.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you have enough context about the spec and architecture to be building this feature correctly, or are you working without the full picture?', descBase: '' },
+    {
+      option: 'Do you have enough context about the spec and architecture to be building this feature correctly, or are you working without the full picture?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Recent prompts: ad-hoc."}
+Minimum next step: enough spec/arch context to build correctly, or full picture missing?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1484,16 +1641,56 @@ const ABSENCE_SPEC_CROSS_CONFIRM: DecisionContent = {
   question:      'Spec written — cross-confirmed against requirements?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
-    { option: 'Cross-confirm this project\'s spec against its source requirements: for each requirement in the spec, verify it traces back to a stated user need or stakeholder decision, covers the acceptance criteria completely, and does not contain assumptions that were not explicitly agreed upon.', descBase: '' },
-    { option: 'Audit this project\'s spec for internal consistency and completeness: identify any requirements that contradict each other, any acceptance criteria that are ambiguous or untestable, and any scope decisions that were made without explicit stakeholder sign-off.', descBase: '' },
-    { option: 'Review this project\'s spec against what is actually feasible given the current technical constraints: flag any requirements that have no clear implementation path, any acceptance criteria that would require capabilities not available in the current stack, and any decisions that have been implicitly made but not documented.', descBase: '' },
+    {
+      option: 'Cross-confirm this project\'s spec against its source requirements: for each requirement in the spec, verify it traces back to a stated user need or stakeholder decision, covers the acceptance criteria completely, and does not contain assumptions that were not explicitly agreed upon.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Spec drafted across recent prompts; traceability to original requirements not audited."}
+The spec itself hasn't been cross-confirmed against the original requirements.
+Per requirement: traces to stated user need / covers acceptance criteria / no unconfirmed assumptions. Flag any failures.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit this project\'s spec for internal consistency and completeness: identify any requirements that contradict each other, any acceptance criteria that are ambiguous or untestable, and any scope decisions that were made without explicit stakeholder sign-off.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Spec drafted; internal-consistency audit not done."}
+The internal-consistency audit hasn't been performed.
+Find contradictions, ambiguous/untestable criteria, unconfirmed scope decisions.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Review this project\'s spec against what is actually feasible given the current technical constraints: flag any requirements that have no clear implementation path, any acceptance criteria that would require capabilities not available in the current stack, and any decisions that have been implicitly made but not documented.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Spec drafted; feasibility audit against current stack not done."}
+Feasibility against the actual stack hasn't been verified.
+Flag requirements with no clear implementation path, criteria needing unavailable capabilities, implicit-but-undocumented decisions.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Go through this project\'s spec and identify any requirement that cannot be directly traced to a stated user need or a documented stakeholder decision — those are assumptions that need to be confirmed before implementation begins.', descBase: '' },
-    { option: 'Is there anything in this project\'s spec that is ambiguous enough that two developers could implement it differently and both be technically correct? Resolve those ambiguities before building.', descBase: '' },
+    {
+      option: 'Go through this project\'s spec and identify any requirement that cannot be directly traced to a stated user need or a documented stakeholder decision — those are assumptions that need to be confirmed before implementation begins.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec drafted; assumption check not done."}
+Lighter: any requirement that's an assumption rather than traced.
+List those for confirmation.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in this project\'s spec that is ambiguous enough that two developers could implement it differently and both be technically correct? Resolve those ambiguities before building.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec drafted; ambiguity audit not done."}
+Narrower: anything ambiguous enough for two correct-but-different implementations.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in this project\'s spec that has not been verified against the original requirements — any assumption, scope decision, or acceptance criterion that was added without explicit confirmation?', descBase: '' },
+    {
+      option: 'Is there anything in this project\'s spec that has not been verified against the original requirements — any assumption, scope decision, or acceptance criterion that was added without explicit confirmation?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec drafted."}
+Minimum next step: any assumption / scope / criterion added without explicit confirmation.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1501,16 +1698,56 @@ const ABSENCE_SPEC_REVISION: DecisionContent = {
   question:      'Spec drafted — revised since initial version?',
   pinchFallback: 'Spec unrevised.',
   L1: [
-    { option: 'Revise this project\'s spec to reflect what has been learned since the initial draft: update any requirements that turned out to be more or less complex than anticipated, add acceptance criteria for edge cases discovered during implementation, and remove or defer any scope that has been implicitly dropped.', descBase: '' },
-    { option: 'Audit this project\'s spec for drift: compare the current implementation against the spec and identify where the two have diverged — either the spec is outdated and the implementation is correct, or the implementation has deviated from the spec and needs to be corrected. Resolve each divergence explicitly.', descBase: '' },
-    { option: 'Review this project\'s spec against the current state of the project: what decisions have been made during implementation that are not reflected in the spec, what requirements have been reinterpreted or changed in practice, and what new constraints or dependencies have emerged that the spec does not document?', descBase: '' },
+    {
+      option: 'Revise this project\'s spec to reflect what has been learned since the initial draft: update any requirements that turned out to be more or less complex than anticipated, add acceptance criteria for edge cases discovered during implementation, and remove or defer any scope that has been implicitly dropped.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Spec drafted; implementation has progressed without spec updates."}
+The spec hasn't been updated to match what's been learned during implementation.
+Update requirements that turned out harder/simpler than expected; add edge-case criteria; remove/defer implicitly-dropped scope.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit this project\'s spec for drift: compare the current implementation against the spec and identify where the two have diverged — either the spec is outdated and the implementation is correct, or the implementation has deviated from the spec and needs to be corrected. Resolve each divergence explicitly.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Spec and implementation present; drift not audited."}
+The spec-vs-implementation drift audit hasn't been done.
+Flag every divergence + decide per case: update spec OR correct implementation.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Review this project\'s spec against the current state of the project: what decisions have been made during implementation that are not reflected in the spec, what requirements have been reinterpreted or changed in practice, and what new constraints or dependencies have emerged that the spec does not document?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Implementation has accumulated decisions; spec not updated to reflect them."}
+The implementation-time decisions haven't been back-propagated into the spec.
+List: undocumented decisions, reinterpreted requirements, emergent constraints/dependencies.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Compare the current implementation against this project\'s spec and flag every place they diverge — then decide for each divergence whether the spec needs to be updated or the implementation needs to change.', descBase: '' },
-    { option: 'Is there anything in this project\'s spec that was written before implementation started and no longer reflects the current technical decisions or scope? Update it now so the spec is a true record of what is being built.', descBase: '' },
+    {
+      option: 'Compare the current implementation against this project\'s spec and flag every place they diverge — then decide for each divergence whether the spec needs to be updated or the implementation needs to change.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec present; impl drift not flagged."}
+Lighter: spec-vs-impl drift — flag and decide direction per drift.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in this project\'s spec that was written before implementation started and no longer reflects the current technical decisions or scope? Update it now so the spec is a true record of what is being built.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec present; pre-impl-only sections not refreshed."}
+Narrower: spec sections written pre-impl that no longer reflect current decisions.
+Update them.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Does this project\'s spec still accurately reflect what is being built, or has the implementation diverged from the original spec without the spec being updated?', descBase: '' },
+    {
+      option: 'Does this project\'s spec still accurately reflect what is being built, or has the implementation diverged from the original spec without the spec being updated?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Spec present; impl ongoing."}
+Minimum next step: does the spec still reflect what's being built?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1635,16 +1872,55 @@ const ABSENCE_SPEC_ACCEPTANCE_CASUAL: DecisionContent = {
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
   L1: [
-    { option: 'Check what was just built against the original plan — does it actually do what it was supposed to? List anything that\'s off, missing, or different from what was asked for.', descBase: '' },
-    { option: 'Compare what was just built to what was specified — any gaps, extra bits that weren\'t asked for, or things that work differently than planned?', descBase: '' },
-    { option: 'Does what was just built handle the edge cases from the spec, or just the happy path? Flag anything that would fail on a non-standard input.', descBase: '' },
+    {
+      option: 'Check what was just built against the original plan — does it actually do what it was supposed to? List anything that\'s off, missing, or different from what was asked for.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something but I haven't checked it against the original plan."}
+Spec compliance hasn't been checked.
+List anything off, missing, or different from what was asked for.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Compare what was just built to what was specified — any gaps, extra bits that weren\'t asked for, or things that work differently than planned?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; plan-vs-build comparison not done."}
+The build hasn't been compared back to the spec.
+Tell me gaps, extra bits unasked for, or different-than-planned behaviours.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Does what was just built handle the edge cases from the spec, or just the happy path? Flag anything that would fail on a non-standard input.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built happy path; edge-case spec coverage not checked."}
+The edge-case spec check hasn't been done.
+Flag anything that fails on non-standard input.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built match what was planned? Flag anything that\'s different or missing.', descBase: '' },
-    { option: 'What\'s the biggest gap between what was just built and what the spec asked for?', descBase: '' },
+    {
+      option: 'Does what was just built match what was planned? Flag anything that\'s different or missing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; spec match not verified."}
+Lighter: anything different or missing vs the plan.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What\'s the biggest gap between what was just built and what the spec asked for?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; biggest spec gap not identified."}
+Narrower: the biggest gap between build and spec.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t match what was originally planned or specified?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t match what was originally planned or specified?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built."}
+Minimum next step: anything that doesn't match the original plan.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1653,16 +1929,55 @@ const ABSENCE_CROSS_CONFIRMING_CASUAL: DecisionContent = {
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
   L1: [
-    { option: 'Take a real look at what was just built — not just \'does it look right\', but does it actually work correctly? Check for made-up functions, wrong assumptions, or logic that sounds good but doesn\'t hold up.', descBase: '' },
-    { option: 'Walk through what was just built and check each part — is there anything that looks right but is subtly off, handles the wrong case, or references something that doesn\'t exist?', descBase: '' },
-    { option: 'Check what was just built for the classic AI mistakes — hallucinated APIs, edge cases silently skipped, or missing error handling. Flag anything you haven\'t manually verified.', descBase: '' },
+    {
+      option: 'Take a real look at what was just built — not just \'does it look right\', but does it actually work correctly? Check for made-up functions, wrong assumptions, or logic that sounds good but doesn\'t hold up.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Code was generated for me; I've been accepting outputs without really checking them."}
+The generated code hasn't been actually checked — just glanced at.
+Look for made-up functions, wrong assumptions, plausible-sounding-but-wrong logic.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through what was just built and check each part — is there anything that looks right but is subtly off, handles the wrong case, or references something that doesn\'t exist?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Generated output present; piece-by-piece check not done."}
+The piece-by-piece walkthrough hasn't been done.
+Find anything subtly off, handles the wrong case, or references something that doesn't exist.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check what was just built for the classic AI mistakes — hallucinated APIs, edge cases silently skipped, or missing error handling. Flag anything you haven\'t manually verified.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Generated output present; classic AI mistakes not screened."}
+The classic-AI-mistake screen hasn't been done.
+Hallucinated APIs, silently-skipped edge cases, missing error handling. Flag what's unverified.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that you accepted without actually checking if it works correctly?', descBase: '' },
-    { option: 'Walk through the main logic in what was just built — does it actually do what you expect, or just look like it does?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that you accepted without actually checking if it works correctly?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Generated output present; correctness-check not done."}
+Lighter: anything accepted without checking it works correctly.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through the main logic in what was just built — does it actually do what you expect, or just look like it does?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Generated; logic walkthrough not done."}
+Narrower: walk through the main logic — does it actually do what I think?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that was generated but you haven\'t checked for correctness yet?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that was generated but you haven\'t checked for correctness yet?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Generated."}
+Minimum next step: anything generated but not checked for correctness yet.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2203,16 +2518,55 @@ const ABSENCE_ARCH_CONFLICT_CASUAL: DecisionContent = {
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
   L1: [
-    { option: 'Look at what was just built and check if it fits with the rest of the codebase — does it follow the same patterns, or does it do things in a new way that the rest of the project doesn\'t? Flag anything that would make a future developer say "why is this one different?"', descBase: '' },
-    { option: 'Check what was just built for places where it crosses boundaries it probably shouldn\'t, pulls in data in a way the rest of the codebase doesn\'t, or introduces a new pattern without a clear reason. Is it consistent, or is it starting to diverge?', descBase: '' },
-    { option: 'Compare what was just built to how the same kind of thing is done elsewhere in the project — same approach, or something different? If different, is there a good reason for it, or did it just happen that way?', descBase: '' },
+    {
+      option: 'Look at what was just built and check if it fits with the rest of the codebase — does it follow the same patterns, or does it do things in a new way that the rest of the project doesn\'t? Flag anything that would make a future developer say "why is this one different?"',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something new but haven't checked if it fits with how the rest of the codebase does things."}
+Codebase consistency hasn't been checked.
+Flag anything that'd make a future dev say "why is this one different?"
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check what was just built for places where it crosses boundaries it probably shouldn\'t, pulls in data in a way the rest of the codebase doesn\'t, or introduces a new pattern without a clear reason. Is it consistent, or is it starting to diverge?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; boundary-crossing / new-pattern issues not checked."}
+The boundary-crossing / new-pattern audit hasn't been done.
+Flag boundaries crossed without reason, off-pattern data access, new conventions without justification.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Compare what was just built to how the same kind of thing is done elsewhere in the project — same approach, or something different? If different, is there a good reason for it, or did it just happen that way?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; same-thing-done-differently-elsewhere comparison not done."}
+The how-is-this-done-elsewhere comparison hasn't been done.
+Same approach as similar code in the project? If different, was there a reason?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built follow the same patterns as the rest of the codebase, or does it introduce something new that might conflict with what\'s already there?', descBase: '' },
-    { option: 'Is there anything in what was just built that doesn\'t fit with the way the rest of the project is structured?', descBase: '' },
+    {
+      option: 'Does what was just built follow the same patterns as the rest of the codebase, or does it introduce something new that might conflict with what\'s already there?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; pattern match unclear."}
+Lighter: does it follow the rest of the codebase or introduce something new?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in what was just built that doesn\'t fit with the way the rest of the project is structured?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; structural fit unclear."}
+Narrower: anything that doesn't fit the project structure.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t match the patterns or structure of the existing codebase?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t match the patterns or structure of the existing codebase?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built."}
+Minimum next step: anything that doesn't match existing patterns/structure.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2220,16 +2574,55 @@ const ABSENCE_PROMPT_CONTEXT_CASUAL: DecisionContent = {
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
   L1: [
-    { option: 'Check the prompts used to build this feature — do you actually know what the spec says, what the architecture looks like, and what the task is supposed to achieve? If you\'ve just been getting ad hoc instructions, paste the relevant context in now so you\'re building the right thing.', descBase: '' },
-    { option: 'Have you been working with the full picture, or just the last thing asked of you? If there\'s a spec, an architecture doc, or a task breakdown you haven\'t seen, let me know — then check that what was just built matches up once you have the full context.', descBase: '' },
-    { option: 'Paste the relevant spec or task definition into the conversation and confirm that what was just built actually does what it\'s supposed to. If there\'s a mismatch, now is a better time to find it than after shipping.', descBase: '' },
+    {
+      option: 'Check the prompts used to build this feature — do you actually know what the spec says, what the architecture looks like, and what the task is supposed to achieve? If you\'ve just been getting ad hoc instructions, paste the relevant context in now so you\'re building the right thing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been following ad-hoc instructions without checking the full spec."}
+The full-picture context hasn't been injected.
+Paste relevant spec / arch / task into the conversation so I'm building the right thing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Have you been working with the full picture, or just the last thing asked of you? If there\'s a spec, an architecture doc, or a task breakdown you haven\'t seen, let me know — then check that what was just built matches up once you have the full context.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Following individual prompts; full picture not in context."}
+Whether I have the full picture or just the last thing asked hasn't been checked.
+Tell me what's missing; once I have it, check the build matches.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Paste the relevant spec or task definition into the conversation and confirm that what was just built actually does what it\'s supposed to. If there\'s a mismatch, now is a better time to find it than after shipping.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; spec-vs-build match not checked."}
+The spec-vs-build match hasn't been confirmed.
+Paste the relevant spec / task definition; confirm match. Finding mismatch now beats finding it after shipping.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Do you have enough context to build this feature correctly — have you seen the spec, the architecture, or the task breakdown? If not, share the relevant bits now.', descBase: '' },
-    { option: 'Paste the spec or the definition of done for this feature into the conversation and check whether what was just built actually matches it.', descBase: '' },
+    {
+      option: 'Do you have enough context to build this feature correctly — have you seen the spec, the architecture, or the task breakdown? If not, share the relevant bits now.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Recent prompts: ad-hoc."}
+Lighter: enough context to build correctly, or missing pieces?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Paste the spec or the definition of done for this feature into the conversation and check whether what was just built actually matches it.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built it; spec-match unverified."}
+Narrower: paste spec / DoD; check build matches.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you know what the spec says for this feature, or have you been building without seeing it?', descBase: '' },
+    {
+      option: 'Do you know what the spec says for this feature, or have you been building without seeing it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Recent prompts: ad-hoc."}
+Minimum next step: I know what the spec says, or I've been building without seeing it?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2305,16 +2698,55 @@ const ABSENCE_SPEC_CROSS_CONFIRM_CASUAL: DecisionContent = {
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
-    { option: 'Go through this project\'s spec and check it against the original plan — does every requirement actually come from something that was agreed on, or did some assumptions sneak in that no one has explicitly signed off on?', descBase: '' },
-    { option: 'Look at this project\'s spec for anything that\'s vague enough to be interpreted two different ways — anything that could lead to building the wrong thing and still technically meeting the spec. Fix those before coding starts.', descBase: '' },
-    { option: 'Check this project\'s spec against what you can actually build with the current stack — is there anything in there that\'s going to hit a wall when someone tries to implement it? Flag those now.', descBase: '' },
+    {
+      option: 'Go through this project\'s spec and check it against the original plan — does every requirement actually come from something that was agreed on, or did some assumptions sneak in that no one has explicitly signed off on?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've drafted a spec but I haven't checked it against what was originally agreed on."}
+The spec-vs-original-agreement check hasn't been done.
+Spot assumptions that sneaked in without explicit sign-off.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Look at this project\'s spec for anything that\'s vague enough to be interpreted two different ways — anything that could lead to building the wrong thing and still technically meeting the spec. Fix those before coding starts.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec drafted; ambiguity check not done."}
+The ambiguity-can-cause-divergent-builds check hasn't been done.
+Spot anything two devs could implement differently and both technically meet spec.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check this project\'s spec against what you can actually build with the current stack — is there anything in there that\'s going to hit a wall when someone tries to implement it? Flag those now.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec drafted; stack-feasibility not verified."}
+Whether the spec is buildable on the current stack hasn't been checked.
+Flag anything that'll hit a wall during implementation.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there any part of this project\'s spec that came from an assumption rather than something explicitly agreed on? Track those down and confirm them.', descBase: '' },
-    { option: 'Is there anything in this project\'s spec vague enough that two people could implement it differently? Clarify it now before it causes a disagreement mid-build.', descBase: '' },
+    {
+      option: 'Is there any part of this project\'s spec that came from an assumption rather than something explicitly agreed on? Track those down and confirm them.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec drafted; assumption-vs-agreed not separated."}
+Lighter: any assumption in the spec vs explicitly-agreed requirements.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in this project\'s spec vague enough that two people could implement it differently? Clarify it now before it causes a disagreement mid-build.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec drafted; ambiguity unresolved."}
+Narrower: anything vague enough to cause a mid-build disagreement.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in this project\'s spec that hasn\'t been verified against what was actually agreed on — any assumptions that are being treated as confirmed requirements?', descBase: '' },
+    {
+      option: 'Is there anything in this project\'s spec that hasn\'t been verified against what was actually agreed on — any assumptions that are being treated as confirmed requirements?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec drafted."}
+Minimum next step: any unconfirmed assumption being treated as requirement.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2322,16 +2754,55 @@ const ABSENCE_SPEC_REVISION_CASUAL: DecisionContent = {
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
   L1: [
-    { option: 'Update this project\'s spec to match what you know now — any requirements that turned out harder or simpler than expected, any edge cases that came up during building, and any things that got quietly dropped or changed in scope.', descBase: '' },
-    { option: 'Check whether this project\'s spec still matches what\'s actually being built — where have things changed since the first draft, what decisions got made during implementation that aren\'t written down, and what would a new developer get wrong by reading the original spec?', descBase: '' },
-    { option: 'Look at where this project\'s spec and the actual implementation have drifted apart — for each gap, is it that the spec needs updating, or that the implementation went in the wrong direction?', descBase: '' },
+    {
+      option: 'Update this project\'s spec to match what you know now — any requirements that turned out harder or simpler than expected, any edge cases that came up during building, and any things that got quietly dropped or changed in scope.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been building from the spec but the spec hasn't been updated since the first draft."}
+The spec hasn't been refreshed to match what's been learned.
+Update requirements that turned out harder/easier, add edge cases discovered, remove silently-dropped scope.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check whether this project\'s spec still matches what\'s actually being built — where have things changed since the first draft, what decisions got made during implementation that aren\'t written down, and what would a new developer get wrong by reading the original spec?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec present; build has diverged from it."}
+Whether the spec still matches the build hasn't been checked.
+Where have they diverged? What decisions got made that aren't in the doc? What would a new dev get wrong from the original spec?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Look at where this project\'s spec and the actual implementation have drifted apart — for each gap, is it that the spec needs updating, or that the implementation went in the wrong direction?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec + impl drift; resolution direction not chosen per gap."}
+Per drift: spec needs updating OR impl went wrong direction?
+Decide per case.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is this project\'s spec still accurate, or has the implementation moved on from what was originally written? Update the parts that no longer match.', descBase: '' },
-    { option: 'What\'s changed in this project since the spec was first written that isn\'t reflected in the spec yet? Update it now while the context is still fresh.', descBase: '' },
+    {
+      option: 'Is this project\'s spec still accurate, or has the implementation moved on from what was originally written? Update the parts that no longer match.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present; current-accuracy not checked."}
+Lighter: is the spec still accurate, or has the impl moved on?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What\'s changed in this project since the spec was first written that isn\'t reflected in the spec yet? Update it now while the context is still fresh.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present; recent changes not reflected."}
+Narrower: what's changed since the spec was first written and isn't in there?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Does this project\'s spec still reflect what\'s actually being built, or has the implementation moved on without the spec being updated?', descBase: '' },
+    {
+      option: 'Does this project\'s spec still reflect what\'s actually being built, or has the implementation moved on without the spec being updated?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present."}
+Minimum next step: does the spec still reflect the actual build?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2655,16 +3126,55 @@ const ABSENCE_API_DESIGN_REVIEW: DecisionContent = {
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
-    { option: 'Review the API surface of what was just built for backwards compatibility: list any changes to existing endpoints, parameters, or response shapes, and confirm whether each change is backwards compatible or constitutes a breaking change that requires a version bump.', descBase: '' },
-    { option: 'Define the contract for this feature\'s API before finalizing implementation: document the endpoint paths, accepted inputs, response shapes, and any error codes — confirm these are stable and not likely to change once consumers depend on them.', descBase: '' },
-    { option: 'Establish the versioning strategy for this project\'s API: will breaking changes be managed through URL versioning, header versioning, or deprecation notices — and does the current implementation reflect that strategy?', descBase: '' },
+    {
+      option: 'Review the API surface of what was just built for backwards compatibility: list any changes to existing endpoints, parameters, or response shapes, and confirm whether each change is backwards compatible or constitutes a breaking change that requires a version bump.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: API implementation. Backwards-compatibility audit not done."}
+The API contract for what was just built hasn't been reviewed for stability.
+Per change: backwards compatible or breaking — version bump needed?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Define the contract for this feature\'s API before finalizing implementation: document the endpoint paths, accepted inputs, response shapes, and any error codes — confirm these are stable and not likely to change once consumers depend on them.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "API present; contract not locked."}
+The API contract hasn't been explicitly defined and locked.
+Document endpoints, inputs, response shapes, error codes; confirm stability before consumers depend.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Establish the versioning strategy for this project\'s API: will breaking changes be managed through URL versioning, header versioning, or deprecation notices — and does the current implementation reflect that strategy?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "API present; versioning strategy not established."}
+The versioning strategy for the project's API hasn't been established.
+URL / header / deprecation? Confirm current impl reflects that strategy.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built introduce any breaking changes to the existing API contract — and if so, what is the plan for consumers already depending on the current contract?', descBase: '' },
-    { option: 'Is the API surface of this feature explicitly documented and locked before implementation continues — or are the endpoint signatures, inputs, and responses still in flux?', descBase: '' },
+    {
+      option: 'Does what was just built introduce any breaking changes to the existing API contract — and if so, what is the plan for consumers already depending on the current contract?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present; breaking-change check not done."}
+Lighter: any breaking change to existing API contract + plan for existing consumers.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is the API surface of this feature explicitly documented and locked before implementation continues — or are the endpoint signatures, inputs, and responses still in flux?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present; surface lock status unclear."}
+Narrower: API surface documented and locked, or still in flux?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What is the most important API design decision for this feature that needs to be made before the implementation is considered complete?', descBase: '' },
+    {
+      option: 'What is the most important API design decision for this feature that needs to be made before the implementation is considered complete?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present."}
+Minimum next step: most important API design decision still open.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2926,16 +3436,55 @@ const ABSENCE_API_DESIGN_REVIEW_CASUAL: DecisionContent = {
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
-    { option: 'Take a look at what was just built and check whether it could break anything that already uses this API — are there any changes to how endpoints work, what they expect, or what they return that might surprise existing callers?', descBase: '' },
-    { option: 'Before locking in the API for this feature — go through what it accepts and what it returns, and think about whether that\'s something you\'d be comfortable with other code depending on. Is anything likely to change again?', descBase: '' },
-    { option: 'Think about how this project\'s API handles changes over time — if something needs to change in a future version, how do you manage that without breaking code that\'s already using it?', descBase: '' },
+    {
+      option: 'Take a look at what was just built and check whether it could break anything that already uses this API — are there any changes to how endpoints work, what they expect, or what they return that might surprise existing callers?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built API endpoints but haven't checked how they affect existing callers."}
+Breaking-change risk for existing callers hasn't been checked.
+Spot endpoint changes, expected-input changes, response-shape changes that'd surprise callers.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Before locking in the API for this feature — go through what it accepts and what it returns, and think about whether that\'s something you\'d be comfortable with other code depending on. Is anything likely to change again?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API surface present; comfort with consumers depending on it not checked."}
+Whether the API surface is settled-enough-for-consumers hasn't been checked.
+Walk through inputs and responses; flag what's likely to change.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Think about how this project\'s API handles changes over time — if something needs to change in a future version, how do you manage that without breaking code that\'s already using it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API present; versioning strategy not chosen."}
+The over-time-change strategy for this API hasn't been thought through.
+How is a future version managed without breaking dependents?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built change how the API works in a way that could break something already depending on it — and if so, what\'s the plan?', descBase: '' },
-    { option: 'Is the shape of this feature\'s API settled enough that you\'re comfortable building other things on top of it — or is it likely to change?', descBase: '' },
+    {
+      option: 'Does what was just built change how the API works in a way that could break something already depending on it — and if so, what\'s the plan?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present; breaking-change plan unclear."}
+Lighter: breaking change in what was just built + plan if so.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is the shape of this feature\'s API settled enough that you\'re comfortable building other things on top of it — or is it likely to change?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present; settled-vs-flux unclear."}
+Narrower: is the API shape settled enough for other things to depend on it?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s the most important API design question about this feature that hasn\'t been answered yet?', descBase: '' },
+    {
+      option: 'What\'s the most important API design question about this feature that hasn\'t been answered yet?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present."}
+Minimum next step: most important API question still open.
+{R4_CLOSE}`,
+    },
   ],
 };
 

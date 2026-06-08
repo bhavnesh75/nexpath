@@ -410,14 +410,39 @@ export const ABSENCE_SPEC_ACCEPTANCE_BEGINNER: DecisionContent = {
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
   L1: [
-    { option: '1. Look at what was just built and compare it to what we planned to build.\n2. Share with me: does it do everything it was supposed to, or is something missing or different?\n3. Then check: are there any situations it should handle that it doesn\'t?', descBase: '' },
-    { option: 'Walk through what was just built step by step and tell me — does each part match what we planned? Share anything that looks different from what we agreed on.', descBase: '' },
+    {
+      option: '1. Look at what was just built and compare it to what we planned to build.\n2. Share with me: does it do everything it was supposed to, or is something missing or different?\n3. Then check: are there any situations it should handle that it doesn\'t?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something but I haven't compared it back to what we planned."}
+Spec-vs-build comparison hasn't been done.
+Walk me through it: does each piece match the plan, is something missing or different, are there situations it should handle that it doesn't?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through what was just built step by step and tell me — does each part match what we planned? Share anything that looks different from what we agreed on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; plan-match not verified."}
+Same moment, simpler: does each part of the build match the plan?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built do what we planned it to do? Share any differences with me before we move on.', descBase: '' },
+    {
+      option: 'Does what was just built do what we planned it to do? Share any differences with me before we move on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built it."}
+Lighter: does it do what we planned? Share any differences.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t match what we originally planned to build?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t match what we originally planned to build?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built it."}
+Minimum next step: anything that doesn't match what we originally planned.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -426,14 +451,39 @@ export const ABSENCE_CROSS_CONFIRMING_BEGINNER: DecisionContent = {
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
   L1: [
-    { option: '1. Read through what was just built carefully — not just to check if it looks right, but to understand what it actually does.\n2. Share with me: is there anything that seems off, confusing, or that you\'re not sure about?\n3. Then tell me: is there anything in what was just built you haven\'t manually checked yet?', descBase: '' },
-    { option: 'Walk through what was just built step by step and tell me — do you understand what each part does? Share anything that looks unclear or that you just accepted without checking.', descBase: '' },
+    {
+      option: '1. Read through what was just built carefully — not just to check if it looks right, but to understand what it actually does.\n2. Share with me: is there anything that seems off, confusing, or that you\'re not sure about?\n3. Then tell me: is there anything in what was just built you haven\'t manually checked yet?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Code was generated for me but I've just been accepting it; I haven't checked the details."}
+The piece-by-piece check on generated code hasn't been done.
+Walk me through it: read carefully to understand what each part does, flag anything off/confusing, then point to anything I haven't manually checked.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through what was just built step by step and tell me — do you understand what each part does? Share anything that looks unclear or that you just accepted without checking.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Generated output present; understanding-check not done."}
+Same moment, simpler: do I understand what each part does? Flag anything unclear or accepted without checking.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that you accepted because it looked right, but haven\'t actually checked? Share it with me.', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that you accepted because it looked right, but haven\'t actually checked? Share it with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Generated; looks-right-but-not-checked items not flagged."}
+Lighter: anything accepted because it looked right, not actually checked.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that you\'re not 100% sure is correct — something you haven\'t manually verified yet?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that you\'re not 100% sure is correct — something you haven\'t manually verified yet?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Generated."}
+Minimum next step: anything I'm not 100% sure is correct.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -828,14 +878,39 @@ export const ABSENCE_ARCH_CONFLICT_BEGINNER: DecisionContent = {
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
   L1: [
-    { option: '1. Look at what was just built and compare it to how other parts of the project are written.\n2. Share with me: does it feel like it belongs, or does it do things in a different way than everything else?\n3. Then tell me: is there anything that could cause problems when we try to connect it with the rest of the project?', descBase: '' },
-    { option: 'Walk me through what was just built and tell me — does it fit with the way the rest of the project is structured, or does it work differently from everything else? Share what you notice with me.', descBase: '' },
+    {
+      option: '1. Look at what was just built and compare it to how other parts of the project are written.\n2. Share with me: does it feel like it belongs, or does it do things in a different way than everything else?\n3. Then tell me: is there anything that could cause problems when we try to connect it with the rest of the project?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something new but I haven't compared it to how other parts of this project are written."}
+Codebase-fit check hasn't been done.
+Walk me through it: compare what I built to other parts, does it fit or do things differently, would it cause problems connecting with the rest?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through what was just built and tell me — does it fit with the way the rest of the project is structured, or does it work differently from everything else? Share what you notice with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; structural-fit unclear."}
+Same moment, simpler: does it fit the project's structure, or does it work differently?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that looks different from how the rest of the project does things? Share it with me and let\'s check if that\'s a problem.', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that looks different from how the rest of the project does things? Share it with me and let\'s check if that\'s a problem.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built it."}
+Lighter: anything that looks different from how the rest of the project does things.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that doesn\'t fit with the rest of the project\'s structure or patterns?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that doesn\'t fit with the rest of the project\'s structure or patterns?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built it."}
+Minimum next step: anything that doesn't fit the project's patterns or structure.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -843,14 +918,39 @@ export const ABSENCE_PROMPT_CONTEXT_BEGINNER: DecisionContent = {
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
   L1: [
-    { option: '1. Think about what you\'ve been building in this session.\n2. Share with me: have you seen the original plan for what we\'re building, or have you just been following each instruction without knowing the bigger picture?\n3. Then paste the plan or the task description into the conversation and check that what was just built matches what was planned.', descBase: '' },
-    { option: 'Walk me through what you\'ve been working from in this session — have you seen the full plan, or just individual instructions? Check whether what was just built matches the original plan if you have it, and share what you find with me.', descBase: '' },
+    {
+      option: '1. Think about what you\'ve been building in this session.\n2. Share with me: have you seen the original plan for what we\'re building, or have you just been following each instruction without knowing the bigger picture?\n3. Then paste the plan or the task description into the conversation and check that what was just built matches what was planned.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been building based on individual instructions but I'm not sure I've seen the full plan."}
+The full-plan-vs-individual-instructions check hasn't been done.
+Walk me through it: think about what I've been building, do I have the full plan or just instructions, then paste the plan and check the build matches.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through what you\'ve been working from in this session — have you seen the full plan, or just individual instructions? Check whether what was just built matches the original plan if you have it, and share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Following individual prompts; full plan unclear."}
+Same moment, simpler: do I have the full plan, or only individual instructions? Check build vs plan if available.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Have you seen the plan or the description of what this feature is supposed to do? If not, ask me for it — then check that what was just built matches and share what you find.', descBase: '' },
+    {
+      option: 'Have you seen the plan or the description of what this feature is supposed to do? If not, ask me for it — then check that what was just built matches and share what you find.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Following individual prompts."}
+Lighter: have I seen the plan or description of this feature? If not, ask for it.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you know what the full plan says for this feature, or have you been building without seeing it?', descBase: '' },
+    {
+      option: 'Do you know what the full plan says for this feature, or have you been building without seeing it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Following individual prompts."}
+Minimum next step: I know what the full plan says, or building without it?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -918,14 +1018,39 @@ export const ABSENCE_SPEC_CROSS_CONFIRM_BEGINNER: DecisionContent = {
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
-    { option: '1. Read through this project\'s spec and check: does everything in it come from something that was actually decided or agreed on?\n2. Share with me: is there anything in the spec that looks like an assumption rather than a confirmed requirement?\n3. Then tell me: is there anything that could be misunderstood or built in the wrong way because it\'s not specific enough?', descBase: '' },
-    { option: 'Walk me through this project\'s spec and tell me — is there anything in it that you\'re not sure was actually agreed on, or anything that\'s vague enough to be confusing? Share what you find with me.', descBase: '' },
+    {
+      option: '1. Read through this project\'s spec and check: does everything in it come from something that was actually decided or agreed on?\n2. Share with me: is there anything in the spec that looks like an assumption rather than a confirmed requirement?\n3. Then tell me: is there anything that could be misunderstood or built in the wrong way because it\'s not specific enough?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I have a spec but I'm not sure everything in it was actually agreed on or specific enough."}
+Spec-vs-actually-agreed check hasn't been done.
+Walk me through it: does everything trace back to a real decision, anything that looks like an assumption, anything not specific enough to build correctly?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through this project\'s spec and tell me — is there anything in it that you\'re not sure was actually agreed on, or anything that\'s vague enough to be confusing? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec present; assumption-vs-confirmed not separated."}
+Same moment, simpler: anything in the spec I'm not sure was actually agreed, or anything vague enough to confuse?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in this project\'s spec that might be an assumption rather than something that was actually confirmed? Share what you find with me.', descBase: '' },
+    {
+      option: 'Is there anything in this project\'s spec that might be an assumption rather than something that was actually confirmed? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present; assumption check not done."}
+Lighter: anything in the spec that might be an assumption rather than confirmed.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in this project\'s spec that hasn\'t been checked against what was actually agreed on?', descBase: '' },
+    {
+      option: 'Is there anything in this project\'s spec that hasn\'t been checked against what was actually agreed on?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present."}
+Minimum next step: anything in the spec not checked against what was actually agreed.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -933,14 +1058,39 @@ export const ABSENCE_SPEC_REVISION_BEGINNER: DecisionContent = {
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
   L1: [
-    { option: '1. Look at this project\'s spec and then look at what has actually been built so far.\n2. Share with me: are they still in sync, or have things changed since the spec was first written?\n3. Then tell me: what would need to be updated in the spec to make it match what\'s actually happening?', descBase: '' },
-    { option: 'Walk me through this project\'s spec and tell me — is it still accurate, or have things changed since it was first written that aren\'t in there yet? Share what\'s out of date with me.', descBase: '' },
+    {
+      option: '1. Look at this project\'s spec and then look at what has actually been built so far.\n2. Share with me: are they still in sync, or have things changed since the spec was first written?\n3. Then tell me: what would need to be updated in the spec to make it match what\'s actually happening?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been building from a spec but the spec hasn't been updated as things change."}
+Spec-vs-build sync check hasn't been done.
+Walk me through it: spec + build side-by-side, are they still in sync, what would need updating to make spec match what's happening?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through this project\'s spec and tell me — is it still accurate, or have things changed since it was first written that aren\'t in there yet? Share what\'s out of date with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Spec present; current-accuracy unclear."}
+Same moment, simpler: is the spec still accurate or out of date?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is this project\'s spec still accurate, or has something changed since it was written that isn\'t reflected in it yet? Share what you find with me.', descBase: '' },
+    {
+      option: 'Is this project\'s spec still accurate, or has something changed since it was written that isn\'t reflected in it yet? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present; recent changes not reflected."}
+Lighter: anything changed since the spec was written and not in it yet?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Does this project\'s spec still match what\'s actually being built, or is it out of date?', descBase: '' },
+    {
+      option: 'Does this project\'s spec still match what\'s actually being built, or is it out of date?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Spec present."}
+Minimum next step: does the spec still match what's actually being built?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1343,14 +1493,39 @@ export const ABSENCE_API_DESIGN_REVIEW_BEGINNER: DecisionContent = {
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
-    { option: '1. Look at what was just built and check whether it could break anything that\'s already using this API. 2. List any changes to how it works — what it expects and what it sends back. 3. Share your list with me before we continue.', descBase: '' },
-    { option: 'Go through this feature\'s API and check — could anything about how it works change after other code starts depending on it? Share what you find with me before we move on.', descBase: '' },
+    {
+      option: '1. Look at what was just built and check whether it could break anything that\'s already using this API. 2. List any changes to how it works — what it expects and what it sends back. 3. Share your list with me before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built API endpoints but I haven't checked if they might break things already using the API."}
+Breaking-change check on the API hasn't been done.
+Walk me through it: changes to how endpoints work, what they expect, what they return — anything that'd surprise existing callers?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through this feature\'s API and check — could anything about how it works change after other code starts depending on it? Share what you find with me before we move on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API present; change-stability unclear."}
+Same moment, simpler: could anything about how it works change after other code depends on it?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does what was just built change the API in a way that might break something that\'s already using it? Tell me what changed and we\'ll figure out if it\'s a problem.', descBase: '' },
+    {
+      option: 'Does what was just built change the API in a way that might break something that\'s already using it? Tell me what changed and we\'ll figure out if it\'s a problem.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present."}
+Lighter: any change in the API that might break something already using it.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s one thing about how this feature\'s API works that might need to change later — and could that cause a problem for anything depending on it?', descBase: '' },
+    {
+      option: 'What\'s one thing about how this feature\'s API works that might need to change later — and could that cause a problem for anything depending on it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present."}
+Minimum next step: one thing about the API that might need to change later + risk to dependents.
+{R4_CLOSE}`,
+    },
   ],
 };
 
