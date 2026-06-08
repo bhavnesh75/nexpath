@@ -35,27 +35,28 @@ export interface ApplyRuntimeSubstitutionsInput {
 export async function applyRuntimeSubstitutions(
   input: ApplyRuntimeSubstitutionsInput,
 ): Promise<OptionEntry[]> {
-  const out: OptionEntry[] = [];
-  for (let i = 0; i < input.generatedOptionTexts.length; i++) {
-    const optionText  = input.generatedOptionTexts[i];
-    const staticEntry = input.staticEntries[i];
-    const staticDescBase = staticEntry?.descBase ?? '';
+  // Per-entry calls are independent (no inter-call state); run in
+  // parallel to keep per-advisory latency under the Haiku p50 target.
+  return Promise.all(
+    input.generatedOptionTexts.map(async (optionText, i) => {
+      const staticEntry    = input.staticEntries[i];
+      const staticDescBase = staticEntry?.descBase ?? '';
 
-    // step 1 — prompt-evidence injection
-    const afterR5 = await injectR5(
-      staticDescBase,
-      input.history,
-      input.signalType,
-      input.register,
-      input.injectOptions ?? {},
-    );
+      // step 1 — prompt-evidence injection
+      const afterR5 = await injectR5(
+        staticDescBase,
+        input.history,
+        input.signalType,
+        input.register,
+        input.injectOptions ?? {},
+      );
 
-    // step 2 — CA-facing bookend substitution (runs LAST)
-    const final = substituteCAFacingBookend(afterR5);
+      // step 2 — CA-facing bookend substitution (runs LAST)
+      const final = substituteCAFacingBookend(afterR5);
 
-    out.push({ option: optionText, descBase: final });
-  }
-  return out;
+      return { option: optionText, descBase: final };
+    }),
+  );
 }
 
 /**
