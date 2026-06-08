@@ -320,7 +320,29 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   'up', 'down', 'out', 'off', 'over', 'under', 'again',
 ]);
 
-/** Common software-engineering verb stems matched against tokens (case-insensitive). */
+/**
+ * Common software-engineering verb stems matched against tokens (case-insensitive).
+ *
+ * Dev-plan §10.3 implementation note: a lightweight English POS library
+ * (e.g. `compromise` or `natural`) is the locked v1 default; regex-based
+ * extraction against a curated verb list is the fallback "if POS adds
+ * too much bundle weight." This implementation deliberately takes the
+ * regex fallback path because:
+ *
+ *   1. `compromise` adds ~140 KB to the install footprint — unacceptable
+ *      for nexpath's CLI distribution model where every install is
+ *      end-user-facing and bundle weight directly affects install time.
+ *   2. `natural` is even larger (~1 MB minified) with native add-ons
+ *      that don't play well with cross-platform packaging.
+ *   3. The L2 trigger detection + voice-rule filter compensate for the
+ *      lack of true POS by curating a sufficient verb stem list and
+ *      filtering banned tokens explicitly.
+ *
+ * Revisit if (a) a tree-shakeable POS library appears with <30 KB
+ * minified-gzipped footprint, OR (b) sim-run data shows regex
+ * extraction missing verbs that POS would catch (low-frequency
+ * software-engineering verbs absent from the stem list below).
+ */
 const VERB_STEMS: readonly string[] = [
   'add', 'build', 'check', 'commit', 'configure', 'create', 'debug',
   'delete', 'deploy', 'design', 'document', 'edit', 'fix', 'flag',
