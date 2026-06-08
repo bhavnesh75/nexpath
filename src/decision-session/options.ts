@@ -9094,6 +9094,7 @@ export const ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Shared-system change about to start without affected teams notified."}
 Affected teams haven't been notified of this shared-system change — risk of post-change broken integration costing team-days.
 Identify teams / draft notification / send / document delivery / pre-change Slack < post-change broken integration.
+Still, before you send the notification to any team you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -9102,6 +9103,7 @@ Identify teams / draft notification / send / document delivery / pre-change Slac
 {R5_INJECT: ~1-2 lines — "Impact-category classification + routing not done."}
 The impact-category classification + routing hasn't been done.
 API contract / schema / shared service / infra → route + receive + acknowledge per category.
+Still, before you route the notification to any affected consumer team you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -9110,6 +9112,7 @@ API contract / schema / shared service / infra → route + receive + acknowledge
 {R5_INJECT: ~1-2 lines — "Minimum notification standard not met."}
 The minimum notification standard hasn't been met.
 Name teams / send / document with date + outcome — accountability + retro paper trail.
+Still, before you send the cross-team notification you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -9119,6 +9122,7 @@ Name teams / send / document with date + outcome — accountability + retro pape
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Shared-system change pending."}
 Lighter: list + send + document.
+Still, before you send the notification to any team you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
