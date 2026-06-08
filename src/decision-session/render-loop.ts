@@ -43,6 +43,7 @@
 // helper for the structured shape; the legacy `message: string` builder
 // stays in place for the unchanged sub-menu select() call sites).
 
+import { emitKeypressEvents } from 'node:readline';
 import type { LineKind } from './styler.js';
 import { styler } from './styler.js';
 
@@ -345,4 +346,198 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   const styledLines = emissions.map((e) => styler(e.text, e.kind));
 
   return { emissions, styledLines, optionLineRanges };
+}
+
+// ── Interactive shell ──────────────────────────────────────────────────────
+
+/** Canonical key-event names produced by `eventsFromReadline` + accepted by `renderLoop`. */
+export type KeyEventName =
+  | 'arrow-up'
+  | 'arrow-down'
+  | 'enter'
+  | 'escape'
+  | 'space'
+  | 'tab'
+  | 'ctrl-c'
+  | 'other';
+
+/** Single key event delivered to the render loop. */
+export interface KeyEvent {
+  name: KeyEventName;
+  /** Raw input string from readline keypress — preserved for diagnostics. */
+  raw?: string;
+}
+
+/** Interactive renderLoop options. Distinct from the layout-only RenderLoopOptions. */
+export interface RenderLoopRunOptions {
+  /** Pure-layout inputs (forwarded to computeLayout). */
+  layout:      RenderLoopOptions;
+  /** Output stream to write styled lines to. Defaults to `process.stdout`. */
+  out?:        NodeJS.WritableStream;
+  /** Async iterable of keypress events. Caller wires readline (or a mock in tests). */
+  keyEvents:   AsyncIterable<KeyEvent>;
+  /**
+   * D3 Space-key handler hook — Bhavnesh Phase 6 task wires the actual
+   * truncated ↔ expanded toggle here. Default = identity (Space is a no-op).
+   * The hook receives the current state + the focused item; returns the
+   * new state (typically toggling membership in `expandedOptions`).
+   */
+  onSpace?:    (state: LayoutState, focusedItem: SelectableItem | undefined) => LayoutState;
+}
+
+/** Default D3 Space hook — no-op. Bhavnesh Phase 6 replaces this. */
+function defaultOnSpace(state: LayoutState): LayoutState {
+  return state;
+}
+
+/** Advance focus while skipping isSeparator items (R2 C1 + existing pattern). */
+function moveFocus(options: readonly SelectableItem[], current: number, delta: 1 | -1): number {
+  const n = options.length;
+  if (n === 0) return current;
+  let next = current;
+  for (let step = 0; step < n; step++) {
+    next = (next + delta + n) % n;
+    if (!options[next].isSeparator) return next;
+  }
+  return current;  // every item is a separator (degenerate; keep focus put)
+}
+
+/**
+ * Minimal interactive render-loop shell — drives the popup via keypress
+ * events from the caller. Resolves with the SelectableItem the user
+ * selected (Enter), or `null` if the user cancelled (Escape / Ctrl+C).
+ *
+ * The interactive shell is intentionally thin: arrow-up / arrow-down
+ * move focus (skipping isSeparator items); Enter resolves; Escape /
+ * Ctrl+C resolves with null; Space dispatches to `onSpace` (Bhavnesh
+ * Phase 6 D3 binding fills in the body); every other key is ignored.
+ *
+ * Re-renders the full layout to `out` after every state change. The
+ * Phase 4 USER basic render writes each styled line followed by `\n`;
+ * Bhavnesh Phase 8 polish adds the cursor-positioning + clear-screen
+ * sequences and the auto-scroll edge cases.
+ */
+export async function renderLoop(opts: RenderLoopRunOptions): Promise<SelectableItem | null> {
+  const out      = opts.out ?? process.stdout;
+  const onSpace  = opts.onSpace ?? defaultOnSpace;
+
+  // Find initial focus — first non-separator option.
+  let initialFocus = 0;
+  for (let i = 0; i < opts.layout.options.length; i++) {
+    if (!opts.layout.options[i].isSeparator) { initialFocus = i; break; }
+  }
+
+  let state: LayoutState = {
+    focusedIndex:    initialFocus,
+    expandedOptions: new Set<number>(),
+    scrollOffset:    0,
+  };
+
+  const writeFrame = () => {
+    const layout = computeLayout(opts.layout, state);
+    for (const line of layout.styledLines) {
+      out.write(line);
+      out.write('\n');
+    }
+  };
+
+  writeFrame();
+
+  for await (const ev of opts.keyEvents) {
+    switch (ev.name) {
+      case 'arrow-up':
+        state = { ...state, focusedIndex: moveFocus(opts.layout.options, state.focusedIndex, -1) };
+        break;
+      case 'arrow-down':
+        state = { ...state, focusedIndex: moveFocus(opts.layout.options, state.focusedIndex,  1) };
+        break;
+      case 'space': {
+        const focusedItem = opts.layout.options[state.focusedIndex];
+        state = onSpace(state, focusedItem);
+        break;
+      }
+      case 'enter': {
+        const picked = opts.layout.options[state.focusedIndex];
+        if (picked && !picked.isSeparator) return picked;
+        break;
+      }
+      case 'escape':
+      case 'ctrl-c':
+        return null;
+      // 'tab' / 'other' — ignored.
+    }
+    writeFrame();
+  }
+
+  // Iterator exhausted without a terminal event — treat as cancel.
+  return null;
+}
+
+/**
+ * Normalise a Node readline keypress into a KeyEvent. Exported for test
+ * parity with the production wiring.
+ */
+export function normaliseKeypress(
+  ch:  string | undefined,
+  key: { name?: string; sequence?: string; ctrl?: boolean } | undefined,
+): KeyEvent {
+  const seq = key?.sequence ?? ch ?? '';
+  if (key?.name === 'up')                            return { name: 'arrow-up',   raw: seq };
+  if (key?.name === 'down')                          return { name: 'arrow-down', raw: seq };
+  if (key?.name === 'return' || seq === '\r' || seq === '\n') return { name: 'enter',  raw: seq };
+  if (key?.name === 'escape' || seq === '\x1b')      return { name: 'escape',     raw: seq };
+  if (key?.ctrl && key?.name === 'c')                return { name: 'ctrl-c',     raw: seq };
+  if (key?.name === 'space' || seq === ' ')          return { name: 'space',      raw: seq };
+  if (key?.name === 'tab' || seq === '\t')           return { name: 'tab',        raw: seq };
+  return { name: 'other', raw: seq };
+}
+
+/**
+ * Build an async-iterable of KeyEvents from a Node ReadableStream
+ * (typically `process.stdin` inside the subprocess script). Wires
+ * `readline.emitKeypressEvents` and pushes normalised events through
+ * a queue with backpressure-aware waiters.
+ *
+ * Returns the iterable + a cancel() function the caller invokes on
+ * cleanup to stop emitting.
+ */
+export function eventsFromReadline(
+  input: NodeJS.ReadableStream,
+): { events: AsyncIterable<KeyEvent>; cancel: () => void } {
+  const queue:   KeyEvent[] = [];
+  const waiters: Array<(v: IteratorResult<KeyEvent>) => void> = [];
+  let cancelled = false;
+
+  emitKeypressEvents(input);
+  const onKey = (ch: string | undefined, key: { name?: string; sequence?: string; ctrl?: boolean } | undefined) => {
+    if (cancelled) return;
+    const event = normaliseKeypress(ch, key);
+    const w     = waiters.shift();
+    if (w) w({ value: event, done: false });
+    else queue.push(event);
+  };
+  input.on('keypress', onKey);
+
+  const events: AsyncIterable<KeyEvent> = {
+    [Symbol.asyncIterator]() {
+      return {
+        next(): Promise<IteratorResult<KeyEvent>> {
+          if (cancelled)         return Promise.resolve({ value: undefined as unknown as KeyEvent, done: true });
+          if (queue.length > 0)  return Promise.resolve({ value: queue.shift()!, done: false });
+          return new Promise<IteratorResult<KeyEvent>>((resolve) => waiters.push(resolve));
+        },
+      };
+    },
+  };
+
+  const cancel = () => {
+    cancelled = true;
+    input.off('keypress', onKey);
+    while (waiters.length > 0) {
+      const w = waiters.shift();
+      if (w) w({ value: undefined as unknown as KeyEvent, done: true });
+    }
+  };
+
+  return { events, cancel };
 }

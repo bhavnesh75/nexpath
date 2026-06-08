@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PassThrough } from 'node:stream';
 import {
   computeLayout,
   D1_TRUNCATED_LINE_CAP,
@@ -7,14 +8,21 @@ import {
   D5_EXPANDED_LINE_CAP,
   SUB_LINE_CONTINUATION_INDENT,
   SUB_LINE_PREFIX,
+  normaliseKeypress,
   renderDescBaseSubLines,
+  renderLoop,
   wrapAndCap,
   wrapLine,
+  type KeyEvent,
   type LayoutState,
   type RenderLoopOptions,
   type SelectableItem,
 } from './render-loop.js';
 import { ALL_LINE_KINDS } from './styler.js';
+
+async function* eventsOf(...names: KeyEvent['name'][]): AsyncIterable<KeyEvent> {
+  for (const name of names) yield { name };
+}
 
 const FRESH_STATE: LayoutState = {
   focusedIndex:    0,
@@ -322,6 +330,168 @@ describe('render-loop — computeLayout D1 + D2 integration', () => {
     const descLines = r.emissions.filter((e) => e.kind === 'desc-base-truncated');
     expect(descLines).toHaveLength(2);
     for (const e of descLines) expect(e.kind).toBe('desc-base-truncated');
+  });
+});
+
+describe('render-loop — renderLoop interactive shell', () => {
+  function makeLayout(over: Partial<RenderLoopOptions> = {}): RenderLoopOptions {
+    return {
+      pinchLabel: 'P', question: 'Q',
+      options: [
+        { value: 'opt-a', label: 'A', descBase: 'a desc' },
+        { value: 'opt-b', label: 'B', descBase: 'b desc' },
+        { value: 'opt-c', label: 'C', descBase: 'c desc' },
+      ],
+      rows: 40, cols: 80,
+      ...over,
+    };
+  }
+
+  it('returns the focused option when Enter is pressed (default focus = first option)', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('enter'),
+    });
+    expect(result).not.toBeNull();
+    expect(result!.value).toBe('opt-a');
+  });
+
+  it('arrow-down moves focus to the next option', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('arrow-down', 'enter'),
+    });
+    expect(result!.value).toBe('opt-b');
+  });
+
+  it('arrow-up wraps backwards from the first option to the last', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('arrow-up', 'enter'),
+    });
+    expect(result!.value).toBe('opt-c');
+  });
+
+  it('arrow-down skips isSeparator items', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout: makeLayout({
+        options: [
+          { value: 'a',   label: 'A', descBase: 'a' },
+          { value: 'sep', label: '',  isSeparator: true },
+          { value: 'b',   label: 'B', descBase: 'b' },
+        ],
+      }),
+      out,
+      keyEvents: eventsOf('arrow-down', 'enter'),
+    });
+    // From index 0 (A), arrow-down skips index 1 (separator) and lands on index 2 (B).
+    expect(result!.value).toBe('b');
+  });
+
+  it('returns null on Escape', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('escape'),
+    });
+    expect(result).toBeNull();
+  });
+
+  it('returns null on Ctrl+C', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('ctrl-c'),
+    });
+    expect(result).toBeNull();
+  });
+
+  it('Space key dispatches to the onSpace hook (default is no-op identity)', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('space', 'enter'),
+    });
+    // Default onSpace is no-op — Space did nothing, Enter selected the focused option.
+    expect(result!.value).toBe('opt-a');
+  });
+
+  it('custom onSpace hook can toggle expandedOptions (the Bhavnesh Phase 6 wiring point)', async () => {
+    const out      = new PassThrough();
+    const calls: Array<{ focusedItemValue: string | undefined }> = [];
+    const onSpace  = (state: LayoutState, focusedItem: SelectableItem | undefined): LayoutState => {
+      calls.push({ focusedItemValue: focusedItem?.value });
+      const next = new Set(state.expandedOptions);
+      if (next.has(state.focusedIndex)) next.delete(state.focusedIndex);
+      else                              next.add(state.focusedIndex);
+      return { ...state, expandedOptions: next };
+    };
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('space', 'enter'),
+      onSpace,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].focusedItemValue).toBe('opt-a');
+    expect(result!.value).toBe('opt-a');
+  });
+
+  it('iterator exhaustion without a terminal event resolves to null (defensive cancel)', async () => {
+    const out = new PassThrough();
+    const result = await renderLoop({
+      layout:    makeLayout(),
+      out,
+      keyEvents: eventsOf('arrow-down'),  // no terminal event — iterator ends
+    });
+    expect(result).toBeNull();
+  });
+
+  it('writes the initial frame to `out` before the first keypress', async () => {
+    const out    = new PassThrough();
+    const chunks: Buffer[] = [];
+    out.on('data', (c: Buffer) => chunks.push(c));
+    await renderLoop({
+      layout:    makeLayout({ pinchLabel: 'PINCH_LABEL_MARKER', question: 'Q' }),
+      out,
+      keyEvents: eventsOf('enter'),
+    });
+    const seen = Buffer.concat(chunks).toString('utf8');
+    expect(seen).toContain('PINCH_LABEL_MARKER');
+  });
+});
+
+describe('render-loop — normaliseKeypress (readline event → KeyEvent)', () => {
+  it('maps arrow-up / arrow-down', () => {
+    expect(normaliseKeypress(undefined, { name: 'up'   }).name).toBe('arrow-up');
+    expect(normaliseKeypress(undefined, { name: 'down' }).name).toBe('arrow-down');
+  });
+
+  it('maps enter / escape / ctrl-c / space / tab', () => {
+    expect(normaliseKeypress(undefined, { name: 'return' }).name).toBe('enter');
+    expect(normaliseKeypress(undefined, { name: 'escape' }).name).toBe('escape');
+    expect(normaliseKeypress(undefined, { ctrl: true, name: 'c' }).name).toBe('ctrl-c');
+    expect(normaliseKeypress(undefined, { name: 'space'  }).name).toBe('space');
+    expect(normaliseKeypress(undefined, { name: 'tab'    }).name).toBe('tab');
+    // Sequence-based dispatch
+    expect(normaliseKeypress(' ',    undefined).name).toBe('space');
+    expect(normaliseKeypress('\r',   undefined).name).toBe('enter');
+    expect(normaliseKeypress('\x1b', undefined).name).toBe('escape');
+    expect(normaliseKeypress('\t',   undefined).name).toBe('tab');
+  });
+
+  it('falls back to "other" for unrecognised keys', () => {
+    expect(normaliseKeypress('x', { name: 'x' }).name).toBe('other');
   });
 });
 
