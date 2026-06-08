@@ -8402,6 +8402,7 @@ export const ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines first-person — "Approaching ship date without a launch plan drafted."}
 Launch plan hasn't been drafted — shipping without distribution risks launching into silence.
 One channel / write post pre-launch / network audience identified — that's a plan.
+Still, before you publish or post this launch publicly you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -8410,6 +8411,7 @@ One channel / write post pre-launch / network audience identified — that's a p
 {R5_INJECT: ~1-2 lines first-person — "Channel not picked + draft not started."}
 The pick-channel + draft-announcement hasn't been done.
 PH / Show HN / subreddit / community / cold outreach 5-10 — one done well > five attempted.
+Still, before you publish the announcement on any public channel you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -8418,6 +8420,7 @@ PH / Show HN / subreddit / community / cold outreach 5-10 — one done well > fi
 {R5_INJECT: ~1-2 lines first-person — "Who-sees-it / how-they-see-it not answered."}
 The who-sees-it + how-they-see-it pair hasn't been answered.
 Channel / audience / pre-launch announcement / 'people-will-find-it' = hope, not plan.
+Still, before you post the announcement publicly you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -8427,6 +8430,7 @@ Channel / audience / pre-launch announcement / 'people-will-find-it' = hope, not
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line first-person — "Approaching ship."}
 Lighter: channel + audience pair.
+Still, before you publish to any public channel you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -8434,6 +8438,7 @@ Lighter: channel + audience pair.
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line first-person — "Approaching ship."}
 Narrower: draft pre-need / forces clarity on what / for whom / worth-trying.
+Still, before you publish or post the draft publicly you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
