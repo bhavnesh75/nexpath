@@ -6876,6 +6876,7 @@ const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Speculative abstractions added without current requirements justifying them."}
 YAGNI hasn't been applied to what was just built — speculative abstractions accumulate as code with no current consumer.
 Identify: abstraction / interface / config option added speculatively / remove or defer.
+Still, before you delete or restructure any code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -6884,6 +6885,7 @@ Identify: abstraction / interface / config option added speculatively / remove o
 {R5_INJECT: ~1-2 lines — "Speculative-design audit not done."}
 The speculative-design audit hasn't been done.
 Flag: abstraction layer / plugin interface / extensibility mechanism with no current consumer / remove or simplify.
+Still, before you delete or simplify any code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -6892,6 +6894,7 @@ Flag: abstraction layer / plugin interface / extensibility mechanism with no cur
 {R5_INJECT: ~1-2 lines — "Per-abstraction current-requirement check not done."}
 The per-abstraction requirement-check hasn't been done.
 Per abstraction: current requirement justifies? / simpler-implementation proposal if not.
+Still, before you delete or replace any abstraction in code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -6901,6 +6904,7 @@ Per abstraction: current requirement justifies? / simpler-implementation proposa
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Code just built."}
 Lighter: YAGNI — identify + remove unrequired abstraction.
+Still, before you delete any abstraction you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -6908,6 +6912,7 @@ Lighter: YAGNI — identify + remove unrequired abstraction.
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Code just built."}
 Narrower: any-no-current-consumer abstraction → propose removal.
+Still, before you remove any abstraction you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
