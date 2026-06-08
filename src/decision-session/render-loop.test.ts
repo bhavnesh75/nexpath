@@ -344,6 +344,77 @@ describe('render-loop — computeLayout D1 + D2 integration', () => {
   });
 });
 
+describe('render-loop — budget computation (§11.4 / §11.8 / §11.12)', () => {
+  it('fixedLines counts all header / why-help / D4-padding emissions (optionIndex === null)', () => {
+    const r = computeLayout(makeOpts({ whyHelpBlock: 'w1\nw2\nw3' }), FRESH_STATE);
+    // pinch (1) + question (1) + whyHelp (3) + D4 padding (1) = 6
+    expect(r.budget.fixedLines).toBe(6);
+  });
+
+  it('fixedLines includes the subtitle row when present', () => {
+    const r = computeLayout(makeOpts({ subtitle: 'lighter' }), FRESH_STATE);
+    // pinch (1) + subtitle (1) + question (1) + D4 padding (1) = 4 (no whyHelp here)
+    expect(r.budget.fixedLines).toBe(4);
+  });
+
+  it('avail = rows - fixedLines - 2, clamped to 0 for tiny terminals', () => {
+    const big = computeLayout(makeOpts(), { ...FRESH_STATE });
+    expect(big.budget.avail).toBe(big.budget.avail);
+    expect(big.budget.avail).toBe(big.budget.avail >= 0 ? big.budget.avail : 0);
+    // Force a very tiny terminal — avail must be 0, not negative.
+    const tiny = computeLayout(makeOpts({ rows: 1 }), FRESH_STATE);
+    expect(tiny.budget.avail).toBe(0);
+  });
+
+  it('fittedItems counts options whose total emission cost fits within avail', () => {
+    // Each option costs 2 lines (label + 1-line truncated desc-base), the
+    // focused option costs 3 (label + desc-base + shortcut-hint).
+    // 2 options total → 3 + 2 = 5 emissions of cost. With rows=40 (avail = 40-3-2=35) all fit.
+    const r = computeLayout(makeOpts(), FRESH_STATE);
+    expect(r.budget.fittedItems).toBe(2);
+  });
+
+  it('maxItems is the larger of fittedItems and opts.maxItemsFloor (default 5)', () => {
+    // 2 options, large terminal → fittedItems = 2; floor = 5 → maxItems = 5.
+    const r = computeLayout(makeOpts(), FRESH_STATE);
+    expect(r.budget.maxItems).toBe(5);
+    expect(r.budget.fittedItems).toBeLessThan(r.budget.maxItems);
+  });
+
+  it('maxItems honours a caller-supplied maxItemsFloor', () => {
+    const r = computeLayout(makeOpts({ maxItemsFloor: 2 }), FRESH_STATE);
+    expect(r.budget.maxItems).toBe(2);  // fittedItems = 2, floor = 2 → maxItems = 2
+  });
+
+  it('a short terminal clips fittedItems to fewer than the total option count', () => {
+    // rows=10, no whyHelp → fixedLines = pinch(1)+question(1)+padding(1) = 3
+    // avail = 10 - 3 - 2 = 5. focused option cost = 3, second option cost = 2 → fits 2.
+    const r = computeLayout(makeOpts({ rows: 10 }), FRESH_STATE);
+    expect(r.budget.avail).toBe(5);
+    expect(r.budget.fittedItems).toBe(2);
+  });
+
+  it('an EXPANDED option consumes more rows in the budget (D5 8-line cap → 9-line block)', () => {
+    const eight  = Array.from({ length: 8 }, (_, i) => `l${i + 1}`).join('\n');
+    const tightOpts: RenderLoopOptions = {
+      pinchLabel: 'P', question: 'Q',
+      options: [
+        { value: 'a', label: 'A', descBase: eight },
+        { value: 'b', label: 'B', descBase: 'b' },
+      ],
+      rows: 14, cols: 80,
+    };
+    // fixedLines = 3 (pinch+question+padding); avail = 14-3-2 = 9.
+    // Focused option's emissions = label(1) + 8 expanded desc-base lines + shortcut-hint(1) = 10
+    // 10 > avail (9) → focused option DOES NOT FIT in expanded state.
+    const expanded = computeLayout(tightOpts, { focusedIndex: 0, expandedOptions: new Set([0]), scrollOffset: 0 });
+    expect(expanded.budget.fittedItems).toBeLessThan(2);
+    // Truncated state — focused option fits comfortably.
+    const truncated = computeLayout(tightOpts, FRESH_STATE);
+    expect(truncated.budget.fittedItems).toBe(2);
+  });
+});
+
 describe('render-loop — shortcut-hint emission (§11.2 Gap 4 fix)', () => {
   it('emits exactly one shortcut-hint element under the focused option when it has a desc-base', () => {
     const r = computeLayout(makeOpts(), { ...FRESH_STATE, focusedIndex: 0 });

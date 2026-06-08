@@ -112,7 +112,7 @@ export interface LineEmission {
   isPadding:   boolean;
 }
 
-/** Output of `computeLayout` — ordered list of emissions + post-styler lines + per-option line ranges. */
+/** Output of `computeLayout` — ordered list of emissions + post-styler lines + per-option line ranges + budget metadata. */
 export interface RenderedLayout {
   /** Raw per-line emissions including LineKind tags. */
   emissions:        readonly LineEmission[];
@@ -120,6 +120,23 @@ export interface RenderedLayout {
   styledLines:      readonly string[];
   /** Per-option visible-range map — startIdx/endIdx into emissions for each option's lines. */
   optionLineRanges: readonly { startIdx: number; endIdx: number; itemIndex: number }[];
+  /**
+   * Budget metadata adapted from the TtySelectFn.ts:72-92 precedent.
+   * Phase 4 USER deliverable per dev-plan §11.4 / §11.8 step 2 / §11.12.
+   *
+   *   fixedLines : count of header / why-help / D4-padding rows above the option list
+   *   avail      : rows - fixedLines - 2 (clamped to 0)
+   *   maxItems   : how many options fit in `avail`, with the
+   *                opts.maxItemsFloor (default 5) applied as a minimum
+   *   fittedItems: raw fitted count BEFORE the floor (informational; lets
+   *                the interactive shell decide whether to scroll)
+   */
+  budget: {
+    fixedLines:  number;
+    avail:       number;
+    maxItems:    number;
+    fittedItems: number;
+  };
 }
 
 // ── Locked constants (dev-plan §11.5 / §11.6 / §11.8 / §11.9 / R1.1-Sub1.4) ─
@@ -365,7 +382,32 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   // body with per-kind ANSI mapping. The dispatch site stays the same.
   const styledLines = emissions.map((e) => styler(e.text, e.kind));
 
-  return { emissions, styledLines, optionLineRanges };
+  // ── Budget computation (§11.4 / §11.8 / §11.12) ────────────────────────────
+  // Adapt the TtySelectFn.ts:72-92 precedent — header rows count as
+  // _fixedLines; remaining rows minus a 2-line gutter is _avail;
+  // _maxItems is the count of options whose total emission cost fits
+  // within _avail, bumped up to the maxItemsFloor (default 5) so the
+  // popup always tries to render at least that many.
+  const fixedLines = emissions.filter((e) => e.optionIndex === null).length;
+  const avail      = Math.max(0, opts.rows - fixedLines - 2);
+
+  let budget = 0;
+  let fittedItems = 0;
+  for (const range of optionLineRanges) {
+    const cost = range.endIdx - range.startIdx;
+    if (budget + cost > avail) break;
+    budget += cost;
+    fittedItems++;
+  }
+  const floor    = opts.maxItemsFloor ?? DEFAULT_MAX_ITEMS_FLOOR;
+  const maxItems = Math.max(fittedItems, floor);
+
+  return {
+    emissions,
+    styledLines,
+    optionLineRanges,
+    budget: { fixedLines, avail, maxItems, fittedItems },
+  };
 }
 
 // ── Interactive shell ──────────────────────────────────────────────────────
