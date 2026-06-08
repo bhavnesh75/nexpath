@@ -4,7 +4,9 @@ import type {
   NonStandardWhyHelpVariants,
   WhyHelpEntry,
   WhyHelpVariants,
+  SignalClass,
 } from './why-help.js';
+import { WHY_HELP_CONTENT, ALL_SIGNAL_CLASSES } from './why-help.js';
 
 describe('why-help — type shape', () => {
   it('UniversalWhyHelpVariants requires formal + casual + beginner', () => {
@@ -56,5 +58,97 @@ describe('why-help — type shape', () => {
     const v: WhyHelpVariants = { formal: 'F', casual: 'C', beginner: 'B' };
     const u: UniversalWhyHelpVariants = v;
     expect(u).toEqual(v);
+  });
+});
+
+describe('why-help — content table', () => {
+  it('WHY_HELP_CONTENT contains exactly 9 signal classes', () => {
+    expect(Object.keys(WHY_HELP_CONTENT)).toHaveLength(9);
+  });
+
+  it('ALL_SIGNAL_CLASSES enumerates the 9 keys present in WHY_HELP_CONTENT', () => {
+    expect(ALL_SIGNAL_CLASSES).toHaveLength(9);
+    for (const cls of ALL_SIGNAL_CLASSES) {
+      expect(WHY_HELP_CONTENT[cls]).toBeDefined();
+    }
+  });
+
+  it('classes 1-6 use the universal-triplet structure with all 3 registers populated', () => {
+    const universalClasses: SignalClass[] = [
+      'stage-transition',
+      'verification-quality',
+      'spec-architecture',
+      'release-observability-infra',
+      'session-quality',
+      'planning-idea-task',
+    ];
+    for (const cls of universalClasses) {
+      const entry = WHY_HELP_CONTENT[cls];
+      expect(entry.structure).toBe('universal-triplet');
+      if (entry.structure === 'universal-triplet') {
+        expect(entry.content.formal.trim().length).toBeGreaterThan(0);
+        expect(entry.content.casual.trim().length).toBeGreaterThan(0);
+        expect(entry.content.beginner.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('class 7 vibe-coder uses class7-vibe-coder structure with casual + beginner only', () => {
+    const entry = WHY_HELP_CONTENT['vibe-coder'];
+    expect(entry.structure).toBe('class7-vibe-coder');
+    if (entry.structure === 'class7-vibe-coder') {
+      expect(entry.content.casual.trim().length).toBeGreaterThan(0);
+      expect(entry.content.beginner.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('class 8 role-specific uses class8-role-cluster structure with 3 role-keyed entries', () => {
+    const entry = WHY_HELP_CONTENT['role-specific'];
+    expect(entry.structure).toBe('class8-role-cluster');
+    if (entry.structure === 'class8-role-cluster') {
+      expect(entry.content.founder_casual!.trim().length).toBeGreaterThan(0);
+      expect(entry.content.indie_hacker_casual!.trim().length).toBeGreaterThan(0);
+      expect(entry.content.pm_formal!.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('class 9 academic-formal uses class9-formal-only structure with formal only', () => {
+    const entry = WHY_HELP_CONTENT['academic-formal'];
+    expect(entry.structure).toBe('class9-formal-only');
+    if (entry.structure === 'class9-formal-only') {
+      expect(entry.content.formal.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('total block count across all classes is 24 (6×3 + 2 + 3 + 1)', () => {
+    let count = 0;
+    for (const cls of ALL_SIGNAL_CLASSES) {
+      const entry = WHY_HELP_CONTENT[cls];
+      if (entry.structure === 'universal-triplet') count += 3;
+      else if (entry.structure === 'class7-vibe-coder') count += 2;
+      else if (entry.structure === 'class8-role-cluster') count += 3;
+      else if (entry.structure === 'class9-formal-only') count += 1;
+    }
+    expect(count).toBe(24);
+  });
+
+  it('no block contains banned third-person AI patterns (the AI / Claude / it says / its answer / its output)', () => {
+    const banned = ['the AI', 'Ask the AI', 'Have the AI', 'Get the AI', 'Instruct the AI', 'Claude', 'the assistant', 'its answer', 'its output'];
+    const collect = (entry: WhyHelpEntry): string[] => {
+      switch (entry.structure) {
+        case 'universal-triplet':   return [entry.content.formal, entry.content.casual, entry.content.beginner];
+        case 'class7-vibe-coder':   return [entry.content.casual, entry.content.beginner];
+        case 'class8-role-cluster': return [entry.content.founder_casual ?? '', entry.content.indie_hacker_casual ?? '', entry.content.pm_formal ?? ''];
+        case 'class9-formal-only':  return [entry.content.formal];
+      }
+    };
+    for (const cls of ALL_SIGNAL_CLASSES) {
+      const blocks = collect(WHY_HELP_CONTENT[cls]);
+      for (const text of blocks) {
+        for (const p of banned) {
+          expect(text, `class ${cls}: banned pattern "${p}" appeared`).not.toContain(p);
+        }
+      }
+    }
   });
 });
