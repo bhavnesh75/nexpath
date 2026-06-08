@@ -1112,6 +1112,7 @@ const ABSENCE_OBSERVABILITY: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Recent prompts: feature implementation. Observability hooks not added in the visible window."}
 Observability for what was just built hasn't been set up — silent failures in production could go undetected.
 Identify invisible production events; add structured logging for diagnosable signals.
+Still, before you add structured logging across the codebase you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -2369,6 +2370,7 @@ const ABSENCE_OBSERVABILITY_CASUAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines first-person — "I built something but I haven't added any logging or monitoring yet."}
 Production visibility for what was just built hasn't been set up.
 Identify key events (requests, failures, state changes); add structured logs.
+Still, before you add structured logs across the codebase you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -4380,6 +4382,7 @@ Per credential: holder / rotation procedure / hot-swap-support.
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Feature with secrets; hardcoded check not done."}
 Lighter: hardcoded credentials in source + remediation plan if so.
+Still, before you remediate any hardcoded credential (move it to env, rotate, or delete) you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -5005,6 +5008,7 @@ Walk through: how to swap a compromised secret + how painful the current setup m
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line first-person — "Feature uses credentials; inline check not done."}
 Lighter: any real credentials inline in source?
+Still, before you move or rotate any credential you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {

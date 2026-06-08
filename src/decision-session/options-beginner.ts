@@ -619,6 +619,7 @@ export const ABSENCE_OBSERVABILITY_BEGINNER: DecisionContent = {
 {R5_INJECT: ~1-2 lines first-person — "I built a feature but I haven't set up anything to tell me when it breaks."}
 Production-failure detection hasn't been set up.
 Walk me through it: how would I find out if it stops working, is there any logging, what's most important to log?
+Still, before you add logging across the codebase you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -2226,6 +2227,7 @@ Same moment, simpler: \`.env.example\` lists every required secret/config?
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line first-person — "Feature uses credentials; inline-secret check not done."}
 Lighter: any inline secret in source.
+Still, before you move any inline secret out of source you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
