@@ -1156,6 +1156,7 @@ Minimum next step: one silent-fail path with no log/alert.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_COMPREHENSION: DecisionContent = {
@@ -1671,6 +1672,7 @@ Minimum next step: rollback plan documented + executable under pressure, or impr
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DEPLOYMENT_PLANNING: DecisionContent = {
@@ -1727,6 +1729,7 @@ Minimum next step: deployment plan confirmed + tested-outside-dev, or undefined?
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DEPENDENCY_MGMT: DecisionContent = {
@@ -1783,6 +1786,7 @@ Minimum next step: conflict / CVE / licence check on new packages.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_PHASE_TRANSITION: DecisionContent = {
@@ -2409,6 +2413,7 @@ Minimum next step: detection coverage from logs/monitoring; what's missing.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_COMPREHENSION_CASUAL: DecisionContent = {
@@ -2923,6 +2928,7 @@ Minimum next step: rollback plan documented or improvisational?
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DEPLOYMENT_PLANNING_CASUAL: DecisionContent = {
@@ -2979,6 +2985,7 @@ Minimum next step: deploy plan exists, or figure-it-out-at-push?
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DEPENDENCY_MGMT_CASUAL: DecisionContent = {
@@ -3035,6 +3042,7 @@ Minimum next step: conflicts / vulnerabilities / licence issues on new packages.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_PHASE_TRANSITION_CASUAL: DecisionContent = {
@@ -4391,6 +4399,7 @@ Minimum next step: most sensitive credential identified + storage location confi
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DATA_VALIDATION: DecisionContent = {
@@ -4505,6 +4514,7 @@ Minimum next step: most important missing automated CI check.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_RATE_LIMITING: DecisionContent = {
@@ -4561,6 +4571,7 @@ Minimum next step: most likely abuse path + current throttle mechanism status.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_FEATURE_SCOPE: DecisionContent = {
@@ -5013,6 +5024,7 @@ Minimum next step: where credentials sit + safe-vs-needs-moving verdict.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DATA_VALIDATION_CASUAL: DecisionContent = {
@@ -5127,6 +5139,7 @@ Minimum next step: most important uncaught-in-CI thing.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_RATE_LIMITING_CASUAL: DecisionContent = {
@@ -5183,6 +5196,7 @@ Minimum next step: most realistic overwhelm path + current prevention.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_FEATURE_SCOPE_CASUAL: DecisionContent = {
@@ -5971,6 +5985,7 @@ Minimum next step: specific problem justifying permanent dependency.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
@@ -6900,6 +6915,7 @@ Minimum next step: YAGNI — remove speculative + implement current-requirement 
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
@@ -7014,6 +7030,7 @@ Minimum next step: instrument all three pillars pre-ship.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
@@ -7070,6 +7087,7 @@ Minimum next step: enumerate failure modes + stability pattern per dep pre-ship.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
@@ -7240,6 +7258,7 @@ Minimum next step: STRIDE enumerate + mitigation controls pre-ship.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
@@ -7296,6 +7315,7 @@ Minimum next step: phase the schema change across deployments.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
@@ -7352,6 +7372,7 @@ Minimum next step: strategy (canary/flag/blue-green/staged) + rollback pre-ship.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
@@ -8420,6 +8441,7 @@ Minimum next step: channel + audience + drafted announcement.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_EARLY_USER_FEEDBACK_CASUAL: DecisionContent = {
@@ -8700,6 +8722,7 @@ Minimum next step: short public post — built + learned.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL: DecisionContent = {
@@ -8870,6 +8893,7 @@ Minimum next step: identify + align stakeholder pre-impl.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL: DecisionContent = {
@@ -9094,6 +9118,7 @@ Minimum next step: notify affected teams pre-impl.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL: DecisionContent = {

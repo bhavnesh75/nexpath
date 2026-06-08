@@ -647,6 +647,7 @@ Minimum next step: silent-fail-without-trace risk.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_COMPREHENSION_BEGINNER: DecisionContent = {
@@ -1017,6 +1018,7 @@ Minimum next step: rollback procedure known.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_DEPLOYMENT_PLANNING_BEGINNER: DecisionContent = {
@@ -1057,6 +1059,7 @@ Minimum next step: deployment planned or undefined.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_DEPENDENCY_MGMT_BEGINNER: DecisionContent = {
@@ -1097,6 +1100,7 @@ Minimum next step: conflicts or known-issues on new packages.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_PHASE_TRANSITION_BEGINNER: DecisionContent = {
@@ -2234,6 +2238,7 @@ Minimum next step: one secret + its current storage location.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_DATA_VALIDATION_BEGINNER: DecisionContent = {
@@ -2316,6 +2321,7 @@ Minimum next step: anything that runs auto on new code; any gaps.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_RATE_LIMITING_BEGINNER: DecisionContent = {
@@ -2356,6 +2362,7 @@ Minimum next step: one overuse path + current prevention.
 {R4_CLOSE}`,
     },
   ],
+  l2SafeguardRequired: true,
 };
 
 export const ABSENCE_FEATURE_SCOPE_BEGINNER: DecisionContent = {
