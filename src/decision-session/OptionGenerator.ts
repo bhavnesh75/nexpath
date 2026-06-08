@@ -4,6 +4,8 @@ import type { FlagType } from '../classifier/Stage2Trigger.js';
 import type { DecisionContent, OptionEntry } from './options.js';
 import { logger } from '../logger.js';
 import { GroundingConfig } from '../config/GroundingConfig.js';
+import { applyRuntimeSubstitutionsAllLevels } from './runtime-substitutions.js';
+import { profileToRegister } from './register.js';
 
 /**
  * Dynamic option text generator.
@@ -29,6 +31,20 @@ export interface GeneratedOptions {
   l1: string[];
   l2: string[];
   l3: string[];
+  /**
+   * Per-option desc-base content AFTER the runtime substitution pipeline
+   * (R5 prompt-evidence injection + R4 CA-facing bookend substitution +
+   * F7 L2 escalation when applicable). Index-aligned with `l1`/`l2`/`l3`.
+   *
+   * Optional because callers may have a build of GeneratedOptions that
+   * pre-dates the substitution wiring — the consumer falls back to the
+   * static DecisionContent desc-base when this field is absent.
+   */
+  generatedDescBases?: {
+    l1: string[];
+    l2: string[];
+    l3: string[];
+  };
 }
 
 export interface OptionGenContext {
@@ -457,6 +473,38 @@ export async function generateOptionList(
   context?: OptionGenContext,
   client?:  OpenAI,
 ): Promise<GeneratedOptions | null> {
+  // Post-Pass-2 substitution helper. Runs R5 prompt-evidence injection
+  // + R4 CA-facing bookend substitution + F7 L2 escalation against the
+  // static desc-bases for each generated option and attaches the
+  // result on `generatedDescBases`. Defensive: any internal failure
+  // returns `generated` unchanged so the static fallback path still
+  // works.
+  const attachDescBases = async (generated: GeneratedOptions): Promise<GeneratedOptions> => {
+    try {
+      const register = profileToRegister(profile);
+      const entries  = await applyRuntimeSubstitutionsAllLevels(
+        { l1: generated.l1, l2: generated.l2, l3: generated.l3 },
+        content,
+        history,
+        content.signalType,
+        register,
+        // Rewrite client deferred — runtime defaults to Strategy-D D-fallbacks.
+        { l2SafeguardRequired: content.l2SafeguardRequired },
+      );
+      return {
+        ...generated,
+        generatedDescBases: {
+          l1: entries.l1.map((e) => e.descBase),
+          l2: entries.l2.map((e) => e.descBase),
+          l3: entries.l3.map((e) => e.descBase),
+        },
+      };
+    } catch (err) {
+      logger.debug('option_gen_substitution_error', { error: String(err) });
+      return generated;
+    }
+  };
+
   // ── Pass 1: vocabulary adaptation ─────────────────────────────────────────────
   let pass1Output: GeneratedOptions | null = null;
   // Constructor is inside the try so a missing OPENAI_API_KEY surfaces as a null
@@ -519,7 +567,7 @@ export async function generateOptionList(
   // ── Pass 2: feature noun embedding ────────────────────────────────────────────
   if (!GroundingConfig.enabled) {
     logger.debug('option_gen_pass2_skipped');
-    return pass1Output;
+    return await attachDescBases(pass1Output);
   }
 
   try {
@@ -553,7 +601,7 @@ export async function generateOptionList(
       const raw    = response.choices[0]?.message?.content ?? '';
       const result = validateWithError(raw, content);
 
-      if ('options' in result) return result.options;
+      if ('options' in result) return await attachDescBases(result.options);
 
       lastRaw   = raw;
       lastError = result.error;
@@ -562,11 +610,11 @@ export async function generateOptionList(
 
     logger.debug('option_gen_pass2_retries_failed', { lastError });
     logger.debug('option_gen_pass2_fallback');
-    return pass1Output;
+    return await attachDescBases(pass1Output);
   } catch (err) {
     logger.debug('option_gen_error', { error: String(err) });
     logger.debug('option_gen_pass2_fallback');
-    return pass1Output;
+    return await attachDescBases(pass1Output);
   }
 }
 

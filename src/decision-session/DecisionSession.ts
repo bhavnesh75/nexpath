@@ -192,11 +192,23 @@ export async function runLevel(
 ): Promise<'skip' | 'next' | 'clipboard_only' | string> {
   const content  = resolveDecisionContent(input.stage, input.flagType, input.profile);
   const gen      = input.generatedOptions;
-  // Generated options carry only the user-facing text. Re-attach each option's
-  // existing desc-base from the static content so the OptionEntry shape stays
-  // intact through the build pipeline.
-  const wrapGen = (texts: string[], source: { L1: typeof content.L1; L2: typeof content.L2; L3: typeof content.L3; }, key: 'L1' | 'L2' | 'L3') =>
-    texts.map((text, i) => ({ option: text, descBase: source[key][i]?.descBase ?? '' }));
+  // Generated options carry only the user-facing text. Each option's
+  // desc-base comes from either the runtime-substituted output on
+  // `gen.generatedDescBases` (post R5 prompt-evidence injection +
+  // R4 bookend substitution + F7 L2 escalation) when OptionGenerator
+  // produced it, OR from the static DecisionContent as a fallback.
+  const wrapGen = (
+    texts:  string[],
+    source: { L1: typeof content.L1; L2: typeof content.L2; L3: typeof content.L3; },
+    key:    'L1' | 'L2' | 'L3',
+  ) => {
+    const lowerKey  = key.toLowerCase() as 'l1' | 'l2' | 'l3';
+    const substituted = gen?.generatedDescBases?.[lowerKey];
+    return texts.map((text, i) => ({
+      option:   text,
+      descBase: substituted?.[i] ?? source[key][i]?.descBase ?? '',
+    }));
+  };
   const effective: DecisionContent = gen
     ? {
         ...content,
