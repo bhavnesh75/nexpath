@@ -5,6 +5,7 @@ import {
   substituteR5Placeholder,
   injectR5,
   strategyDFallback,
+  extractVocab,
   type R5Register,
 } from './r5-injection.js';
 
@@ -93,6 +94,59 @@ describe('r5-injection — strategyDFallback()', () => {
   it('idempotent on input without a placeholder', () => {
     const out = strategyDFallback(SAMPLE_DESC_BASE_NO_PLACEHOLDER, 'TASK_REVIEW', 'formal');
     expect(out).toBe(SAMPLE_DESC_BASE_NO_PLACEHOLDER);
+  });
+});
+
+describe('r5-injection — extractVocab()', () => {
+  it('returns an empty array when history is empty', () => {
+    expect(extractVocab([])).toEqual([]);
+  });
+
+  it('promotes a repeated word (appearing in ≥ 2 prompts) above other categories', () => {
+    const history = [
+      makePrompt('I am working on the invoice feature today.', 0),
+      makePrompt('Still building the invoice rendering path.', 1),
+    ];
+    const vocab = extractVocab(history);
+    // "invoice" appears in both prompts → must be highest-priority and in the result.
+    expect(vocab[0].toLowerCase()).toBe('invoice');
+  });
+
+  it('picks verb stems out of single-prompt text', () => {
+    const history = [makePrompt('I refactored the auth module and validated the new flow.', 0)];
+    const vocab = extractVocab(history).map((t) => t.toLowerCase());
+    expect(vocab.some((t) => t.startsWith('refactor'))).toBe(true);
+    expect(vocab.some((t) => t.startsWith('validat'))).toBe(true);
+  });
+
+  it('picks noun-like tokens (camelCase, snake_case, file path) out of single-prompt text', () => {
+    const history = [
+      makePrompt('Editing the OptionGenerator file and user_profile schema in handler.ts today.', 0),
+    ];
+    const vocab = extractVocab(history);
+    expect(vocab).toContain('OptionGenerator');
+    expect(vocab).toContain('user_profile');
+    expect(vocab).toContain('handler.ts');
+  });
+
+  it('caps the output at maxTokens (default 8)', () => {
+    const sentence = 'I added building deploying running testing checking reviewing implementing committing pushing modules together.';
+    const history = [makePrompt(sentence, 0)];
+    const vocab = extractVocab(history);
+    expect(vocab.length).toBeLessThanOrEqual(8);
+  });
+
+  it('honours an explicit maxTokens argument', () => {
+    const history = [makePrompt('I added building deploying running testing checking reviewing implementing committing pushing modules together.', 0)];
+    expect(extractVocab(history, 3).length).toBeLessThanOrEqual(3);
+  });
+
+  it('deduplicates case-variant occurrences (e.g., "Invoice" + "invoice")', () => {
+    const history = [makePrompt('Invoice rendered, invoice tested, invoice ready.', 0)];
+    const vocab = extractVocab(history);
+    const lowered = vocab.map((t) => t.toLowerCase());
+    const uniq = new Set(lowered);
+    expect(uniq.size).toBe(lowered.length);
   });
 });
 
