@@ -115,7 +115,8 @@ describe('runtime-substitutions — applyRuntimeSubstitutions()', () => {
       history,
       signalType:           'IRRELEVANT',
       register:             'casual',
-      injectOptions:        { client: rewriteClient },
+      // 5-line fixture overflows MEDIUM (4); HEAVY accommodates it.
+      injectOptions:        { client: rewriteClient, lengthBudget: 'HEAVY' },
     });
     expect(out[0].descBase).not.toContain('{R5_INJECT');
     expect(out[0].descBase).toContain(R4_CA_OPEN);

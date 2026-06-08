@@ -73,10 +73,16 @@ export async function applyRuntimeSubstitutionsAllLevels(
   register:     R5Register,
   injectOptions?: InjectR5Options,
 ): Promise<{ l1: OptionEntry[]; l2: OptionEntry[]; l3: OptionEntry[] }> {
+  // Per-set length budget comes from DecisionContent. Merge it into
+  // injectOptions so injectR5 enforces the tier ceiling.
+  const mergedOptions: InjectR5Options = {
+    ...(injectOptions ?? {}),
+    lengthBudget: injectOptions?.lengthBudget ?? content.lengthBudget,
+  };
   const [l1, l2, l3] = await Promise.all([
-    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l1, staticEntries: content.L1, history, signalType, register, injectOptions }),
-    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l2, staticEntries: content.L2, history, signalType, register, injectOptions }),
-    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l3, staticEntries: content.L3, history, signalType, register, injectOptions }),
+    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l1, staticEntries: content.L1, history, signalType, register, injectOptions: mergedOptions }),
+    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l2, staticEntries: content.L2, history, signalType, register, injectOptions: mergedOptions }),
+    applyRuntimeSubstitutions({ generatedOptionTexts: generated.l3, staticEntries: content.L3, history, signalType, register, injectOptions: mergedOptions }),
   ]);
   return { l1, l2, l3 };
 }

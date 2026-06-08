@@ -19,8 +19,11 @@ import {
   meetsConcentrationThreshold,
   rewriteViaLLM,
   CONCENTRATION_THRESHOLD,
+  fitsLengthBudget,
+  LENGTH_BUDGETS,
   type R5Register,
   type R5RewriteClient,
+  type LengthBudgetTier,
 } from './r5-injection.js';
 
 function makePrompt(text: string, index = 0): PromptRecord {
@@ -422,7 +425,8 @@ describe('r5-injection — injectR5() full orchestration', () => {
       richHistory,
       'TASK_REVIEW',
       'formal',
-      { client, exampleHint: '"example shape"' },
+      // 5-line fixture overflows MEDIUM (4); HEAVY accommodates it.
+      { client, exampleHint: '"example shape"', lengthBudget: 'HEAVY' },
     );
     expect(out).toContain('refactoring invoice');
     expect(out).not.toContain('{R5_INJECT');
@@ -487,5 +491,120 @@ describe('r5-injection — injectR5() full orchestration', () => {
       const out = await injectR5(SAMPLE_DESC_BASE_NO_PLACEHOLDER, richHistory, 'TASK_REVIEW', reg);
       expect(typeof out).toBe('string');
     }
+  });
+});
+
+describe('r5-injection — fitsLengthBudget() helper', () => {
+  it('returns true when the desc-base is below the tier ceiling on both lines and chars', () => {
+    expect(fitsLengthBudget('one\ntwo', 'LIGHT')).toBe(true);
+    expect(fitsLengthBudget('a'.repeat(150), 'LIGHT')).toBe(true);
+  });
+
+  it('returns false when the char count exceeds the tier ceiling', () => {
+    expect(fitsLengthBudget('a'.repeat(201),  'LIGHT')).toBe(false);
+    expect(fitsLengthBudget('a'.repeat(401),  'MEDIUM')).toBe(false);
+    expect(fitsLengthBudget('a'.repeat(1001), 'HEAVY')).toBe(false);
+  });
+
+  it('returns false when the line count exceeds the tier ceiling', () => {
+    expect(fitsLengthBudget('a\nb\nc',                'LIGHT')).toBe(false);   // 3 > 2
+    expect(fitsLengthBudget('a\nb\nc\nd\ne',          'MEDIUM')).toBe(false);  // 5 > 4
+    expect(fitsLengthBudget('a\n'.repeat(10) + 'end', 'HEAVY')).toBe(false);   // 11 > 10
+  });
+
+  it('exposes the locked tier ceilings as LENGTH_BUDGETS', () => {
+    expect(LENGTH_BUDGETS.LIGHT).toEqual({  maxExpandedLines: 2,  maxChars: 200  });
+    expect(LENGTH_BUDGETS.MEDIUM).toEqual({ maxExpandedLines: 4,  maxChars: 400  });
+    expect(LENGTH_BUDGETS.HEAVY).toEqual({  maxExpandedLines: 10, maxChars: 1000 });
+  });
+});
+
+describe('r5-injection — per-set total length budget (§10.1.2)', () => {
+  const groundedHistory: readonly PromptRecord[] = [
+    makePrompt('I have been refactoring the invoice rendering path today.', 0),
+    makePrompt('Building the invoice and validating with tests now.', 1),
+  ];
+
+  // High-concentration rewrite client — output uses extracted vocab.
+  const echoClient: R5RewriteClient = {
+    rewrite: async () => 'refactoring invoice building validating tests now.',
+  };
+
+  it('returns the substituted desc-base when total length is within the tier (LIGHT clean path)', async () => {
+    // Single-placeholder desc-base — total ≤ 200 chars + ≤ 2 lines after substitution.
+    const shortTemplate = '{R5_INJECT: ~1 line — "example"}';
+    const out = await injectR5(
+      shortTemplate,
+      groundedHistory,
+      'TASK_REVIEW',
+      'formal',
+      { client: echoClient, exampleHint: '', lengthBudget: 'LIGHT' },
+    );
+    expect(out).toContain('refactoring invoice');
+    expect(out).not.toContain('{R5_INJECT');
+    expect(out.length).toBeLessThanOrEqual(LENGTH_BUDGETS.LIGHT.maxChars);
+  });
+
+  it('falls back to Strategy D when LIGHT total-length ceiling is exceeded', async () => {
+    // Template padded so total post-substitution > 200 chars even with capped R5 output.
+    const padded = `${'A'.repeat(190)}\n{R5_INJECT: ~1 line — "example"}`;
+    const out = await injectR5(
+      padded,
+      groundedHistory,
+      'TASK_REVIEW',          // has a D-fallback registered
+      'formal',
+      { client: echoClient, exampleHint: '', lengthBudget: 'LIGHT' },
+    );
+    // Strategy D was applied — the LLM rewrite output is absent.
+    expect(out).not.toContain('refactoring invoice');
+    expect(out).not.toContain('{R5_INJECT');
+  });
+
+  it('defaults to MEDIUM when lengthBudget is omitted', async () => {
+    // Padded between LIGHT (200) and MEDIUM (400) ceilings, fits MEDIUM cleanly.
+    const padded = `${'B'.repeat(250)}\n{R5_INJECT: ~1 line — "example"}`;
+    const out = await injectR5(
+      padded,
+      groundedHistory,
+      'TASK_REVIEW',
+      'formal',
+      { client: echoClient, exampleHint: '' },
+      // lengthBudget omitted → defaults to MEDIUM (400 char ceiling)
+    );
+    expect(out).toContain('refactoring invoice');
+  });
+
+  it('allows up to ~1000 chars when HEAVY tier is set', async () => {
+    // Padded between MEDIUM (400) and HEAVY (1000) ceilings.
+    const padded = `${'C'.repeat(800)}\n{R5_INJECT: ~1 line — "example"}`;
+    const out = await injectR5(
+      padded,
+      groundedHistory,
+      'TASK_REVIEW',
+      'formal',
+      { client: echoClient, exampleHint: '', lengthBudget: 'HEAVY' },
+    );
+    expect(out).toContain('refactoring invoice');
+    expect(out.length).toBeGreaterThan(LENGTH_BUDGETS.MEDIUM.maxChars);
+  });
+
+  it('falls back to Strategy D when expanded line count exceeds the tier ceiling', async () => {
+    // 3 lines from template + 1 line of R5 substitution = 4 lines total > LIGHT.maxExpandedLines (2).
+    const multiLineTemplate = 'line 1\nline 2\nline 3\n{R5_INJECT: ~1 line — "example"}';
+    const out = await injectR5(
+      multiLineTemplate,
+      groundedHistory,
+      'TASK_REVIEW',
+      'formal',
+      { client: echoClient, exampleHint: '', lengthBudget: 'LIGHT' },
+    );
+    expect(out).not.toContain('refactoring invoice');
+    expect(out).not.toContain('{R5_INJECT');
+  });
+
+  // LengthBudgetTier type-only assertion — ensures the type is exported and usable.
+  it('exports a LengthBudgetTier type covering the three locked tiers', () => {
+    const tiers: LengthBudgetTier[] = ['LIGHT', 'MEDIUM', 'HEAVY'];
+    expect(tiers).toHaveLength(3);
   });
 });

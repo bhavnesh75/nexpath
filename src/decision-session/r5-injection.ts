@@ -56,6 +56,39 @@ export interface InjectR5Options {
   client?:      R5RewriteClient;
   /** Format/length hint passed to the rewrite prompt (typically the `{R5_INJECT: ...}` example text from the desc-base template). */
   exampleHint?: string;
+  /**
+   * Per-set total-length budget tier applied to the FULL desc-base
+   * AFTER R5 substitution. Defaults to MEDIUM when omitted.
+   * Triggers a Strategy-D fallback when the post-substitution desc-base
+   * exceeds the tier's line or char ceiling.
+   */
+  lengthBudget?: LengthBudgetTier;
+}
+
+/** Per-set length budget tier. */
+export type LengthBudgetTier = 'LIGHT' | 'MEDIUM' | 'HEAVY';
+
+/**
+ * Per-tier total-length ceilings applied to the FULL post-R5
+ * substituted desc-base. `maxExpandedLines` matches the expanded
+ * (untruncated) line count; `maxChars` is the total char count.
+ */
+export const LENGTH_BUDGETS: Readonly<Record<LengthBudgetTier, { maxExpandedLines: number; maxChars: number }>> = {
+  LIGHT:  { maxExpandedLines: 2,  maxChars: 200  },
+  MEDIUM: { maxExpandedLines: 4,  maxChars: 400  },
+  HEAVY:  { maxExpandedLines: 10, maxChars: 1000 },
+};
+
+/**
+ * Returns true when the full post-substitution desc-base fits inside
+ * the tier's line + char ceilings. Falsey result triggers a Strategy-D
+ * fallback in `injectR5`.
+ */
+export function fitsLengthBudget(descBase: string, tier: LengthBudgetTier): boolean {
+  const { maxExpandedLines, maxChars } = LENGTH_BUDGETS[tier];
+  if (descBase.length > maxChars) return false;
+  if (descBase.split('\n').length > maxExpandedLines) return false;
+  return true;
 }
 
 /**
@@ -137,7 +170,19 @@ export async function injectR5(
     return strategyDFallback(descBase, signalType, register);
   }
 
-  return substituteR5Placeholder(descBase, capped);
+  const substituted = substituteR5Placeholder(descBase, capped);
+
+  // (10) — per-set total-length budget check on the FULL post-substitution
+  // desc-base. F4 only caps the substitution itself; this catches the case
+  // where the bookend + gap-framing + direction-body + R5 line together
+  // overflow the set's overall budget (LIGHT 2 / MEDIUM 4 / HEAVY 10
+  // expanded lines, with matching char ceilings).
+  const tier = options.lengthBudget ?? 'MEDIUM';
+  if (!fitsLengthBudget(substituted, tier)) {
+    return strategyDFallback(descBase, signalType, register);
+  }
+
+  return substituted;
 }
 
 /**
