@@ -22,6 +22,13 @@ import { getR5DFallback } from './r5-fallbacks.js';
 export type R5Register = 'formal' | 'casual' | 'beginner';
 
 /**
+ * Dev-plan §10.2 illustrative type alias. Re-exported so callers
+ * matching the dev-plan literal signature can import `Register`
+ * directly without renaming. Structurally identical to `R5Register`.
+ */
+export type Register = R5Register;
+
+/**
  * R5_INJECT placeholder pattern. The placeholder allows free-form
  * content between the colon and the closing brace (registers, length
  * hints, quoted example text); the runtime treats the entire matched

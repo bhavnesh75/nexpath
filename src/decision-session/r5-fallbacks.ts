@@ -677,6 +677,13 @@ export const R5_D_FALLBACKS: Record<string, RegisterPartial> = {
 };
 
 /**
+ * Dev-plan §10.2 illustrative export name. Re-exported under the
+ * dev-plan literal `D_FALLBACKS` so callers can import either name
+ * interchangeably. Same data; no semantic change.
+ */
+export { R5_D_FALLBACKS as D_FALLBACKS };
+
+/**
  * Runtime lookup — returns the D-fallback string for the (signal_type,
  * register) pair, or `undefined` when no fallback is authored. The
  * caller chooses whether to skip or substitute alternative content.
