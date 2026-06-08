@@ -49,7 +49,23 @@ import { styler } from './styler.js';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
-/** A selectable item shown in the popup option list. */
+/**
+ * A selectable item shown in the popup option list.
+ *
+ * Documented deviations from dev-plan §11.12 module-shape literal:
+ *
+ *   - `value: string` is ADDED here. The dev-plan literal omits it, but
+ *     `renderLoop` resolves with the picked SelectableItem and callers
+ *     need an identifier to map back to the originating OptionEntry /
+ *     SHOW_SIMPLER / SKIP_NOW / HELP_LABEL sentinel. The label alone is
+ *     not unique enough (duplicate option-texts across levels would
+ *     collide).
+ *
+ *   - `descBase?: string` is OPTIONAL here. The dev-plan literal has
+ *     it required. Meta items (SHOW_SIMPLER / SKIP_NOW / HELP_LABEL)
+ *     and separators have no desc-base; making the field optional
+ *     lets callers omit it cleanly without passing an empty string.
+ */
 export interface SelectableItem {
   /** Selection sentinel value returned when the user picks this item. */
   value:        string;
