@@ -29,6 +29,26 @@ describe('why-help-mood — content table', () => {
       }
     }
   });
+
+  // Voice-rule audit per dev-plan §14.3 — why-help-mood inherits the same
+  // observational voice contract as why-help.ts. Iterate the 12 literal
+  // banned patterns (matches r5-fallbacks.test.ts's set) against every mood
+  // sentence (2 moods × 3 registers = 6 sentences) and assert zero matches.
+  it('no mood sentence contains banned third-person AI / prompt-self-reference patterns (§14.3 L1 audit)', () => {
+    const banned = [
+      'the AI', 'Ask the AI', 'Have the AI', 'Get the AI', 'Instruct the AI',
+      'Claude', 'the assistant', 'its answer', 'its output',
+      'this option', 'the action below', 'the prompt above',
+    ];
+    for (const mood of Object.keys(WHY_HELP_MOOD) as WhyHelpMoodKey[]) {
+      for (const reg of Object.keys(WHY_HELP_MOOD[mood]) as WhyHelpMoodRegister[]) {
+        const text = WHY_HELP_MOOD[mood][reg];
+        for (const p of banned) {
+          expect(text, `mood ${mood} × ${reg}: banned pattern "${p}" appeared`).not.toContain(p);
+        }
+      }
+    }
+  });
 });
 
 describe('why-help-mood — getMoodSentence resolver', () => {
