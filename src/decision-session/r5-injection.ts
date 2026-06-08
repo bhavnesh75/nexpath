@@ -101,24 +101,53 @@ export function fitsLengthBudget(descBase: string, tier: LengthBudgetTier): bool
 
 /**
  * R5 runtime substitution — the public entry point. Orchestrates the
- * locked 8-step Strategy-C flow with Strategy-D fallback on any of the
- * F1-F7 failure modes:
+ * Strategy-C flow with Strategy-D fallback on any of the F1-F7
+ * failure modes:
  *
- *   1. Idempotency        — return verbatim if no `{R5_INJECT}` placeholder
- *   2. F1 early-session   — fall back to D when history.length < 2
- *   3. F2 mask secrets    — redact PII / credentials before extraction
- *   4. F5 dedup           — collapse repeated prompts
- *   5. Vocab extraction   — top-N grounded tokens from masked history
- *   6. Step-4.5 filter    — drop banned tokens from the vocab list
- *   7. LLM rewrite        — produce 1-2-line summary (if client provided)
- *   8. F4 length cap      — sentence-boundary truncate or fall back
- *   9. 70-80% rule check  — fall back if summary concentration < 0.7
+ *   1. Idempotency             — return verbatim if no `{R5_INJECT}` placeholder
+ *   2. F1 early-session        — fall back to D when history.length < 2
+ *   3. F2 mask secrets         — redact PII / credentials before extraction
+ *   4. F7 detect + strip       — detect L2 sensitive-action triggers and
+ *                                strip trigger phrases before extraction
+ *   5. F5 repetition + dedup   — compute pre-dedup cross-prompt repetition
+ *                                counts; then dedup verbatim repeats
+ *   6. Vocab extraction        — top-N grounded tokens from stripped/deduped history
+ *   7. Step-4.5 voice filter   — drop banned tokens from the vocab list
+ *   8. LLM rewrite             — produce 1-2-line summary (if client provided),
+ *                                with the repetition list passed as a hint
+ *   9. F4 length cap           — sentence-boundary truncate or fall back
+ *  10. 70-80% concentration    — fall back if summary concentration < 0.7
+ *  11. Substitute placeholder  — fill the {R5_INJECT: ...} slot
+ *  12. F7 path-(a) escalation  — append the safeguard sentence when triggers
+ *                                were detected AND static is L2-clean
+ *  13. Per-set length budget   — fall back to D when the final desc-base
+ *                                exceeds the set's LIGHT/MEDIUM/HEAVY ceilings
  *
  * Contract:
  *   - Never throws — every failure path resolves to a Strategy-D
  *     substitution OR (if no fallback exists for the (signal_type,
  *     register) pair) returns the desc-base verbatim.
  *   - Idempotent on inputs without `{R5_INJECT: ...}`.
+ *
+ * Documented deviations from dev plan §10:
+ *   - §10.6.1 F7 two-tier (a)/(b) — the dev plan treats path (a)
+ *     (escalate via safeguard append) and path (b) (strip L2 trigger
+ *     tokens from vocab) as mutually exclusive. This implementation
+ *     applies (b) ALWAYS (strip trigger phrases before vocab
+ *     extraction) and applies (a) on top when the static set is
+ *     L2-clean. The combined approach was chosen for content-
+ *     sensitivity safety per the private submodule's "Content
+ *     Sensitivity / Security — high-risk by default" rule: a
+ *     sensitive verb must never flow into the LLM rewrite output
+ *     even when the safeguard sentence already covers it elsewhere
+ *     in the desc-base.
+ *   - §10.1 step 3 — the dev plan places the "<2 useful tokens after
+ *     masking → fall back to D" check directly after F2 mask. This
+ *     implementation places it directly after vocab extraction (one
+ *     step later in the flow). Functionally equivalent because
+ *     `extractVocab` operates on the masked content; the check fires
+ *     on the same condition (insufficient meaningful tokens
+ *     surviving the mask).
  */
 export async function injectR5(
   descBase:   string,

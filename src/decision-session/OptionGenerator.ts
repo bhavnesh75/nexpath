@@ -464,6 +464,15 @@ export function validateGeneratedOptions(
  * Returns null only after all adaptation attempts are exhausted; caller falls back to static options.
  * If the embedding step exhausts retries or throws, returns the adapted output as-is.
  * Never throws.
+ *
+ * Signature note (dev plan §10.8 deviation): the dev-plan illustrative
+ * signature is `generateOptionList(content, history, signalType, register)`.
+ * The live function keeps the existing public API
+ * `(content, profile, language, history, context?, client?)` because
+ * stop.ts and all existing tests bind that shape. signalType is derived
+ * from `content.signalType` and register from `profileToRegister(profile)`
+ * inside the function — semantically equivalent to the dev-plan signature
+ * with zero ripple through callers.
  */
 export async function generateOptionList(
   content:  DecisionContent,
