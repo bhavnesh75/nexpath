@@ -1097,16 +1097,55 @@ const ABSENCE_OBSERVABILITY: DecisionContent = {
   question:      'Feature built — how will you know it\'s working?',
   pinchFallback: 'No observability.',
   L1: [
-    { option: 'Review what was just built for observability gaps: identify what this feature does in production that is currently invisible — requests, failures, latency, state changes — and add structured logging for the events that would allow you to diagnose a production incident without SSH access.', descBase: '' },
-    { option: 'Audit what was just built for monitoring coverage: what SLI would you define for this feature, what metrics would you emit, and what alert condition would page someone if this feature degraded silently in production?', descBase: '' },
-    { option: 'Check what was just built for error tracking integration: are failures captured in your error tracking system with enough context — request ID, user ID, stack trace — to diagnose the issue without reproducing it locally?', descBase: '' },
+    {
+      option: 'Review what was just built for observability gaps: identify what this feature does in production that is currently invisible — requests, failures, latency, state changes — and add structured logging for the events that would allow you to diagnose a production incident without SSH access.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: feature implementation. Observability hooks not added in the visible window."}
+Observability for what was just built hasn't been set up — silent failures in production could go undetected.
+Identify invisible production events; add structured logging for diagnosable signals.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit what was just built for monitoring coverage: what SLI would you define for this feature, what metrics would you emit, and what alert condition would page someone if this feature degraded silently in production?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; SLI/metrics/alert design not done."}
+Monitoring coverage hasn't been designed.
+Define SLI + emit metrics + alert condition. Don't fix coverage gaps in this pass.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check what was just built for error tracking integration: are failures captured in your error tracking system with enough context — request ID, user ID, stack trace — to diagnose the issue without reproducing it locally?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature implemented; error-tracker context coverage not verified."}
+Error tracking integration hasn't been verified for diagnostic completeness.
+Per failure path: request ID / user ID / stack trace present? Flag gaps.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What events in what was just built are currently invisible in production? Add structured logging for the ones that would be essential to diagnose a failure.', descBase: '' },
-    { option: 'If this feature broke silently in production tonight, what would you see in your logs and monitoring to detect it? If the answer is "nothing", what needs to be added?', descBase: '' },
+    {
+      option: 'What events in what was just built are currently invisible in production? Add structured logging for the ones that would be essential to diagnose a failure.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; invisible events not enumerated."}
+Lighter: invisible events first. Log the diagnostic-essential ones.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'If this feature broke silently in production tonight, what would you see in your logs and monitoring to detect it? If the answer is "nothing", what needs to be added?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented; silent-break detection not verified."}
+Narrower: silent-break detection — what's already visible, what's missing.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that could fail silently in production with no log entry or alert to detect it?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that could fail silently in production with no log entry or alert to detect it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature implemented."}
+Minimum next step: one silent-fail path with no log/alert.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1573,16 +1612,55 @@ const ABSENCE_ROLLBACK_PLANNING: DecisionContent = {
   question:      'Release pending — rollback plan defined?',
   pinchFallback: 'No rollback plan.',
   L1: [
-    { option: 'Define the rollback procedure for this feature before shipping: identify the steps to revert if the deployment fails, confirm the rollback can be completed within your acceptable downtime window, and verify that database migrations or data changes are reversible.', descBase: '' },
-    { option: 'Audit the rollback readiness of this feature: what happens to data, sessions, and dependent services if this deploy is reverted? Document the rollback steps, assign ownership, and confirm the plan can be executed without live debugging during an incident.', descBase: '' },
-    { option: 'Cross-confirm rollback viability for what was just built: if you rolled back this feature in production right now, what would break, what state would be left in an inconsistent state, and what would need to be cleaned up manually? Address any gaps before shipping.', descBase: '' },
+    {
+      option: 'Define the rollback procedure for this feature before shipping: identify the steps to revert if the deployment fails, confirm the rollback can be completed within your acceptable downtime window, and verify that database migrations or data changes are reversible.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship stage; rollback procedure not authored."}
+A rollback plan for what was just built hasn't been defined.
+Document revert steps + downtime window + migration reversibility.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit the rollback readiness of this feature: what happens to data, sessions, and dependent services if this deploy is reverted? Document the rollback steps, assign ownership, and confirm the plan can be executed without live debugging during an incident.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship; rollback impact on data/sessions/deps not audited."}
+The rollback impact audit hasn't been done.
+Document data/session/dep effects + ownership + executable-under-pressure steps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm rollback viability for what was just built: if you rolled back this feature in production right now, what would break, what state would be left in an inconsistent state, and what would need to be cleaned up manually? Address any gaps before shipping.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship; revert-viability not confirmed."}
+Whether a clean rollback is possible right now hasn't been confirmed.
+Identify what would break + inconsistent-state items + manual cleanup. Address gaps.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What is the rollback procedure if the deployment of this feature fails? Document it before shipping — it should be executable under pressure without needing to invent steps on the fly.', descBase: '' },
-    { option: 'Are there any parts of this feature — database migrations, external API integrations, data format changes — that cannot be cleanly rolled back? Address those before shipping or accept them as known risks.', descBase: '' },
+    {
+      option: 'What is the rollback procedure if the deployment of this feature fails? Document it before shipping — it should be executable under pressure without needing to invent steps on the fly.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship; rollback steps not documented."}
+Lighter: document executable-under-pressure rollback steps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Are there any parts of this feature — database migrations, external API integrations, data format changes — that cannot be cleanly rolled back? Address those before shipping or accept them as known risks.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship; unrollback-able pieces not flagged."}
+Narrower: parts that can't roll back cleanly (migrations, integrations, data formats).
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there a documented rollback plan for this feature that could be executed in production under pressure, or would reverting require improvisation?', descBase: '' },
+    {
+      option: 'Is there a documented rollback plan for this feature that could be executed in production under pressure, or would reverting require improvisation?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship."}
+Minimum next step: rollback plan documented + executable under pressure, or improvisational?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1590,16 +1668,55 @@ const ABSENCE_DEPLOYMENT_PLANNING: DecisionContent = {
   question:      'Release pending — deployment plan confirmed?',
   pinchFallback: 'No deploy plan.',
   L1: [
-    { option: 'Define the deployment plan for this feature before shipping: confirm the target environment configuration, document any environment variables or secrets that need to be provisioned, and verify that the deployment process has been tested outside of production.', descBase: '' },
-    { option: 'Audit the deployment readiness of this feature: are there environment-specific configuration differences between staging and production that could cause a failure, any new environment variables required, or any infrastructure changes needed before this can deploy cleanly?', descBase: '' },
-    { option: 'Cross-confirm deployment readiness for this feature: what does the production environment need to have in place before this deploys successfully — configuration, secrets, database state, external service integrations — and is each of those confirmed and ready?', descBase: '' },
+    {
+      option: 'Define the deployment plan for this feature before shipping: confirm the target environment configuration, document any environment variables or secrets that need to be provisioned, and verify that the deployment process has been tested outside of production.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship stage; deployment plan not authored."}
+A deployment plan hasn't been authored.
+Define target env config + secrets/vars to provision + deploy-tested-outside-prod confirmation.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit the deployment readiness of this feature: are there environment-specific configuration differences between staging and production that could cause a failure, any new environment variables required, or any infrastructure changes needed before this can deploy cleanly?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship; staging-vs-prod diff and infra-change check not done."}
+The deploy-readiness audit hasn't been done.
+Identify staging-vs-prod config differences, new env vars, required infra changes.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm deployment readiness for this feature: what does the production environment need to have in place before this deploys successfully — configuration, secrets, database state, external service integrations — and is each of those confirmed and ready?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Pre-ship; production-prerequisite audit not done."}
+Production prerequisites haven't been cross-confirmed.
+Per prerequisite (config / secrets / DB state / external integrations): confirmed-ready or pending?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What environment configuration does this feature require in production that is not yet confirmed — secrets, environment variables, infrastructure dependencies? Resolve each before shipping.', descBase: '' },
-    { option: 'Has this feature been deployed to a staging environment that mirrors production? If not, what deployment risks are you accepting by shipping without a staging verification?', descBase: '' },
+    {
+      option: 'What environment configuration does this feature require in production that is not yet confirmed — secrets, environment variables, infrastructure dependencies? Resolve each before shipping.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship; prod-config gap not resolved."}
+Lighter: prod config required but not confirmed — secrets, env vars, infra deps. Resolve each.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Has this feature been deployed to a staging environment that mirrors production? If not, what deployment risks are you accepting by shipping without a staging verification?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship; staging verification not done."}
+Narrower: staging-mirror verification status + accepted-risk list if skipped.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there a confirmed deployment plan for this feature, or is the deployment process still undefined and untested outside of development?', descBase: '' },
+    {
+      option: 'Is there a confirmed deployment plan for this feature, or is the deployment process still undefined and untested outside of development?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Pre-ship."}
+Minimum next step: deployment plan confirmed + tested-outside-dev, or undefined?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1607,16 +1724,55 @@ const ABSENCE_DEPENDENCY_MGMT: DecisionContent = {
   question:      'Dependencies added — conflicts and risks reviewed?',
   pinchFallback: 'Dependency risk.',
   L1: [
-    { option: 'Review the new dependencies introduced in what was just built: check for version conflicts with existing packages, known security vulnerabilities in the chosen version, and whether a more stable or widely-adopted alternative exists for the same purpose.', descBase: '' },
-    { option: 'Audit the packages added in what was just built for dependency health: are the chosen versions the latest stable releases, do any have known CVEs in the installed version, and are the licences compatible with this project\'s licence requirements?', descBase: '' },
-    { option: 'Cross-confirm the dependency decisions made in what was just built: for each new package, verify it is actively maintained, has adequate documentation, does not introduce transitive dependencies that conflict with the existing dependency tree, and is not a single-maintainer package with no succession plan.', descBase: '' },
+    {
+      option: 'Review the new dependencies introduced in what was just built: check for version conflicts with existing packages, known security vulnerabilities in the chosen version, and whether a more stable or widely-adopted alternative exists for the same purpose.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: new dependencies added. Conflict/CVE/alternative audit not done."}
+New dependencies haven't been audited for conflicts/CVEs/alternatives.
+Per package: version-conflict / known CVE / better alternative available?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit the packages added in what was just built for dependency health: are the chosen versions the latest stable releases, do any have known CVEs in the installed version, and are the licences compatible with this project\'s licence requirements?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Dependencies added; health audit not done."}
+Dependency health hasn't been audited.
+Per package: latest-stable / CVE-clean / licence-compatible.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Cross-confirm the dependency decisions made in what was just built: for each new package, verify it is actively maintained, has adequate documentation, does not introduce transitive dependencies that conflict with the existing dependency tree, and is not a single-maintainer package with no succession plan.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Dependencies added; maintenance/transitive-deps/bus-factor not cross-confirmed."}
+The dependency decision cross-confirmation hasn't been done.
+Per package: maintenance status / docs / transitive conflicts / bus-factor risk.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Check the new packages added in what was just built for version conflicts and known vulnerabilities — run a dependency audit and confirm there are no high-severity issues before shipping.', descBase: '' },
-    { option: 'Is there any package added in what was just built that is unmaintained, has an incompatible licence, or pulls in a transitive dependency that conflicts with what is already installed?', descBase: '' },
+    {
+      option: 'Check the new packages added in what was just built for version conflicts and known vulnerabilities — run a dependency audit and confirm there are no high-severity issues before shipping.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Dependencies added; npm/pip/cargo audit not run."}
+Lighter: run a dependency audit; confirm zero high-severity issues.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there any package added in what was just built that is unmaintained, has an incompatible licence, or pulls in a transitive dependency that conflicts with what is already installed?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Dependencies added; risk audit not done."}
+Narrower: any package unmaintained / licence-incompatible / transitive-conflict.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Have the new packages added in what was just built been checked for version conflicts, known security vulnerabilities, and licence compatibility?', descBase: '' },
+    {
+      option: 'Have the new packages added in what was just built been checked for version conflicts, known security vulnerabilities, and licence compatibility?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Dependencies added."}
+Minimum next step: conflict / CVE / licence check on new packages.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2155,16 +2311,55 @@ const ABSENCE_OBSERVABILITY_CASUAL: DecisionContent = {
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
   L1: [
-    { option: 'Look at what was just built — if it breaks in production tonight, what would you see in your logs? If the answer is "not much", add logging for the key events: requests coming in, failures happening, anything that changed state.', descBase: '' },
-    { option: 'Check what was just built for blind spots in production — what does it do that you currently can\'t see? Add logging or metrics for the things you\'d want to know about when something goes wrong.', descBase: '' },
-    { option: 'What\'s the first thing you\'d check if what was just built stopped working in production? Is that thing actually observable right now, or would you be flying blind?', descBase: '' },
+    {
+      option: 'Look at what was just built — if it breaks in production tonight, what would you see in your logs? If the answer is "not much", add logging for the key events: requests coming in, failures happening, anything that changed state.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something but I haven't added any logging or monitoring yet."}
+Production visibility for what was just built hasn't been set up.
+Identify key events (requests, failures, state changes); add structured logs.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check what was just built for blind spots in production — what does it do that you currently can\'t see? Add logging or metrics for the things you\'d want to know about when something goes wrong.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; blind-spot list not made."}
+The production blind-spot audit hasn't been done.
+Spot what's invisible; add logs/metrics for diagnosable signals.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What\'s the first thing you\'d check if what was just built stopped working in production? Is that thing actually observable right now, or would you be flying blind?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; first-check observability not verified."}
+The "first thing I'd check" observability path hasn't been verified.
+Identify what I'd check first; confirm it's actually observable.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What would you see in your logs if what was just built failed in production right now? If not much, add logging for the key failure points.', descBase: '' },
-    { option: 'Is there anything in what was just built that could break silently in production without triggering an alert or showing up in logs?', descBase: '' },
+    {
+      option: 'What would you see in your logs if what was just built failed in production right now? If not much, add logging for the key failure points.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; failure-log coverage unclear."}
+Lighter: what would I see in logs on failure? Add logging where missing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in what was just built that could break silently in production without triggering an alert or showing up in logs?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; silent-fail audit not done."}
+Narrower: silent-break paths with no alert/log trace.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'If what was just built broke in production, would you be able to detect it from logs or monitoring? What\'s missing?', descBase: '' },
+    {
+      option: 'If what was just built broke in production, would you be able to detect it from logs or monitoring? What\'s missing?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built."}
+Minimum next step: detection coverage from logs/monitoring; what's missing.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2630,16 +2825,55 @@ const ABSENCE_ROLLBACK_PLANNING_CASUAL: DecisionContent = {
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
   L1: [
-    { option: 'Before you ship this feature, work out what you\'d do if the deployment goes wrong — what\'s the rollback plan, how long would it take, and is there anything in this feature that can\'t be undone cleanly?', descBase: '' },
-    { option: 'Walk through what would happen if you had to roll back this feature in production tonight — what steps would you follow, what could go wrong during the rollback, and is there anything left in an inconsistent state if you do?', descBase: '' },
-    { option: 'Check the rollback risk in this feature — any database migrations, external integrations, or data changes that would be a pain to undo? Flag those before shipping and decide if you\'re okay with them.', descBase: '' },
+    {
+      option: 'Before you ship this feature, work out what you\'d do if the deployment goes wrong — what\'s the rollback plan, how long would it take, and is there anything in this feature that can\'t be undone cleanly?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I'm about to ship but I haven't worked out what to do if the deploy goes wrong."}
+A rollback plan hasn't been worked out.
+Define steps + time-to-revert + anything that can't be cleanly undone.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through what would happen if you had to roll back this feature in production tonight — what steps would you follow, what could go wrong during the rollback, and is there anything left in an inconsistent state if you do?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; haven't walked through what a rollback would actually do."}
+The rollback walkthrough hasn't been done.
+Walk through: steps / what could go wrong / inconsistent-state risks.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check the rollback risk in this feature — any database migrations, external integrations, or data changes that would be a pain to undo? Flag those before shipping and decide if you\'re okay with them.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; hard-to-undo pieces not flagged."}
+The hard-to-undo audit hasn't been done.
+Flag migrations / integrations / data changes; decide acceptance per item.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What\'s the rollback plan for this feature if the deployment goes sideways? Write it down — it should be something you could follow in a panic without thinking.', descBase: '' },
-    { option: 'Is there anything in this feature that can\'t be rolled back cleanly? Know that before you ship.', descBase: '' },
+    {
+      option: 'What\'s the rollback plan for this feature if the deployment goes sideways? Write it down — it should be something you could follow in a panic without thinking.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; rollback plan not written."}
+Lighter: write down the executable-in-panic rollback plan.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything in this feature that can\'t be rolled back cleanly? Know that before you ship.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; clean-rollback check not done."}
+Narrower: anything that can't roll back cleanly.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you have a plan for rolling back this feature if the deployment fails, or would you be making it up as you go?', descBase: '' },
+    {
+      option: 'Do you have a plan for rolling back this feature if the deployment fails, or would you be making it up as you go?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship."}
+Minimum next step: rollback plan documented or improvisational?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2647,16 +2881,55 @@ const ABSENCE_DEPLOYMENT_PLANNING_CASUAL: DecisionContent = {
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
   L1: [
-    { option: 'Before shipping this feature, check: do you actually have a deployment plan? What environment config does it need, what secrets need to be in place, and has anything been tested outside your local setup?', descBase: '' },
-    { option: 'Walk through how this feature is actually going to get deployed — what\'s the process, what needs to be configured in the production environment, and is there anything that only exists in your local config that hasn\'t been provisioned yet?', descBase: '' },
-    { option: 'Check the gap between where this feature runs now and what production actually needs — are there environment variables, secrets, or infrastructure pieces that aren\'t set up yet? Sort those out before shipping.', descBase: '' },
+    {
+      option: 'Before shipping this feature, check: do you actually have a deployment plan? What environment config does it need, what secrets need to be in place, and has anything been tested outside your local setup?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I'm about to ship but I haven't actually checked if there's a deployment plan."}
+A deployment plan hasn't been confirmed.
+Spot env config + secrets + outside-local testing status.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk through how this feature is actually going to get deployed — what\'s the process, what needs to be configured in the production environment, and is there anything that only exists in your local config that hasn\'t been provisioned yet?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; deploy-process walkthrough not done."}
+The deployment process walkthrough hasn't been done.
+Walk through process / prod env requirements / local-only-not-provisioned gaps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check the gap between where this feature runs now and what production actually needs — are there environment variables, secrets, or infrastructure pieces that aren\'t set up yet? Sort those out before shipping.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; local-to-prod gap not enumerated."}
+The local-to-prod gap hasn't been enumerated.
+Spot env vars / secrets / infra missing in prod; resolve each.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What does the production environment need to have in place before this feature can deploy cleanly? Confirm each of those is actually ready.', descBase: '' },
-    { option: 'Has this feature been tested anywhere other than your local machine? If it goes straight to production, what are you not sure about?', descBase: '' },
+    {
+      option: 'What does the production environment need to have in place before this feature can deploy cleanly? Confirm each of those is actually ready.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; prod-readiness items not confirmed."}
+Lighter: prod prerequisites — confirm each.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Has this feature been tested anywhere other than your local machine? If it goes straight to production, what are you not sure about?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; only-local-tested risk unclear."}
+Narrower: tested outside local? If straight-to-prod, accepted risks.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there a deployment plan for this feature, or are you planning to figure it out when you push?', descBase: '' },
+    {
+      option: 'Is there a deployment plan for this feature, or are you planning to figure it out when you push?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship."}
+Minimum next step: deploy plan exists, or figure-it-out-at-push?
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -2664,16 +2937,55 @@ const ABSENCE_DEPENDENCY_MGMT_CASUAL: DecisionContent = {
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
   L1: [
-    { option: 'Check the packages added in what was just built — do they conflict with anything already installed, is there a security issue with the version you picked, and is there a better or more popular alternative you didn\'t consider?', descBase: '' },
-    { option: 'Look at the new dependencies in what was just built: are they actively maintained, is the version you\'re using the latest stable one, and do they pull in anything that clashes with what\'s already in the project?', descBase: '' },
-    { option: 'Run a quick audit on the packages added in what was just built — any known CVEs in the version you\'re using, licence issues that could cause problems, or extra packages they pull in that don\'t play nice with what\'s already there?', descBase: '' },
+    {
+      option: 'Check the packages added in what was just built — do they conflict with anything already installed, is there a security issue with the version you picked, and is there a better or more popular alternative you didn\'t consider?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I installed some packages but I haven't checked them for issues."}
+New packages haven't been checked.
+Conflicts / security issues / better alternatives.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Look at the new dependencies in what was just built: are they actively maintained, is the version you\'re using the latest stable one, and do they pull in anything that clashes with what\'s already in the project?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Packages added; maintenance/version/clash check not done."}
+The maintenance + version + transitive-clash check hasn't been done.
+Spot unmaintained / outdated / clashing pulled-in deps.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Run a quick audit on the packages added in what was just built — any known CVEs in the version you\'re using, licence issues that could cause problems, or extra packages they pull in that don\'t play nice with what\'s already there?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Packages added; CVE/licence/transitive audit not done."}
+The quick audit hasn't been run.
+Run it; spot CVEs / licence issues / nasty transitive pulls.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Have the packages added in what was just built been checked for conflicts and vulnerabilities? Run a dependency audit and flag anything suspicious.', descBase: '' },
-    { option: 'Is there any package added in what was just built that looks risky — old version, no maintenance, licence mismatch, or something that clashes with existing dependencies?', descBase: '' },
+    {
+      option: 'Have the packages added in what was just built been checked for conflicts and vulnerabilities? Run a dependency audit and flag anything suspicious.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Packages added; audit not run."}
+Lighter: run audit, flag suspicious results.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there any package added in what was just built that looks risky — old version, no maintenance, licence mismatch, or something that clashes with existing dependencies?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Packages added; risk spot-check not done."}
+Narrower: any risky package — old / unmaintained / licence-mismatched / clashing.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Have the new packages added in what was just built been checked for conflicts, vulnerabilities, or licence issues?', descBase: '' },
+    {
+      option: 'Have the new packages added in what was just built been checked for conflicts, vulnerabilities, or licence issues?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Packages added."}
+Minimum next step: conflicts / vulnerabilities / licence issues on new packages.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3240,16 +3552,55 @@ const ABSENCE_ENV_AND_SECRETS: DecisionContent = {
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
-    { option: 'Audit the secrets storage pattern for what was just built: identify every credential, API key, and environment-specific value used — confirm none are hardcoded in source, all are loaded from environment variables, and the variable names are documented in a `.env.example` file.', descBase: '' },
-    { option: 'Review the environment configuration for this feature: confirm a `.env.example` exists with all required keys (values redacted), that `.env` is in `.gitignore`, and that any secret loaded at runtime has a clear failure path if the variable is missing.', descBase: '' },
-    { option: 'Define the secret rotation plan for this project: for each credential in use, identify who holds it, how it gets rotated if compromised, and whether the current implementation supports hot-swapping secrets without a redeploy.', descBase: '' },
+    {
+      option: 'Audit the secrets storage pattern for what was just built: identify every credential, API key, and environment-specific value used — confirm none are hardcoded in source, all are loaded from environment variables, and the variable names are documented in a `.env.example` file.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: feature with credential/API-key usage. Storage pattern not audited."}
+The secrets storage pattern hasn't been audited.
+Per credential: not-hardcoded / env-loaded / documented in \`.env.example\`.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Review the environment configuration for this feature: confirm a `.env.example` exists with all required keys (values redacted), that `.env` is in `.gitignore`, and that any secret loaded at runtime has a clear failure path if the variable is missing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Feature with env vars; .env.example / .gitignore / failure-path not verified."}
+The env-config hygiene hasn't been verified.
+Confirm: \`.env.example\` complete / \`.env\` git-ignored / missing-var failure path.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Define the secret rotation plan for this project: for each credential in use, identify who holds it, how it gets rotated if compromised, and whether the current implementation supports hot-swapping secrets without a redeploy.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Project uses secrets; rotation plan not authored."}
+A secret rotation plan hasn't been authored.
+Per credential: holder / rotation procedure / hot-swap-support.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Are there any hardcoded credentials, API keys, or secrets in what was just built — and if so, what is the remediation plan before this reaches production?', descBase: '' },
-    { option: 'Is there a `.env.example` that documents every environment variable required by this feature, and is the actual `.env` file excluded from source control?', descBase: '' },
+    {
+      option: 'Are there any hardcoded credentials, API keys, or secrets in what was just built — and if so, what is the remediation plan before this reaches production?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature with secrets; hardcoded check not done."}
+Lighter: hardcoded credentials in source + remediation plan if so.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there a `.env.example` that documents every environment variable required by this feature, and is the actual `.env` file excluded from source control?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature with env vars; example file + git exclusion not verified."}
+Narrower: \`.env.example\` documents all required vars + \`.env\` excluded from VCS.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What is the most sensitive credential used by this feature — and where is it currently stored?', descBase: '' },
+    {
+      option: 'What is the most sensitive credential used by this feature — and where is it currently stored?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Feature with credentials."}
+Minimum next step: most sensitive credential identified + storage location confirmed.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3315,16 +3666,55 @@ const ABSENCE_CI_PIPELINE: DecisionContent = {
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
-    { option: 'Confirm automated test execution is configured for this project: check that a CI workflow (e.g. GitHub Actions) runs the full test suite on every pull request and push to main — verify the workflow file exists, the test command is correct, and test failures block merges.', descBase: '' },
-    { option: 'Review the CI build verification for this feature: confirm that a failing build — compilation errors, type errors, or broken imports — is caught automatically before code reaches the main branch, and that the pipeline status is visible on every pull request.', descBase: '' },
-    { option: 'Audit the CI pipeline coverage for what was just built: list every check currently configured (tests, linting, type-checking, security scans), confirm each is wired up correctly, and identify any verification that runs locally but is missing from the pipeline.', descBase: '' },
+    {
+      option: 'Confirm automated test execution is configured for this project: check that a CI workflow (e.g. GitHub Actions) runs the full test suite on every pull request and push to main — verify the workflow file exists, the test command is correct, and test failures block merges.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Project moving toward release; automated test execution config not verified."}
+Automated test execution on PR/main hasn't been confirmed.
+Verify: workflow file present / test command correct / failures block merges.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Review the CI build verification for this feature: confirm that a failing build — compilation errors, type errors, or broken imports — is caught automatically before code reaches the main branch, and that the pipeline status is visible on every pull request.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "CI present; build-verification scope not confirmed."}
+CI build-verification coverage hasn't been confirmed.
+Confirm: compile / type errors / broken imports caught before main + PR-visible status.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Audit the CI pipeline coverage for what was just built: list every check currently configured (tests, linting, type-checking, security scans), confirm each is wired up correctly, and identify any verification that runs locally but is missing from the pipeline.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "CI present; full check inventory not audited."}
+CI pipeline coverage hasn't been fully audited.
+List configured checks; verify each wired correctly; spot local-only-not-in-CI gaps.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does this project have a CI pipeline that automatically runs its tests on every pull request — and does a test failure block a merge?', descBase: '' },
-    { option: 'What does the CI pipeline for this feature actually verify — and is there anything checked locally during development that is not running automatically in CI?', descBase: '' },
+    {
+      option: 'Does this project have a CI pipeline that automatically runs its tests on every pull request — and does a test failure block a merge?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Project status; CI test-block check not done."}
+Lighter: CI runs tests on PRs + failures block merge.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What does the CI pipeline for this feature actually verify — and is there anything checked locally during development that is not running automatically in CI?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "CI present; local-only-gap not enumerated."}
+Narrower: CI verification scope + local-only-but-not-CI items.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What is the most important automated check missing from the CI pipeline for this project right now?', descBase: '' },
+    {
+      option: 'What is the most important automated check missing from the CI pipeline for this project right now?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "Project status."}
+Minimum next step: most important missing automated CI check.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3332,16 +3722,55 @@ const ABSENCE_RATE_LIMITING: DecisionContent = {
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
-    { option: 'Define the rate limiting strategy for what was just built: specify the throttle limits per user, per API key, or per IP address — confirm which identifier is used for tracking, what the limit is (requests per second or per minute), and what happens when the limit is exceeded.', descBase: '' },
-    { option: 'Design the throttle response for this feature: when a caller exceeds the rate limit, confirm the API returns a 429 status with a `Retry-After` header or equivalent signal — and document the expected backoff behaviour for clients.', descBase: '' },
-    { option: 'Establish the quota model for this project: decide whether rate limits are applied per second, per minute, or per hour, whether limits differ by user tier or API key, and whether the throttle resets on a rolling window or a fixed interval.', descBase: '' },
+    {
+      option: 'Define the rate limiting strategy for what was just built: specify the throttle limits per user, per API key, or per IP address — confirm which identifier is used for tracking, what the limit is (requests per second or per minute), and what happens when the limit is exceeded.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "Recent prompts: API endpoint built. Rate limiting strategy not defined."}
+A rate limiting strategy hasn't been defined.
+Specify: identifier (user / key / IP) + limit (rps / rpm) + over-limit behaviour.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Design the throttle response for this feature: when a caller exceeds the rate limit, confirm the API returns a 429 status with a `Retry-After` header or equivalent signal — and document the expected backoff behaviour for clients.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "API present; throttle response design not done."}
+The throttle response hasn't been designed.
+Confirm: 429 + Retry-After + documented client backoff.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Establish the quota model for this project: decide whether rate limits are applied per second, per minute, or per hour, whether limits differ by user tier or API key, and whether the throttle resets on a rolling window or a fixed interval.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines — "API present; quota model not established."}
+The quota model hasn't been established.
+Decide: time window (s/m/h) / per-tier differentiation / rolling-vs-fixed reset.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What is the per-user or per-key request limit for what was just built — and is there any middleware or layer currently enforcing that limit?', descBase: '' },
-    { option: 'What response does this feature return when a caller is throttled — and does the response include enough information for the client to know when to retry?', descBase: '' },
+    {
+      option: 'What is the per-user or per-key request limit for what was just built — and is there any middleware or layer currently enforcing that limit?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present; per-id limit + enforcement unclear."}
+Lighter: per-user/key limit + middleware enforcing it.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What response does this feature return when a caller is throttled — and does the response include enough information for the client to know when to retry?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present; throttle-response detail unclear."}
+Narrower: throttle response + retry-information completeness.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What is the most likely way this feature gets abused through excessive requests — and is there any throttle mechanism currently in place to prevent it?', descBase: '' },
+    {
+      option: 'What is the most likely way this feature gets abused through excessive requests — and is there any throttle mechanism currently in place to prevent it?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line — "API present."}
+Minimum next step: most likely abuse path + current throttle mechanism status.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3550,16 +3979,55 @@ const ABSENCE_ENV_AND_SECRETS_CASUAL: DecisionContent = {
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
-    { option: 'Take a look at what was just built and check whether any API keys, passwords, or credentials are written directly into the code — if so, move them out now and load them from a separate config file instead.', descBase: '' },
-    { option: 'Go through the environment setup for this feature — is there a `.env.example` file that lists every variable the app needs to run? Does the real `.env` file stay out of the repo?', descBase: '' },
-    { option: 'Think about what happens if one of the secrets used by this project gets leaked or needs to be changed — how would you swap it out, and does the current setup make that easy or painful?', descBase: '' },
+    {
+      option: 'Take a look at what was just built and check whether any API keys, passwords, or credentials are written directly into the code — if so, move them out now and load them from a separate config file instead.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something with credentials but I haven't checked if anything is hardcoded."}
+The hardcoded-credentials check hasn't been done.
+Find any inline API keys / passwords / credentials; load from config instead.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through the environment setup for this feature — is there a `.env.example` file that lists every variable the app needs to run? Does the real `.env` file stay out of the repo?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Feature has env vars; setup hygiene not checked."}
+The env-setup hygiene hasn't been verified.
+Confirm: \`.env.example\` lists all vars + real \`.env\` out of repo.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Think about what happens if one of the secrets used by this project gets leaked or needs to be changed — how would you swap it out, and does the current setup make that easy or painful?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Feature uses secrets; rotation hasn't been thought through."}
+Secret-rotation feasibility hasn't been considered.
+Walk through: how to swap a compromised secret + how painful the current setup makes it.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that has a real password, API key, or token written directly into the code rather than loaded from a config file?', descBase: '' },
-    { option: 'What happens in this feature if a required environment variable isn\'t set — does something break immediately with a clear message, or does it fail in a confusing way later?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that has a real password, API key, or token written directly into the code rather than loaded from a config file?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature uses credentials; inline check not done."}
+Lighter: any real credentials inline in source?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What happens in this feature if a required environment variable isn\'t set — does something break immediately with a clear message, or does it fail in a confusing way later?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature uses env vars; missing-var failure mode unclear."}
+Narrower: missing-env-var failure path — clear immediate error or confusing later failure?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Where are the passwords and API keys for this feature sitting right now — are they safe, or is there something that needs to move?', descBase: '' },
+    {
+      option: 'Where are the passwords and API keys for this feature sitting right now — are they safe, or is there something that needs to move?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature uses credentials."}
+Minimum next step: where credentials sit + safe-vs-needs-moving verdict.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3625,16 +4093,55 @@ const ABSENCE_CI_PIPELINE_CASUAL: DecisionContent = {
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
-    { option: 'Take a look at whether this project has something set up to automatically run the tests whenever code is pushed — if not, setting up a simple GitHub Actions workflow now means you catch failures before they reach the main branch.', descBase: '' },
-    { option: 'Go through what a CI run actually does for this feature — when someone pushes code, does it automatically run the tests and stop a bad merge if something fails?', descBase: '' },
-    { option: 'Think about what was just built and whether the CI pipeline is actually checking everything it should — are the tests running, is the build being verified, and is anything important only being checked locally but not automatically?', descBase: '' },
+    {
+      option: 'Take a look at whether this project has something set up to automatically run the tests whenever code is pushed — if not, setting up a simple GitHub Actions workflow now means you catch failures before they reach the main branch.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been pushing code but I'm not sure if there's a CI workflow running tests."}
+Automated CI test execution hasn't been verified.
+Check; if missing, set up a simple GH Actions workflow to catch failures pre-main.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through what a CI run actually does for this feature — when someone pushes code, does it automatically run the tests and stop a bad merge if something fails?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "CI exists; what-it-does walkthrough not done."}
+The CI walkthrough hasn't been done.
+Walk through: tests run on push + bad-merge block on failure?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Think about what was just built and whether the CI pipeline is actually checking everything it should — are the tests running, is the build being verified, and is anything important only being checked locally but not automatically?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "CI exists; coverage gaps not enumerated."}
+CI coverage hasn't been checked against what's needed.
+Tests / build / local-only-but-should-be-automated items.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does this project run its tests automatically whenever code is pushed — and does it stop a bad merge if the tests fail?', descBase: '' },
-    { option: 'Is there anything about this feature that gets checked by hand during development but isn\'t running automatically in CI — and should it be?', descBase: '' },
+    {
+      option: 'Does this project run its tests automatically whenever code is pushed — and does it stop a bad merge if the tests fail?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Project; auto-test-on-push unclear."}
+Lighter: CI runs tests on push + blocks bad merge?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Is there anything about this feature that gets checked by hand during development but isn\'t running automatically in CI — and should it be?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature; local-only-checks not promoted to CI."}
+Narrower: hand-checked locally but not in CI; should it be?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s the most important thing the CI pipeline should be catching for this project that it isn\'t catching right now?', descBase: '' },
+    {
+      option: 'What\'s the most important thing the CI pipeline should be catching for this project that it isn\'t catching right now?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Project."}
+Minimum next step: most important uncaught-in-CI thing.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -3642,16 +4149,55 @@ const ABSENCE_RATE_LIMITING_CASUAL: DecisionContent = {
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
-    { option: 'Take a look at what was just built and think about what happens if someone calls this endpoint way too many times in a short period — is there anything stopping them from doing that, and if not, what would happen to the app?', descBase: '' },
-    { option: 'Think about how this feature handles someone who keeps hammering the API — what does it tell them when they\'ve made too many requests, and does it give them enough info to know when to try again?', descBase: '' },
-    { option: 'Go through the rate limiting design for this project — how many requests does a user or API key get before they\'re throttled, does the limit reset every minute or every hour, and does it work the same way for everyone?', descBase: '' },
+    {
+      option: 'Take a look at what was just built and think about what happens if someone calls this endpoint way too many times in a short period — is there anything stopping them from doing that, and if not, what would happen to the app?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built an API endpoint but I haven't added any rate limiting."}
+Rate limiting hasn't been added.
+Walk through abuse path; identify what'd happen to the app under hammer-traffic.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Think about how this feature handles someone who keeps hammering the API — what does it tell them when they\'ve made too many requests, and does it give them enough info to know when to try again?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API present; over-limit response not designed."}
+The over-limit response hasn't been designed.
+Throttle response content + retry-info sufficiency.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through the rate limiting design for this project — how many requests does a user or API key get before they\'re throttled, does the limit reset every minute or every hour, and does it work the same way for everyone?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API present; quota model not chosen."}
+The quota model hasn't been chosen.
+Limit per id / reset window / per-tier differentiation.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that prevents a single user or caller from hitting the endpoint too many times — and if not, is that something that needs to be added?', descBase: '' },
-    { option: 'What does this feature say back to someone who\'s sent too many requests — do they get a useful response that tells them when they can try again?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that prevents a single user or caller from hitting the endpoint too many times — and if not, is that something that needs to be added?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present; per-user throttle status unclear."}
+Lighter: any single-caller throttle present + needs-adding decision if not.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What does this feature say back to someone who\'s sent too many requests — do they get a useful response that tells them when they can try again?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present; over-limit response not verified."}
+Narrower: throttle response + retry-when-info.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s the most realistic way this feature gets overwhelmed by too many requests — and is there anything in place right now to prevent that?', descBase: '' },
+    {
+      option: 'What\'s the most realistic way this feature gets overwhelmed by too many requests — and is there anything in place right now to prevent that?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present."}
+Minimum next step: most realistic overwhelm path + current prevention.
+{R4_CLOSE}`,
+    },
   ],
 };
 

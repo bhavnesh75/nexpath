@@ -613,14 +613,39 @@ export const ABSENCE_OBSERVABILITY_BEGINNER: DecisionContent = {
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
   L1: [
-    { option: '1. Think about what was just built running in the real world — if it stopped working, how would you find out?\n2. Share with me: is there anything that records what it\'s doing, or would it just fail without warning?\n3. Then tell me: what\'s the most important thing to log so you\'d know it\'s working?', descBase: '' },
-    { option: 'Walk me through what was just built and tell me — if something went wrong when real users were using it, would you get any warning, or would you find out when users complained? Share what you find with me.', descBase: '' },
+    {
+      option: '1. Think about what was just built running in the real world — if it stopped working, how would you find out?\n2. Share with me: is there anything that records what it\'s doing, or would it just fail without warning?\n3. Then tell me: what\'s the most important thing to log so you\'d know it\'s working?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built a feature but I haven't set up anything to tell me when it breaks."}
+Production-failure detection hasn't been set up.
+Walk me through it: how would I find out if it stops working, is there any logging, what's most important to log?
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through what was just built and tell me — if something went wrong when real users were using it, would you get any warning, or would you find out when users complained? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Built it; warning system not set up."}
+Same moment, simpler: would I get a warning on user-facing failure, or find out via complaint?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in what was just built that could stop working without you noticing? Share with me what would help you detect that.', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that could stop working without you noticing? Share with me what would help you detect that.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built; silent-fail detection unclear."}
+Lighter: silent-fail risk + what'd detect it.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything in what was just built that could fail silently in production without triggering a log entry or alert?', descBase: '' },
+    {
+      option: 'Is there anything in what was just built that could fail silently in production without triggering a log entry or alert?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Built."}
+Minimum next step: silent-fail-without-trace risk.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -958,14 +983,39 @@ export const ABSENCE_ROLLBACK_PLANNING_BEGINNER: DecisionContent = {
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
   L1: [
-    { option: '1. Think about what would happen if this feature caused a problem when it went live.\n2. Share with me: what would you do to undo the deployment if something went wrong?\n3. Then check: is there anything in this feature that would be hard to reverse once it\'s live?', descBase: '' },
-    { option: 'Walk me through what you\'d do if this feature broke in production right after shipping — would you know how to roll it back, or would you need to figure it out under pressure? Share your plan with me.', descBase: '' },
+    {
+      option: '1. Think about what would happen if this feature caused a problem when it went live.\n2. Share with me: what would you do to undo the deployment if something went wrong?\n3. Then check: is there anything in this feature that would be hard to reverse once it\'s live?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I'm about to ship but I haven't thought about what to do if things go wrong."}
+A rollback plan hasn't been thought through.
+Walk me through it: live-failure scenario, undo procedure, hard-to-reverse pieces.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through what you\'d do if this feature broke in production right after shipping — would you know how to roll it back, or would you need to figure it out under pressure? Share your plan with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; rollback procedure not known."}
+Same moment, simpler: rollback procedure known or figure-out-under-pressure?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there a plan for what to do if this feature causes a problem after it\'s deployed? Share it with me before we ship.', descBase: '' },
+    {
+      option: 'Is there a plan for what to do if this feature causes a problem after it\'s deployed? Share it with me before we ship.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; post-deploy-problem plan unclear."}
+Lighter: post-deploy-problem plan exists?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you know what you\'d do to roll back this feature if something went wrong after shipping?', descBase: '' },
+    {
+      option: 'Do you know what you\'d do to roll back this feature if something went wrong after shipping?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship."}
+Minimum next step: rollback procedure known.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -973,14 +1023,39 @@ export const ABSENCE_DEPLOYMENT_PLANNING_BEGINNER: DecisionContent = {
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
   L1: [
-    { option: '1. Think about how this feature is going to get from your computer to where users will use it.\n2. Share with me: is there a plan for that, or is it still not figured out?\n3. Then check: is there anything the live environment needs that isn\'t set up yet — like settings or secret keys?', descBase: '' },
-    { option: 'Walk me through how this feature would actually get deployed — what are the steps, and is there anything that needs to be set up in the live environment before it\'ll work? Share what you find with me.', descBase: '' },
+    {
+      option: '1. Think about how this feature is going to get from your computer to where users will use it.\n2. Share with me: is there a plan for that, or is it still not figured out?\n3. Then check: is there anything the live environment needs that isn\'t set up yet — like settings or secret keys?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built something but I haven't figured out how it'll actually get to users."}
+The deploy-to-users path hasn't been figured out.
+Walk me through it: deploy plan, missing live-env pieces (settings, secrets).
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through how this feature would actually get deployed — what are the steps, and is there anything that needs to be set up in the live environment before it\'ll work? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Pre-ship; deploy steps unclear."}
+Same moment, simpler: deploy steps + live-env prerequisites.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there a plan for how this feature gets deployed to where real users will use it? Share it with me so we can check if anything\'s missing.', descBase: '' },
+    {
+      option: 'Is there a plan for how this feature gets deployed to where real users will use it? Share it with me so we can check if anything\'s missing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship; deploy plan unclear."}
+Lighter: deploy plan exists?
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Do you know how this feature is going to be deployed, or is the deployment still not planned out?', descBase: '' },
+    {
+      option: 'Do you know how this feature is going to be deployed, or is the deployment still not planned out?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Pre-ship."}
+Minimum next step: deployment planned or undefined.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -988,14 +1063,39 @@ export const ABSENCE_DEPENDENCY_MGMT_BEGINNER: DecisionContent = {
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
   L1: [
-    { option: '1. Look at the new packages that were added while building this feature.\n2. Share with me: do any of them have known problems, or did you just install them because they looked like what you needed?\n3. Then check: do they work alongside everything else that\'s already installed, or could they cause a conflict?', descBase: '' },
-    { option: 'Walk me through the packages added in what was just built — are they the right ones for the job, and have you checked if there are any known problems with the versions you installed? Share what you find with me.', descBase: '' },
+    {
+      option: '1. Look at the new packages that were added while building this feature.\n2. Share with me: do any of them have known problems, or did you just install them because they looked like what you needed?\n3. Then check: do they work alongside everything else that\'s already installed, or could they cause a conflict?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I installed some packages while building this but I didn't check them for problems."}
+The new-package check hasn't been done.
+Walk me through it: known-problem audit + conflict-with-existing check.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Walk me through the packages added in what was just built — are they the right ones for the job, and have you checked if there are any known problems with the versions you installed? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Packages added; right-fit + known-problem check not done."}
+Same moment, simpler: right-fit for job + known-problem check on installed versions.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything about the packages added in what was just built that could cause a problem — like a conflict with existing packages or a known security issue? Share what you find with me.', descBase: '' },
+    {
+      option: 'Is there anything about the packages added in what was just built that could cause a problem — like a conflict with existing packages or a known security issue? Share what you find with me.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Packages added; problem-screen not done."}
+Lighter: conflict or known-security-issue screen.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Have the new packages added in what was just built been checked to make sure they don\'t cause any conflicts or known issues?', descBase: '' },
+    {
+      option: 'Have the new packages added in what was just built been checked to make sure they don\'t cause any conflicts or known issues?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Packages added."}
+Minimum next step: conflicts or known-issues on new packages.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1575,14 +1675,39 @@ export const ABSENCE_ENV_AND_SECRETS_BEGINNER: DecisionContent = {
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
-    { option: '1. Go through what was just built and check — are any passwords, API keys, or other secrets written directly in the code? 2. If they are, those need to be moved to a separate `.env` file. 3. Share what you find with me before we continue.', descBase: '' },
-    { option: 'Check whether this feature has a `.env.example` file that lists every secret or config value it needs to run — without the real values. Share what you find with me before we move on.', descBase: '' },
+    {
+      option: '1. Go through what was just built and check — are any passwords, API keys, or other secrets written directly in the code? 2. If they are, those need to be moved to a separate `.env` file. 3. Share what you find with me before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I used some passwords and API keys while building but I haven't checked if they're hardcoded."}
+The hardcoded-secrets check hasn't been done.
+Walk me through it: find inline secrets + move to \`.env\` + share what's found.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check whether this feature has a `.env.example` file that lists every secret or config value it needs to run — without the real values. Share what you find with me before we move on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Feature uses env vars; .env.example status unclear."}
+Same moment, simpler: \`.env.example\` lists every required secret/config?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there a password, API key, or any other secret in what was just built that\'s written directly into the code? Tell me what it is and we\'ll figure out how to move it somewhere safe.', descBase: '' },
+    {
+      option: 'Is there a password, API key, or any other secret in what was just built that\'s written directly into the code? Tell me what it is and we\'ll figure out how to move it somewhere safe.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature uses credentials; inline-secret check not done."}
+Lighter: any inline secret in source.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s one secret or password this feature uses — and where is it stored right now?', descBase: '' },
+    {
+      option: 'What\'s one secret or password this feature uses — and where is it stored right now?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Feature uses credentials."}
+Minimum next step: one secret + its current storage location.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1632,14 +1757,39 @@ export const ABSENCE_CI_PIPELINE_BEGINNER: DecisionContent = {
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
-    { option: '1. Check whether this project has anything set up to run the tests automatically whenever code is pushed. 2. If not, this is a good time to set that up so mistakes get caught before they reach the final code. 3. Share what you find with me before we continue.', descBase: '' },
-    { option: 'Go through what happens when code gets pushed to this feature — do the tests run automatically, or does someone have to remember to run them by hand? Share what you find with me before we move on.', descBase: '' },
+    {
+      option: '1. Check whether this project has anything set up to run the tests automatically whenever code is pushed. 2. If not, this is a good time to set that up so mistakes get caught before they reach the final code. 3. Share what you find with me before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been pushing code but I haven't checked if tests run automatically."}
+Auto-test-on-push hasn't been set up or verified.
+Walk me through it: check current status + set up if missing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through what happens when code gets pushed to this feature — do the tests run automatically, or does someone have to remember to run them by hand? Share what you find with me before we move on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Project; auto-vs-manual test trigger unclear."}
+Same moment, simpler: tests run auto on push or manual?
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does this project have something that automatically runs the tests whenever code is pushed — and does it stop bad code from getting merged if the tests fail?', descBase: '' },
+    {
+      option: 'Does this project have something that automatically runs the tests whenever code is pushed — and does it stop bad code from getting merged if the tests fail?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Project; CI status unclear."}
+Lighter: CI auto-tests + bad-merge block.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Is there anything that runs automatically when new code is added to this project — like the tests? Tell me what happens and we\'ll figure out if anything is missing.', descBase: '' },
+    {
+      option: 'Is there anything that runs automatically when new code is added to this project — like the tests? Tell me what happens and we\'ll figure out if anything is missing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Project."}
+Minimum next step: anything that runs auto on new code; any gaps.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1647,14 +1797,39 @@ export const ABSENCE_RATE_LIMITING_BEGINNER: DecisionContent = {
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
-    { option: '1. Think about what would happen if someone sent a huge number of requests to this feature very quickly. 2. Check whether the app has any limit on how many times it can be called in a short period. 3. Share what you find with me before we continue.', descBase: '' },
-    { option: 'Go through what was just built and check — if someone calls this API endpoint hundreds of times in a row, does the app handle that, or would it start having problems? Share what you find with me before we move on.', descBase: '' },
+    {
+      option: '1. Think about what would happen if someone sent a huge number of requests to this feature very quickly. 2. Check whether the app has any limit on how many times it can be called in a short period. 3. Share what you find with me before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I built an API endpoint but I haven't set any limit on how often it can be called."}
+A request limit hasn't been set.
+Walk me through it: hammer-traffic scenario + current limit status + add if missing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go through what was just built and check — if someone calls this API endpoint hundreds of times in a row, does the app handle that, or would it start having problems? Share what you find with me before we move on.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "API present; hammer-test not done."}
+Same moment, simpler: hundreds-of-requests handling + problem-points.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Does this feature have any kind of limit on how many times someone can call it in a short period — and what happens if they go over that limit?', descBase: '' },
+    {
+      option: 'Does this feature have any kind of limit on how many times someone can call it in a short period — and what happens if they go over that limit?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present; limit + over-limit behaviour unclear."}
+Lighter: limit + over-limit behaviour status.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s one way someone could use this feature too much — and is there anything currently stopping that from happening?', descBase: '' },
+    {
+      option: 'What\'s one way someone could use this feature too much — and is there anything currently stopping that from happening?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "API present."}
+Minimum next step: one overuse path + current prevention.
+{R4_CLOSE}`,
+    },
   ],
 };
 
