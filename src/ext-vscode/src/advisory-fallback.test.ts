@@ -60,7 +60,7 @@ describe('createAdvisoryFallback', () => {
       publishPayload, statusBar, showInfoOnce, read,
       now: () => 6000, recentWindowMs: 60_000,
     });
-    await fb.noteCycleWithoutSelection('/proj');
+    await fb.armIfPending('/proj');
     expect(statusBar.show).toHaveBeenCalledWith(STATUS_BAR_TEXT, expect.stringContaining('Quick check.'));
     expect(showInfoOnce).toHaveBeenCalledOnce();
   });
@@ -68,7 +68,7 @@ describe('createAdvisoryFallback', () => {
   it('does NOT surface when there is no advisory', async () => {
     read.mockResolvedValue(null);
     const fb = createAdvisoryFallback({ publishPayload, statusBar, showInfoOnce, read });
-    await fb.noteCycleWithoutSelection('/proj');
+    await fb.armIfPending('/proj');
     expect(statusBar.show).not.toHaveBeenCalled();
     expect(showInfoOnce).not.toHaveBeenCalled();
   });
@@ -79,7 +79,7 @@ describe('createAdvisoryFallback', () => {
       publishPayload, statusBar, showInfoOnce, read,
       now: () => 1_000_000, recentWindowMs: 60_000,
     });
-    await fb.noteCycleWithoutSelection('/proj');
+    await fb.armIfPending('/proj');
     expect(statusBar.show).not.toHaveBeenCalled();
   });
 
@@ -88,8 +88,8 @@ describe('createAdvisoryFallback', () => {
     const fb = createAdvisoryFallback({
       publishPayload, statusBar, showInfoOnce, read, now: () => 6000,
     });
-    await fb.noteCycleWithoutSelection('/proj');
-    await fb.noteCycleWithoutSelection('/proj');
+    await fb.armIfPending('/proj');
+    await fb.armIfPending('/proj');
     expect(showInfoOnce).toHaveBeenCalledOnce();
     expect(statusBar.show).toHaveBeenCalledTimes(2);
   });
@@ -97,7 +97,7 @@ describe('createAdvisoryFallback', () => {
   it('never throws when the reader rejects', async () => {
     read.mockRejectedValue(new Error('db gone'));
     const fb = createAdvisoryFallback({ publishPayload, statusBar, read });
-    await expect(fb.noteCycleWithoutSelection('/proj')).resolves.toBeUndefined();
+    await expect(fb.armIfPending('/proj')).resolves.toBeUndefined();
     expect(statusBar.show).not.toHaveBeenCalled();
   });
 
@@ -110,7 +110,7 @@ describe('createAdvisoryFallback', () => {
   it('showAdvisory() publishes the waiting advisory to the webview and hides the status bar', async () => {
     read.mockResolvedValue(advisory({ createdAt: 5000 }));
     const fb = createAdvisoryFallback({ publishPayload, statusBar, read, now: () => 6000 });
-    await fb.noteCycleWithoutSelection('/proj'); // arms pendingProject
+    await fb.armIfPending('/proj'); // arms pendingProject
     await fb.showAdvisory();
     expect(publishPayload).toHaveBeenCalledWith(toPayload(advisory({ createdAt: 5000 })));
     expect(statusBar.hide).toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe('createAdvisoryFallback', () => {
     read.mockResolvedValueOnce(advisory({ createdAt: 5000 })); // arm
     read.mockResolvedValueOnce(null);                          // gone by the time we open it
     const fb = createAdvisoryFallback({ publishPayload, statusBar, read, now: () => 6000 });
-    await fb.noteCycleWithoutSelection('/proj');
+    await fb.armIfPending('/proj');
     await fb.showAdvisory();
     expect(publishPayload).not.toHaveBeenCalled();
     expect(statusBar.hide).toHaveBeenCalled();

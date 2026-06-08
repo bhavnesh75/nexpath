@@ -106,7 +106,7 @@ vi.mock('./ipc.js', () => ({
 }));
 vi.mock('./advisory-fallback.js', () => ({
   createAdvisoryFallback: vi.fn(() => ({
-    noteCycleWithoutSelection: vi.fn(),
+    armIfPending: vi.fn(),
     clear: vi.fn(),
     showAdvisory: vi.fn(),
   })),

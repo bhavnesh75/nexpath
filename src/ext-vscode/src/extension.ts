@@ -274,10 +274,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       advisoryFallback.clear();
       await injectIntoChat(selectedPrompt);
     },
-    // No terminal selection → if Layer C parked a fresh advisory the popup
-    // didn't deliver, surface the in-editor fallback.
-    onNoSelection: (event) =>
-      advisoryFallback.noteCycleWithoutSelection(cwdForEvent(event)),
+    // After capture, before the popup: arm the in-editor fallback if `auto`
+    // parked an advisory, so it's available even if the popup blocks (macOS
+    // Automation dialog) or can't open.
+    onAfterCapture: (event) =>
+      advisoryFallback.armIfPending(cwdForEvent(event)),
     composeSessionId: (event) => `${cwdForEvent(event)}|${event.rawSessionId}`,
     // Wire IPC failures (e.g. nexpath binary not on PATH → ENOENT) into
     // the Nexpath OutputChannel so they surface to the user. Default logger

@@ -10,14 +10,19 @@ import type { StopSelection } from './ipc.js';
  *   1. Calls `nexpath auto <prompt> <session-id>` via ipc — forwards the
  *      prompt to the existing capture/classify/advisory stages
  *      (Layer C, untouched).
- *   2. Immediately calls `nexpath stop <session-id>` via ipc — Layer C opens
- *      its terminal popup and blocks until the user acts.
- *   3a. If the user SELECTED an option in the popup, `stop` returns a
- *       `StopSelection`; the handler injects that prompt into the host's chat
- *       input (`injectSelection`).
- *   3b. If `stop` returned no selection (dismissed / no-advisory / the popup
- *       couldn't open), the handler calls `onNoSelection` so the caller can
- *       surface the in-editor advisory fallback if one is waiting.
+ *   2. Calls `onAfterCapture` — the caller checks the store and arms the
+ *      in-editor advisory fallback if `auto` just parked one. This runs BEFORE
+ *      the (possibly blocking) terminal popup so the user always has a path to
+ *      the advisory even when the popup can't open — e.g. on macOS the popup is
+ *      `osascript` → Terminal.app, which BLOCKS on the Automation-permission
+ *      dialog and may never return.
+ *   3. Calls `nexpath stop <session-id>` via ipc — Layer C opens its terminal
+ *      popup and blocks until the user acts.
+ *   4. If the user SELECTED an option in the popup, `stop` returns a
+ *      `StopSelection`; the handler injects that prompt into the host's chat
+ *      input (`injectSelection`) and the wiring clears the now-redundant
+ *      fallback. No selection (dismissed / no-advisory / popup couldn't open) →
+ *      the armed fallback stays as the escape hatch.
  *
  * **Timing simplification for B5 smoke test:** `auto` and `stop` are
  * called back-to-back. In production we'd want `stop` to fire after the
@@ -63,11 +68,12 @@ export interface ChatPipelineDeps {
    */
   injectSelection: (selectedPrompt: string, event: ChatHistoryEvent) => Promise<void> | void;
   /**
-   * Optional: called when a cycle finished with NO terminal selection. The
-   * caller uses it to surface the in-editor advisory fallback (status bar /
-   * webview) if Layer C parked an advisory the popup didn't deliver.
+   * Optional: called right after `auto` succeeds, BEFORE the terminal popup.
+   * The caller checks the store and arms the in-editor advisory fallback if an
+   * advisory was just parked — so it's available even if the popup blocks (the
+   * macOS Automation-dialog case) or can't open at all.
    */
-  onNoSelection?: (event: ChatHistoryEvent) => Promise<void> | void;
+  onAfterCapture?: (event: ChatHistoryEvent) => Promise<void> | void;
   /**
    * Optional session-id composer. Production passes a function that prefixes
    * the host workspace id; tests omit this and just use `event.rawSessionId`.
@@ -102,23 +108,25 @@ export function createChatEventHandler(
       logger.error('[nexpath] spawnAuto failed:', err);
       return;
     }
+    // Arm the in-editor fallback BEFORE the popup. `stop` can block indefinitely
+    // on macOS (osascript waiting on the Automation-permission dialog), so the
+    // fallback must not depend on `stop` returning.
+    if (deps.onAfterCapture) {
+      try {
+        await deps.onAfterCapture(event);
+      } catch (err) {
+        logger.error('[nexpath] onAfterCapture failed:', err);
+      }
+    }
     let selection: StopSelection | null;
     try {
       selection = await deps.spawnStop(sessionId, event);
     } catch (err) {
+      // The popup couldn't deliver a selection — the fallback armed above stands.
       logger.error('[nexpath] spawnStop failed:', err);
       return;
     }
-    if (selection === null) {
-      if (deps.onNoSelection) {
-        try {
-          await deps.onNoSelection(event);
-        } catch (err) {
-          logger.error('[nexpath] onNoSelection failed:', err);
-        }
-      }
-      return;
-    }
+    if (selection === null) return; // dismissed / no advisory / no TTY — fallback stands
     try {
       await deps.injectSelection(selection.selectedPrompt, event);
     } catch (err) {

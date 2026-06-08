@@ -60,10 +60,12 @@ export const FIRST_TIME_HINT =
 
 export interface AdvisoryFallback {
   /**
-   * Call when a prompt cycle finished with NO terminal selection. Surfaces the
-   * status bar if a fresh advisory exists for `projectRoot`; otherwise no-op.
+   * Call right after `auto` parks an advisory (before the terminal popup).
+   * Surfaces the status bar if a fresh advisory exists for `projectRoot` so the
+   * user has an in-editor path regardless of whether the popup opens; no-op
+   * otherwise.
    */
-  noteCycleWithoutSelection(projectRoot: string): Promise<void>;
+  armIfPending(projectRoot: string): Promise<void>;
   /** Call when the user DID select in the terminal popup — clears the pending fallback. */
   clear(): void;
   /** Command handler (`nexpath.showAdvisory`): reveal the waiting advisory in the webview. */
@@ -89,7 +91,7 @@ export function createAdvisoryFallback(deps: AdvisoryFallbackDeps): AdvisoryFall
   let hintShown = false;
 
   return {
-    async noteCycleWithoutSelection(projectRoot: string): Promise<void> {
+    async armIfPending(projectRoot: string): Promise<void> {
       let advisory: StoredAdvisory | null;
       try {
         advisory = await read(projectRoot);
