@@ -2,6 +2,7 @@ import type { DecisionContent } from './options.js';
 import type { Stage } from '../classifier/types.js';
 
 const IDEA_TO_PRD_BEGINNER: DecisionContent = {
+  signalType:   "IDEA_TO_PRD",
   question:      'Before building — is the plan written?',
   pinchFallback: 'Before coding.',
   L1: [
@@ -43,6 +44,7 @@ Minimum next step: just tell me what's still unclear.
 };
 
 const PRD_TO_ARCHITECTURE_BEGINNER: DecisionContent = {
+  signalType:   "PRD_TO_ARCHITECTURE",
   question:      'Spec ready — is the architecture decided?',
   pinchFallback: 'Design first.',
   L1: [
@@ -83,6 +85,7 @@ Minimum next step: anything in the plan that will bite during coding.
 };
 
 const ARCHITECTURE_TO_TASKS_BEGINNER: DecisionContent = {
+  signalType:   "ARCHITECTURE_TO_TASKS",
   question:      'Architecture done — is the task list ordered?',
   pinchFallback: 'Break it down.',
   L1: [
@@ -124,6 +127,7 @@ Minimum next step: anything unclear or missing about the order.
 };
 
 export const TASK_REVIEW_BEGINNER: DecisionContent = {
+  signalType:   "TASK_REVIEW",
   question:      'Task done — reviewed and tested?',
   pinchFallback: 'Quick check.',
   L1: [
@@ -164,6 +168,7 @@ Minimum next step: anything wrong or incomplete.
 };
 
 const IMPLEMENTATION_TO_REVIEW_BEGINNER: DecisionContent = {
+  signalType:   "IMPLEMENTATION_TO_REVIEW",
   question:      'Phase done — full review before moving on?',
   pinchFallback: 'Phase done?',
   L1: [
@@ -204,6 +209,7 @@ Minimum next step: anything obviously broken or missing.
 };
 
 const REVIEW_TO_RELEASE_BEGINNER: DecisionContent = {
+  signalType:   "REVIEW_TO_RELEASE",
   question:      'Ready to ship — final checks done?',
   pinchFallback: 'Almost there.',
   L1: [
@@ -244,6 +250,7 @@ Minimum next step: anything that could break in production we haven't tested.
 };
 
 const RELEASE_TO_FEEDBACK_BEGINNER: DecisionContent = {
+  signalType:   "RELEASE_TO_FEEDBACK",
   question:      'Just shipped — is the feedback loop active?',
   pinchFallback: 'Watch it live.',
   L1: [
@@ -284,6 +291,7 @@ Minimum next step: anything in the build that could fail silently.
 };
 
 const BEHAVIOUR_TESTING_BEGINNER: DecisionContent = {
+  signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
   L1: [
@@ -325,6 +333,7 @@ Minimum next step: anything that feels off when I use it.
 
 /** ABSENCE_TEST_CREATION_BEGINNER — beginner-register variant (L1×2 / L2×1 / L3×1) */
 export const ABSENCE_TEST_CREATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
   L1: [
@@ -366,6 +375,7 @@ Minimum next step: one thing that should have a test before I move on.
 
 /** ABSENCE_REGRESSION_CHECK_BEGINNER — beginner-register variant (L1×2 / L2×1 / L3×1) */
 export const ABSENCE_REGRESSION_CHECK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
   L1: [
@@ -407,6 +417,7 @@ Minimum next step: anything that used to work and might not now.
 
 /** ABSENCE_SPEC_ACCEPTANCE_BEGINNER — beginner-register variant (L1×2 / L2×1 / L3×1) */
 export const ABSENCE_SPEC_ACCEPTANCE_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
   L1: [
@@ -448,6 +459,7 @@ Minimum next step: anything that doesn't match what we originally planned.
 
 /** ABSENCE_CROSS_CONFIRMING_BEGINNER — beginner-register variant (L1×2 / L2×1 / L3×1) */
 export const ABSENCE_CROSS_CONFIRMING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
   L1: [
@@ -488,6 +500,7 @@ Minimum next step: anything I'm not 100% sure is correct.
 };
 
 export const ABSENCE_SECURITY_CHECK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Built something — any security checks done?',
   pinchFallback: 'Security gap.',
   L1: [
@@ -528,6 +541,7 @@ Minimum next step: anything a user could misuse or that isn't protected.
 };
 
 export const ABSENCE_ERROR_HANDLING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — what happens when it breaks?',
   pinchFallback: 'Error handling.',
   L1: [
@@ -568,6 +582,7 @@ Minimum next step: anything that could crash or fail silently on unexpected inpu
 };
 
 export const ABSENCE_DOCUMENTATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — is anything documented?',
   pinchFallback: 'Docs missing.',
   L1: [
@@ -610,6 +625,7 @@ Minimum next step: anything not obvious that would confuse someone who didn't wr
 };
 
 export const ABSENCE_OBSERVABILITY_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
   L1: [
@@ -652,6 +668,7 @@ Minimum next step: silent-fail-without-trace risk.
 };
 
 export const ABSENCE_COMPREHENSION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI wrote it — do you actually get it?',
   pinchFallback: 'Comprehension check.',
   L1: [
@@ -694,6 +711,7 @@ Minimum next step: anything I'm not sure I fully understand.
 };
 
 export const ABSENCE_REFACTORING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_REFACTORING",
   question:      'Long build run — anything to clean up?',
   pinchFallback: 'Refactor check.',
   L1: [
@@ -736,6 +754,7 @@ Minimum next step: anything to clean up or simplify before we continue.
 };
 
 export const ABSENCE_NO_PUSHBACK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
   L1: [
@@ -778,6 +797,7 @@ Minimum next step: let's check for any suggestion I said yes to without thinking
 };
 
 export const ABSENCE_CORRECTION_SEEKING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
   L1: [
@@ -820,6 +840,7 @@ Minimum next step: one thing that might be wrong or could be done better.
 };
 
 export const ABSENCE_PROBLEM_CORRECTION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Spotted a bug — did it actually get fixed?',
   pinchFallback: 'Bug unresolved.',
   L1: [
@@ -860,6 +881,7 @@ Minimum next step: any bug noticed earlier but not actually fixed.
 };
 
 export const ABSENCE_ALTERNATIVES_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
   L1: [
@@ -902,6 +924,7 @@ Minimum next step: let's check for any decision made without thinking about othe
 };
 
 export const ABSENCE_ARCH_CONFLICT_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
   L1: [
@@ -942,6 +965,7 @@ Minimum next step: anything that doesn't fit the project's patterns or structure
 };
 
 export const ABSENCE_PROMPT_CONTEXT_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
   L1: [
@@ -982,6 +1006,7 @@ Minimum next step: I know what the full plan says, or building without it?
 };
 
 export const ABSENCE_ROLLBACK_PLANNING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
   L1: [
@@ -1023,6 +1048,7 @@ Minimum next step: rollback procedure known.
 };
 
 export const ABSENCE_DEPLOYMENT_PLANNING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
   L1: [
@@ -1064,6 +1090,7 @@ Minimum next step: deployment planned or undefined.
 };
 
 export const ABSENCE_DEPENDENCY_MGMT_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
   L1: [
@@ -1105,6 +1132,7 @@ Minimum next step: conflicts or known-issues on new packages.
 };
 
 export const ABSENCE_PHASE_TRANSITION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Been in this phase a while — what comes next?',
   pinchFallback: 'Phase check.',
   L1: [
@@ -1145,6 +1173,7 @@ Minimum next step: ready or things-to-finish-first?
 };
 
 export const ABSENCE_SPEC_CROSS_CONFIRM_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
@@ -1185,6 +1214,7 @@ Minimum next step: anything in the spec not checked against what was actually ag
 };
 
 export const ABSENCE_SPEC_REVISION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
   L1: [
@@ -1229,6 +1259,7 @@ Minimum next step: does the spec still match what's actually being built?
 // Group A — idea signals (beginner)
 
 export const ABSENCE_IDEA_SCOPING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea forming — what exactly are we building?',
   pinchFallback: 'Scope unclear.',
   L1: [
@@ -1269,6 +1300,7 @@ Minimum next step: is it clear what / what for?
 };
 
 export const ABSENCE_IDEA_CONSTRAINT_CHECK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea forming — what\'s out of scope?',
   pinchFallback: 'No non-goals set.',
   L1: [
@@ -1309,6 +1341,7 @@ Minimum next step: any will-not-do still unsaid.
 };
 
 export const ABSENCE_IDEA_USER_DEFINITION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea forming — who is this actually for?',
   pinchFallback: 'User not defined.',
   L1: [
@@ -1351,6 +1384,7 @@ Minimum next step: is it clear who + trying-to-do?
 // Group B — task_breakdown signals (beginner)
 
 export const ABSENCE_TASK_ORDERING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — what order do we do them in?',
   pinchFallback: 'No order set.',
   L1: [
@@ -1391,6 +1425,7 @@ Minimum next step: order clear or still to sort?
 };
 
 export const ABSENCE_TASK_SIZING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks listed — are they small enough to do in one go?',
   pinchFallback: 'Tasks too big.',
   L1: [
@@ -1431,6 +1466,7 @@ Minimum next step: all small enough vs any-needing-break-down.
 };
 
 export const ABSENCE_TASK_DEFINITION_OF_DONE_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks set — how do we know when each one\'s done?',
   pinchFallback: 'Done criteria missing.',
   L1: [
@@ -1473,6 +1509,7 @@ Minimum next step: per-task done clarity check.
 // Group C — feedback_loop signals (beginner)
 
 export const ABSENCE_USER_FEEDBACK_REVIEW_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback in — have we actually gone through it?',
   pinchFallback: 'Feedback not reviewed.',
   L1: [
@@ -1513,6 +1550,7 @@ Minimum next step: gone-through or still-to-do?
 };
 
 export const ABSENCE_ITERATION_PLANNING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — what are we building next?',
   pinchFallback: 'Next iteration unplanned.',
   L1: [
@@ -1555,6 +1593,7 @@ Minimum next step: clear-what-next or still-deciding?
 // ── Phase 5 D1-D3 — beginner signals (BEGINNER register) ─────────────────────
 
 export const ABSENCE_INCREMENTAL_BUILD_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Building something — verifying each piece as you go?',
   pinchFallback: 'One piece at a time.',
   L1: [
@@ -1595,6 +1634,7 @@ Minimum next step: working-before-continuing check.
 };
 
 export const ABSENCE_ERROR_UNDERSTANDING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ERROR_UNDERSTANDING",
   question:      'Got an error — do you know what it means?',
   pinchFallback: 'Understand the error.',
   L1: [
@@ -1635,6 +1675,7 @@ Minimum next step: understand-or-needs-explaining check.
 };
 
 export const ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DOCUMENTATION_BEFORE_ASK",
   question:      'About to ask — have you checked the docs?',
   pinchFallback: 'Docs first.',
   L1: [
@@ -1677,6 +1718,7 @@ Minimum next step: docs check before asking.
 };
 
 export const ABSENCE_OUTPUT_VERIFICATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_OUTPUT_VERIFICATION",
   question:      'Code generated — have you actually tried it?',
   pinchFallback: 'Test it first.',
   L1: [
@@ -1717,6 +1759,7 @@ Minimum next step: actually test it to see if it works.
 };
 
 export const ABSENCE_REQUIREMENT_CLARITY_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_REQUIREMENT_CLARITY",
   question:      'About to build — is the requirement clear?',
   pinchFallback: 'Clarify first.',
   L1: [
@@ -1757,6 +1800,7 @@ Minimum next step: plain-words goal.
 };
 
 export const ABSENCE_COPY_PASTE_AWARENESS_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_COPY_PASTE_AWARENESS",
   question:      'Code generated — do you understand it before using it?',
   pinchFallback: 'Understand first.',
   L1: [
@@ -1797,6 +1841,7 @@ Minimum next step: understand-before-add check.
 };
 
 export const ABSENCE_DEBUGGING_OBSERVATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DEBUGGING_OBSERVATION",
   question:      'Something\'s broken — what did you actually see?',
   pinchFallback: 'Describe it first.',
   L1: [
@@ -1837,6 +1882,7 @@ Minimum next step: what-went-wrong + saw vs expected.
 };
 
 export const ABSENCE_LEARNING_CONSOLIDATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_LEARNING_CONSOLIDATION",
   question:      'We\'ve built a lot — do you feel like you understood it?',
   pinchFallback: 'Recap learning.',
   L1: [
@@ -1877,6 +1923,7 @@ Minimum next step: anything understood well enough to explain to someone else.
 };
 
 export const ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SIMPLE_SOLUTION_FIRST",
   question:      'Building this — is there a simpler way to do it?',
   pinchFallback: 'Simplest first.',
   L1: [
@@ -1917,6 +1964,7 @@ Minimum next step: simplest way to get this done.
 };
 
 export const ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING",
   question:      'Asking a lot at once — let\'s do one thing at a time',
   pinchFallback: 'One thing at a time.',
   L1: [
@@ -1957,6 +2005,7 @@ Minimum next step: most important single-next-step.
 };
 
 export const ABSENCE_ROLLBACK_AWARENESS_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ROLLBACK_AWARENESS",
   question:      'About to change things — do you know how to undo it?',
   pinchFallback: 'Save before changing.',
   L1: [
@@ -1997,6 +2046,7 @@ Minimum next step: commit before change.
 };
 
 export const ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_BUILD_VS_UNDERSTAND_RATIO",
   question:      'We\'ve been building — do you understand what we\'ve built?',
   pinchFallback: 'Pause and understand.',
   L1: [
@@ -2040,6 +2090,7 @@ Minimum next step: own-words walk-through.
 // ── Sub-7 — beginner content sets ─────────────────────────────────────────────
 
 export const ABSENCE_SCOPE_CREEP_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
   L1: [
@@ -2080,6 +2131,7 @@ Minimum next step: name one extra item.
 };
 
 export const ABSENCE_CONTEXT_LOSS_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
   L1: [
@@ -2120,6 +2172,7 @@ Minimum next step: the one thing I don't want us to forget right now.
 };
 
 export const ABSENCE_API_DESIGN_REVIEW_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
@@ -2160,6 +2213,7 @@ Minimum next step: one thing about the API that might need to change later + ris
 };
 
 export const ABSENCE_ACCESSIBILITY_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
   L1: [
@@ -2202,6 +2256,7 @@ Minimum next step: anything mouse-only or sight-dependent that could trouble som
 };
 
 export const ABSENCE_ENV_AND_SECRETS_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
@@ -2244,6 +2299,7 @@ Minimum next step: one secret + its current storage location.
 };
 
 export const ABSENCE_DATA_VALIDATION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
   L1: [
@@ -2286,6 +2342,7 @@ Minimum next step: one piece of data accepted without being checked first.
 };
 
 export const ABSENCE_CI_PIPELINE_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
@@ -2327,6 +2384,7 @@ Minimum next step: anything that runs auto on new code; any gaps.
 };
 
 export const ABSENCE_RATE_LIMITING_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
@@ -2368,6 +2426,7 @@ Minimum next step: one overuse path + current prevention.
 };
 
 export const ABSENCE_FEATURE_SCOPE_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Building this — what should it actually do?',
   pinchFallback: 'Scope first.',
   L1: [
@@ -2408,6 +2467,7 @@ Minimum next step: plain-words what + how-done.
 };
 
 export const ABSENCE_IMPLEMENTATION_CHECKPOINT_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Built something new — does it actually work?',
   pinchFallback: 'Quick check.',
   L1: [
@@ -2448,6 +2508,7 @@ Minimum next step: quick check before continuing.
 };
 
 export const ABSENCE_SPEC_BEFORE_CODE_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Coding this — what\'s it supposed to do?',
   pinchFallback: 'Spec first.',
   L1: [
@@ -2490,6 +2551,7 @@ Minimum next step: plain-words what-it-should-do.
 // ── Phase 7 F1-F2 — session-quality signals (BEGINNER register) ───────────────
 
 export const ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Accepting without reviewing — applied critical check recently?',
   pinchFallback: 'Streak alert.',
   L1: [
@@ -2537,6 +2599,7 @@ Minimum next step: one thing to verify before continuing.
 };
 
 export const ABSENCE_WORK_RHYTHM_CHECK_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Sending fast — read the last response fully before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
@@ -2584,6 +2647,7 @@ Minimum next step: pause and read the last response.
 };
 
 export const ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Working on many things — finished any of them yet?',
   pinchFallback: 'Focus drift.',
   L1: [
@@ -2631,6 +2695,7 @@ Minimum next step: complete one before opening anything else.
 };
 
 export const ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Working for a while — what have you built so far?',
   pinchFallback: 'Checkpoint due.',
   L1: [
@@ -2678,6 +2743,7 @@ Minimum next step: the most important thing to remember about where we are.
 };
 
 export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER: DecisionContent = {
+  signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Built a lot — have you written down what you made?',
   pinchFallback: 'Document now.',
   L1: [

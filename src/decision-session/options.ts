@@ -38,6 +38,14 @@ export interface OptionEntry {
 }
 
 export interface DecisionContent {
+  /**
+   * Per-set signal_type key matching the r5-fallbacks lookup table.
+   * Multiple register variants of the same logical set
+   * (e.g. ABSENCE_TEST_CREATION / ABSENCE_TEST_CREATION_CASUAL /
+   * ABSENCE_TEST_CREATION_BEGINNER) share the same base signalType
+   * so the D-fallback lookup is register-agnostic.
+   */
+  signalType:    string;
   question:      string;
   pinchFallback: string;
   L1: OptionEntry[];
@@ -83,6 +91,7 @@ export interface DecisionContent {
 
 /** Transition 1: Idea → PRD */
 const IDEA_TO_PRD: DecisionContent = {
+  signalType:   "IDEA_TO_PRD",
   question:      'Before building — is the plan written?',
   pinchFallback: 'Before coding.',
   L1: [
@@ -143,6 +152,7 @@ Minimum next step at this transition: three acceptance criteria — nothing else
 
 /** Transition 2: PRD → Architecture */
 const PRD_TO_ARCHITECTURE: DecisionContent = {
+  signalType:   "PRD_TO_ARCHITECTURE",
   question:      'Spec ready — is the architecture decided?',
   pinchFallback: 'Design first.',
   L1: [
@@ -211,6 +221,7 @@ Minimum next step: one risk + one simplest mitigation.
 
 /** Transition 3: Architecture → Task Breakdown */
 const ARCHITECTURE_TO_TASKS: DecisionContent = {
+  signalType:   "ARCHITECTURE_TO_TASKS",
   question:      'Architecture done — is the task list ordered?',
   pinchFallback: 'Break it down.',
   L1: [
@@ -278,6 +289,7 @@ Minimum next step: one first build that validates the core assumption fastest.
 
 /** Transition 4: task_breakdown → implementation (per-task review before coding starts) */
 const TASK_REVIEW: DecisionContent = {
+  signalType:   "TASK_REVIEW",
   question:      'Task done — reviewed and tested?',
   pinchFallback: 'Quick check.',
   L1: [
@@ -337,6 +349,7 @@ Minimum next step: one obvious issue check before moving on.
 
 /** TASK_REVIEW_CASUAL — casual-register variant for cool_geek and pro_geek_soul profiles */
 const TASK_REVIEW_CASUAL: DecisionContent = {
+  signalType:   "TASK_REVIEW",
   question:      'Task done — quick check before moving on?',
   pinchFallback: 'Quick check.',
   L1: [
@@ -395,6 +408,7 @@ Minimum next step: one off-looking thing before I move on.
 
 /** Transition 5: Implementation → Review/Testing */
 const IMPLEMENTATION_TO_REVIEW: DecisionContent = {
+  signalType:   "IMPLEMENTATION_TO_REVIEW",
   question:      'Phase done — full review before moving on?',
   pinchFallback: 'Phase done?',
   L1: [
@@ -471,6 +485,7 @@ Minimum next step: any obvious break or missing piece before the next phase.
 
 /** Transition 6: Review/Testing → Release */
 const REVIEW_TO_RELEASE: DecisionContent = {
+  signalType:   "REVIEW_TO_RELEASE",
   question:      'Ready to ship — final checks done?',
   pinchFallback: 'Almost there.',
   L1: [
@@ -537,6 +552,7 @@ Minimum next step: one likely-production-break thing not yet tested.
 
 /** Transition 7: Release → Feedback Loop */
 const RELEASE_TO_FEEDBACK: DecisionContent = {
+  signalType:   "RELEASE_TO_FEEDBACK",
   question:      'Just shipped — is the feedback loop active?',
   pinchFallback: 'Watch it live.',
   L1: [
@@ -595,6 +611,7 @@ Minimum next step: one signal that would catch silent failure.
 
 /** Absence trigger: behaviour_testing — fires when implementation proceeds without manual acceptance testing */
 const BEHAVIOUR_TESTING: DecisionContent = {
+  signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
   L1: [
@@ -654,6 +671,7 @@ Minimum next step: one scenario to try manually.
 
 /** BEHAVIOUR_TESTING_CASUAL — casual-register variant for cool_geek and pro_geek_soul profiles */
 const BEHAVIOUR_TESTING_CASUAL: DecisionContent = {
+  signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
   L1: [
@@ -715,6 +733,7 @@ Minimum next step: one specific break-by-hand risk.
 
 /** Absence: test_creation — fires when implementation proceeds without writing tests */
 const ABSENCE_TEST_CREATION: DecisionContent = {
+  signalType:   "ABSENCE_TEST_CREATION",
   question:      'Code added — where are the tests?',
   pinchFallback: 'Tests missing.',
   L1: [
@@ -774,6 +793,7 @@ Minimum next step: one test for the most important behaviour.
 
 /** Absence: regression_check — fires when changes are made without regression testing */
 const ABSENCE_REGRESSION_CHECK: DecisionContent = {
+  signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changes made — regression verified?',
   pinchFallback: 'Regression check.',
   L1: [
@@ -831,6 +851,7 @@ Minimum next step: run existing tests, report what's newly failing.
 
 /** Absence: spec_acceptance_check — fires when implementation proceeds without checking against spec */
 const ABSENCE_SPEC_ACCEPTANCE: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Implementation done — spec checked?',
   pinchFallback: 'Check the spec.',
   L1: [
@@ -889,6 +910,7 @@ Minimum next step: any spec or acceptance criterion not met.
 
 /** Absence: cross_confirming — fires when implementation proceeds without cross-confirmation prompts */
 const ABSENCE_CROSS_CONFIRMING: DecisionContent = {
+  signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI generated it — have you verified it?',
   pinchFallback: 'Verify the output.',
   L1: [
@@ -945,6 +967,7 @@ Minimum next step: anything generated but not manually verified.
 };
 
 const ABSENCE_SECURITY_CHECK: DecisionContent = {
+  signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Feature built — security reviewed?',
   pinchFallback: 'Security gap.',
   L1: [
@@ -1003,6 +1026,7 @@ Minimum next step: one exploitable issue — untrusted input, missing auth, or d
 };
 
 const ABSENCE_ERROR_HANDLING: DecisionContent = {
+  signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — error paths handled?',
   pinchFallback: 'Error handling.',
   L1: [
@@ -1061,6 +1085,7 @@ Minimum next step: one silent or unhelpful failure path.
 };
 
 const ABSENCE_DOCUMENTATION: DecisionContent = {
+  signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — any documentation added?',
   pinchFallback: 'Docs missing.',
   L1: [
@@ -1119,6 +1144,7 @@ Minimum next step: anything with non-obvious behavior or hidden assumptions not 
 };
 
 const ABSENCE_OBSERVABILITY: DecisionContent = {
+  signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — how will you know it\'s working?',
   pinchFallback: 'No observability.',
   L1: [
@@ -1177,6 +1203,7 @@ Minimum next step: one silent-fail path with no log/alert.
 };
 
 const ABSENCE_COMPREHENSION: DecisionContent = {
+  signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI generated it — do you understand it?',
   pinchFallback: 'Comprehension check.',
   L1: [
@@ -1235,6 +1262,7 @@ Minimum next step: anything not manually traced through + fully understood.
 };
 
 const ABSENCE_REFACTORING: DecisionContent = {
+  signalType:   "ABSENCE_REFACTORING",
   question:      'Extended implementation — code health reviewed?',
   pinchFallback: 'Refactor check.',
   L1: [
@@ -1293,6 +1321,7 @@ Minimum next step: anything that should be refactored or cleaned up before movin
 };
 
 const ABSENCE_NO_PUSHBACK: DecisionContent = {
+  signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI suggesting — are you evaluating critically?',
   pinchFallback: 'No pushback.',
   L1: [
@@ -1351,6 +1380,7 @@ Minimum next step: any accepted output where reasoning wasn't questioned + alter
 };
 
 const ABSENCE_CORRECTION_SEEKING: DecisionContent = {
+  signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'AI output — self-verification requested?',
   pinchFallback: 'No verification.',
   L1: [
@@ -1409,6 +1439,7 @@ Minimum next step: the one part least confident as correct.
 };
 
 const ABSENCE_PROBLEM_CORRECTION: DecisionContent = {
+  signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Bug noticed — explicitly corrected?',
   pinchFallback: 'Bug unresolved.',
   L1: [
@@ -1466,6 +1497,7 @@ Minimum next step: any noticed-but-uncorrected bug.
 };
 
 const ABSENCE_ALTERNATIVES: DecisionContent = {
+  signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — alternatives considered?',
   pinchFallback: 'No alternatives.',
   L1: [
@@ -1524,6 +1556,7 @@ Minimum next step: any decision made without evaluating other options at all.
 };
 
 const ABSENCE_ARCH_CONFLICT: DecisionContent = {
+  signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — architecture consistency checked?',
   pinchFallback: 'Arch conflict.',
   L1: [
@@ -1580,6 +1613,7 @@ Minimum next step: anything that doesn't fit the existing codebase's structure.
 };
 
 const ABSENCE_PROMPT_CONTEXT: DecisionContent = {
+  signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Prompts sent — spec and arch referenced?',
   pinchFallback: 'Missing context.',
   L1: [
@@ -1636,6 +1670,7 @@ Minimum next step: enough spec/arch context to build correctly, or full picture 
 };
 
 const ABSENCE_ROLLBACK_PLANNING: DecisionContent = {
+  signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Release pending — rollback plan defined?',
   pinchFallback: 'No rollback plan.',
   L1: [
@@ -1693,6 +1728,7 @@ Minimum next step: rollback plan documented + executable under pressure, or impr
 };
 
 const ABSENCE_DEPLOYMENT_PLANNING: DecisionContent = {
+  signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Release pending — deployment plan confirmed?',
   pinchFallback: 'No deploy plan.',
   L1: [
@@ -1750,6 +1786,7 @@ Minimum next step: deployment plan confirmed + tested-outside-dev, or undefined?
 };
 
 const ABSENCE_DEPENDENCY_MGMT: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Dependencies added — conflicts and risks reviewed?',
   pinchFallback: 'Dependency risk.',
   L1: [
@@ -1807,6 +1844,7 @@ Minimum next step: conflict / CVE / licence check on new packages.
 };
 
 const ABSENCE_PHASE_TRANSITION: DecisionContent = {
+  signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Extended phase — transition readiness assessed?',
   pinchFallback: 'Phase check.',
   L1: [
@@ -1863,6 +1901,7 @@ Minimum next step: name the next-phase-readiness condition + status.
 };
 
 const ABSENCE_SPEC_CROSS_CONFIRM: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec written — cross-confirmed against requirements?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
@@ -1920,6 +1959,7 @@ Minimum next step: any assumption / scope / criterion added without explicit con
 };
 
 const ABSENCE_SPEC_REVISION: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec drafted — revised since initial version?',
   pinchFallback: 'Spec unrevised.',
   L1: [
@@ -1978,6 +2018,7 @@ Minimum next step: does the spec still reflect what's being built?
 
 /** ABSENCE_TEST_CREATION_CASUAL — casual-register variant for pro_geek_soul and null profiles */
 const ABSENCE_TEST_CREATION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
   L1: [
@@ -2037,6 +2078,7 @@ Minimum next step: one test on the most important behaviour.
 
 /** ABSENCE_REGRESSION_CHECK_CASUAL — casual-register variant for pro_geek_soul and null profiles */
 const ABSENCE_REGRESSION_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
   L1: [
@@ -2094,6 +2136,7 @@ Minimum next step: run the tests, tell me if anything broke.
 
 /** ABSENCE_SPEC_ACCEPTANCE_CASUAL — casual-register variant for pro_geek_soul and null profiles */
 const ABSENCE_SPEC_ACCEPTANCE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
   L1: [
@@ -2151,6 +2194,7 @@ Minimum next step: anything that doesn't match the original plan.
 
 /** ABSENCE_CROSS_CONFIRMING_CASUAL — casual-register variant for pro_geek_soul and null profiles */
 const ABSENCE_CROSS_CONFIRMING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
   L1: [
@@ -2207,6 +2251,7 @@ Minimum next step: anything generated but not checked for correctness yet.
 };
 
 const ABSENCE_SECURITY_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Built something — any security checks done?',
   pinchFallback: 'Security gap.',
   L1: [
@@ -2263,6 +2308,7 @@ Minimum next step: one exploitable bit — untrusted input, missing auth, expose
 };
 
 const ABSENCE_ERROR_HANDLING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — what happens when it breaks?',
   pinchFallback: 'Error handling.',
   L1: [
@@ -2319,6 +2365,7 @@ Minimum next step: one silent-fail or obvious-error-case gap.
 };
 
 const ABSENCE_DOCUMENTATION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — is anything documented?',
   pinchFallback: 'Docs missing.',
   L1: [
@@ -2377,6 +2424,7 @@ Minimum next step: anything needing a comment or note to explain why it works th
 };
 
 const ABSENCE_OBSERVABILITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
   L1: [
@@ -2435,6 +2483,7 @@ Minimum next step: detection coverage from logs/monitoring; what's missing.
 };
 
 const ABSENCE_COMPREHENSION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI wrote it — do you actually get it?',
   pinchFallback: 'Comprehension check.',
   L1: [
@@ -2493,6 +2542,7 @@ Minimum next step: anything I haven't fully understood + verified myself.
 };
 
 const ABSENCE_REFACTORING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_REFACTORING",
   question:      'Long build run — anything to clean up?',
   pinchFallback: 'Refactor check.',
   L1: [
@@ -2551,6 +2601,7 @@ Minimum next step: anything to clean up or simplify before moving on.
 };
 
 const ABSENCE_NO_PUSHBACK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
   L1: [
@@ -2609,6 +2660,7 @@ Minimum next step: any suggestion accepted without evaluating whether the approa
 };
 
 const ABSENCE_CORRECTION_SEEKING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
   L1: [
@@ -2667,6 +2719,7 @@ Minimum next step: the one part least confident is correct.
 };
 
 const ABSENCE_PROBLEM_CORRECTION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Spotted a bug — did it actually get fixed?',
   pinchFallback: 'Bug unresolved.',
   L1: [
@@ -2723,6 +2776,7 @@ Minimum next step: one bug noticed earlier and not explicitly fixed.
 };
 
 const ABSENCE_ALTERNATIVES_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
   L1: [
@@ -2781,6 +2835,7 @@ Minimum next step: any decision where I didn't look at other options first.
 };
 
 const ABSENCE_ARCH_CONFLICT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
   L1: [
@@ -2837,6 +2892,7 @@ Minimum next step: anything that doesn't match existing patterns/structure.
 };
 
 const ABSENCE_PROMPT_CONTEXT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
   L1: [
@@ -2893,6 +2949,7 @@ Minimum next step: I know what the spec says, or I've been building without seei
 };
 
 const ABSENCE_ROLLBACK_PLANNING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
   L1: [
@@ -2950,6 +3007,7 @@ Minimum next step: rollback plan documented or improvisational?
 };
 
 const ABSENCE_DEPLOYMENT_PLANNING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
   L1: [
@@ -3007,6 +3065,7 @@ Minimum next step: deploy plan exists, or figure-it-out-at-push?
 };
 
 const ABSENCE_DEPENDENCY_MGMT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
   L1: [
@@ -3064,6 +3123,7 @@ Minimum next step: conflicts / vulnerabilities / licence issues on new packages.
 };
 
 const ABSENCE_PHASE_TRANSITION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Been in this phase a while — what comes next?',
   pinchFallback: 'Phase check.',
   L1: [
@@ -3120,6 +3180,7 @@ Minimum next step: ready or just been-here-a-while?
 };
 
 const ABSENCE_SPEC_CROSS_CONFIRM_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
   L1: [
@@ -3176,6 +3237,7 @@ Minimum next step: any unconfirmed assumption being treated as requirement.
 };
 
 const ABSENCE_SPEC_REVISION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
   L1: [
@@ -3236,6 +3298,7 @@ Minimum next step: does the spec still reflect the actual build?
 // Group A — idea signals
 
 const ABSENCE_IDEA_SCOPING: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea in mind — is the scope defined?',
   pinchFallback: 'Scope undefined.',
   L1: [
@@ -3292,6 +3355,7 @@ Minimum next step: what / problem / first version contents.
 };
 
 const ABSENCE_IDEA_SCOPING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea forming — what exactly are we building?',
   pinchFallback: 'Scope unclear.',
   L1: [
@@ -3348,6 +3412,7 @@ Minimum next step: what + what it does.
 };
 
 const ABSENCE_IDEA_CONSTRAINT_CHECK: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea scoped — are the non-goals defined?',
   pinchFallback: 'Non-goals missing.',
   L1: [
@@ -3404,6 +3469,7 @@ Minimum next step: one will-not-do + why-now.
 };
 
 const ABSENCE_IDEA_CONSTRAINT_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea forming — what\'s out of scope?',
   pinchFallback: 'No non-goals set.',
   L1: [
@@ -3460,6 +3526,7 @@ Minimum next step: one will-not-do to state clearly before building.
 };
 
 const ABSENCE_IDEA_USER_DEFINITION: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea scoped — is the target user defined?',
   pinchFallback: 'Target user undefined.',
   L1: [
@@ -3516,6 +3583,7 @@ Minimum next step: who + what they're trying to do.
 };
 
 const ABSENCE_IDEA_USER_DEFINITION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea forming — who is this actually for?',
   pinchFallback: 'User not defined.',
   L1: [
@@ -3574,6 +3642,7 @@ Minimum next step: who + what they're trying to do.
 // Group B — task_breakdown signals
 
 const ABSENCE_TASK_ORDERING: DecisionContent = {
+  signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — have they been ordered?',
   pinchFallback: 'Tasks unordered.',
   L1: [
@@ -3630,6 +3699,7 @@ Minimum next step: first task + what it unblocks.
 };
 
 const ABSENCE_TASK_ORDERING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — what order do we do them in?',
   pinchFallback: 'No order set.',
   L1: [
@@ -3686,6 +3756,7 @@ Minimum next step: first task.
 };
 
 const ABSENCE_TASK_SIZING: DecisionContent = {
+  signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks defined — are they scoped to single sessions?',
   pinchFallback: 'Tasks oversized.',
   L1: [
@@ -3742,6 +3813,7 @@ Minimum next step: identify too-large + break it.
 };
 
 const ABSENCE_TASK_SIZING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks listed — are they small enough to do in one go?',
   pinchFallback: 'Tasks too big.',
   L1: [
@@ -3798,6 +3870,7 @@ Minimum next step: any task too big for one session?
 };
 
 const ABSENCE_TASK_DEFINITION_OF_DONE: DecisionContent = {
+  signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks ordered — does each task have a definition of done?',
   pinchFallback: 'No done criteria.',
   L1: [
@@ -3854,6 +3927,7 @@ Minimum next step: every task has DoD or any missing?
 };
 
 const ABSENCE_TASK_DEFINITION_OF_DONE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks set — how do we know when each one\'s done?',
   pinchFallback: 'Done criteria missing.',
   L1: [
@@ -3912,6 +3986,7 @@ Minimum next step: how to know first task is done.
 // Group C — feedback_loop signals
 
 const ABSENCE_USER_FEEDBACK_REVIEW: DecisionContent = {
+  signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback received — has it been reviewed systematically?',
   pinchFallback: 'Feedback not reviewed.',
   L1: [
@@ -3968,6 +4043,7 @@ Minimum next step: what users say + most critical issue.
 };
 
 const ABSENCE_USER_FEEDBACK_REVIEW_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback in — have we actually gone through it?',
   pinchFallback: 'Feedback not reviewed.',
   L1: [
@@ -4024,6 +4100,7 @@ Minimum next step: what users are saying.
 };
 
 const ABSENCE_ITERATION_PLANNING: DecisionContent = {
+  signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — has the next iteration been planned?',
   pinchFallback: 'Next iteration unplanned.',
   L1: [
@@ -4080,6 +4157,7 @@ Minimum next step: first feedback-derived change.
 };
 
 const ABSENCE_ITERATION_PLANNING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — what are we building next?',
   pinchFallback: 'Next iteration unplanned.',
   L1: [
@@ -4138,6 +4216,7 @@ Minimum next step: first next-version item.
 // ── Sub-7 — formal content sets ───────────────────────────────────────────────
 
 const ABSENCE_SCOPE_CREEP: DecisionContent = {
+  signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
   L1: [
@@ -4194,6 +4273,7 @@ Minimum next step: one item in feature not in original-scope.
 };
 
 const ABSENCE_CONTEXT_LOSS: DecisionContent = {
+  signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
   L1: [
@@ -4250,6 +4330,7 @@ Minimum next step: the one decision-thread anchor without which follow-on work w
 };
 
 const ABSENCE_API_DESIGN_REVIEW: DecisionContent = {
+  signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
@@ -4306,6 +4387,7 @@ Minimum next step: most important API design decision still open.
 };
 
 const ABSENCE_ACCESSIBILITY: DecisionContent = {
+  signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
   L1: [
@@ -4364,6 +4446,7 @@ Minimum next step: most-significant accessibility gap a user with a disability w
 };
 
 const ABSENCE_ENV_AND_SECRETS: DecisionContent = {
+  signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
@@ -4422,6 +4505,7 @@ Minimum next step: most sensitive credential identified + storage location confi
 };
 
 const ABSENCE_DATA_VALIDATION: DecisionContent = {
+  signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
   L1: [
@@ -4480,6 +4564,7 @@ Minimum next step: one un-validated input + its worst-case unexpected-data outco
 };
 
 const ABSENCE_CI_PIPELINE: DecisionContent = {
+  signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
@@ -4537,6 +4622,7 @@ Minimum next step: most important missing automated CI check.
 };
 
 const ABSENCE_RATE_LIMITING: DecisionContent = {
+  signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
@@ -4594,6 +4680,7 @@ Minimum next step: most likely abuse path + current throttle mechanism status.
 };
 
 const ABSENCE_FEATURE_SCOPE: DecisionContent = {
+  signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Feature started — Definition of Ready confirmed?',
   pinchFallback: 'Scope this first.',
   L1: [
@@ -4650,6 +4737,7 @@ Minimum next step: list acceptance criteria before more code.
 };
 
 const ABSENCE_IMPLEMENTATION_CHECKPOINT: DecisionContent = {
+  signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Implementation continued — current state verified?',
   pinchFallback: 'Verify first.',
   L1: [
@@ -4706,6 +4794,7 @@ Minimum next step: verify last change before next.
 };
 
 const ABSENCE_SPEC_BEFORE_CODE: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Implementation started — behaviour specified first?',
   pinchFallback: 'Spec before code.',
   L1: [
@@ -4764,6 +4853,7 @@ Minimum next step: one G/W/T scenario before next step.
 // ── Sub-7 — casual content sets ───────────────────────────────────────────────
 
 const ABSENCE_SCOPE_CREEP_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
   L1: [
@@ -4820,6 +4910,7 @@ Minimum next step: one not-in-original item.
 };
 
 const ABSENCE_CONTEXT_LOSS_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
   L1: [
@@ -4876,6 +4967,7 @@ Minimum next step: the one thing I most need to remember before continuing.
 };
 
 const ABSENCE_API_DESIGN_REVIEW_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
   L1: [
@@ -4932,6 +5024,7 @@ Minimum next step: most important API question still open.
 };
 
 const ABSENCE_ACCESSIBILITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
   L1: [
@@ -4990,6 +5083,7 @@ Minimum next step: the one accessibility issue that would most block a disabled 
 };
 
 const ABSENCE_ENV_AND_SECRETS_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
   L1: [
@@ -5048,6 +5142,7 @@ Minimum next step: where credentials sit + safe-vs-needs-moving verdict.
 };
 
 const ABSENCE_DATA_VALIDATION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
   L1: [
@@ -5106,6 +5201,7 @@ Minimum next step: one input that isn't being validated.
 };
 
 const ABSENCE_CI_PIPELINE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
   L1: [
@@ -5163,6 +5259,7 @@ Minimum next step: most important uncaught-in-CI thing.
 };
 
 const ABSENCE_RATE_LIMITING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
   L1: [
@@ -5220,6 +5317,7 @@ Minimum next step: most realistic overwhelm path + current prevention.
 };
 
 const ABSENCE_FEATURE_SCOPE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Started building — is scope defined?',
   pinchFallback: 'What\'s in scope?',
   L1: [
@@ -5276,6 +5374,7 @@ Minimum next step: one-sentence done.
 };
 
 const ABSENCE_IMPLEMENTATION_CHECKPOINT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Kept building — is the last change verified?',
   pinchFallback: 'Checkpoint.',
   L1: [
@@ -5332,6 +5431,7 @@ Minimum next step: quick try of last.
 };
 
 const ABSENCE_SPEC_BEFORE_CODE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Building this — behaviour defined first?',
   pinchFallback: 'Spec it first.',
   L1: [
@@ -5390,6 +5490,7 @@ Minimum next step: one-sentence spec before next prompt.
 // ── Phase 5 D1 — incremental_build (CASUAL + FORMAL registers) ────────────────
 
 const ABSENCE_INCREMENTAL_BUILD_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Building incrementally — verifying between steps?',
   pinchFallback: 'Verify between steps.',
   L1: [
@@ -5446,6 +5547,7 @@ Minimum next step: last-built working+verified before next.
 };
 
 const ABSENCE_INCREMENTAL_BUILD: DecisionContent = {
+  signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Incremental build — is each step verified before the next?',
   pinchFallback: 'Verify before proceeding.',
   L1: [
@@ -5504,6 +5606,7 @@ Minimum next step: most-recent change verified before next.
 // ── Phase 5 D4-D6 — cool_geek signals (CASUAL register) ──────────────────────
 
 const ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FEATURE_COMPLETION_CHECK",
   question:      'Adding more — is the previous feature actually done?',
   pinchFallback: 'Finish before starting next.',
   L1: [
@@ -5560,6 +5663,7 @@ Minimum next step: last-feature actually-done-and-tested check.
 };
 
 const ABSENCE_FINISHING_LINE_AWARENESS_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FINISHING_LINE_AWARENESS",
   question:      'Multiple things in progress — how many are complete?',
   pinchFallback: 'Finish one before starting next.',
   L1: [
@@ -5616,6 +5720,7 @@ Minimum next step: closest-to-done → finish that.
 };
 
 const ABSENCE_POLISH_VS_FUNCTION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_POLISH_VS_FUNCTION",
   question:      'Working on the look — does the core work end-to-end?',
   pinchFallback: 'Function before polish.',
   L1: [
@@ -5672,6 +5777,7 @@ Minimum next step: core-working-end-to-end before looks-focus.
 };
 
 const ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_MVP_SCOPE_DISCIPLINE",
   question:      'Adding features — is each one actually MVP scope?',
   pinchFallback: 'MVP discipline check.',
   L1: [
@@ -5728,6 +5834,7 @@ Minimum next step: MVP-scope test — hypothesis or nice-to-have?
 };
 
 const ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_IDEA_TO_SPEC_BRIDGE",
   question:      'New idea — defined what it does before building?',
   pinchFallback: 'Spec the idea first.',
   L1: [
@@ -5784,6 +5891,7 @@ Minimum next step: does/doesn't before code.
 };
 
 const ABSENCE_DEMO_VS_PRODUCT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DEMO_VS_PRODUCT",
   question:      'Is this demo quality or production quality — explicit distinction?',
   pinchFallback: 'Demo vs. production: name which.',
   L1: [
@@ -5840,6 +5948,7 @@ Minimum next step: demo or production — name which.
 };
 
 const ABSENCE_USER_JOURNEY_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_JOURNEY_CHECK",
   question:      'Feature being built — is the full user journey mapped?',
   pinchFallback: 'Map the user journey first.',
   L1: [
@@ -5896,6 +6005,7 @@ Minimum next step: name empty / error / first-use.
 };
 
 const ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TECHNICAL_SPIKE_TREATMENT",
   question:      'Exploring / experimenting — spike or production code?',
   pinchFallback: 'Spike or production: name which.',
   L1: [
@@ -5952,6 +6062,7 @@ Minimum next step: spike or production — name before commit.
 };
 
 const ABSENCE_DEPENDENCY_ADVENTURE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_ADVENTURE",
   question:      'Adding a dependency — evaluated the need and maintenance cost?',
   pinchFallback: 'Evaluate before adding.',
   L1: [
@@ -6014,6 +6125,7 @@ Minimum next step: specific problem justifying permanent dependency.
 };
 
 const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_RESTART_IMPULSE_CHECK",
   question:      'Hitting friction — debugged before considering a restart?',
   pinchFallback: 'Debug before restarting.',
   L1: [
@@ -6070,6 +6182,7 @@ Minimum next step: specific broken part + debug before restart.
 };
 
 const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CREATIVE_VS_CORE_RATIO",
   question:      'Session balance — how much went to core vs. creative features?',
   pinchFallback: 'Core value first.',
   L1: [
@@ -6128,6 +6241,7 @@ Minimum next step: core-vs-creative attention ratio.
 // ── Phase 5 D7 — pro_geek_soul cluster 1 (CASUAL register) ───────────────────
 
 const ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_CODE_DOCUMENTATION_GAP",
   question:      'Complex logic added — documented the why?',
   pinchFallback: 'Add the why comment.',
   L1: [
@@ -6186,6 +6300,7 @@ Minimum next step: inline WHY-comment explaining why this logic works this way.
 };
 
 const ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT",
   question:      'Shortcut taken — tagged it as debt?',
   pinchFallback: 'Tag the shortcut.',
   L1: [
@@ -6244,6 +6359,7 @@ Minimum next step: tag the shortcut with TODO/FIXME before moving on.
 };
 
 const ABSENCE_TEST_DEPTH_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TEST_DEPTH_CHECK",
   question:      'Tests written — covering beyond the happy path?',
   pinchFallback: 'Add edge and error path tests.',
   L1: [
@@ -6302,6 +6418,7 @@ Minimum next step: edge case + error path tests.
 };
 
 const ABSENCE_ARCHITECTURE_NOTE_ABSENCE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ARCHITECTURE_NOTE_ABSENCE",
   question:      'Architecture decision made — noted the rationale?',
   pinchFallback: 'Add an architecture note.',
   L1: [
@@ -6362,6 +6479,7 @@ Minimum next step: brief rationale note — why this approach.
 // ── Phase 5 D8 — pro_geek_soul cluster 2 (CASUAL register) ───────────────────
 
 const ABSENCE_DEPENDENCY_AUDIT_GAP_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_AUDIT_GAP",
   question:      'New dependency added — evaluated it before adopting?',
   pinchFallback: 'Check the dependency before adding.',
   L1: [
@@ -6421,6 +6539,7 @@ Run the minimum check on this single dependency now.
 };
 
 const ABSENCE_SECURITY_REVIEW_GAP_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SECURITY_REVIEW_GAP",
   question:      'Security surface touched — applied security checks?',
   pinchFallback: 'Apply security checks now.',
   L1: [
@@ -6479,6 +6598,7 @@ Minimum next step: input validation + authorization + injection prevention check
 };
 
 const ABSENCE_API_CONTRACT_DEFINITION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_API_CONTRACT_DEFINITION",
   question:      'API being built — defined the contract first?',
   pinchFallback: 'Define the interface before implementing.',
   L1: [
@@ -6537,6 +6657,7 @@ Minimum next step: define request schema + response schema + error format.
 };
 
 const ABSENCE_ERROR_HANDLING_COVERAGE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_ERROR_HANDLING_COVERAGE",
   question:      'Implementation done — covered the error paths?',
   pinchFallback: 'Add error handling for failure cases.',
   L1: [
@@ -6597,6 +6718,7 @@ Minimum next step: error handling for failure paths — external / input / edge.
 // ── Phase 5 D9 — pro_geek_soul cluster 3 (CASUAL register) ───────────────────
 
 const ABSENCE_REFACTORING_CHECKPOINT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_REFACTORING_CHECKPOINT",
   question:      'Adding to messy code — refactored first?',
   pinchFallback: 'Do a cleanup pass before extending.',
   L1: [
@@ -6655,6 +6777,7 @@ Minimum next step: a refactor pass on the existing code before extending.
 };
 
 const ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_BACKWARDS_COMPATIBILITY_CHECK",
   question:      'Interface changed — checked existing consumers?',
   pinchFallback: 'Check what calls this before changing.',
   L1: [
@@ -6713,6 +6836,7 @@ Minimum next step: check all callers before changing — update or version any a
 };
 
 const ABSENCE_SELF_REVIEW_HABIT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SELF_REVIEW_HABIT",
   question:      'Long implementation run — done a review pass?',
   pinchFallback: 'Read back through what was built.',
   L1: [
@@ -6771,6 +6895,7 @@ Minimum next step: diff-readback for drift / gaps / inconsistencies.
 };
 
 const ABSENCE_PERFORMANCE_AWARENESS_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_PERFORMANCE_AWARENESS",
   question:      'Data-heavy operation — considered performance?',
   pinchFallback: 'Check for performance implications.',
   L1: [
@@ -6831,6 +6956,7 @@ Minimum next step: check for N+1 / unbounded fetches / expensive renders before 
 // ── Phase 5 D10 — hardcore_pro cluster 1 (FORMAL register) ───────────────────
 
 const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DECISION_RECORD_ABSENCE",
   question:      'Architectural decision made — ADR recorded?',
   pinchFallback: 'Record the decision with context and consequences.',
   L1: [
@@ -6887,6 +7013,7 @@ Minimum next step: ADR with context / decision / consequences / alternatives.
 };
 
 const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_OVER_ENGINEERING_CHECK",
   question:      'Is this abstraction required by current requirements?',
   pinchFallback: 'Apply YAGNI — build only what current requirements require.',
   L1: [
@@ -6949,6 +7076,7 @@ Minimum next step: YAGNI — remove speculative + implement current-requirement 
 };
 
 const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_PAIR_REVIEW_ABSENCE",
   question:      'Critical implementation complete — review plan established?',
   pinchFallback: 'Establish a review plan before merging.',
   L1: [
@@ -7007,6 +7135,7 @@ Minimum next step: review plan — design / errors / security — pre-merge.
 // ── Phase 5 D11 — hardcore_pro cluster 2 (FORMAL register) ───────────────────
 
 const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_OBSERVABILITY_FIRST",
   question:      'Feature shipping — observability instrumented?',
   pinchFallback: 'Add logging, metrics, and tracing before shipping.',
   L1: [
@@ -7067,6 +7196,7 @@ Minimum next step: instrument all three pillars pre-ship.
 };
 
 const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_FAILURE_MODE_ANALYSIS",
   question:      'External dependencies integrated — failure modes enumerated?',
   pinchFallback: 'Enumerate failure modes for each dependency.',
   L1: [
@@ -7127,6 +7257,7 @@ Minimum next step: enumerate failure modes + stability pattern per dep pre-ship.
 };
 
 const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_CONTRACT_TESTING_GAP",
   question:      'Service boundary established — contract tests defined?',
   pinchFallback: 'Define consumer-driven contract tests for this boundary.',
   L1: [
@@ -7185,6 +7316,7 @@ Minimum next step: consumer-driven contract tests pre-independent-deploy.
 // ── Phase 5 D12 — hardcore_pro clusters 3+4 (FORMAL register) ────────────────
 
 const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_CAPACITY_PLANNING_GAP",
   question:      'Load-adding feature — capacity estimate done?',
   pinchFallback: 'Complete a capacity estimate before shipping.',
   L1: [
@@ -7241,6 +7373,7 @@ Minimum next step: RPS + storage growth + headroom — all three pre-ship.
 };
 
 const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_SECURITY_THREAT_MODELING",
   question:      'Security-sensitive feature — STRIDE threat model completed?',
   pinchFallback: 'Complete a STRIDE threat model before shipping.',
   L1: [
@@ -7301,6 +7434,7 @@ Minimum next step: STRIDE enumerate + mitigation controls pre-ship.
 };
 
 const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DATABASE_MIGRATION_SAFETY",
   question:      'Schema change — expand-migrate-contract pattern applied?',
   pinchFallback: 'Apply backwards-compatible phased migration.',
   L1: [
@@ -7364,6 +7498,7 @@ Still, before you run any schema migration you must ask me for go-ahead confirma
 };
 
 const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE",
   question:      'Significant feature shipping — deployment strategy defined?',
   pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
   L1: [
@@ -7427,6 +7562,7 @@ Still, before you trigger any deployment you must ask me for go-ahead confirmati
 };
 
 const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_OPERATIONAL_RUNBOOK_GAP",
   question:      'New service/feature shipping — operational runbook written?',
   pinchFallback: 'Write the runbook before shipping.',
   L1: [
@@ -7483,6 +7619,7 @@ Minimum next step: runbook — what / debug / metrics / escalation.
 };
 
 const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_SLO_DEFINITION_GAP",
   question:      'User-facing feature/service — SLOs defined?',
   pinchFallback: 'Define SLOs before shipping.',
   L1: [
@@ -7541,6 +7678,7 @@ Minimum next step: SLOs — availability + p99 + error rate pre-ship.
 // ── Phase 6 E1-E3 — founder role CASUAL content ───────────────────────────────
 
 export const ABSENCE_USER_VALUE_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_VALUE_CHECK",
   question: 'Has this feature been validated with real users?',
   pinchFallback: 'Check user signal before committing to this build.',
   L1: [
@@ -7597,6 +7735,7 @@ Minimum next step: one-real-user validation before commit.
 };
 
 export const ABSENCE_OUTCOME_DEFINITION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_OUTCOME_DEFINITION",
   question: 'What does success look like for this feature?',
   pinchFallback: 'Define the success metric before building starts.',
   L1: [
@@ -7653,6 +7792,7 @@ Minimum next step: observable-outcome success metric.
 };
 
 export const ABSENCE_FEATURE_PRIORITIZATION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FEATURE_PRIORITIZATION",
   question: 'Why is this the highest-priority thing to build right now?',
   pinchFallback: 'Confirm this is the highest-impact item before building.',
   L1: [
@@ -7709,6 +7849,7 @@ Minimum next step: explicit rationale before start.
 };
 
 export const ABSENCE_USER_PERSONA_CLARITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_PERSONA_CLARITY",
   question: 'Who specifically is this feature for?',
   pinchFallback: 'Name the specific user this feature is designed for.',
   L1: [
@@ -7765,6 +7906,7 @@ Minimum next step: specific user-type before build decisions.
 };
 
 export const ABSENCE_COMPETITIVE_AWARENESS_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_COMPETITIVE_AWARENESS",
   question: 'Have you checked how competitors handle this?',
   pinchFallback: 'Run a quick competitive check before committing to this build.',
   L1: [
@@ -7821,6 +7963,7 @@ Minimum next step: quick competitive audit + differentiation angle.
 };
 
 export const ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_MVP_BOUNDARY_DISCIPLINE",
   question: 'Is this addition within MVP scope?',
   pinchFallback: 'Check whether this is needed to test the core hypothesis.',
   L1: [
@@ -7877,6 +8020,7 @@ Minimum next step: MVP-scope check — defer non-hypothesis additions.
 };
 
 export const ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_ACQUISITION_CONSIDERATION",
   question: 'How will target users find and access this feature?',
   pinchFallback: 'Define the acquisition path before building.',
   L1: [
@@ -7933,6 +8077,7 @@ Minimum next step: acquisition path before build.
 };
 
 export const ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_RETENTION_MECHANISM_CHECK",
   question: 'How does this feature bring users back?',
   pinchFallback: 'Consider the retention angle before building.',
   L1: [
@@ -7989,6 +8134,7 @@ Minimum next step: retention angle before build.
 };
 
 export const ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT",
   question: 'How will you know if this feature is working after you ship it?',
   pinchFallback: 'Add a feedback mechanism before shipping.',
   L1: [
@@ -8045,6 +8191,7 @@ Minimum next step: event + metric + review-date.
 };
 
 export const ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_HYPOTHESIS_BEFORE_BUILD",
   question: 'What hypothesis does this feature test?',
   pinchFallback: 'Define the hypothesis before starting the build.',
   L1: [
@@ -8101,6 +8248,7 @@ Minimum next step: hypothesis — outcome tested + how to know.
 };
 
 export const ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE",
   question: 'When did you last check product direction — not just implementation?',
   pinchFallback: 'Take a product perspective before continuing to build.',
   L1: [
@@ -8157,6 +8305,7 @@ Minimum next step: product-direction check — not just what, but whether.
 };
 
 export const ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_NORTH_STAR_ALIGNMENT",
   question: 'How does this feature connect to your product\'s core metric?',
   pinchFallback: 'Check north star alignment before adding this feature.',
   L1: [
@@ -8215,6 +8364,7 @@ Minimum next step: traceable north-star connection before build.
 // ── Phase 6 E4-E6 — indie_hacker role CASUAL content ─────────────────────────
 
 export const ABSENCE_TIME_TO_VALUE_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TIME_TO_VALUE_CHECK",
   question: 'Is this solution the right size for your current scale?',
   pinchFallback: 'Check whether this complexity is justified at current user count.',
   L1: [
@@ -8271,6 +8421,7 @@ Minimum next step: simplest for current scale, not future.
 };
 
 export const ABSENCE_SHIP_READINESS_DEFINITION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SHIP_READINESS_DEFINITION",
   question: 'What needs to be true for this to be ready to ship?',
   pinchFallback: 'Write ship criteria before continuing to build.',
   L1: [
@@ -8327,6 +8478,7 @@ Minimum next step: explicit binary ship criteria.
 };
 
 export const ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_MANUAL_BEFORE_AUTOMATE",
   question: 'Have you done this manually to confirm it works before automating?',
   pinchFallback: 'Do it manually first, then automate the proven version.',
   L1: [
@@ -8383,6 +8535,7 @@ Minimum next step: manual-first + validate with real users.
 };
 
 export const ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_TECH_STACK_COMPLEXITY_CHECK",
   question: 'Can you maintain this architecture alone, at 2am, when it breaks?',
   pinchFallback: 'Apply the solo maintainability test before adding this complexity.',
   L1: [
@@ -8439,6 +8592,7 @@ Minimum next step: solo-maintainability test → simplest debuggable alone.
 };
 
 export const ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_LAUNCH_STRATEGY_ABSENCE",
   question: 'How are people going to find out this product exists when you launch?',
   pinchFallback: 'Define a launch strategy before getting closer to ship date.',
   L1: [
@@ -8501,6 +8655,7 @@ Minimum next step: channel + audience + drafted announcement.
 };
 
 export const ABSENCE_EARLY_USER_FEEDBACK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_EARLY_USER_FEEDBACK",
   question: 'When did you last get a real user\'s reaction to what you\'re building?',
   pinchFallback: 'Show what you\'ve built to at least one real user before continuing.',
   L1: [
@@ -8557,6 +8712,7 @@ Minimum next step: show to one real user + watch.
 };
 
 export const ABSENCE_SOLO_MAINTAINABILITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SOLO_MAINTAINABILITY",
   question: 'Is this addition maintainable by you alone, long-term?',
   pinchFallback: 'Run the solo maintainability check before adding this complexity.',
   L1: [
@@ -8613,6 +8769,7 @@ Minimum next step: own-full-failure-alone test.
 };
 
 export const ABSENCE_DISTRIBUTION_THINKING_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DISTRIBUTION_THINKING",
   question: 'How will users discover and access this feature?',
   pinchFallback: 'Consider the distribution angle before building this feature.',
   L1: [
@@ -8669,6 +8826,7 @@ Minimum next step: name distribution path before build.
 };
 
 export const ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_MONETIZATION_PATH_CLARITY",
   question: 'How does this feature connect to how the product makes money?',
   pinchFallback: 'Consider the monetization connection before building this feature.',
   L1: [
@@ -8725,6 +8883,7 @@ Minimum next step: monetization connection + why.
 };
 
 export const ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY",
   question: 'Is this a milestone worth sharing publicly?',
   pinchFallback: 'Consider sharing this milestone publicly before moving to the next.',
   L1: [
@@ -8788,6 +8947,7 @@ Still, before you publish this post publicly you must ask me for go-ahead confir
 };
 
 export const ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SCOPE_VS_TIME_CHECK",
   question: 'Is the current scope still within your available time and energy?',
   pinchFallback: 'Run a scope-vs-time check before adding more to the build.',
   L1: [
@@ -8846,6 +9006,7 @@ Minimum next step: cut scope to available time.
 // ── Phase 6 E7-E9 — pm role FORMAL content ───────────────────────────────────
 
 export const ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV",
   question: 'Are acceptance criteria defined for this story before development begins?',
   pinchFallback: 'Define acceptance criteria for this story before starting implementation.',
   L1: [
@@ -8902,6 +9063,7 @@ Minimum next step: 'done when [condition]' pre-impl.
 };
 
 export const ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK",
   question: 'Have relevant stakeholders been aligned on this feature before development begins?',
   pinchFallback: 'Verify stakeholder alignment before proceeding with significant development work.',
   L1: [
@@ -8963,6 +9125,7 @@ Minimum next step: identify + align stakeholder pre-impl.
 };
 
 export const ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG",
   question: 'Are there ambiguous quality attributes in these requirements that need a measurable definition?',
   pinchFallback: 'Resolve ambiguous quality attributes to measurable criteria before implementation.',
   L1: [
@@ -9019,6 +9182,7 @@ Minimum next step: measurable target per attribute pre-impl.
 };
 
 export const ABSENCE_DEPENDENCY_MAPPING_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DEPENDENCY_MAPPING",
   question: 'Have upstream and downstream dependencies for this work been identified before starting?',
   pinchFallback: 'Map dependencies before beginning this work to prevent blocked integration.',
   L1: [
@@ -9075,6 +9239,7 @@ Minimum next step: map upstream + downstream pre-first-prompt.
 };
 
 export const ABSENCE_DEFINITION_OF_DONE_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DEFINITION_OF_DONE",
   question: 'Is there an explicit Definition of Done for this sprint item?',
   pinchFallback: 'Define the completion criteria for this item before starting work.',
   L1: [
@@ -9131,6 +9296,7 @@ Minimum next step: 'done when [condition]' pre-work.
 };
 
 export const ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_CROSS_TEAM_IMPACT_CHECK",
   question: 'Have teams affected by this change been notified before development begins?',
   pinchFallback: 'Identify and notify affected teams before building this change to shared systems.',
   L1: [
@@ -9192,6 +9358,7 @@ Minimum next step: notify affected teams pre-impl.
 };
 
 export const ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_SUCCESS_METRIC_DEFINITION",
   question: 'Is there a success metric defined for this feature before development begins?',
   pinchFallback: 'Define how success will be measured for this feature before starting implementation.',
   L1: [
@@ -9248,6 +9415,7 @@ Minimum next step: metric + threshold + timeline pre-impl.
 };
 
 export const ABSENCE_PRIORITY_JUSTIFICATION_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_PRIORITY_JUSTIFICATION",
   question: 'Is there an explicit justification for why this item is the current highest priority?',
   pinchFallback: 'Articulate the priority justification for this item before beginning work.',
   L1: [
@@ -9304,6 +9472,7 @@ Minimum next step: why-this-now-over-alternatives.
 };
 
 export const ABSENCE_USER_STORY_COMPLETENESS_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_USER_STORY_COMPLETENESS",
   question: 'Is this work item expressed as a complete user story with who, what, and why?',
   pinchFallback: 'Reframe this work item as a user story — who benefits, what they need, why it matters.',
   L1: [
@@ -9360,6 +9529,7 @@ Minimum next step: full user story who/what/why before impl.
 };
 
 export const ABSENCE_RISK_FLAG_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_RISK_FLAG",
   question: 'Have risks been identified for this decision or scope change before proceeding?',
   pinchFallback: 'Identify and document risks before proceeding with this significant decision.',
   L1: [
@@ -9416,6 +9586,7 @@ Minimum next step: identify + document risks + mitigation.
 };
 
 export const ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT",
   question: 'Has the impact of this scope change on the current sprint been assessed?',
   pinchFallback: 'Assess sprint impact before accepting this scope change.',
   L1: [
@@ -9472,6 +9643,7 @@ Minimum next step: complete 4-point impact assessment pre-accept.
 };
 
 export const ABSENCE_RETROSPECTIVE_HABIT_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_RETROSPECTIVE_HABIT",
   question: 'Has this sprint or iteration been closed with a retrospective before starting the next?',
   pinchFallback: 'Run a retrospective on this sprint before moving to the next cycle.',
   L1: [
@@ -9530,6 +9702,7 @@ Minimum next step: retro + one process change for next sprint.
 // ── Phase 7 F1-F2 — session-quality signals (CASUAL register) ─────────────────
 
 export const ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
   L1: [
@@ -9586,6 +9759,7 @@ Minimum next step: anything in the last response worth questioning.
 };
 
 export const ABSENCE_WORK_RHYTHM_CHECK_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
@@ -9642,6 +9816,7 @@ Minimum next step: read the last response before the next send.
 };
 
 export const ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
   L1: [
@@ -9698,6 +9873,7 @@ Minimum next step: complete one before opening another.
 };
 
 export const ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
   L1: [
@@ -9754,6 +9930,7 @@ Minimum next step: the one most important thing to not lose track of.
 };
 
 export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL: DecisionContent = {
+  signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
   L1: [
@@ -9812,6 +9989,7 @@ Minimum next step: one-sentence note on what was built.
 // ── Phase 7 F1-F2 — session-quality signals (FORMAL register) ─────────────────
 
 export const ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
   L1: [
@@ -9868,6 +10046,7 @@ Minimum next step: one thing to verify or question before next-response acceptan
 };
 
 export const ABSENCE_WORK_RHYTHM_CHECK_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
@@ -9924,6 +10103,7 @@ Minimum next step: pause + read last response.
 };
 
 export const ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
   L1: [
@@ -9980,6 +10160,7 @@ Minimum next step: complete one end-to-end before opening another.
 };
 
 export const ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
   L1: [
@@ -10036,6 +10217,7 @@ Minimum next step: one not-to-be-lost context anchor.
 };
 
 export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL: DecisionContent = {
+  signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
   L1: [

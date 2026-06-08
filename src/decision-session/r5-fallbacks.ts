@@ -250,34 +250,34 @@ const CLASS_5_FALLBACKS = {
   // ── Base (R3-Sub5 Phase A — 18 sets, 6 signal_types × 3 registers) ──
 
   // Anchor #1 — R5-Sub1.7 worked example (legacy colon-fragment pattern)
-  WORK_RHYTHM_CHECK: {
+  ABSENCE_WORK_RHYTHM_CHECK: {
     formal:   "Recent prompts: rapid prompting pattern observed.",
     casual:   "I've been sending prompts pretty fast.",
     beginner: "I've been sending prompts quickly without reading each one.",
   },
-  DECISION_FATIGUE_PATTERN: {
+  ABSENCE_DECISION_FATIGUE_PATTERN: {
     formal:   "Decision activity has shifted toward default acceptance without articulated rationale.",
     casual:   "I've been accepting defaults without really thinking through each choice.",
     beginner: "I've been picking whatever comes back without thinking about it much.",
   },
-  FOCUS_DRIFT_DETECTION: {
+  ABSENCE_FOCUS_DRIFT_DETECTION: {
     formal:   "The conversation has drifted from the originally-stated objective without realignment.",
     casual:   "I've been drifting from what I started out to do without coming back to it.",
     beginner: "I've been getting off-track without coming back to what I originally wanted.",
   },
-  SESSION_LENGTH_CHECKPOINT: {
+  ABSENCE_SESSION_LENGTH_CHECKPOINT: {
     formal:   "Session length has crossed working-window norms without a consolidation checkpoint.",
     casual:   "I've been working straight through without stepping back to see where I am.",
     beginner: "I've been working for a long time without stopping to check on my progress.",
   },
-  PROGRESS_CONSOLIDATION_GAP: {
+  ABSENCE_PROGRESS_CONSOLIDATION_GAP: {
     formal:   "Progress markers haven't been consolidated; new work has continued layering on top.",
     casual:   "I've been moving forward without pausing to note where things stand.",
     beginner: "I've been making progress without writing down what I've already finished.",
   },
 
   // Anchor #2 — Stage 0 calibration sample (legacy colon-fragment pattern)
-  CONTEXT_LOSS: {
+  ABSENCE_CONTEXT_LOSS: {
     formal:   "Recent prompts: earlier work referenced without restated constraints or assumptions.",
     casual:   "I've been touching pieces of earlier decisions without bringing the reasons back in.",
     beginner: "I've been referencing earlier work without pulling it back into view.",
