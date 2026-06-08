@@ -13,6 +13,7 @@ import {
   maskSecretsInText,
   f4EnforceLengthCap,
   f5DeduplicatePrompts,
+  computeRepetitionCounts,
   f7DetectL2Triggers,
   f7DetectL2TriggerMatches,
   buildRewritePrompt,
@@ -283,6 +284,112 @@ describe('r5-injection — F5 deduplicate prompts', () => {
   it('returns identical array when no duplicates are present', () => {
     const history = [makePrompt('a', 0), makePrompt('b', 1), makePrompt('c', 2)];
     expect(f5DeduplicatePrompts(history)).toHaveLength(3);
+  });
+});
+
+describe('r5-injection — computeRepetitionCounts() F5 repetition signal', () => {
+  it('returns tokens appearing in ≥ 2 distinct prompts with their cross-prompt counts', () => {
+    const history = [
+      makePrompt('fix this bug',         0),
+      makePrompt('fix this bug',         1),
+      makePrompt('fix this bug please',  2),
+      makePrompt('still broken, fix this bug', 3),
+      makePrompt('fix this bug now',     4),
+    ];
+    const reps = computeRepetitionCounts(history);
+    const fix = reps.find((r) => r.token.toLowerCase() === 'fix');
+    const bug = reps.find((r) => r.token.toLowerCase() === 'bug');
+    expect(fix?.promptCount).toBe(5);
+    expect(bug?.promptCount).toBe(5);
+  });
+
+  it('returns an empty array when no token repeats across prompts', () => {
+    const history = [
+      makePrompt('alpha beta',  0),
+      makePrompt('gamma delta', 1),
+    ];
+    expect(computeRepetitionCounts(history)).toEqual([]);
+  });
+
+  it('skips stopwords + tokens shorter than 2 chars', () => {
+    const history = [
+      makePrompt('I have been refactoring', 0),
+      makePrompt('I have been writing tests', 1),
+    ];
+    const reps = computeRepetitionCounts(history);
+    // Stopwords ("i", "have", "been") never appear in the result.
+    expect(reps.find((r) => r.token.toLowerCase() === 'i')).toBeUndefined();
+    expect(reps.find((r) => r.token.toLowerCase() === 'have')).toBeUndefined();
+    expect(reps.find((r) => r.token.toLowerCase() === 'been')).toBeUndefined();
+  });
+
+  it('sorts results by promptCount descending', () => {
+    const history = [
+      makePrompt('alpha beta gamma',       0),
+      makePrompt('alpha beta',             1),
+      makePrompt('alpha somethingother',   2),
+      makePrompt('beta yetanother',        3),
+    ];
+    // alpha appears in 3 prompts, beta in 3 prompts — both kept; ordering by count desc.
+    const reps = computeRepetitionCounts(history);
+    expect(reps[0].promptCount).toBeGreaterThanOrEqual(reps[reps.length - 1].promptCount);
+  });
+
+  it('counts a token ONCE per prompt even when it appears multiple times within the same prompt', () => {
+    const history = [
+      makePrompt('fix fix fix',  0),
+      makePrompt('fix something else', 1),
+    ];
+    const reps = computeRepetitionCounts(history);
+    const fix = reps.find((r) => r.token.toLowerCase() === 'fix');
+    expect(fix?.promptCount).toBe(2);  // 2 distinct prompts, not 4 total occurrences
+  });
+});
+
+describe('r5-injection — buildRewritePrompt() F5 repetition hint', () => {
+  it('omits the repetition hint section when no repetitions are passed', () => {
+    const prompt = buildRewritePrompt(['foo', 'bar'], 'TASK_REVIEW', 'casual', '');
+    expect(prompt).not.toContain('appeared in multiple distinct');
+    expect(prompt).not.toContain('Reflect this repetition naturally');
+  });
+
+  it('includes the repetition hint listing tokens with their cross-prompt counts when repetitions are present', () => {
+    const prompt = buildRewritePrompt(
+      ['fix', 'bug'],
+      'TASK_REVIEW',
+      'casual',
+      '',
+      [
+        { token: 'fix', promptCount: 5 },
+        { token: 'bug', promptCount: 5 },
+      ],
+    );
+    expect(prompt).toContain('appeared in multiple distinct user prompts');
+    expect(prompt).toContain('fix (×5)');
+    expect(prompt).toContain('bug (×5)');
+    expect(prompt).toContain('Reflect this repetition naturally');
+  });
+});
+
+describe('r5-injection — F5 hint flows from injectR5 to the rewrite client', () => {
+  it('passes the repetition hint to the rewrite client when prompts contain repeated tokens', async () => {
+    const history = [
+      makePrompt('I have been refactoring the parser and adding tests', 0),
+      makePrompt('I keep refactoring the parser and the test plan',     1),
+      makePrompt('Still refactoring the parser today',                  2),
+    ];
+    let captured = '';
+    const client: R5RewriteClient = {
+      rewrite: async (p) => { captured = p; return 'parser refactoring tests'; },
+    };
+    await injectR5(SAMPLE_DESC_BASE_WITH_PLACEHOLDER, history, 'TASK_REVIEW', 'formal', {
+      client,
+      exampleHint:   '',
+      lengthBudget:  'HEAVY',
+    });
+    expect(captured).toContain('appeared in multiple distinct');
+    expect(captured.toLowerCase()).toContain('parser');
+    expect(captured.toLowerCase()).toContain('refactoring');
   });
 });
 

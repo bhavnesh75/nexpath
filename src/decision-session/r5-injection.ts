@@ -143,25 +143,20 @@ export async function injectR5(
   // (3) F2 — mask PII / secrets BEFORE any token extraction touches them.
   const masked = f2MaskPromptHistory(history);
 
-  // (4) F5 — collapse verbatim-repeated prompts so the extractor doesn't
-  // over-weight a copy-pasted sentence.
-  const deduped = f5DeduplicatePrompts(masked);
+  // (4) F7 — detect L2 sensitive-action triggers + strip trigger phrases
+  // BEFORE F5 dedup, so the cross-prompt repetition counts and the
+  // deduped vocab share the same content-safety boundary (sensitive
+  // verbs are never surfaced to the LLM rewrite step).
+  const triggerMatches = f7DetectL2TriggerMatches(masked);
+  // Path-(b) drop applied uniformly — see dev-plan §10.6.1 deviation note.
+  const strippedAll    = triggerMatches.length > 0 ? stripL2TriggerText(masked) : masked;
 
-  // (5) F7 — detect L2 sensitive-action triggers in the prompt history.
-  // Runs AFTER F2 masking but BEFORE deterministic vocab extraction.
-  // Capture both deduplicated category names (for the stripping decision)
-  // and the per-match list with literal user-prompt text (for the
-  // safeguard sentence per dev-plan §10.6.1).
-  const triggerMatches = f7DetectL2TriggerMatches(deduped);
-
-  // For vocab extraction, strip L2 trigger phrases so sensitive verbs
-  // never flow into the LLM rewrite output. This is the path-(b) drop
-  // behaviour applied uniformly — appending the safeguard sentence
-  // (path a) is handled separately in finalize(). Documented dev-plan
-  // deviation: the literal §10.6.1 model is (a) XOR (b); we apply (b)
-  // always for content-sensitivity safety per the high-risk content
-  // rule, and append (a) on top when applicable.
-  const promptsForVocab = triggerMatches.length > 0 ? stripL2TriggerText(deduped) : deduped;
+  // (5) F5 — compute per-token cross-prompt repetition counts BEFORE
+  // dedup so the "repeated [verb]" signal (dev-plan §10.6 F5 row)
+  // survives the dedup collapse, then dedup so vocab extraction
+  // does not over-weight copy-pasted sentences.
+  const repetitions      = computeRepetitionCounts(strippedAll);
+  const promptsForVocab  = f5DeduplicatePrompts(strippedAll);
 
   // (6) — deterministic vocab extraction.
   const rawVocab = extractVocab(promptsForVocab);
@@ -184,6 +179,7 @@ export async function injectR5(
     register,
     options.exampleHint ?? '',
     options.client,
+    repetitions,
   );
   if (summary.trim().length === 0) {
     return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
@@ -542,6 +538,57 @@ export function f5DeduplicatePrompts(history: readonly PromptRecord[]): PromptRe
   return out;
 }
 
+/** Single repetition record returned by `computeRepetitionCounts`. */
+export interface RepetitionEntry {
+  /** Original-cased token (first occurrence wins). */
+  token:       string;
+  /** Number of distinct prompts (pre-dedup) that contained the token. */
+  promptCount: number;
+}
+
+/**
+ * Compute per-token cross-prompt repetition counts on the PRE-dedup
+ * prompt set. The F5 dedup step collapses verbatim duplicates so
+ * vocab extraction doesn't over-weight a copy-pasted phrase, but
+ * that collapse hides the F5 "repeated [verb] pattern" signal the
+ * rewrite summary is supposed to surface (dev-plan §10.6 F5 row).
+ *
+ * Returns tokens that appear in ≥ 2 distinct prompts, sorted by
+ * promptCount descending. Stopwords + tokens shorter than 2 chars
+ * are skipped (same filter as `extractVocab`).
+ */
+export function computeRepetitionCounts(history: readonly PromptRecord[]): RepetitionEntry[] {
+  const promptsContaining = new Map<string, Set<number>>();
+  const rawByLower        = new Map<string, string>();
+  for (let i = 0; i < history.length; i++) {
+    const seen = new Set<string>();
+    for (const raw of history[i].text.split(/\s+/)) {
+      const cleaned = trimPunctuation(raw);
+      if (cleaned.length < 2) continue;
+      const lower = cleaned.toLowerCase();
+      if (STOPWORDS.has(lower)) continue;
+      if (!rawByLower.has(lower)) rawByLower.set(lower, cleaned);
+      seen.add(lower);
+    }
+    for (const t of seen) {
+      let bucket = promptsContaining.get(t);
+      if (!bucket) {
+        bucket = new Set<number>();
+        promptsContaining.set(t, bucket);
+      }
+      bucket.add(i);
+    }
+  }
+  const out: RepetitionEntry[] = [];
+  for (const [lower, prompts] of promptsContaining) {
+    if (prompts.size >= 2) {
+      out.push({ token: rawByLower.get(lower)!, promptCount: prompts.size });
+    }
+  }
+  out.sort((a, b) => b.promptCount - a.promptCount);
+  return out;
+}
+
 /** L2 sensitive-action triggers (per CLAUDE.md L2 trigger list, used by F7). */
 const L2_TRIGGER_PATTERNS: readonly { name: string; re: RegExp }[] = [
   { name: 'destructive-fs',    re: /\brm\s+-rf\b|\bdelete\b|\bdrop\s+table\b|\btruncate\b/i },
@@ -685,13 +732,15 @@ export function buildRewritePrompt(
   signalType:  string,
   register:    R5Register,
   exampleHint: string,
+  repetitions: ReadonlyArray<RepetitionEntry> = [],
 ): string {
   const registerInstruction: Record<R5Register, string> = {
     formal:   'Use third-person framing such as "Recent prompts: ..." or "The session has ...". Do NOT use first-person.',
     casual:   'Use first-person framing such as "I\'ve been ...". Keep the tone conversational.',
     beginner: 'Use first-person framing such as "I\'ve been ...". Keep the wording simple and explicit.',
   };
-  return [
+
+  const lines: string[] = [
     `You are summarising recent user prompts for a coding-agent signal of type "${signalType}".`,
     '',
     `Register: ${register}.`,
@@ -702,6 +751,21 @@ export function buildRewritePrompt(
     '',
     'Add only the remaining ≤ 30% as structural connective words (e.g., "I\'ve been", "Recent prompts:", "without") for grammatical coherence.',
     '',
+  ];
+
+  // F5 repetition hint — surface tokens that appeared across multiple
+  // distinct prompts (pre-dedup) so the summary can naturally call out
+  // the "repeated [verb]" pattern per dev-plan §10.6 F5 row.
+  if (repetitions.length > 0) {
+    const hint = repetitions.map((r) => `${r.token} (×${r.promptCount})`).join(', ');
+    lines.push(
+      `These tokens appeared in multiple distinct user prompts (indicating a repeated focus): ${hint}.`,
+      'Reflect this repetition naturally in the summary (e.g. "I\'ve been repeatedly ..." or "Recent prompts have repeatedly ...").',
+      '',
+    );
+  }
+
+  lines.push(
     'Match the format and length of this example shape (the actual content should be different — the example only shows length and tone):',
     exampleHint,
     '',
@@ -710,7 +774,9 @@ export function buildRewritePrompt(
     '- Do NOT use the words "AI", "Claude", "assistant", or any third-person agent reference.',
     '- Do NOT address the user as "you" / "your".',
     '- Output ONLY the summary text, no preamble, no quotes, no markdown.',
-  ].join('\n');
+  );
+
+  return lines.join('\n');
 }
 
 /**
@@ -755,8 +821,9 @@ export async function rewriteViaLLM(
   register:    R5Register,
   exampleHint: string,
   client:      R5RewriteClient,
+  repetitions: ReadonlyArray<RepetitionEntry> = [],
 ): Promise<string> {
-  const prompt = buildRewritePrompt(vocab, signalType, register, exampleHint);
+  const prompt = buildRewritePrompt(vocab, signalType, register, exampleHint, repetitions);
   try {
     return await client.rewrite(prompt);
   } catch {
