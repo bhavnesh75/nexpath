@@ -52,6 +52,15 @@ export interface DecisionContent {
    * to `true` (desc-bases active) when omitted.
    */
   descBaseEnabled?: boolean;
+  /**
+   * Per-set marker for the deferred L2 safeguard pass. When `true`, this
+   * set is in scope for the L2 sensitive-action safeguard authoring pass
+   * — author inlines a confirmation-seek sentence into the relevant
+   * options' desc-base content during the L2 pass. Sets without this
+   * marker are out of scope. Defaults to `undefined` / `false` when
+   * omitted.
+   */
+  l2SafeguardRequired?: boolean;
 }
 
 // ── Per-transition content ─────────────────────────────────────────────────────

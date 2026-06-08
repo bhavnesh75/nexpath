@@ -83,11 +83,36 @@ describe('DecisionContent — shape acceptance', () => {
       L1: [{ option: 'L1-a', descBase: '' }, { option: 'L1-b', descBase: '' }],
       L2: [{ option: 'L2-a', descBase: '' }],
       L3: [{ option: 'L3-a', descBase: '' }],
-      whyHelp:         { formal: 'F', casual: 'C', beginner: 'B' },
-      descBaseEnabled: true,
+      whyHelp:             { formal: 'F', casual: 'C', beginner: 'B' },
+      descBaseEnabled:     true,
+      l2SafeguardRequired: true,
     };
     expect(c.L1).toHaveLength(2);
     expect(c.whyHelp?.formal).toBe('F');
     expect(c.descBaseEnabled).toBe(true);
+    expect(c.l2SafeguardRequired).toBe(true);
+  });
+
+  it('accepts l2SafeguardRequired set to true (marker for the deferred L2 pass)', () => {
+    const c: DecisionContent = {
+      question:      'q',
+      pinchFallback: 'pf',
+      L1: [{ option: 'L1-a', descBase: '' }],
+      L2: [{ option: 'L2-a', descBase: '' }],
+      L3: [{ option: 'L3-a', descBase: '' }],
+      l2SafeguardRequired: true,
+    };
+    expect(c.l2SafeguardRequired).toBe(true);
+  });
+
+  it('omitting l2SafeguardRequired leaves it undefined (not in scope for L2 pass)', () => {
+    const c: DecisionContent = {
+      question:      'q',
+      pinchFallback: 'pf',
+      L1: [{ option: 'L1-a', descBase: '' }],
+      L2: [{ option: 'L2-a', descBase: '' }],
+      L3: [{ option: 'L3-a', descBase: '' }],
+    };
+    expect(c.l2SafeguardRequired).toBeUndefined();
   });
 });
