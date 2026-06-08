@@ -1578,14 +1578,39 @@ export const ABSENCE_CONTEXT_LOSS_BEGINNER: DecisionContent = {
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
   L1: [
-    { option: '1. Think about everything we\'ve done with what was just built this session. 2. Write down what\'s working and what still needs to be done. 3. Share that with me before we keep going — it\'ll help us stay on track.', descBase: '' },
-    { option: 'Take a moment and catch up on this project — what have we built so far, what choices did we make, and what\'s next? Share your summary with me before we continue.', descBase: '' },
+    {
+      option: '1. Think about everything we\'ve done with what was just built this session. 2. Write down what\'s working and what still needs to be done. 3. Share that with me before we keep going — it\'ll help us stay on track.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long session and I haven't paused to think about where we are with this feature."}
+Where we are with this feature hasn't been thought through.
+Walk me through it: review the session, write down what's working / what's still to do, share so we stay on track.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Take a moment and catch up on this project — what have we built so far, what choices did we make, and what\'s next? Share your summary with me before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long session; project catch-up not done."}
+Same moment, simpler: catch-up summary — built / choices / what's next.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Can you tell me where this feature is right now in your own words — what\'s done and what still needs to happen?', descBase: '' },
+    {
+      option: 'Can you tell me where this feature is right now in your own words — what\'s done and what still needs to happen?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long session; feature status unclear."}
+Lighter: where this feature is — in plain words.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What\'s one thing you want to make sure we don\'t forget about where this project is right now?', descBase: '' },
+    {
+      option: 'What\'s one thing you want to make sure we don\'t forget about where this project is right now?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long session."}
+Minimum next step: the one thing I don't want us to forget right now.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1884,15 +1909,46 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER: DecisionContent = {
   question:      'Accepting without reviewing — applied critical check recently?',
   pinchFallback: 'Streak alert.',
   L1: [
-    { option: 'Look back at the last few suggestions made — is there anything that looks right but you have not double-checked?', descBase: '' },
-    { option: 'Review what was built recently and identify one thing to verify or question before continuing.', descBase: '' },
-    { option: 'Check the last few responses: is there anything you would like to confirm is correct before continuing?', descBase: '' },
+    {
+      option: 'Look back at the last few suggestions made — is there anything that looks right but you have not double-checked?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been accepting Claude's suggestions without double-checking them."}
+The double-check on recent Claude suggestions hasn't been done.
+Look back at recent suggestions for anything not yet double-checked.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Review what was built recently and identify one thing to verify or question before continuing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Recent Claude work; one-thing-to-verify not flagged."}
+Same moment, simpler: review recent and identify one thing to verify or question.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Check the last few responses: is there anything you would like to confirm is correct before continuing?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Last few Claude responses; confirm-correctness check not done."}
+Same moment, deeper: confirm-correctness check on recent responses.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Is there anything in the recent suggestions you would like to double-check before continuing?', descBase: '' },
+    {
+      option: 'Is there anything in the recent suggestions you would like to double-check before continuing?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Recent Claude work."}
+Lighter: anything in recent Claude work to double-check.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Pick one thing from the recent responses to verify before continuing.', descBase: '' },
+    {
+      option: 'Pick one thing from the recent responses to verify before continuing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Recent Claude work."}
+Minimum next step: one thing to verify before continuing.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1900,15 +1956,46 @@ export const ABSENCE_WORK_RHYTHM_CHECK_BEGINNER: DecisionContent = {
   question:      'Sending fast — read the last response fully before continuing?',
   pinchFallback: 'Slow down.',
   L1: [
-    { option: 'Read the last response carefully before continuing — is there anything that looks right but you have not actually checked?', descBase: '' },
-    { option: 'Go back and read the last response — does everything look correct?', descBase: '' },
-    { option: 'Before continuing: read the last response and verify that everything there is correct.', descBase: '' },
+    {
+      option: 'Read the last response carefully before continuing — is there anything that looks right but you have not actually checked?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been sending prompts fast without reading Claude's responses carefully."}
+The careful read on Claude's last response hasn't been done.
+Read carefully; spot looks-right-but-not-checked items.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Go back and read the last response — does everything look correct?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Rapid sends; haven't read Claude's last response."}
+Same moment, simpler: go back, read, check correctness.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Before continuing: read the last response and verify that everything there is correct.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Rapid sends; pre-continue verify not done."}
+Same moment, deeper: pre-continue verify on last response.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Read the last response carefully before sending the next message.', descBase: '' },
+    {
+      option: 'Read the last response carefully before sending the next message.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Rapid sends."}
+Lighter: careful read before next send.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Pause and read the last response before continuing.', descBase: '' },
+    {
+      option: 'Pause and read the last response before continuing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Rapid sends."}
+Minimum next step: pause and read the last response.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1916,15 +2003,46 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER: DecisionContent = {
   question:      'Working on many things — finished any of them yet?',
   pinchFallback: 'Focus drift.',
   L1: [
-    { option: 'Let us focus on one thing at a time — what is the most important thing to finish in this session before we start anything new?', descBase: '' },
-    { option: 'Pick the most important thing that is not finished yet and complete it before we continue with anything else.', descBase: '' },
-    { option: 'What is the one thing we should complete right now before starting something else?', descBase: '' },
+    {
+      option: 'Let us focus on one thing at a time — what is the most important thing to finish in this session before we start anything new?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been jumping around this session and nothing is finished yet."}
+The one-thing-at-a-time discipline hasn't been applied.
+Pick the most important thing to finish; complete it; then start new.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Pick the most important thing that is not finished yet and complete it before we continue with anything else.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Multiple open things; pick-and-complete not done."}
+Same moment, simpler: pick most important unfinished; complete; then continue.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What is the one thing we should complete right now before starting something else?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Multiple opens; one-to-complete-right-now not identified."}
+Same moment, deeper: the one thing to complete right now before something else.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What is the most important thing to finish before we start anything new?', descBase: '' },
+    {
+      option: 'What is the most important thing to finish before we start anything new?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Multiple opens."}
+Lighter: most important thing to finish before new start.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Complete one thing before we open anything else.', descBase: '' },
+    {
+      option: 'Complete one thing before we open anything else.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Multiple opens."}
+Minimum next step: complete one before opening anything else.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1932,15 +2050,46 @@ export const ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER: DecisionContent = {
   question:      'Working for a while — what have you built so far?',
   pinchFallback: 'Checkpoint due.',
   L1: [
-    { option: 'Summarize what we have built so far in this session — what is working, what is still in progress, and what we still need to do.', descBase: '' },
-    { option: 'Write a quick update on where we are — what has been done and what still needs to happen.', descBase: '' },
-    { option: 'What is the current state of what we are building and what comes next?', descBase: '' },
+    {
+      option: 'Summarize what we have built so far in this session — what is working, what is still in progress, and what we still need to do.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've been at this for a while and I haven't summed up what we've built."}
+A session summary hasn't been done.
+What we built / working / in progress / still to do.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Write a quick update on where we are — what has been done and what still needs to happen.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long session; update not written."}
+Same moment, simpler: quick update — done / still-needs.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'What is the current state of what we are building and what comes next?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long session; current-state unclear."}
+Same moment, deeper: current state + what comes next.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'What is the current state of what we are building — what works and what still needs to be done?', descBase: '' },
+    {
+      option: 'What is the current state of what we are building — what works and what still needs to be done?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long session."}
+Lighter: current state — works / still-needs.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'What is the most important thing to remember about where we are right now?', descBase: '' },
+    {
+      option: 'What is the most important thing to remember about where we are right now?',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long session."}
+Minimum next step: the most important thing to remember about where we are.
+{R4_CLOSE}`,
+    },
   ],
 };
 
@@ -1948,15 +2097,46 @@ export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER: DecisionContent = {
   question:      'Built a lot — have you written down what you made?',
   pinchFallback: 'Document now.',
   L1: [
-    { option: 'Write a short note about what we built in this session, even just a few sentences, before we continue.', descBase: '' },
-    { option: 'Add a quick update to the README or a comment in the code describing what was just built.', descBase: '' },
-    { option: 'Summarize what was built in this session so the progress is captured somewhere.', descBase: '' },
+    {
+      option: 'Write a short note about what we built in this session, even just a few sentences, before we continue.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "I've built a lot this session and I haven't written any of it down."}
+A short note about what we built hasn't been written.
+Write a few sentences before continuing.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Add a quick update to the README or a comment in the code describing what was just built.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long build run; README/comment update not done."}
+Same moment, simpler: README update or code comment describing what was built.
+{R4_CLOSE}`,
+    },
+    {
+      option: 'Summarize what was built in this session so the progress is captured somewhere.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1-2 lines first-person — "Long build run; progress not captured."}
+Same moment, deeper: summarize so progress is captured somewhere.
+{R4_CLOSE}`,
+    },
   ],
   L2: [
-    { option: 'Add a brief comment or note describing what was just built.', descBase: '' },
+    {
+      option: 'Add a brief comment or note describing what was just built.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long build run."}
+Lighter: brief comment or note about what was just built.
+{R4_CLOSE}`,
+    },
   ],
   L3: [
-    { option: 'Write one sentence about what was just built before continuing.', descBase: '' },
+    {
+      option: 'Write one sentence about what was just built before continuing.',
+      descBase: `{R4_OPEN}
+{R5_INJECT: ~1 line first-person — "Long build run."}
+Minimum next step: one sentence about what was just built.
+{R4_CLOSE}`,
+    },
   ],
 };
 
