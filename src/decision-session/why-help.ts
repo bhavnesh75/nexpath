@@ -49,17 +49,17 @@ export type WhyHelpVariants = UniversalWhyHelpVariants;
 // Content — 24 base why-help blocks across the 9 signal classes.
 // ──────────────────────────────────────────────────────────────────────────
 
-/** Signal-class keys for the why-help content table. */
+/** Signal-class keys for the why-help content table — verbatim per the locked spec. */
 export type SignalClass =
-  | 'stage-transition'
-  | 'verification-quality'
-  | 'spec-architecture'
-  | 'release-observability-infra'
-  | 'session-quality'
-  | 'planning-idea-task'
-  | 'vibe-coder'
-  | 'role-specific'
-  | 'academic-formal';
+  | 'class1_stage_transition'
+  | 'class2_verification_quality'
+  | 'class3_spec_architecture'
+  | 'class4_release_observability_infra'
+  | 'class5_session_quality'
+  | 'class6_planning_idea_task'
+  | 'class7_cool_geek_vibe_coder'
+  | 'class8_role_cluster'
+  | 'class9_academic_hardcore_pro';
 
 /**
  * Why-help content table keyed by signal class. Each entry's `structure`
@@ -72,8 +72,8 @@ export type SignalClass =
  *
  * 24 base blocks total (6×3 + 2 + 3 + 1).
  */
-export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
-  'stage-transition': {
+export const WHY_HELP_PER_CLASS: Record<SignalClass, WhyHelpEntry> = {
+  class1_stage_transition: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts indicate a transition from one development stage to the next. Confirmation that the prior stage's outputs are complete and stable hasn't surfaced. Teams typically anchor that confirmation before moving forward — to avoid carrying unfinished work into the next stage.",
@@ -81,7 +81,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts show you've moved to a new stage. The previous stage's pieces haven't been wrapped up. Let's check those first.",
     },
   },
-  'verification-quality': {
+  class2_verification_quality: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts have focused on implementation without surfacing verification — tests, review, or code-quality checks haven't anchored the current flow. Verification practices typically run alongside or shortly after implementation. This is where teams pause to confirm what's been built holds up.",
@@ -89,7 +89,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts show building but no checking. Tests and reviews haven't shown up. Let's verify what's been built before moving on.",
     },
   },
-  'spec-architecture': {
+  class3_spec_architecture: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts have moved into implementation without anchoring the spec or architecture decisions behind it. Design intent, component boundaries, or data contracts haven't surfaced. Teams typically lock those before implementation to avoid downstream churn.",
@@ -97,7 +97,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts jump into building without a plan first. The design hasn't been discussed lately. Let's pin down the plan before more building.",
     },
   },
-  'release-observability-infra': {
+  class4_release_observability_infra: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts have moved toward release without surfacing observability, rollback planning, or monitoring readiness. Release-stage rigor hasn't been part of the recent flow. Teams typically lock these before any production-facing change.",
@@ -105,7 +105,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts are about releasing but the monitoring and rollback pieces haven't come up. Let's set those up first.",
     },
   },
-  'session-quality': {
+  class5_session_quality: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts have referenced earlier work without restating the constraints or assumptions behind it. Quality-checkpoint moments — re-anchoring decisions, pausing the rhythm — haven't surfaced in the visible window. This is where teams typically take a breath to reconstruct the assumption set before continuing.",
@@ -113,7 +113,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts mention earlier work but don't pull it back into view. Quick pauses haven't happened. Let's pause and check in.",
     },
   },
-  'planning-idea-task': {
+  class6_planning_idea_task: {
     structure: 'universal-triplet',
     content: {
       formal:   "Recent prompts have moved into work without anchoring scope, task ordering, or definition-of-done. Planning structure hasn't surfaced in the current flow. Teams typically lock these before deeper implementation to prevent scope drift.",
@@ -121,14 +121,14 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       beginner: "Recent prompts jump into work without a clear plan. Scope and task pieces haven't been discussed. Let's plan first.",
     },
   },
-  'vibe-coder': {
+  class7_cool_geek_vibe_coder: {
     structure: 'class7-vibe-coder',
     content: {
       casual:   "Your work has been moving with vibe-coder energy — fast, exploratory — but completion checks, polish-vs-function balance, or MVP scope haven't anchored the flow. These are the discipline points vibe coding needs to stay productive. Worth a quick look at which gap fits the current work.",
       beginner: "Recent prompts have been fast and exploratory but completion or scope haven't been discussed. These are the pieces vibe coding needs to stay on track. Let's check which gap matches now.",
     },
   },
-  'role-specific': {
+  class8_role_cluster: {
     structure: 'class8-role-cluster',
     content: {
       founder_casual:      "Your recent prompts have moved into the build without surfacing launch context, distribution thinking, or build-in-public signals. Founder-context practices — what to share, when, with whom — haven't been part of the flow. Worth pulling those in before deeper build work.",
@@ -136,7 +136,7 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
       pm_formal:           "Recent prompts have advanced the work without surfacing PM-context practices — stakeholder alignment, cross-team impact, or requirement traceability. These haven't anchored the recent flow. Teams typically lock these before deeper implementation to avoid downstream alignment costs.",
     },
   },
-  'academic-formal': {
+  class9_academic_hardcore_pro: {
     structure: 'class9-formal-only',
     content: {
       formal: "Recent prompts have moved into implementation without anchoring high-rigor engineering practices — failure-mode analysis, security threat modeling, observability-first design, or over-engineering audits. These practices typically anchor production-grade work. Teams lock them before any release-facing change.",
@@ -146,13 +146,13 @@ export const WHY_HELP_CONTENT: Record<SignalClass, WhyHelpEntry> = {
 
 /** All signal-class keys as a const array — useful for exhaustive iteration in tests / dispatch tables. */
 export const ALL_SIGNAL_CLASSES: readonly SignalClass[] = [
-  'stage-transition',
-  'verification-quality',
-  'spec-architecture',
-  'release-observability-infra',
-  'session-quality',
-  'planning-idea-task',
-  'vibe-coder',
-  'role-specific',
-  'academic-formal',
+  'class1_stage_transition',
+  'class2_verification_quality',
+  'class3_spec_architecture',
+  'class4_release_observability_infra',
+  'class5_session_quality',
+  'class6_planning_idea_task',
+  'class7_cool_geek_vibe_coder',
+  'class8_role_cluster',
+  'class9_academic_hardcore_pro',
 ] as const;
