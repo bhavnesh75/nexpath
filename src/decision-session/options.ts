@@ -7230,6 +7230,7 @@ const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Security-sensitive feature pending ship without STRIDE threat model."}
 STRIDE threat model for this feature hasn't been completed — risk of un-mitigated attack vectors at ship.
 Per STRIDE category: Spoofing / Tampering / Repudiation / Info Disclosure / DoS / Elevation — control per relevant threat pre-ship.
+Still, before you implement any security control in code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -7238,6 +7239,7 @@ Per STRIDE category: Spoofing / Tampering / Repudiation / Info Disclosure / DoS 
 {R5_INJECT: ~1-2 lines — "STRIDE-to-threat-surface application not done."}
 The STRIDE → threat-surface application hasn't been done.
 Per category: attack vector / at-risk data or component / mitigating control.
+Still, before you implement any mitigating control in code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -7246,6 +7248,7 @@ Per category: attack vector / at-risk data or component / mitigating control.
 {R5_INJECT: ~1-2 lines — "STRIDE threats + severity + mitigation/accepted-risk not documented."}
 The threats + severity + mitigation-or-accepted-risk documentation hasn't been done.
 Enumerate / severity / mitigation OR accepted-risk decision per threat pre-ship.
+Still, before you implement any security mitigation in code you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
