@@ -644,6 +644,34 @@ describe('r5-injection — injectR5() full orchestration', () => {
       expect(typeof out).toBe('string');
     }
   });
+
+  it('falls back to Strategy D when F2 masking + F7 stripping leave fewer than 2 useful tokens (dev plan §10.1 step 3)', async () => {
+    // Every meaningful word in these prompts matches a redaction
+    // pattern: API key + email + secret-store path. After masking,
+    // only the redaction markers remain — extractVocab returns no
+    // useful tokens, and the runtime must fall back to D before
+    // reaching the voice-rule filter.
+    const history: PromptRecord[] = [
+      makePrompt('api_key=abc12345def67890 contact dev@example.com',  0),
+      makePrompt('check ~/.aws/credentials and ~/.ssh/id_rsa next',   1),
+    ];
+    let rewriteCalled = false;
+    const client: R5RewriteClient = {
+      rewrite: async () => { rewriteCalled = true; return 'should never run'; },
+    };
+    const out = await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      history,
+      'TASK_REVIEW',
+      'formal',
+      { client, exampleHint: '', lengthBudget: 'HEAVY' },
+    );
+    // No rewrite call — the early <2 check exits before the LLM step.
+    expect(rewriteCalled).toBe(false);
+    // R5 placeholder substituted via Strategy D (TASK_REVIEW has a D-fallback authored).
+    expect(out).not.toContain('{R5_INJECT');
+    expect(out).not.toContain('should never run');
+  });
 });
 
 describe('r5-injection — fitsLengthBudget() helper', () => {

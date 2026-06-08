@@ -161,6 +161,15 @@ export async function injectR5(
   // (6) — deterministic vocab extraction.
   const rawVocab = extractVocab(promptsForVocab);
 
+  // Dev-plan §10.1 step 3: "If <2 useful tokens after masking → fall
+  // back to D." This early check catches the case where F2 masking
+  // (plus F7 stripping) removed substantially all meaningful content
+  // from the prompts, BEFORE running the voice-rule filter on an
+  // already-empty vocab.
+  if (rawVocab.length < 2) {
+    return finalize(strategyDFallback(descBase, signalType, register), triggerMatches);
+  }
+
   // (7) — step-4.5 voice-rule filter.
   const filteredVocab = applyVoiceRuleFilter(rawVocab);
   if (filteredVocab.length < 2) {
