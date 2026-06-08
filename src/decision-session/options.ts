@@ -8865,6 +8865,7 @@ export const ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Feature entering dev without stakeholder alignment confirmed."}
 Stakeholder alignment for this feature hasn't been confirmed — risk of rework on rejection at demo.
 Identify stakeholders / per-stakeholder touchpoint type / each completed or scheduled / date + outcome documented.
+Still, before you send any alignment request to a stakeholder you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -8873,6 +8874,7 @@ Identify stakeholders / per-stakeholder touchpoint type / each completed or sche
 {R5_INJECT: ~1-2 lines — "15-min alignment pass not run."}
 The 15-min alignment pass hasn't been run.
 List / send request / capture responses / document in sprint item / state stakeholder-position assumptions.
+Still, before you send the alignment request to any stakeholder you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -8881,6 +8883,7 @@ List / send request / capture responses / document in sprint item / state stakeh
 {R5_INJECT: ~1-2 lines — "Alignment-threshold question not asked."}
 The alignment-threshold question hasn't been asked.
 Legitimate opinion → demo-rejection risk? / if 'anyone' → align pre-dev / document who + when.
+Still, before you contact any stakeholder you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -8890,6 +8893,7 @@ Legitimate opinion → demo-rejection risk? / if 'anyone' → align pre-dev / do
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Feature entering dev."}
 Lighter: legitimate-opinion + contact-before-first-prompt.
+Still, before you contact the stakeholder you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
