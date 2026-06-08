@@ -21,6 +21,9 @@ import {
   CONCENTRATION_THRESHOLD,
   fitsLengthBudget,
   LENGTH_BUDGETS,
+  buildL2SafeguardSentence,
+  stripL2TriggerText,
+  appendL2Safeguard,
   type R5Register,
   type R5RewriteClient,
   type LengthBudgetTier,
@@ -606,5 +609,153 @@ describe('r5-injection — per-set total length budget (§10.1.2)', () => {
   it('exports a LengthBudgetTier type covering the three locked tiers', () => {
     const tiers: LengthBudgetTier[] = ['LIGHT', 'MEDIUM', 'HEAVY'];
     expect(tiers).toHaveLength(3);
+  });
+});
+
+describe('r5-injection — F7 helpers', () => {
+  it('buildL2SafeguardSentence emits the locked safeguard phrasing for known triggers', () => {
+    expect(buildL2SafeguardSentence(['destructive-fs'])).toBe(
+      'Still, before you perform any destructive filesystem operation you must ask me for go-ahead confirmation.',
+    );
+    expect(buildL2SafeguardSentence(['schema-migration'])).toBe(
+      'Still, before you run any schema migration you must ask me for go-ahead confirmation.',
+    );
+    expect(buildL2SafeguardSentence(['deployment'])).toBe(
+      'Still, before you deploy or release you must ask me for go-ahead confirmation.',
+    );
+  });
+
+  it('buildL2SafeguardSentence falls back to a generic phrase for unknown trigger names', () => {
+    expect(buildL2SafeguardSentence(['unknown-trigger-xyz'])).toBe(
+      'Still, before you this sensitive action you must ask me for go-ahead confirmation.',
+    );
+  });
+
+  it('stripL2TriggerText removes L2 trigger phrases from each prompt while preserving other text', () => {
+    const stripped = stripL2TriggerText([
+      makePrompt('Please migrate the users table and write a unit test for it.', 0),
+      makePrompt('Then deploy to production and let me know.', 1),
+    ]);
+    expect(stripped[0].text).not.toMatch(/migrate/i);
+    expect(stripped[0].text).toContain('unit test');
+    expect(stripped[1].text).not.toMatch(/deploy/i);
+    expect(stripped[1].text).not.toMatch(/production/i);
+  });
+
+  it('appendL2Safeguard inserts the sentence before {R4_CLOSE} when present', () => {
+    const desc = 'body line\n{R4_CLOSE}';
+    const out  = appendL2Safeguard(desc, ['destructive-fs']);
+    expect(out).toContain('Still, before you perform any destructive filesystem operation');
+    // R4_CLOSE remains on its own trailing line.
+    expect(out.endsWith('{R4_CLOSE}')).toBe(true);
+  });
+
+  it('appendL2Safeguard appends at the end when {R4_CLOSE} is not present', () => {
+    const desc = 'body line only';
+    const out  = appendL2Safeguard(desc, ['deployment']);
+    expect(out.startsWith('body line only\n')).toBe(true);
+    expect(out).toContain('Still, before you deploy or release');
+  });
+
+  it('appendL2Safeguard returns the desc-base unchanged when no triggers are detected', () => {
+    expect(appendL2Safeguard('body\n{R4_CLOSE}', [])).toBe('body\n{R4_CLOSE}');
+  });
+});
+
+describe('r5-injection — F7 two-tier orchestration (§10.6.1)', () => {
+  // History with one L2 trigger ("deploy to production") plus enough other
+  // tokens to keep vocab extraction non-empty after the trigger words are
+  // stripped.
+  const l2History: readonly PromptRecord[] = [
+    makePrompt('I have been refactoring the invoice rendering path today.', 0),
+    makePrompt('Building the invoice service and getting ready to deploy to production.', 1),
+  ];
+
+  const echoClient: R5RewriteClient = {
+    rewrite: async () => 'refactoring invoice building rendering service today.',
+  };
+
+  it('path (a) — appends the safeguard sentence when triggers present AND static is L2-clean', async () => {
+    const out = await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      l2History,
+      'TASK_REVIEW',
+      'formal',
+      {
+        client: echoClient,
+        exampleHint: '',
+        lengthBudget: 'HEAVY',
+        // l2SafeguardRequired omitted — i.e. static is L2-clean → escalate.
+      },
+    );
+    expect(out).toContain('Still, before you deploy or release you must ask me for go-ahead confirmation.');
+  });
+
+  it('path (b) — does NOT append safeguard when static is already L2-flagged', async () => {
+    const out = await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      l2History,
+      'TASK_REVIEW',
+      'formal',
+      {
+        client: echoClient,
+        exampleHint: '',
+        lengthBudget: 'HEAVY',
+        l2SafeguardRequired: true,
+      },
+    );
+    expect(out).not.toContain('Still, before you');
+  });
+
+  it('drops L2 trigger words from the vocab so they cannot leak into the rewrite output', async () => {
+    // A capturing client returns the vocab JSON array verbatim so the test
+    // can assert which tokens reached the LLM step.
+    let capturedPrompt = '';
+    const captureClient: R5RewriteClient = {
+      rewrite: async (prompt: string) => {
+        capturedPrompt = prompt;
+        return 'refactoring invoice building rendering service today.';
+      },
+    };
+    await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      l2History,
+      'TASK_REVIEW',
+      'formal',
+      { client: captureClient, exampleHint: '', lengthBudget: 'HEAVY' },
+    );
+    // The trigger words were stripped before vocab extraction.
+    expect(capturedPrompt).not.toMatch(/"deploy"/i);
+    expect(capturedPrompt).not.toMatch(/"production"/i);
+    // Other user tokens still survived.
+    expect(capturedPrompt).toMatch(/invoice|refactoring|rendering/i);
+  });
+
+  it('no-op when history contains no L2 triggers — safeguard NOT appended', async () => {
+    const cleanHistory: readonly PromptRecord[] = [
+      makePrompt('I have been refactoring the invoice rendering path today.', 0),
+      makePrompt('Building the invoice service with new feature notes.', 1),
+    ];
+    const out = await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      cleanHistory,
+      'TASK_REVIEW',
+      'formal',
+      { client: echoClient, exampleHint: '', lengthBudget: 'HEAVY' },
+    );
+    expect(out).not.toContain('Still, before you');
+  });
+
+  it('safeguard still applied when the path falls back to Strategy D (no rewrite client)', async () => {
+    const out = await injectR5(
+      SAMPLE_DESC_BASE_WITH_PLACEHOLDER,
+      l2History,
+      'TASK_REVIEW',
+      'formal',
+      { lengthBudget: 'HEAVY' },  // no client → Strategy D
+    );
+    // D-fallback substituted the R5 placeholder AND the safeguard appended.
+    expect(out).not.toContain('{R5_INJECT');
+    expect(out).toContain('Still, before you deploy or release');
   });
 });

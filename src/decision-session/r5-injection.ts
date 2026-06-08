@@ -63,6 +63,14 @@ export interface InjectR5Options {
    * exceeds the tier's line or char ceiling.
    */
   lengthBudget?: LengthBudgetTier;
+  /**
+   * Per-set marker from the static DecisionContent. When `true`, the
+   * static desc-base already carries a confirmation-seek safeguard
+   * sentence — runtime escalation (appending another) is suppressed.
+   * Runtime still strips L2 trigger words from the prompt vocab before
+   * extraction so the rewrite output does not echo sensitive verbs.
+   */
+  l2SafeguardRequired?: boolean;
 }
 
 /** Per-set length budget tier. */
@@ -121,9 +129,15 @@ export async function injectR5(
 ): Promise<string> {
   if (!hasR5Injection(descBase)) return descBase;
 
+  // Helper closures — finalize wraps every return path so F7 escalation
+  // and the per-set length budget check apply uniformly to both
+  // Strategy-C output and every Strategy-D fallback.
+  const isAlreadyL2 = options.l2SafeguardRequired === true;
+  const tier        = options.lengthBudget ?? 'MEDIUM';
+
   // (2) F1 — early-session guard.
   if (f1ShouldFallback(history)) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), []);
   }
 
   // (3) F2 — mask PII / secrets BEFORE any token extraction touches them.
@@ -133,20 +147,30 @@ export async function injectR5(
   // over-weight a copy-pasted sentence.
   const deduped = f5DeduplicatePrompts(masked);
 
-  // (5) — deterministic vocab extraction.
-  const rawVocab = extractVocab(deduped);
+  // (5) F7 — detect L2 sensitive-action triggers in the prompt history.
+  // Runs AFTER F2 masking but BEFORE deterministic vocab extraction.
+  const triggers = f7DetectL2Triggers(deduped);
 
-  // (6) — step-4.5 voice-rule filter.
+  // For vocab extraction, strip L2 trigger phrases so sensitive verbs
+  // never flow into the LLM rewrite output. This is the path-(b) drop
+  // behaviour applied uniformly — appending the safeguard sentence
+  // (path a) is handled separately in finalize().
+  const promptsForVocab = triggers.length > 0 ? stripL2TriggerText(deduped) : deduped;
+
+  // (6) — deterministic vocab extraction.
+  const rawVocab = extractVocab(promptsForVocab);
+
+  // (7) — step-4.5 voice-rule filter.
   const filteredVocab = applyVoiceRuleFilter(rawVocab);
   if (filteredVocab.length < 2) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), triggers);
   }
 
-  // (7) — LLM rewrite, only when a client is bound. Without a client,
+  // (8) — LLM rewrite, only when a client is bound. Without a client,
   // the runtime falls back to Strategy D — this keeps the path
   // production-safe in environments that haven't provisioned an LLM.
   if (!options.client) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), triggers);
   }
   const summary = await rewriteViaLLM(
     filteredVocab,
@@ -156,33 +180,45 @@ export async function injectR5(
     options.client,
   );
   if (summary.trim().length === 0) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), triggers);
   }
 
-  // (8) — F4 per-substitution length cap.
+  // (9) — F4 per-substitution length cap.
   const capped = f4EnforceLengthCap(summary);
   if (capped === null) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), triggers);
   }
 
-  // (9) — 70-80% concentration check on the user-grounded vocab.
+  // (10) — 70-80% concentration check on the user-grounded vocab.
   if (!meetsConcentrationThreshold(capped, filteredVocab)) {
-    return strategyDFallback(descBase, signalType, register);
+    return finalize(strategyDFallback(descBase, signalType, register), triggers);
   }
 
   const substituted = substituteR5Placeholder(descBase, capped);
+  return finalize(substituted, triggers);
 
-  // (10) — per-set total-length budget check on the FULL post-substitution
-  // desc-base. F4 only caps the substitution itself; this catches the case
-  // where the bookend + gap-framing + direction-body + R5 line together
-  // overflow the set's overall budget (LIGHT 2 / MEDIUM 4 / HEAVY 10
-  // expanded lines, with matching char ceilings).
-  const tier = options.lengthBudget ?? 'MEDIUM';
-  if (!fitsLengthBudget(substituted, tier)) {
-    return strategyDFallback(descBase, signalType, register);
+  function finalize(out: string, detected: readonly string[]): string {
+    // Path (a) — escalate to L2 when triggers detected AND static
+    // desc-base is currently L2-clean. Skip when static is already
+    // L2-flagged (l2SafeguardRequired === true) since the static
+    // safeguard sentence already covers it.
+    const withSafeguard = (!isAlreadyL2 && detected.length > 0)
+      ? appendL2Safeguard(out, detected)
+      : out;
+
+    // Per-set total-length budget check on the final desc-base. When
+    // overflow occurs, fall back to Strategy D for that option (D
+    // strings are shorter and fit within the same budget). The
+    // safeguard still applies on top of the D fallback when relevant.
+    if (!fitsLengthBudget(withSafeguard, tier)) {
+      const dFallback = strategyDFallback(descBase, signalType, register);
+      return (!isAlreadyL2 && detected.length > 0)
+        ? appendL2Safeguard(dFallback, detected)
+        : dFallback;
+    }
+
+    return withSafeguard;
   }
-
-  return substituted;
 }
 
 /**
@@ -510,6 +546,69 @@ const L2_TRIGGER_PATTERNS: readonly { name: string; re: RegExp }[] = [
   { name: 'deployment',        re: /\bdeploy\b|\brelease\b|\bproduction\b|\bstaging\b/i },
   { name: 'multi-file-mod',    re: /\brefactor\s+across\b|\brewrite\s+all\b|\bmigrate\s+all\b/i },
 ];
+
+/**
+ * Human-readable verb-phrase for each L2 trigger category, used to fill
+ * the `<action>` slot in the runtime confirmation-seek safeguard
+ * sentence. Categorical labels (not user-prompt text) avoid leaking
+ * potentially-sensitive prompt content back into the substituted
+ * desc-base.
+ */
+const L2_ACTION_PHRASES: Readonly<Record<string, string>> = {
+  'destructive-fs':   'perform any destructive filesystem operation',
+  'schema-migration': 'run any schema migration',
+  'dep-install':      'install or upgrade any dependency',
+  'secret-env':       'read or write any secret or env value',
+  'force-push':       'force-push',
+  'deployment':       'deploy or release',
+  'multi-file-mod':   'make multi-file changes outside the immediate task',
+};
+
+/**
+ * Build the runtime L2 escalation safeguard sentence. Uses the first
+ * detected trigger's categorical phrase; falls back to a generic
+ * phrase for unknown trigger names.
+ */
+export function buildL2SafeguardSentence(triggerNames: readonly string[]): string {
+  const first  = triggerNames[0];
+  const phrase = (first && L2_ACTION_PHRASES[first]) ?? 'this sensitive action';
+  return `Still, before you ${phrase} you must ask me for go-ahead confirmation.`;
+}
+
+/**
+ * Strip L2 trigger phrases from each prompt's text. Used before vocab
+ * extraction so sensitive verbs do not flow into the LLM rewrite
+ * output. The masked replacements preserve word boundaries by
+ * substituting a single space (collapsed afterwards in vocab tokenise).
+ */
+export function stripL2TriggerText(history: readonly PromptRecord[]): PromptRecord[] {
+  // Each L2 trigger regex carries an alternation that may match multiple
+  // times in a single prompt. The detection regexes do not have the
+  // global flag (test() on /g would mutate lastIndex across calls), so
+  // build a per-call /gi clone here for full-text replacement.
+  const globalPatterns = L2_TRIGGER_PATTERNS.map(({ re }) => new RegExp(re.source, 'gi'));
+  return history.map((p) => ({
+    ...p,
+    text: globalPatterns.reduce((t, re) => t.replace(re, ' '), p.text),
+  }));
+}
+
+/**
+ * Append the L2 safeguard sentence to a substituted desc-base. The
+ * placement is at the end of the body (just before any trailing
+ * `{R4_CLOSE}` placeholder so the bookend stays on the final line).
+ * Returns the input unchanged when `triggerNames` is empty.
+ */
+export function appendL2Safeguard(descBase: string, triggerNames: readonly string[]): string {
+  if (triggerNames.length === 0) return descBase;
+  const sentence = buildL2SafeguardSentence(triggerNames);
+  // If the desc-base still carries an unsubstituted `{R4_CLOSE}` placeholder,
+  // insert before it; otherwise append at the end.
+  if (descBase.includes('{R4_CLOSE}')) {
+    return descBase.replace('{R4_CLOSE}', `${sentence}\n{R4_CLOSE}`);
+  }
+  return `${descBase}\n${sentence}`;
+}
 
 /**
  * F7 — detect L2 sensitive-action triggers in the prompt history.
