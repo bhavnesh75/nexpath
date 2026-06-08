@@ -134,3 +134,84 @@ describe('Voice-rule invariant — 12 literal banned-pattern phrases', () => {
     }
   });
 });
+
+// ─── descBase template-literal content (full coverage) ─────────────────────
+//
+// Pulls every `` descBase: `...` `` template-literal value out of the
+// options source and runs the same 12-phrase invariant against the
+// template body. Closes the coverage gap that left descBase content
+// catching banned phrases only by accidental apostrophe bracketing.
+
+function extractDescBaseTemplates(filePath: string): { snippet: string; text: string }[] {
+  const source = readFileSync(filePath, 'utf-8');
+  const results: { snippet: string; text: string }[] = [];
+
+  // Match `descBase: `<body>`,` where `<body>` may span multiple lines
+  // and may contain escaped backticks (\`) and escaped backslashes (\\).
+  const re = /descBase:\s*`((?:[^`\\]|\\.)*)`/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(source)) !== null) {
+    const raw = m[1];
+    // Unescape \\` and \\\\ + interpret \\n as a newline so semantic checks
+    // see the same text the runtime would see.
+    const text = raw
+      .replace(/\\`/g, '`')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\n/g, '\n');
+    const start = m.index + m[0].indexOf('`') + 1;
+    const snippet = source.slice(Math.max(0, start - 60), Math.min(source.length, start + 60));
+    results.push({ snippet, text });
+  }
+  return results;
+}
+
+describe('Voice-rule invariant — descBase template-literal content', () => {
+  describe('options.ts descBase templates', () => {
+    const entries = extractDescBaseTemplates(OPTIONS_FILE);
+
+    it('extracts a reasonable number of desc-base templates (sanity)', () => {
+      // Pre-Phase-2 baseline: ~1000 templates expected once content port is complete.
+      expect(entries.length).toBeGreaterThan(400);
+    });
+
+    for (const { pattern, desc } of BANNED_PATTERNS) {
+      it(`no descBase template contains "${pattern}" (${desc})`, () => {
+        const violations = entries.filter(({ text }) =>
+          text.toLowerCase().includes(pattern.toLowerCase())
+        );
+        if (violations.length > 0) {
+          const detail = violations
+            .slice(0, 8)
+            .map((v) => `  …${v.snippet.replace(/\n/g, '\\n')}…`)
+            .join('\n');
+          const more = violations.length > 8 ? `\n  (${violations.length - 8} more not shown)` : '';
+          throw new Error(`Found "${pattern}" in ${violations.length} descBase template(s):\n${detail}${more}`);
+        }
+      });
+    }
+  });
+
+  describe('options-beginner.ts descBase templates', () => {
+    const entries = extractDescBaseTemplates(OPTIONS_BEGINNER_FILE);
+
+    it('extracts a reasonable number of desc-base templates (sanity)', () => {
+      expect(entries.length).toBeGreaterThan(150);
+    });
+
+    for (const { pattern, desc } of BANNED_PATTERNS) {
+      it(`no descBase template contains "${pattern}" (${desc})`, () => {
+        const violations = entries.filter(({ text }) =>
+          text.toLowerCase().includes(pattern.toLowerCase())
+        );
+        if (violations.length > 0) {
+          const detail = violations
+            .slice(0, 8)
+            .map((v) => `  …${v.snippet.replace(/\n/g, '\\n')}…`)
+            .join('\n');
+          const more = violations.length > 8 ? `\n  (${violations.length - 8} more not shown)` : '';
+          throw new Error(`Found "${pattern}" in ${violations.length} descBase template(s):\n${detail}${more}`);
+        }
+      });
+    }
+  });
+});
