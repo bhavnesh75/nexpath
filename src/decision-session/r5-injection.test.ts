@@ -14,7 +14,13 @@ import {
   f4EnforceLengthCap,
   f5DeduplicatePrompts,
   f7DetectL2Triggers,
+  buildRewritePrompt,
+  calculateUserVocabConcentration,
+  meetsConcentrationThreshold,
+  rewriteViaLLM,
+  CONCENTRATION_THRESHOLD,
   type R5Register,
+  type R5RewriteClient,
 } from './r5-injection.js';
 
 function makePrompt(text: string, index = 0): PromptRecord {
@@ -299,6 +305,88 @@ describe('r5-injection — F7 L2 sensitive-action trigger detection', () => {
     ];
     const triggers = f7DetectL2Triggers(history);
     expect(triggers.filter((t) => t === 'deployment')).toHaveLength(1);
+  });
+});
+
+describe('r5-injection — buildRewritePrompt()', () => {
+  it('includes the signal type, register, vocab JSON, and example hint in the prompt', () => {
+    const prompt = buildRewritePrompt(
+      ['invoice', 'building'],
+      'TASK_REVIEW',
+      'formal',
+      '"I have been building the invoice path"',
+    );
+    expect(prompt).toContain('TASK_REVIEW');
+    expect(prompt).toContain('formal');
+    expect(prompt).toContain('invoice');
+    expect(prompt).toContain('building');
+    expect(prompt).toContain('I have been building the invoice path');
+  });
+
+  it('uses third-person register instruction for formal', () => {
+    expect(buildRewritePrompt([], 'X', 'formal', '')).toContain('third-person');
+  });
+
+  it('uses first-person register instruction for casual + beginner', () => {
+    expect(buildRewritePrompt([], 'X', 'casual',   '')).toContain('first-person');
+    expect(buildRewritePrompt([], 'X', 'beginner', '')).toContain('first-person');
+  });
+
+  it('embeds the L1 voice-rule guard against banned tokens', () => {
+    const prompt = buildRewritePrompt([], 'X', 'formal', '');
+    expect(prompt).toContain('"AI"');
+    expect(prompt).toContain('"Claude"');
+    expect(prompt).toContain('"you"');
+  });
+});
+
+describe('r5-injection — calculateUserVocabConcentration()', () => {
+  it('returns 0 when the summary is empty', () => {
+    expect(calculateUserVocabConcentration('', ['x'])).toBe(0);
+  });
+  it('returns 1 when every summary word comes from vocab', () => {
+    expect(calculateUserVocabConcentration('invoice building', ['invoice', 'building'])).toBe(1);
+  });
+  it('returns the correct fraction for a partial overlap', () => {
+    // "I have been building the invoice today" — 7 words, 2 from vocab → 2/7 ≈ 0.286
+    const fraction = calculateUserVocabConcentration('I have been building the invoice today', ['building', 'invoice']);
+    expect(fraction).toBeCloseTo(2 / 7, 5);
+  });
+  it('comparison is case-insensitive', () => {
+    expect(calculateUserVocabConcentration('Invoice INVOICE invoice', ['invoice'])).toBe(1);
+  });
+});
+
+describe('r5-injection — meetsConcentrationThreshold()', () => {
+  it('returns true when fraction ≥ 70%', () => {
+    // 7 words from vocab + 3 connectors = 10 words, 7/10 = 0.7 → meets threshold
+    const summary = 'invoice building refactor deploy commit push merge has been today';
+    const vocab   = ['invoice', 'building', 'refactor', 'deploy', 'commit', 'push', 'merge'];
+    expect(meetsConcentrationThreshold(summary, vocab)).toBe(true);
+  });
+  it('returns false when fraction < 70%', () => {
+    expect(meetsConcentrationThreshold('many of the the very plain filler words and only one invoice', ['invoice'])).toBe(false);
+  });
+  it('CONCENTRATION_THRESHOLD is 0.7', () => {
+    expect(CONCENTRATION_THRESHOLD).toBe(0.7);
+  });
+});
+
+describe('r5-injection — rewriteViaLLM()', () => {
+  it('returns the client output verbatim on success', async () => {
+    const client: R5RewriteClient = {
+      rewrite: async () => "I've been building the invoice flow today.",
+    };
+    const out = await rewriteViaLLM(['invoice'], 'TASK_REVIEW', 'casual', '"example"', client);
+    expect(out).toBe("I've been building the invoice flow today.");
+  });
+
+  it('returns empty string when the client throws — never propagates', async () => {
+    const client: R5RewriteClient = {
+      rewrite: async () => { throw new Error('boom'); },
+    };
+    const out = await rewriteViaLLM(['x'], 'Y', 'formal', '', client);
+    expect(out).toBe('');
   });
 });
 

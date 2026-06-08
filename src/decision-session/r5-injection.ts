@@ -415,3 +415,109 @@ export function f7DetectL2Triggers(history: readonly PromptRecord[]): string[] {
   }
   return Array.from(hits);
 }
+
+// ─── Haiku LLM rewrite wrapper + 70-80% concentration rule ────────────
+//
+// The rewrite step takes the filtered vocab list + signal + register
+// + the in-template R5_INJECT example as guidance and asks a Haiku-
+// tier model to produce a 1-2-line summary that concentrates ≥ 70%
+// of its output vocabulary from the user-grounded extracted tokens.
+//
+// The client is passed in by the caller (dependency-injected) so the
+// production binding can use the existing OpenAI client while the
+// tests use a mock implementation. The wrapper itself is responsible
+// only for prompt construction + post-output concentration check.
+
+/** 70-80% concentration rule lower bound. */
+export const CONCENTRATION_THRESHOLD = 0.7;
+
+/** Pluggable rewrite client interface — production binds an OpenAI / Anthropic implementation. */
+export interface R5RewriteClient {
+  /** Run the rewrite prompt and return the model's text output. Never throws — falls back to the empty string on error. */
+  rewrite(prompt: string): Promise<string>;
+}
+
+/** Compose the rewrite prompt sent to the Haiku model. */
+export function buildRewritePrompt(
+  vocab:       readonly string[],
+  signalType:  string,
+  register:    R5Register,
+  exampleHint: string,
+): string {
+  const registerInstruction: Record<R5Register, string> = {
+    formal:   'Use third-person framing such as "Recent prompts: ..." or "The session has ...". Do NOT use first-person.',
+    casual:   'Use first-person framing such as "I\'ve been ...". Keep the tone conversational.',
+    beginner: 'Use first-person framing such as "I\'ve been ...". Keep the wording simple and explicit.',
+  };
+  return [
+    `You are summarising recent user prompts for a coding-agent signal of type "${signalType}".`,
+    '',
+    `Register: ${register}.`,
+    registerInstruction[register],
+    '',
+    'Produce a 1-2-line summary where AT LEAST 70-80% of the words come from this user-grounded vocabulary set:',
+    JSON.stringify(vocab),
+    '',
+    'Add only the remaining ≤ 30% as structural connective words (e.g., "I\'ve been", "Recent prompts:", "without") for grammatical coherence.',
+    '',
+    'Match the format and length of this example shape (the actual content should be different — the example only shows length and tone):',
+    exampleHint,
+    '',
+    'Constraints:',
+    '- Total length: ≤ 2 lines / ≤ 120 characters.',
+    '- Do NOT use the words "AI", "Claude", "assistant", or any third-person agent reference.',
+    '- Do NOT address the user as "you" / "your".',
+    '- Output ONLY the summary text, no preamble, no quotes, no markdown.',
+  ].join('\n');
+}
+
+/**
+ * Calculate the fraction of summary words that come from the
+ * user-grounded vocabulary set. Returns 0 when the summary is empty.
+ * Comparison is case-insensitive on whitespace-split tokens.
+ */
+export function calculateUserVocabConcentration(
+  summary: string,
+  vocab:   readonly string[],
+): number {
+  const words = summary
+    .toLowerCase()
+    .split(/[^a-z0-9_$.]+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return 0;
+  const vocabLower = new Set(vocab.map((t) => t.toLowerCase()));
+  let fromVocab = 0;
+  for (const w of words) {
+    if (vocabLower.has(w)) fromVocab++;
+  }
+  return fromVocab / words.length;
+}
+
+/** Returns true when the summary meets the 70-80% concentration threshold. */
+export function meetsConcentrationThreshold(
+  summary: string,
+  vocab:   readonly string[],
+): boolean {
+  return calculateUserVocabConcentration(summary, vocab) >= CONCENTRATION_THRESHOLD;
+}
+
+/**
+ * Run the rewrite call against the provided client + return the model
+ * output verbatim. The caller is responsible for downstream length-cap
+ * and concentration checks. Returns the empty string when the client
+ * throws (the contract is: this wrapper never throws).
+ */
+export async function rewriteViaLLM(
+  vocab:       readonly string[],
+  signalType:  string,
+  register:    R5Register,
+  exampleHint: string,
+  client:      R5RewriteClient,
+): Promise<string> {
+  const prompt = buildRewritePrompt(vocab, signalType, register, exampleHint);
+  try {
+    return await client.rewrite(prompt);
+  } catch {
+    return '';
+  }
+}
