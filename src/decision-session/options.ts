@@ -7353,6 +7353,7 @@ const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
 {R5_INJECT: ~1-2 lines — "Significant feature pending ship without deployment strategy."}
 Deployment strategy and rollback plan haven't been defined — risk of un-isolated full-traffic deploy.
 Strategy: canary / feature flag / blue-green / staged rollout / rollback procedure / rollback within downtime window.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -7361,6 +7362,7 @@ Strategy: canary / feature flag / blue-green / staged rollout / rollback procedu
 {R5_INJECT: ~1-2 lines — "Risk-isolating strategy + abort signals + rollback not defined."}
 The strategy + abort-signals + rollback definition hasn't been done.
 Risk-isolating strategy / abort signals / rollback procedure on signals observed post-deploy.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -7369,6 +7371,7 @@ Risk-isolating strategy / abort signals / rollback procedure on signals observed
 {R5_INJECT: ~1-2 lines — "Deployment readiness audit not done."}
 The deployment readiness audit hasn't been done.
 Strategy confirmed / rollback verified / failed-deploy-detection monitoring pre-full-traffic.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -7378,6 +7381,7 @@ Strategy confirmed / rollback verified / failed-deploy-detection monitoring pre-
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Feature pending ship."}
 Lighter: strategy + rollback plan pre-ship.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
     {
@@ -7385,6 +7389,7 @@ Lighter: strategy + rollback plan pre-ship.
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Feature pending ship."}
 Narrower: strategy + rollback trigger on deploy-fail.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
@@ -7394,6 +7399,7 @@ Narrower: strategy + rollback trigger on deploy-fail.
       descBase: `{R4_OPEN}
 {R5_INJECT: ~1 line — "Feature pending ship."}
 Minimum next step: strategy (canary/flag/blue-green/staged) + rollback pre-ship.
+Still, before you trigger any deployment you must ask me for go-ahead confirmation.
 {R4_CLOSE}`,
     },
   ],
