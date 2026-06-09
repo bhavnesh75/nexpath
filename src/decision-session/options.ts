@@ -7806,6 +7806,7 @@ export const ABSENCE_USER_VALUE_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_VALUE_CHECK",
   question: 'Has this feature been validated with real users?',
   pinchFallback: 'Check user signal before committing to this build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_VALUE_CHECK'],
   L1: [
     {
       option: 'The single biggest waste in product development is building something nobody asked for. Lean Startup core loop: before any feature build, check whether you have a user signal — a conversation, a behavioral observation, a direct request, or survey data — that confirms the problem you\'re solving is real for your users. Without signal, you\'re making a bet, not a decision.',
@@ -7863,6 +7864,7 @@ export const ABSENCE_OUTCOME_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_OUTCOME_DEFINITION",
   question: 'What does success look like for this feature?',
   pinchFallback: 'Define the success metric before building starts.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OUTCOME_DEFINITION'],
   L1: [
     {
       option: 'An output is something you ship. An outcome is the change in user behavior that justifies shipping it. The OKR discipline applied to product: before building, write one sentence that completes "This feature is successful if...". Without that sentence, you can\'t evaluate whether the feature worked, you can\'t communicate success criteria to teammates, and you can\'t decide when the feature is done enough to ship.',
@@ -7920,6 +7922,7 @@ export const ABSENCE_FEATURE_PRIORITIZATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_PRIORITIZATION",
   question: 'Why is this the highest-priority thing to build right now?',
   pinchFallback: 'Confirm this is the highest-impact item before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_PRIORITIZATION'],
   L1: [
     {
       option: 'Building what comes to mind next — rather than what has the highest impact — is the feature factory pattern. Every hour of engineering time spent on a lower-impact feature is an hour not spent on a higher-impact one. Backlog prioritization question: what evidence suggests this feature delivers more value to users than any alternative you could build with the same engineering time?',
@@ -7977,6 +7980,7 @@ export const ABSENCE_USER_PERSONA_CLARITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_PERSONA_CLARITY",
   question: 'Who specifically is this feature for?',
   pinchFallback: 'Name the specific user this feature is designed for.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_PERSONA_CLARITY'],
   L1: [
     {
       option: 'Name the specific user this feature serves: 2 sentences describing who they are, what context they use the product in, and what they are trying to accomplish — concrete enough that a design decision can be tested against "would Marcus understand this?" rather than "would users in general?"',
@@ -8034,6 +8038,7 @@ export const ABSENCE_COMPETITIVE_AWARENESS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_COMPETITIVE_AWARENESS",
   question: 'Have you checked how competitors handle this?',
   pinchFallback: 'Run a quick competitive check before committing to this build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COMPETITIVE_AWARENESS'],
   L1: [
     {
       option: 'Building a feature without knowing the competitive landscape means you\'re solving a problem that may already be solved — possibly better than you\'ll solve it. Before committing to any non-trivial feature, answer three questions: does a competitor already have this? If yes, how have they implemented it? And what would make your version a reason to switch rather than a reason to stay with the incumbent?',
@@ -8091,6 +8096,7 @@ export const ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MVP_BOUNDARY_DISCIPLINE",
   question: 'Is this addition within MVP scope?',
   pinchFallback: 'Check whether this is needed to test the core hypothesis.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MVP_BOUNDARY_DISCIPLINE'],
   L1: [
     {
       option: 'Apply MVP discipline to this addition: name the riskiest hypothesis the MVP is meant to test, then state whether this addition reduces uncertainty about that hypothesis. If it does not, propose deferring it to post-validation scope.',
@@ -8148,6 +8154,7 @@ export const ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_ACQUISITION_CONSIDERATION",
   question: 'How will target users find and access this feature?',
   pinchFallback: 'Define the acquisition path before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_ACQUISITION_CONSIDERATION'],
   L1: [
     {
       option: 'A feature\'s value is zero for any user who never encounters it. Distribution fit is as important as product-market fit — and it has to be designed in, not discovered after launch. Before committing to a feature build, answer: what is the specific path through which target users will find and start using this feature? SEO, referral loop, in-app discovery, sharing mechanic, onboarding hook, community post — name the channel.',
