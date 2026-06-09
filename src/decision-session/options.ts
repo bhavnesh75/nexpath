@@ -6,6 +6,7 @@ import {
   TRANSITION_CONTENT_BEGINNER,
   TASK_REVIEW_BEGINNER,
 } from './options-beginner.js';
+import { WHY_HELP_BY_SIGNAL_TYPE } from './why-help-by-signal-type.js';
 
 /**
  * Per-stage decision session content (from spec-driven-stages-research.md Part 3).
@@ -101,6 +102,7 @@ const IDEA_TO_PRD: DecisionContent = {
   signalType:   "IDEA_TO_PRD",
   question:      'Before building — is the plan written?',
   pinchFallback: 'Before coding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IDEA_TO_PRD'],
   L1: [
     {
       option: 'Write a PRD for this project: define the problem, target user, core features with acceptance criteria, what is explicitly out of scope, and any technical constraints.',
@@ -162,6 +164,7 @@ const PRD_TO_ARCHITECTURE: DecisionContent = {
   signalType:   "PRD_TO_ARCHITECTURE",
   question:      'Spec ready — is the architecture decided?',
   pinchFallback: 'Design first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['PRD_TO_ARCHITECTURE'],
   L1: [
     {
       option: 'Design the system architecture for this project: list the main components, how they interact, the data model, API contracts (if any), and the tech stack with rationale for key choices.',
@@ -231,6 +234,7 @@ const ARCHITECTURE_TO_TASKS: DecisionContent = {
   signalType:   "ARCHITECTURE_TO_TASKS",
   question:      'Architecture done — is the task list ordered?',
   pinchFallback: 'Break it down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ARCHITECTURE_TO_TASKS'],
   L1: [
     {
       option: 'Break the implementation into an ordered task list: each task should be completable in one coding session, delivered as a vertical slice where possible, and have a clear definition of done.',
@@ -299,6 +303,7 @@ const TASK_REVIEW: DecisionContent = {
   signalType:   "TASK_REVIEW",
   question:      'Task done — reviewed and tested?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['TASK_REVIEW'],
   L1: [
     {
       option: 'Review what was just built for this task: does the implementation match the spec and acceptance criteria? List any discrepancies, missing logic, hallucinated code, or potential issues before I mark this done.',
@@ -359,6 +364,7 @@ const TASK_REVIEW_CASUAL: DecisionContent = {
   signalType:   "TASK_REVIEW",
   question:      'Task done — quick check before moving on?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['TASK_REVIEW'],
   L1: [
     {
       option: 'Quick look at what was just built — does it do what the task asked for? Anything off, anything missing, any weird generated code before I say it\'s done?',
@@ -418,6 +424,7 @@ const IMPLEMENTATION_TO_REVIEW: DecisionContent = {
   signalType:   "IMPLEMENTATION_TO_REVIEW",
   question:      'Phase done — full review before moving on?',
   pinchFallback: 'Phase done?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IMPLEMENTATION_TO_REVIEW'],
   L1: [
     {
       option: 'Run the full test suite for this phase: unit tests, integration tests, and any regression tests. Report results, failures, and what needs to be fixed.',
@@ -495,6 +502,7 @@ const REVIEW_TO_RELEASE: DecisionContent = {
   signalType:   "REVIEW_TO_RELEASE",
   question:      'Ready to ship — final checks done?',
   pinchFallback: 'Almost there.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['REVIEW_TO_RELEASE'],
   L1: [
     {
       option: 'Run all tests one final time before release: unit, integration, and regression. Confirm everything passes or tell me what is still failing.',
@@ -562,6 +570,7 @@ const RELEASE_TO_FEEDBACK: DecisionContent = {
   signalType:   "RELEASE_TO_FEEDBACK",
   question:      'Just shipped — is the feedback loop active?',
   pinchFallback: 'Watch it live.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['RELEASE_TO_FEEDBACK'],
   L1: [
     {
       option: 'Verify the production monitoring setup for what was just built: confirm error tracking is active, alert thresholds are configured, and dashboards show live metrics — list what is collecting and what still needs to be set up.',
