@@ -815,6 +815,7 @@ export const ABSENCE_CORRECTION_SEEKING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: '1. Look at what was just built again — but this time, find what might be wrong with it.\n2. Share what you find with me.\n3. Then tell me: does what you found make sense, or does something still seem off?',
@@ -1694,6 +1695,7 @@ export const ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION_BEFORE_ASK",
   question:      'About to ask — have you checked the docs?',
   pinchFallback: 'Docs first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION_BEFORE_ASK'],
   L1: [
     {
       option: '1. Before asking me this question — check the official documentation for this library or API.\n2. Share with me: what did you find, and is the answer there?\n3. Then ask me what you still couldn\'t find in the docs.',

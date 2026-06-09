@@ -1407,6 +1407,7 @@ const ABSENCE_CORRECTION_SEEKING: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'AI output — self-verification requested?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: 'Self-review what was just built: identify any assumptions that may be incorrect, logic that could fail under edge cases, and any parts of the implementation you are not confident about.',
@@ -2694,6 +2695,7 @@ const ABSENCE_CORRECTION_SEEKING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: 'Take a second look at what was just built — not to explain it, but to actually critique it. What would you do differently, what assumptions did you make that might be wrong, and what are the riskiest parts?',
@@ -6757,6 +6759,7 @@ const ABSENCE_REFACTORING_CHECKPOINT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING_CHECKPOINT",
   question:      'Adding to messy code — refactored first?',
   pinchFallback: 'Do a cleanup pass before extending.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING_CHECKPOINT'],
   L1: [
     {
       option: 'Boy Scout Rule (Clean Code): \'Leave the code cleaner than you found it.\' Before adding a feature to code that was already acknowledged as messy or complex — do a refactoring pass first. The alternative is adding features on top of complexity, which makes the next change harder, not the same difficulty. The refactoring pass before extending is the investment that prevents compound complexity debt.',
