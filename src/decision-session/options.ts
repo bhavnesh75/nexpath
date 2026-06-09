@@ -5711,6 +5711,7 @@ const ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_COMPLETION_CHECK",
   question:      'Adding more — is the previous feature actually done?',
   pinchFallback: 'Finish before starting next.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_COMPLETION_CHECK'],
   L1: [
     {
       option: 'Checkpoint: what\'s the state of the last feature started? Is it done and tested end-to-end? Scrum\'s Definition of Done exists because partially-done features compound — starting new ones before previous ones meet DoD means carrying technical debt through every subsequent sprint.',
@@ -5768,6 +5769,7 @@ const ABSENCE_FINISHING_LINE_AWARENESS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FINISHING_LINE_AWARENESS",
   question:      'Multiple things in progress — how many are complete?',
   pinchFallback: 'Finish one before starting next.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FINISHING_LINE_AWARENESS'],
   L1: [
     {
       option: 'Count check: how many features are currently in-progress vs. complete end-to-end? A partially-done feature delivers zero user value. Three features 40% each is worse than one feature 100% — the user can use one, and none of three.',
@@ -5825,6 +5827,7 @@ const ABSENCE_POLISH_VS_FUNCTION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_POLISH_VS_FUNCTION",
   question:      'Working on the look — does the core work end-to-end?',
   pinchFallback: 'Function before polish.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_POLISH_VS_FUNCTION'],
   L1: [
     {
       option: 'Lean MVP principle: polish comes after function. Before spending more prompts on UI improvements — does the core functionality work end-to-end? \'MVP UI should be clean and usable, not museum-quality.\' Fix the working before fixing the looking.',
@@ -5882,6 +5885,7 @@ const ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MVP_SCOPE_DISCIPLINE",
   question:      'Adding features — is each one actually MVP scope?',
   pinchFallback: 'MVP discipline check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MVP_SCOPE_DISCIPLINE'],
   L1: [
     {
       option: 'Eric Ries MVP heuristic: start with what you believe is needed, then eliminate half the features, then eliminate half again. Each addition should answer: does this test the core hypothesis? Is it the minimum needed to get real user feedback? If neither — it\'s gold-plating an unvalidated MVP.',
@@ -5939,6 +5943,7 @@ const ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IDEA_TO_SPEC_BRIDGE",
   question:      'New idea — defined what it does before building?',
   pinchFallback: 'Spec the idea first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_TO_SPEC_BRIDGE'],
   L1: [
     {
       option: 'Spec-driven development principle: a feature idea is not a spec. Before building — write a one-paragraph description: what does this feature do? What does it NOT do? How does it fit into what already exists? The spec becomes the source of truth; code is its expression.',
