@@ -1110,6 +1110,7 @@ const ABSENCE_DOCUMENTATION: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — any documentation added?',
   pinchFallback: 'Docs missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION'],
   L1: [
     {
       option: 'Review what was just built for documentation coverage: identify functions, classes, and modules with non-obvious behaviour that lack docstrings or inline comments, and add documentation that explains the why — the constraint, the invariant, the tradeoff — not just the what.',
@@ -1287,6 +1288,7 @@ const ABSENCE_REFACTORING: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING",
   question:      'Extended implementation — code health reviewed?',
   pinchFallback: 'Refactor check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING'],
   L1: [
     {
       option: 'Review what was just built for refactoring opportunities: identify code duplication, functions that do more than one thing, abstractions that have grown inconsistent with their usage, and naming that no longer reflects current behaviour — prioritize by maintenance risk.',
@@ -2395,6 +2397,7 @@ const ABSENCE_DOCUMENTATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — is anything documented?',
   pinchFallback: 'Docs missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION'],
   L1: [
     {
       option: 'Look at what was just built — what parts would confuse someone reading it for the first time? Add short comments explaining the why, not just the what, for anything that isn\'t obvious from the code itself.',
@@ -2572,6 +2575,7 @@ const ABSENCE_REFACTORING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING",
   question:      'Long build run — anything to clean up?',
   pinchFallback: 'Refactor check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING'],
   L1: [
     {
       option: 'Look at what was just built as a whole — is there anything that\'s gotten messy, duplicated, or harder to read than it needs to be? Flag the bits that would slow down the next person who touches this.',
@@ -4418,6 +4422,7 @@ const ABSENCE_ACCESSIBILITY: DecisionContent = {
   signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCESSIBILITY'],
   L1: [
     {
       option: 'Audit the ARIA labelling and semantic structure of what was just built: identify every interactive element and confirm it has an accessible name — via native semantics, aria-label, or aria-labelledby — and that its role is correctly communicated to assistive technologies.',
@@ -4536,6 +4541,7 @@ const ABSENCE_DATA_VALIDATION: DecisionContent = {
   signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATA_VALIDATION'],
   L1: [
     {
       option: 'Define the input schema for what was just built: for every endpoint or form, document the expected shape — required fields, optional fields, data types, and any constraints (min/max, allowed values) — and implement schema validation using a library such as Zod, Yup, or Joi.',
@@ -5055,6 +5061,7 @@ const ABSENCE_ACCESSIBILITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCESSIBILITY'],
   L1: [
     {
       option: 'Go through what was just built and check whether a screen reader could make sense of it — does every button and link have a clear label, and are there any parts that would be confusing or silent for someone using one?',
@@ -5173,6 +5180,7 @@ const ABSENCE_DATA_VALIDATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATA_VALIDATION'],
   L1: [
     {
       option: 'Take a look at what was just built and check what happens when someone sends unexpected data — a missing field, the wrong type, or a completely random value. Is the app handling it gracefully or just crashing?',
