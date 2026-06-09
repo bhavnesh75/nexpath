@@ -9452,6 +9452,7 @@ export const ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CROSS_TEAM_IMPACT_CHECK",
   question: 'Have teams affected by this change been notified before development begins?',
   pinchFallback: 'Identify and notify affected teams before building this change to shared systems.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_TEAM_IMPACT_CHECK'],
   L1: [
     {
       option: 'Identify every team affected by this change to a shared system (API, schema, infrastructure), draft the notification message, send it, and document delivery in the sprint item before implementation begins. A pre-change Slack message costs minutes; a post-change broken integration costs team-days.',
@@ -9514,6 +9515,7 @@ export const ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SUCCESS_METRIC_DEFINITION",
   question: 'Is there a success metric defined for this feature before development begins?',
   pinchFallback: 'Define how success will be measured for this feature before starting implementation.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SUCCESS_METRIC_DEFINITION'],
   L1: [
     {
       option: 'Define the success metric for this feature before development: name the metric, the measurement method, the success threshold, and the measurement timeline — e.g. "feature adoption rate, tracked via feature_used analytics event, threshold 30% of active users within 30 days." Add to the sprint item.',
@@ -9571,6 +9573,7 @@ export const ABSENCE_PRIORITY_JUSTIFICATION_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_PRIORITY_JUSTIFICATION",
   question: 'Is there an explicit justification for why this item is the current highest priority?',
   pinchFallback: 'Articulate the priority justification for this item before beginning work.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PRIORITY_JUSTIFICATION'],
   L1: [
     {
       option: 'State the priority justification for this sprint item in one sentence before development begins: name the user or business value, the urgency or time criticality, the risk reduction or strategic alignment — and the next-highest-priority alternative being deferred to make room for this item.',
@@ -9628,6 +9631,7 @@ export const ABSENCE_USER_STORY_COMPLETENESS_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_USER_STORY_COMPLETENESS",
   question: 'Is this work item expressed as a complete user story with who, what, and why?',
   pinchFallback: 'Reframe this work item as a user story — who benefits, what they need, why it matters.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_STORY_COMPLETENESS'],
   L1: [
     {
       option: 'Rewrite this work item in Connextra format before implementation: "As a [specific user type], I want [the capability this feature enables], so that [the value or outcome delivered]." If the "so that" cannot be completed, that is the most important thing to resolve — propose what stakeholder conversation closes it.',
@@ -9685,6 +9689,7 @@ export const ABSENCE_RISK_FLAG_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_RISK_FLAG",
   question: 'Have risks been identified for this decision or scope change before proceeding?',
   pinchFallback: 'Identify and document risks before proceeding with this significant decision.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RISK_FLAG'],
   L1: [
     {
       option: 'Identify the risks for this decision before proceeding: for each risk category (technical, scope, stakeholder, dependency, timeline), name the specific risk, estimate likelihood (H/M/L) and impact (H/M/L), and state the mitigation or acceptance decision. Document each in the sprint item.',
@@ -9742,6 +9747,7 @@ export const ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT",
   question: 'Has the impact of this scope change on the current sprint been assessed?',
   pinchFallback: 'Assess sprint impact before accepting this scope change.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT'],
   L1: [
     {
       option: 'Before accepting this mid-sprint scope change, complete the four-point impact assessment: (1) what existing in-progress item is displaced, (2) does the sprint end date shift, (3) which downstream teams have a date dependency on what this change affects, (4) what is explicitly removed or deferred to make room. Document all four answers in the sprint item before the change enters scope.',
@@ -9799,6 +9805,7 @@ export const ABSENCE_RETROSPECTIVE_HABIT_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_RETROSPECTIVE_HABIT",
   question: 'Has this sprint or iteration been closed with a retrospective before starting the next?',
   pinchFallback: 'Run a retrospective on this sprint before moving to the next cycle.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RETROSPECTIVE_HABIT'],
   L1: [
     {
       option: 'Run the sprint retrospective now before the next sprint begins: list what went well (preserve and reinforce), what did not go well (process problems without blame), and one or two specific, actionable process changes to try in the next sprint. Document the chosen action items.',
