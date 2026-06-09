@@ -903,6 +903,7 @@ export const ABSENCE_ALTERNATIVES_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: '1. Think about the biggest decision that was made while building this feature.\n2. Share with me: what other ways could it have been done, and why did we go with this one?\n3. Then tell me: is this still the best approach now that you think about it, or would something else have been simpler?',

@@ -1528,6 +1528,7 @@ const ABSENCE_ALTERNATIVES: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — alternatives considered?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: 'Review the key decisions made in what was just built: name the alternatives that were not chosen, explain the tradeoffs between each approach, and confirm that the chosen solution is the best fit for the constraints of this project — not just the first viable option.',
@@ -2821,6 +2822,7 @@ const ABSENCE_ALTERNATIVES_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: 'Look at the biggest decision made in what was just built — is it the right call, or just the first thing that came to mind? Name one or two other ways it could have been done and explain why this approach beats them.',
@@ -6476,6 +6478,7 @@ const ABSENCE_ARCHITECTURE_NOTE_ABSENCE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ARCHITECTURE_NOTE_ABSENCE",
   question:      'Architecture decision made — noted the rationale?',
   pinchFallback: 'Add an architecture note.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCHITECTURE_NOTE_ABSENCE'],
   L1: [
     {
       option: 'Architecture Decision Records (Michael Nygard, 2011): \'An ADR captures a single architectural decision and its rationale. People months or years later need to understand why the system is constructed the way that it is.\' For the structural decision just made — add a short note: context, decision, consequences. A code comment block or doc entry works.',
@@ -6657,6 +6660,7 @@ const ABSENCE_API_CONTRACT_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_API_CONTRACT_DEFINITION",
   question:      'API being built — defined the contract first?',
   pinchFallback: 'Define the interface before implementing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_CONTRACT_DEFINITION'],
   L1: [
     {
       option: 'OpenAPI contract-first principle: define the API interface before writing the handler. For the endpoint being built — what does it accept (request schema: required fields, types, validation rules)? What does it return (response schema: success shape, error shape, status codes)? What is the error response format? Defining this first prevents implicit contracts that drift between callers and implementors — and makes mock servers and tests possible before the backend exists.',
@@ -6838,6 +6842,7 @@ const ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_BACKWARDS_COMPATIBILITY_CHECK",
   question:      'Interface changed — checked existing consumers?',
   pinchFallback: 'Check what calls this before changing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_BACKWARDS_COMPATIBILITY_CHECK'],
   L1: [
     {
       option: 'Semantic Versioning (semver.org): MAJOR version = backwards-incompatible change. The formal rule: any change to an interface used by existing callers must enumerate those callers and assess the impact before implementation. For the function signature, API contract, or interface just changed — what calls it? What are the downstream effects? Have those callers been updated or is the change backwards-compatible?',
