@@ -6,6 +6,7 @@ import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import * as rl from 'node:readline';
 import pc, { createColors } from 'picocolors';
 import type { SelectFn } from './DecisionSession.js';
@@ -457,6 +458,13 @@ function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): Sel
           skipNow:         SKIP_NOW,
           showSimpler:     SHOW_SIMPLER,
           separatorPrefix: OPTION_SEPARATOR,
+          // Path A render-loop structured fields (consumed by .mjs child when
+          // the script switches from clack `select` to `renderLoop`). Legacy
+          // clack-based child still works — these are ignored when absent.
+          pinchLabel:      opts.pinchLabel,
+          subtitle:        opts.subtitle,
+          question:        opts.question,
+          whyHelpBlock:    opts.whyHelpBlock,
         }),
         'utf8',
       );
@@ -527,6 +535,24 @@ function resolveClackEsmUrl(): string {
   const clackEsmEntry = clackPkg.exports['.'].import;
   const clackEsmPath  = join(dirname(clackPkgPath), clackEsmEntry);
   return `file:///${clackEsmPath.replace(/\\/g, '/')}`;
+}
+
+/**
+ * Resolve the local `render-loop.js` ESM URL — sibling module to this file
+ * after TypeScript compilation (`dist/decision-session/render-loop.js`).
+ *
+ * Mirrors the `resolveClackEsmUrl()` pattern so the .mjs child script can
+ * import `renderLoop` from a fully-qualified `file:///` URL with no module
+ * resolution of its own — required because the child runs in a separate
+ * Node process spawned in a new window (Windows / Linux / Mac) and has no
+ * package.json context to resolve bare specifiers against.
+ */
+function resolveRenderLoopEsmUrl(): string {
+  // import.meta.url points at this compiled module (dist/decision-session/TtySelectFn.js);
+  // render-loop.js lives as a sibling in the same dist directory.
+  const thisDir = dirname(fileURLToPath(import.meta.url));
+  const rlPath  = join(thisDir, 'render-loop.js');
+  return `file:///${rlPath.replace(/\\/g, '/')}`;
 }
 
 /** Resolve the @clack/core ESM entry URL (for SelectPrompt) from nexpath's module context. */
@@ -649,6 +675,13 @@ function buildLinuxNewWindowSelectFn(store?: Store, projectRoot?: string): Selec
           skipNow:         SKIP_NOW,
           showSimpler:     SHOW_SIMPLER,
           separatorPrefix: OPTION_SEPARATOR,
+          // Path A render-loop structured fields (consumed by .mjs child when
+          // the script switches from clack `select` to `renderLoop`). Legacy
+          // clack-based child still works — these are ignored when absent.
+          pinchLabel:      opts.pinchLabel,
+          subtitle:        opts.subtitle,
+          question:        opts.question,
+          whyHelpBlock:    opts.whyHelpBlock,
         }),
         'utf8',
       );
@@ -747,6 +780,13 @@ function buildMacNewWindowSelectFn(store?: Store, projectRoot?: string): SelectF
           skipNow:         SKIP_NOW,
           showSimpler:     SHOW_SIMPLER,
           separatorPrefix: OPTION_SEPARATOR,
+          // Path A render-loop structured fields (consumed by .mjs child when
+          // the script switches from clack `select` to `renderLoop`). Legacy
+          // clack-based child still works — these are ignored when absent.
+          pinchLabel:      opts.pinchLabel,
+          subtitle:        opts.subtitle,
+          question:        opts.question,
+          whyHelpBlock:    opts.whyHelpBlock,
         }),
         'utf8',
       );
