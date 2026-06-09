@@ -946,6 +946,7 @@ export const ABSENCE_ARCH_CONFLICT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: '1. Look at what was just built and compare it to how other parts of the project are written.\n2. Share with me: does it feel like it belongs, or does it do things in a different way than everything else?\n3. Then tell me: is there anything that could cause problems when we try to connect it with the rest of the project?',
@@ -987,6 +988,7 @@ export const ABSENCE_PROMPT_CONTEXT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: '1. Think about what you\'ve been building in this session.\n2. Share with me: have you seen the original plan for what we\'re building, or have you just been following each instruction without knowing the bigger picture?\n3. Then paste the plan or the task description into the conversation and check that what was just built matches what was planned.',
@@ -2198,6 +2200,7 @@ export const ABSENCE_API_DESIGN_REVIEW_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: '1. Look at what was just built and check whether it could break anything that\'s already using this API. 2. List any changes to how it works — what it expects and what it sends back. 3. Share your list with me before we continue.',

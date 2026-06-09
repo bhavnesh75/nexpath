@@ -1587,6 +1587,7 @@ const ABSENCE_ARCH_CONFLICT: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — architecture consistency checked?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: 'Review what was just built for architectural consistency: does this feature follow the same patterns, abstractions, and conventions established in the existing codebase, or does it introduce a parallel approach that will diverge over time and increase maintenance cost?',
@@ -1644,6 +1645,7 @@ const ABSENCE_PROMPT_CONTEXT: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Prompts sent — spec and arch referenced?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: 'Review the prompts used to build this feature: are they grounded in the project\'s spec, architecture decisions, and task breakdown, or are they ad hoc instructions that you are implementing without access to the full planning context? If context is missing, inject it now before the next prompt.',
@@ -2878,6 +2880,7 @@ const ABSENCE_ARCH_CONFLICT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: 'Look at what was just built and check if it fits with the rest of the codebase — does it follow the same patterns, or does it do things in a new way that the rest of the project doesn\'t? Flag anything that would make a future developer say "why is this one different?"',
@@ -2935,6 +2938,7 @@ const ABSENCE_PROMPT_CONTEXT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: 'Check the prompts used to build this feature — do you actually know what the spec says, what the architecture looks like, and what the task is supposed to achieve? If you\'ve just been getting ad hoc instructions, paste the relevant context in now so you\'re building the right thing.',
@@ -4375,6 +4379,7 @@ const ABSENCE_API_DESIGN_REVIEW: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: 'Review the API surface of what was just built for backwards compatibility: list any changes to existing endpoints, parameters, or response shapes, and confirm whether each change is backwards compatible or constitutes a breaking change that requires a version bump.',
@@ -5014,6 +5019,7 @@ const ABSENCE_API_DESIGN_REVIEW_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: 'Take a look at what was just built and check whether it could break anything that already uses this API — are there any changes to how endpoints work, what they expect, or what they return that might surprise existing callers?',
