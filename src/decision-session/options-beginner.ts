@@ -302,6 +302,7 @@ const BEHAVIOUR_TESTING_BEGINNER: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: '1. Walk through this feature as if you\'re a real user — tell me each step, what you\'d click or type, and whether it works the way it should.\n2. Share what you find with me before we move on.\n3. Flag anything that feels wrong or missing along the way.',
@@ -344,6 +345,7 @@ export const ABSENCE_TEST_CREATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: '1. Write a test for what was just built — start with the main thing it\'s supposed to do.\n2. Share the test with me so I can check it covers the right thing.\n3. Then tell me: is there anything else in what was just built that could break without a test catching it?',
@@ -386,6 +388,7 @@ export const ABSENCE_REGRESSION_CHECK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: '1. Run the existing tests for this project now that what was just built has been added.\n2. Share the results with me — which ones pass, which ones fail.\n3. Then tell me: is there anything that used to work that might not work anymore?',

@@ -630,6 +630,7 @@ const BEHAVIOUR_TESTING: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: 'Write a manual test scenario for the main user journey: list each step a real user would take, what they would see, and what would confirm it is working correctly.',
@@ -690,6 +691,7 @@ const BEHAVIOUR_TESTING_CASUAL: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: 'Put yourself in a user\'s shoes and go through what was just built from start to finish — what\'s the main thing it does, does it actually work, and is anything confusing or broken along the way?',
@@ -752,6 +754,7 @@ const ABSENCE_TEST_CREATION: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Code added — where are the tests?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: 'Write tests for what was just built: unit tests for each function added or modified, and at least one integration test that covers the main path through this feature.',
@@ -812,6 +815,7 @@ const ABSENCE_REGRESSION_CHECK: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changes made — regression verified?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: 'Identify which existing tests cover the code paths changed in what was just built, run them, and flag any regressions — anything that was passing before this session that is now failing.',
@@ -2037,6 +2041,7 @@ const ABSENCE_TEST_CREATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: 'Write tests for what was just built — unit tests for anything new or changed, and one test that runs the main flow. What\'s the most likely thing that could break?',
@@ -2097,6 +2102,7 @@ const ABSENCE_REGRESSION_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: 'Run the tests for this project and check — did what was just built break anything that was working before? Report what\'s failing and why.',
