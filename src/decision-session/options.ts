@@ -874,6 +874,7 @@ const ABSENCE_SPEC_ACCEPTANCE: DecisionContent = {
   signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Implementation done — spec checked?',
   pinchFallback: 'Check the spec.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_ACCEPTANCE'],
   L1: [
     {
       option: 'Review what was just built against the spec and acceptance criteria: go through each requirement and confirm whether it is fully implemented, partially implemented, or missing from what was just built.',
@@ -933,6 +934,7 @@ const ABSENCE_CROSS_CONFIRMING: DecisionContent = {
   signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI generated it — have you verified it?',
   pinchFallback: 'Verify the output.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_CONFIRMING'],
   L1: [
     {
       option: 'Review what was just built critically: identify any hallucinated functions or APIs, logic that looks plausible but is incorrect, edge cases not handled, and any code that was generated but not verified against the actual system it will run in.',
@@ -1930,6 +1932,7 @@ const ABSENCE_SPEC_CROSS_CONFIRM: DecisionContent = {
   signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec written — cross-confirmed against requirements?',
   pinchFallback: 'Spec not confirmed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_CROSS_CONFIRM'],
   L1: [
     {
       option: 'Cross-confirm this project\'s spec against its source requirements: for each requirement in the spec, verify it traces back to a stated user need or stakeholder decision, covers the acceptance criteria completely, and does not contain assumptions that were not explicitly agreed upon.',
@@ -1988,6 +1991,7 @@ const ABSENCE_SPEC_REVISION: DecisionContent = {
   signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec drafted — revised since initial version?',
   pinchFallback: 'Spec unrevised.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_REVISION'],
   L1: [
     {
       option: 'Revise this project\'s spec to reflect what has been learned since the initial draft: update any requirements that turned out to be more or less complex than anticipated, add acceptance criteria for edge cases discovered during implementation, and remove or defer any scope that has been implicitly dropped.',
@@ -2167,6 +2171,7 @@ const ABSENCE_SPEC_ACCEPTANCE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_ACCEPTANCE'],
   L1: [
     {
       option: 'Check what was just built against the original plan — does it actually do what it was supposed to? List anything that\'s off, missing, or different from what was asked for.',
@@ -2225,6 +2230,7 @@ const ABSENCE_CROSS_CONFIRMING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_CONFIRMING'],
   L1: [
     {
       option: 'Take a real look at what was just built — not just \'does it look right\', but does it actually work correctly? Check for made-up functions, wrong assumptions, or logic that sounds good but doesn\'t hold up.',
@@ -3217,6 +3223,7 @@ const ABSENCE_SPEC_CROSS_CONFIRM_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_CROSS_CONFIRM'],
   L1: [
     {
       option: 'Go through this project\'s spec and check it against the original plan — does every requirement actually come from something that was agreed on, or did some assumptions sneak in that no one has explicitly signed off on?',
@@ -3274,6 +3281,7 @@ const ABSENCE_SPEC_REVISION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_REVISION'],
   L1: [
     {
       option: 'Update this project\'s spec to match what you know now — any requirements that turned out harder or simpler than expected, any edge cases that came up during building, and any things that got quietly dropped or changed in scope.',
