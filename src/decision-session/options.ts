@@ -7084,6 +7084,7 @@ const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DECISION_RECORD_ABSENCE",
   question:      'Architectural decision made — ADR recorded?',
   pinchFallback: 'Record the decision with context and consequences.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DECISION_RECORD_ABSENCE'],
   L1: [
     {
       option: 'Write an architecture decision record for the key design decision made here: document the context (what problem was being solved), the decision made, the alternatives that were considered and rejected, and the consequences — so future engineers understand why this exists as it does.',
@@ -7141,6 +7142,7 @@ const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OVER_ENGINEERING_CHECK",
   question:      'Is this abstraction required by current requirements?',
   pinchFallback: 'Apply YAGNI — build only what current requirements require.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OVER_ENGINEERING_CHECK'],
   L1: [
     {
       option: 'Apply YAGNI to what was just built: identify any abstraction, interface, or configuration option that was added speculatively — not required by a current story or use case — and remove or defer it.',
@@ -7204,6 +7206,7 @@ const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_PAIR_REVIEW_ABSENCE",
   question:      'Critical implementation complete — review plan established?',
   pinchFallback: 'Establish a review plan before merging.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PAIR_REVIEW_ABSENCE'],
   L1: [
     {
       option: 'Establish a review plan for this change before merging: define who reviews it, what the review checklist covers (design correctness, error handling, edge cases, security, performance implications), and what the merge gate is — confirm the plan is in place before the branch is merged.',
@@ -7263,6 +7266,7 @@ const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OBSERVABILITY_FIRST",
   question:      'Feature shipping — observability instrumented?',
   pinchFallback: 'Add logging, metrics, and tracing before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OBSERVABILITY_FIRST'],
   L1: [
     {
       option: 'Add observability to this feature before shipping: instrument all three pillars — structured logging at each significant event boundary, metrics for request rate, error rate, and latency, and distributed trace spans for every external call — so production behavior is visible from day one.',
@@ -7324,6 +7328,7 @@ const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_FAILURE_MODE_ANALYSIS",
   question:      'External dependencies integrated — failure modes enumerated?',
   pinchFallback: 'Enumerate failure modes for each dependency.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FAILURE_MODE_ANALYSIS'],
   L1: [
     {
       option: 'Enumerate failure modes for every external dependency this feature relies on: for each dependency, name the failure mode (timeout, error response, partial data, unavailability), specify the stability pattern that handles it (circuit breaker, timeout + fallback, bulkhead, retry with backoff), and confirm the pattern is implemented before shipping.',
@@ -7385,6 +7390,7 @@ const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CONTRACT_TESTING_GAP",
   question:      'Service boundary established — contract tests defined?',
   pinchFallback: 'Define consumer-driven contract tests for this boundary.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CONTRACT_TESTING_GAP'],
   L1: [
     {
       option: 'Define consumer-driven contract tests for this service boundary before independent deployment: write the contract from the consumer\'s perspective, verify the provider satisfies it in isolation, and add provider verification to the CI pipeline.',
