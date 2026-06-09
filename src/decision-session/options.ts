@@ -7450,6 +7450,7 @@ const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CAPACITY_PLANNING_GAP",
   question:      'Load-adding feature — capacity estimate done?',
   pinchFallback: 'Complete a capacity estimate before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CAPACITY_PLANNING_GAP'],
   L1: [
     {
       option: 'Estimate capacity requirements for this feature before shipping: project peak request rate (RPS), storage growth over 90 days, and required infrastructure headroom — then verify current infrastructure can serve the estimated peak load.',
@@ -7507,6 +7508,7 @@ const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_THREAT_MODELING",
   question:      'Security-sensitive feature — STRIDE threat model completed?',
   pinchFallback: 'Complete a STRIDE threat model before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_THREAT_MODELING'],
   L1: [
     {
       option: 'Enumerate applicable STRIDE threats for this feature and define a mitigation control per threat: Spoofing (identity verification), Tampering (input validation + integrity checks), Repudiation (audit logging), Information Disclosure (data exposure scope), Denial of Service (rate limiting + timeouts), Elevation of Privilege (authorization checks) — confirm each relevant threat has a control before shipping.',
@@ -7568,6 +7570,7 @@ const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DATABASE_MIGRATION_SAFETY",
   question:      'Schema change — expand-migrate-contract pattern applied?',
   pinchFallback: 'Apply backwards-compatible phased migration.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATABASE_MIGRATION_SAFETY'],
   L1: [
     {
       option: 'Apply the expand-migrate-contract sequence to this database change: confirm the schema change can be split into a backward-compatible add phase, a data migration phase, and a cleanup phase — so each phase deploys independently without downtime or rollback risk.',
@@ -7632,6 +7635,7 @@ const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE",
   question:      'Significant feature shipping — deployment strategy defined?',
   pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE'],
   L1: [
     {
       option: 'Define the deployment strategy for this feature before shipping: choose the strategy (canary, feature flag, blue-green, staged rollout), define the rollback procedure, and confirm the rollback can be completed within the acceptable downtime window.',
@@ -7696,6 +7700,7 @@ const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OPERATIONAL_RUNBOOK_GAP",
   question:      'New service/feature shipping — operational runbook written?',
   pinchFallback: 'Write the runbook before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OPERATIONAL_RUNBOOK_GAP'],
   L1: [
     {
       option: 'Write the operational runbook for this feature before shipping: document what the feature does, how to deploy it, the key health metrics to monitor, how to diagnose the most likely failure scenarios, and the escalation path if on-call cannot resolve the issue.',
@@ -7753,6 +7758,7 @@ const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SLO_DEFINITION_GAP",
   question:      'User-facing feature/service — SLOs defined?',
   pinchFallback: 'Define SLOs before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SLO_DEFINITION_GAP'],
   L1: [
     {
       option: 'Define SLOs for this feature before shipping: specify the availability target, the latency p99 budget, and the error rate budget — then confirm alerting and on-call escalation are tied to each SLO before launch.',
