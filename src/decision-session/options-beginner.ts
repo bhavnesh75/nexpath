@@ -1931,6 +1931,7 @@ export const ABSENCE_LEARNING_CONSOLIDATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_LEARNING_CONSOLIDATION",
   question:      'We\'ve built a lot — do you feel like you understood it?',
   pinchFallback: 'Recap learning.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_LEARNING_CONSOLIDATION'],
   L1: [
     {
       option: '1. We\'ve covered a lot in this session — take a moment and think about what you actually learned.\n2. Share with me: what\'s the most important thing you now understand that you didn\'t before?\n3. Then tell me: is there anything we covered that still feels unclear or confusing?',
@@ -1972,6 +1973,7 @@ export const ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SIMPLE_SOLUTION_FIRST",
   question:      'Building this — is there a simpler way to do it?',
   pinchFallback: 'Simplest first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SIMPLE_SOLUTION_FIRST'],
   L1: [
     {
       option: '1. Before building something complex — ask: is there a simpler way to get the same result? The simplest solution that works is almost always the right one to start with.\n2. Share what you\'re trying to do in plain terms. Let\'s find the simple version first.',
@@ -2013,6 +2015,7 @@ export const ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER: DecisionContent =
   signalType:   "ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING",
   question:      'Asking a lot at once — let\'s do one thing at a time',
   pinchFallback: 'One thing at a time.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING'],
   L1: [
     {
       option: '1. When you send several things at once, the results get messy and hard to check. Try focusing on just one thing per message.\n2. What\'s the most important thing to do right now? Start with that — then we\'ll move to the next.',
@@ -2054,6 +2057,7 @@ export const ABSENCE_ROLLBACK_AWARENESS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ROLLBACK_AWARENESS",
   question:      'About to change things — do you know how to undo it?',
   pinchFallback: 'Save before changing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ROLLBACK_AWARENESS'],
   L1: [
     {
       option: '1. Before making a big change to your code — do a git commit first. This saves a snapshot you can always go back to if something breaks.\n2. Not sure how? Try: git add . then git commit -m \'working before change\'. Then make your change safely.',
@@ -2095,6 +2099,7 @@ export const ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_BUILD_VS_UNDERSTAND_RATIO",
   question:      'We\'ve been building — do you understand what we\'ve built?',
   pinchFallback: 'Pause and understand.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_BUILD_VS_UNDERSTAND_RATIO'],
   L1: [
     {
       option: '1. We\'ve added a lot of code — can you explain in your own words what it does? Even a rough description is fine.\n2. Understanding what you\'ve built is as important as building it. Code you don\'t understand becomes a problem you can\'t fix later.',
