@@ -2,133 +2,121 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createAdvisoryPoller } from './advisory-poller.js';
 import type { StoredAdvisory } from './advisory-store-reader.js';
 
-const advisory = (overrides: Partial<StoredAdvisory> = {}): StoredAdvisory => ({
-  projectRoot: '/proj',
-  stage: 'implementation',
-  flagType: 'stage_transition',
-  pinchLabel: 'Quick check.',
-  createdAt: 1000,
-  status: 'pending',
-  l1: ['opt'],
-  l2: [],
-  l3: [],
-  ...overrides,
+const advisory = (o: Partial<StoredAdvisory> = {}): StoredAdvisory => ({
+  projectRoot: '/proj', stage: 'implementation', flagType: 'stage_transition',
+  pinchLabel: 'Quick check.', createdAt: 5000, status: 'pending',
+  l1: ['opt'], l2: [], l3: [], ...o,
 });
 
-describe('createAdvisoryPoller', () => {
-  let onFresh: ReturnType<typeof vi.fn>;
-  let read: ReturnType<typeof vi.fn>;
+describe('createAdvisoryPoller (windsurf delivery)', () => {
+  let onSelection: ReturnType<typeof vi.fn>;
+  let onArm: ReturnType<typeof vi.fn>;
+  let readAdvisory: ReturnType<typeof vi.fn>;
+  let readInjected: ReturnType<typeof vi.fn>;
+  let t: number;
+  const make = (over = {}) => createAdvisoryPoller({
+    projectRoots: ['/proj'], readAdvisory, readInjected, onSelection, onArm,
+    graceMs: 6000, now: () => t, setIntervalFn: () => 1, clearIntervalFn: () => {}, ...over,
+  });
 
   beforeEach(() => {
-    onFresh = vi.fn();
-    read = vi.fn();
+    onSelection = vi.fn(); onArm = vi.fn();
+    readAdvisory = vi.fn(); readInjected = vi.fn().mockResolvedValue(null);
+    t = 4000;
   });
 
-  it('fires onFreshAdvisory for an advisory parked after start()', async () => {
-    read.mockResolvedValue(advisory({ projectRoot: '/proj', createdAt: 6000 }));
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/proj'], onFreshAdvisory: onFresh, read,
-      now: () => 5000, setIntervalFn: () => 1, clearIntervalFn: () => {},
-    });
-    poller.start();          // seeds lastDeliveredAt = 5000
-    await poller.pollOnce();
-    expect(onFresh).toHaveBeenCalledWith('/proj');
+  it('injects the popup selection and does NOT arm the fallback (popup handled it)', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'shown', createdAt: 5000 }));
+    readInjected.mockResolvedValue('Run the full test suite.');
+    const p = make(); p.start(); t = 7000;
+    await p.pollOnce();
+    expect(onSelection).toHaveBeenCalledWith('Run the full test suite.');
+    expect(onArm).not.toHaveBeenCalled();
   });
 
-  it('does NOT fire for advisories that predate start() (no replay)', async () => {
-    read.mockResolvedValue(advisory({ createdAt: 4000 }));
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/proj'], onFreshAdvisory: onFresh, read,
-      now: () => 5000, setIntervalFn: () => 1, clearIntervalFn: () => {},
-    });
-    poller.start();
-    await poller.pollOnce();
-    expect(onFresh).not.toHaveBeenCalled();
+  it('does NOT arm while the advisory is still pending (popup not run yet)', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'pending', createdAt: 5000 }));
+    const p = make(); p.start(); t = 100000;
+    await p.pollOnce();
+    expect(onArm).not.toHaveBeenCalled();
   });
 
-  it('fires only once per advisory (dedup by createdAt), then again for a newer one', async () => {
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/proj'], onFreshAdvisory: onFresh, read,
-      now: () => 1000, setIntervalFn: () => 1, clearIntervalFn: () => {},
-    });
-    poller.start();
-    read.mockResolvedValue(advisory({ createdAt: 2000 }));
-    await poller.pollOnce();
-    await poller.pollOnce();           // same advisory — no re-fire
-    expect(onFresh).toHaveBeenCalledTimes(1);
-    read.mockResolvedValue(advisory({ createdAt: 3000 })); // a newer one
-    await poller.pollOnce();
-    expect(onFresh).toHaveBeenCalledTimes(2);
+  it('arms the fallback only after grace once shown + no selection (popup failed)', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'shown', createdAt: 5000 }));
+    const p = make(); p.start();          // startedAt = 4000
+    t = 5000; await p.pollOnce();          // first sees "shown" → grace starts
+    expect(onArm).not.toHaveBeenCalled();
+    t = 9000; await p.pollOnce();          // 9000-5000 = 4000 < 6000 grace
+    expect(onArm).not.toHaveBeenCalled();
+    t = 11000; await p.pollOnce();         // 11000-5000 = 6000 ≥ grace → arm
+    expect(onArm).toHaveBeenCalledWith('/proj');
+    expect(onArm).toHaveBeenCalledTimes(1);
   });
 
-  it('picks the newest advisory across candidate roots (canonical vs raw)', async () => {
-    read.mockImplementation(async (root: string) =>
-      root === '/private/var/proj'
-        ? advisory({ projectRoot: root, createdAt: 7000 })
-        : advisory({ projectRoot: root, createdAt: 6000 }),
-    );
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/var/proj', '/private/var/proj'], onFreshAdvisory: onFresh, read,
-      now: () => 5000, setIntervalFn: () => 1, clearIntervalFn: () => {},
-    });
-    poller.start();
-    await poller.pollOnce();
-    expect(onFresh).toHaveBeenCalledWith('/private/var/proj');
+  it('does NOT arm if the selection arrives within the grace window', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'shown', createdAt: 5000 }));
+    const p = make(); p.start();
+    t = 5000; await p.pollOnce();                       // shown, grace starts, no selection
+    readInjected.mockResolvedValue('picked option');    // user selects in the popup
+    t = 7000; await p.pollOnce();                       // before grace elapses
+    expect(onSelection).toHaveBeenCalledWith('picked option');
+    expect(onArm).not.toHaveBeenCalled();
+    t = 20000; await p.pollOnce();                       // way past grace — still no arm (handled)
+    expect(onArm).not.toHaveBeenCalled();
   });
 
-  it('no-ops when no advisory exists under any root', async () => {
-    read.mockResolvedValue(null);
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/a', '/b'], onFreshAdvisory: onFresh, read,
-      now: () => 5000, setIntervalFn: () => 1, clearIntervalFn: () => {},
+  it('fires the selection once (dedup), then again after lastInjectedPrompt clears', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'shown', createdAt: 5000 }));
+    const p = make(); p.start(); t = 6000;
+    readInjected.mockResolvedValue('A'); await p.pollOnce();
+    await p.pollOnce();                                   // same value → no re-fire
+    expect(onSelection).toHaveBeenCalledTimes(1);
+    readInjected.mockResolvedValue(null); await p.pollOnce();   // auto cleared it
+    readInjected.mockResolvedValue('B'); await p.pollOnce();    // a new selection
+    expect(onSelection).toHaveBeenNthCalledWith(2, 'B');
+  });
+
+  it('ignores advisories parked before start() (no replay)', async () => {
+    readAdvisory.mockResolvedValue(advisory({ status: 'shown', createdAt: 3000 }));
+    t = 10000; const p = make(); p.start();   // startedAt = 10000
+    t = 30000; await p.pollOnce();
+    expect(onArm).not.toHaveBeenCalled();
+    expect(onSelection).not.toHaveBeenCalled();
+  });
+
+  it('picks the newest advisory across candidate roots', async () => {
+    readAdvisory.mockImplementation(async (root: string) =>
+      root === '/b' ? advisory({ projectRoot: '/b', status: 'shown', createdAt: 7000 })
+                     : advisory({ projectRoot: '/a', status: 'shown', createdAt: 6000 }));
+    const p = createAdvisoryPoller({
+      projectRoots: ['/a', '/b'], readAdvisory, readInjected, onSelection, onArm,
+      graceMs: 0, now: () => t, setIntervalFn: () => 1, clearIntervalFn: () => {},
     });
-    poller.start();
-    await poller.pollOnce();
-    expect(onFresh).not.toHaveBeenCalled();
+    p.start(); t = 8000; await p.pollOnce();
+    expect(onArm).toHaveBeenCalledWith('/b');
   });
 
   it('tolerates a reader that rejects for one root', async () => {
-    read.mockImplementation(async (root: string) => {
-      if (root === '/bad') throw new Error('db locked');
-      return advisory({ projectRoot: root, createdAt: 9000 });
+    readAdvisory.mockImplementation(async (root: string) => {
+      if (root === '/bad') throw new Error('locked');
+      return advisory({ projectRoot: root, status: 'shown', createdAt: 9000 });
     });
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/bad', '/good'], onFreshAdvisory: onFresh, read,
-      now: () => 5000, setIntervalFn: () => 1, clearIntervalFn: () => {},
+    const p = createAdvisoryPoller({
+      projectRoots: ['/bad', '/good'], readAdvisory, readInjected, onSelection, onArm,
+      graceMs: 0, now: () => t, setIntervalFn: () => 1, clearIntervalFn: () => {},
     });
-    poller.start();
-    await poller.pollOnce();
-    expect(onFresh).toHaveBeenCalledWith('/good');
+    p.start(); t = 12000; await p.pollOnce();
+    expect(onArm).toHaveBeenCalledWith('/good');
   });
 
-  it('start() schedules on the injected timer; stop() clears it', () => {
-    const setIntervalFn = vi.fn(() => 42);
-    const clearIntervalFn = vi.fn();
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/proj'], onFreshAdvisory: onFresh, read,
-      intervalMs: 1234, setIntervalFn, clearIntervalFn, now: () => 0,
-    });
-    poller.start();
-    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 1234);
-    poller.start(); // idempotent — no second timer
+  it('start() schedules on the injected timer; stop() clears it; start() is idempotent', () => {
+    const setIntervalFn = vi.fn(() => 42); const clearIntervalFn = vi.fn();
+    const p = make({ setIntervalFn, clearIntervalFn, intervalMs: 1500 });
+    p.start();
+    expect(setIntervalFn).toHaveBeenCalledWith(expect.any(Function), 1500);
+    p.start();
     expect(setIntervalFn).toHaveBeenCalledTimes(1);
-    poller.stop();
+    p.stop();
     expect(clearIntervalFn).toHaveBeenCalledWith(42);
-  });
-
-  it('does not overlap cycles (a slow read blocks the next pollOnce)', async () => {
-    let resolveRead: (v: StoredAdvisory | null) => void = () => {};
-    read.mockImplementation(() => new Promise((r) => { resolveRead = r; }));
-    const poller = createAdvisoryPoller({
-      projectRoots: ['/proj'], onFreshAdvisory: onFresh, read,
-      now: () => 0, setIntervalFn: () => 1, clearIntervalFn: () => {},
-    });
-    poller.start();
-    const p1 = poller.pollOnce();   // starts, blocks on read
-    await poller.pollOnce();        // should early-return (inFlight)
-    expect(read).toHaveBeenCalledTimes(1);
-    resolveRead(advisory({ createdAt: 5000 }));
-    await p1;
-    expect(onFresh).toHaveBeenCalledTimes(1);
   });
 });

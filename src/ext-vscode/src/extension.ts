@@ -25,6 +25,7 @@ import { spawnAuto, spawnStop } from './ipc.js';
 import { resolveWorkspaceFromDbPath, canonicalizeCwd } from './resolve-db-workspace.js';
 import { createAdvisoryFallback, type AdvisoryFallback } from './advisory-fallback.js';
 import { createAdvisoryPoller, type AdvisoryPoller } from './advisory-poller.js';
+import { readLatestAdvisory, readInjectedPrompt } from './advisory-store-reader.js';
 import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
 
 /** globalState key gating the one-time "use the status bar fallback" hint. */
@@ -169,7 +170,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const roots = Array.from(new Set([canonicalizeCwd(ws), ws]));
     advisoryPoller = createAdvisoryPoller({
       projectRoots: roots,
-      onFreshAdvisory: (root) => advisoryFallback.armIfPending(root),
+      readAdvisory: (root) => readLatestAdvisory(root),
+      readInjected: (root) => readInjectedPrompt(root),
+      // Popup selection → inject into Cascade + clear the fallback.
+      onSelection: async (prompt) => {
+        advisoryFallback.clear();
+        await injectIntoChat(prompt);
+      },
+      // Popup ran but no selection → surface the in-editor fallback.
+      onArm: (root) => advisoryFallback.armIfPending(root),
     });
     advisoryPoller.start();
     context.subscriptions.push({ dispose: () => advisoryPoller?.stop() });

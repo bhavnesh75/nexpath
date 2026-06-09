@@ -118,7 +118,7 @@ describe('windsurfAdapter.install', () => {
     expect(existsSync(hooksPath)).toBe(true);
     const hooks = JSON.parse(readFileSync(hooksPath, 'utf8')).hooks;
     expect(hooks.pre_user_prompt[0].command).toContain('windsurf-hook pre_user_prompt');
-    expect(hooks.post_cascade_response).toBeUndefined();
+    expect(hooks.post_cascade_response[0].command).toContain('windsurf-hook post_cascade_response');
     // delivery: extension deep-link still printed
     const allLogs = logSpy.mock.calls.map((c) => c.join(' ')).join('\n');
     expect(allLogs).toContain('Cascade capture hook written');

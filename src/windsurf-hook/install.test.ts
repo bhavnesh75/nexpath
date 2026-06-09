@@ -29,10 +29,10 @@ describe('paths + command', () => {
     const cmd = buildWindsurfHookCommand('/abs/dist/cli/index.js', 'pre_user_prompt');
     expect(cmd).toBe('node "/abs/dist/cli/index.js" windsurf-hook pre_user_prompt');
   });
-  it('config writes ONLY pre_user_prompt (capture); no post_cascade_response popup', () => {
+  it('config writes both events: pre_user_prompt (capture) + post_cascade_response (popup)', () => {
     const cfg = buildWindsurfHooksConfig('/abs/cli.js');
     expect(cfg.pre_user_prompt[0].command).toContain('windsurf-hook pre_user_prompt');
-    expect((cfg as Record<string, unknown>).post_cascade_response).toBeUndefined();
+    expect(cfg.post_cascade_response[0].command).toContain('windsurf-hook post_cascade_response');
   });
   it('isNexpathWindsurfHook matches only our command', () => {
     expect(isNexpathWindsurfHook({ command: 'node x windsurf-hook pre_user_prompt' })).toBe(true);
@@ -42,35 +42,21 @@ describe('paths + command', () => {
 });
 
 describe('writeWindsurfHooks', () => {
-  it('creates hooks.json with ONLY the pre_user_prompt capture hook', () => {
+  it('creates hooks.json with both nexpath hooks (capture + popup)', () => {
     writeWindsurfHooks(file, '/abs/cli.js');
     const d = read();
     expect(d.hooks.pre_user_prompt[0].command).toContain('windsurf-hook pre_user_prompt');
-    expect(d.hooks.post_cascade_response).toBeUndefined();
+    expect(d.hooks.post_cascade_response[0].command).toContain('windsurf-hook post_cascade_response');
   });
 
-  it('strips a stale nexpath post_cascade_response left by an older install', () => {
-    // Simulate a hooks.json an older nexpath wrote (both events).
-    writeFileSync(file, JSON.stringify({
-      hooks: {
-        pre_user_prompt: [{ command: 'node old windsurf-hook pre_user_prompt' }],
-        post_cascade_response: [{ command: 'node old windsurf-hook post_cascade_response' }],
-      },
-    }));
-    writeWindsurfHooks(file, '/abs/cli.js');
-    const d = read();
-    expect(d.hooks.pre_user_prompt).toHaveLength(1);
-    expect(d.hooks.pre_user_prompt[0].command).toContain('/abs/cli.js');
-    expect(d.hooks.post_cascade_response).toBeUndefined(); // stale popup hook gone
-  });
-
-  it("keeps another tool's post_cascade_response while dropping ours", () => {
+  it("keeps another tool's post_cascade_response alongside ours", () => {
     writeFileSync(file, JSON.stringify({
       hooks: { post_cascade_response: [{ command: 'python3 audit.py' }] },
     }));
     writeWindsurfHooks(file, '/abs/cli.js');
     const d = read();
-    expect(d.hooks.post_cascade_response).toEqual([{ command: 'python3 audit.py' }]);
+    expect(d.hooks.post_cascade_response).toHaveLength(2);
+    expect(d.hooks.post_cascade_response.some((h: any) => h.command === 'python3 audit.py')).toBe(true);
     expect(d.hooks.pre_user_prompt[0].command).toContain('windsurf-hook pre_user_prompt');
   });
 

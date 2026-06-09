@@ -18,15 +18,18 @@ export const WINDSURF_HOOK_EVENTS = ['pre_user_prompt', 'post_cascade_response']
 export type WindsurfHookEvent = (typeof WINDSURF_HOOK_EVENTS)[number];
 
 /**
- * Events nexpath WRITES today: capture only (`pre_user_prompt` → `nexpath auto`).
- * `post_cascade_response` is intentionally NOT written: Windsurf hooks are
- * read-only (they can't inject a selection back into Cascade), so the advisory is
- * delivered by the nexpath VS Code extension (the advisory poller), not a terminal
- * popup. Writing `post_cascade_response` would only spawn a redundant, dead-end
- * popup. Removal still cleans BOTH events so older installs get the stale
- * `post_cascade_response` stripped on the next write/uninstall.
+ * Events nexpath WRITES:
+ *   - `pre_user_prompt`       → `nexpath auto`  (capture + park advisory)
+ *   - `post_cascade_response` → `nexpath stop`  (the terminal popup — PRIMARY
+ *      advisory surface, same as Claude Code / Cursor)
+ *
+ * The popup is the primary surface on Windsurf too. Its selection can't return
+ * through the read-only hook, but the extension bridges it: `stop` persists the
+ * choice to `session_states.lastInjectedPrompt`, and the extension injects that
+ * into Cascade. The in-editor surface (status bar → sidebar) is only the fallback
+ * for when the popup couldn't open.
  */
-export const WINDSURF_WRITE_EVENTS = ['pre_user_prompt'] as const;
+export const WINDSURF_WRITE_EVENTS = ['pre_user_prompt', 'post_cascade_response'] as const;
 export type WindsurfWriteEvent = (typeof WINDSURF_WRITE_EVENTS)[number];
 
 interface HookEntry { command?: string; [k: string]: unknown }
@@ -51,10 +54,11 @@ export function isNexpathWindsurfHook(entry: HookEntry): boolean {
   return typeof entry.command === 'string' && entry.command.includes('windsurf-hook');
 }
 
-/** Build the hook entries nexpath writes (capture only — `pre_user_prompt`). */
+/** Build the hook entries nexpath writes: capture (auto) + popup (stop). */
 export function buildWindsurfHooksConfig(cliPath: string): Record<WindsurfWriteEvent, HookEntry[]> {
   return {
-    pre_user_prompt: [{ command: buildWindsurfHookCommand(cliPath, 'pre_user_prompt') }],
+    pre_user_prompt:       [{ command: buildWindsurfHookCommand(cliPath, 'pre_user_prompt') }],
+    post_cascade_response: [{ command: buildWindsurfHookCommand(cliPath, 'post_cascade_response') }],
   };
 }
 
