@@ -26,6 +26,7 @@ import { resolveWorkspaceFromDbPath, canonicalizeCwd } from './resolve-db-worksp
 import { createAdvisoryFallback, type AdvisoryFallback } from './advisory-fallback.js';
 import { createAdvisoryPoller, type AdvisoryPoller } from './advisory-poller.js';
 import { readLatestAdvisory, readInjectedPrompt } from './advisory-store-reader.js';
+import { raiseWindsurfWindow, pasteKeystroke } from './windsurf-autopaste.js';
 import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
 
 /** globalState key gating the one-time "use the status bar fallback" hint. */
@@ -70,10 +71,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   //    matching command (the safe default; see chat-input-injector.ts).
   //    The same path injects a terminal-popup selection and a webview-fallback
   //    selection, so define it once and reuse.
+  // Windsurf has NO extension-callable command to insert text into Cascade's
+  // input (`windsurf.sendTextToChat` is an unregistered ID; the real path is an
+  // internal `addCascadeInput` webview protobuf). So on Windsurf we do what a user
+  // would: copy → focus Cascade → simulate the paste shortcut. Returns true when
+  // the keystroke was dispatched (suppresses the clipboard toast); false leaves the
+  // clipboard + toast fallback in place.
+  const windsurfInject = async (text: string): Promise<boolean> => {
+    await vscode.env.clipboard.writeText(text); // for the paste AND as the fallback
+    raiseWindsurfWindow();
+    // Best-effort focus of the Cascade input before pasting.
+    try { await vscode.commands.executeCommand('windsurf.prioritized.chat.open'); } catch { /* ignore */ }
+    await new Promise((r) => setTimeout(r, 250));
+    const ok = pasteKeystroke();
+    log(`[nexpath] windsurf inject → ${ok ? 'auto-pasted into Cascade (Ctrl+V)' : 'no keystroke tool; left on clipboard'}`);
+    return ok;
+  };
   const injectIntoChat = (text: string): Promise<void> =>
     handleOptionSelection(text, {
-      injectFn: (t) => chatInputInject(t, { host }),
+      injectFn: host === 'windsurf' ? windsurfInject : (t) => chatInputInject(t, { host }),
     });
+
+  // One-click self-test (Command Palette → "Nexpath: Test Cascade Inject"): runs
+  // the exact inject path with a probe so the inject can be verified in isolation
+  // from the popup/poller chain. Watch Cascade's input + Output → Nexpath.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('nexpath.testCascadeInject', async () => {
+      const probe = 'NEXPATH SELF-TEST — if you see this in Cascade, inject works.';
+      log('[nexpath] testCascadeInject: running inject self-test…');
+      await injectIntoChat(probe);
+      void vscode.window.showInformationMessage(
+        'Nexpath: ran the Cascade inject self-test. Did the probe text appear in Cascade? See Output → Nexpath.',
+      );
+    }),
+  );
   viewProvider = new NexpathDecisionSessionViewProvider(
     context.extensionUri,
     injectIntoChat,
@@ -182,11 +213,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       onArm: (root) => advisoryFallback.armIfPending(root),
     });
     advisoryPoller.start();
-    // Confirm the verified inject command is present on THIS Windsurf build.
-    void vscode.commands.getCommands(true).then(
-      (all) => log(`[nexpath] windsurf.sendTextToChat available: ${all.includes('windsurf.sendTextToChat')}`),
-      () => {},
-    );
+    log('[nexpath] windsurf inject = clipboard + focus Cascade + paste keystroke (xdotool/osascript/SendKeys). Run "Nexpath: Test Cascade Inject" to verify.');
     context.subscriptions.push({ dispose: () => advisoryPoller?.stop() });
     log(`[nexpath] windsurf advisory poller started for roots: ${roots.join(' | ')}`);
   }
