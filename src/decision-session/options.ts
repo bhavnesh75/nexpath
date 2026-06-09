@@ -8212,6 +8212,7 @@ export const ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_RETENTION_MECHANISM_CHECK",
   question: 'How does this feature bring users back?',
   pinchFallback: 'Consider the retention angle before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RETENTION_MECHANISM_CHECK'],
   L1: [
     {
       option: 'Features that acquire users but don\'t retain them have diminishing returns forever. Every significant feature should have an answer to: why does a user return to this feature after the first use, and how does using it once make the next use more likely? Without a retention angle, you\'re building acquisition features, not engagement features.',
@@ -8269,6 +8270,7 @@ export const ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT",
   question: 'How will you know if this feature is working after you ship it?',
   pinchFallback: 'Add a feedback mechanism before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT'],
   L1: [
     {
       option: 'Shipping without a way to measure whether the feature worked means the engineering investment produces no validated learning. The Lean Startup loop: Build → Measure → Learn. Skipping the Measure step after Build means the loop stops at the most expensive point and never produces the insight that informs the next build. Define your measurement mechanism before shipping, not after.',
@@ -8326,6 +8328,7 @@ export const ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_HYPOTHESIS_BEFORE_BUILD",
   question: 'What hypothesis does this feature test?',
   pinchFallback: 'Define the hypothesis before starting the build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_HYPOTHESIS_BEFORE_BUILD'],
   L1: [
     {
       option: 'Write the experiment hypothesis for this feature in the form: "We believe [feature/change] will cause [observable outcome] for [user type]. We will know this is true when [signal] appears within [timeframe]." If any bracket cannot be filled, propose what data or decision would resolve it before continuing.',
@@ -8383,6 +8386,7 @@ export const ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL: DecisionContent =
   signalType:   "ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE",
   question: 'When did you last check product direction — not just implementation?',
   pinchFallback: 'Take a product perspective before continuing to build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE'],
   L1: [
     {
       option: 'Pause implementation and run a product-direction check: count the last 10-15 prompts by category (implementation instructions vs product-direction questions). If heavily skewed to implementation, answer one product question before continuing — is this still the right feature to be building for the right user toward the right outcome?',
@@ -8440,6 +8444,7 @@ export const ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_NORTH_STAR_ALIGNMENT",
   question: 'How does this feature connect to your product\'s core metric?',
   pinchFallback: 'Check north star alignment before adding this feature.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_NORTH_STAR_ALIGNMENT'],
   L1: [
     {
       option: 'Trace this feature to the product\'s north star metric in one or two steps: state how it moves the metric directly, or how it enables a downstream feature that does. If no traceable connection exists, propose deferring or removing it.',
@@ -8499,6 +8504,7 @@ export const ABSENCE_TIME_TO_VALUE_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TIME_TO_VALUE_CHECK",
   question: 'Is this solution the right size for your current scale?',
   pinchFallback: 'Check whether this complexity is justified at current user count.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TIME_TO_VALUE_CHECK'],
   L1: [
     {
       option: 'Right-size this solution for current scale: name the current user count, name the simplest technology that solves the problem at that scale (a database query, a single API call, a flat file), and propose using it. Defer infrastructure complexity until scale actually requires it.',
@@ -8556,6 +8562,7 @@ export const ABSENCE_SHIP_READINESS_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SHIP_READINESS_DEFINITION",
   question: 'What needs to be true for this to be ready to ship?',
   pinchFallback: 'Write ship criteria before continuing to build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SHIP_READINESS_DEFINITION'],
   L1: [
     {
       option: 'Write the ship criteria for this build before more is added: list the specific, binary conditions that must be true to ship — "users can sign up", "the core workflow completes end-to-end", etc. This list is your Definition of Done; everything beyond it is post-launch scope.',
