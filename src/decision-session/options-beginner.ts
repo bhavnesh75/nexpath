@@ -1677,6 +1677,7 @@ export const ABSENCE_ERROR_UNDERSTANDING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ERROR_UNDERSTANDING",
   question:      'Got an error — do you know what it means?',
   pinchFallback: 'Understand the error.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_UNDERSTANDING'],
   L1: [
     {
       option: '1. Before asking to fix this error — read the error message carefully.\n2. Share with me: what do you think it\'s saying went wrong?\n3. Then tell me: does your explanation match where the problem is in the code?',
@@ -1804,6 +1805,7 @@ export const ABSENCE_REQUIREMENT_CLARITY_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_REQUIREMENT_CLARITY",
   question:      'About to build — is the requirement clear?',
   pinchFallback: 'Clarify first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REQUIREMENT_CLARITY'],
   L1: [
     {
       option: '1. Before I build this — tell me specifically what you want it to do.\n2. Share with me: what does it look like when it\'s working correctly?\n3. Then tell me: what should NOT happen — is there anything it should avoid doing?',
@@ -1845,6 +1847,7 @@ export const ABSENCE_COPY_PASTE_AWARENESS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_COPY_PASTE_AWARENESS",
   question:      'Code generated — do you understand it before using it?',
   pinchFallback: 'Understand first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COPY_PASTE_AWARENESS'],
   L1: [
     {
       option: '1. Before adding the generated code to your project — read through it.\n2. Share with me: what does each part do in plain words?\n3. If there\'s a part you\'re not sure about, point it out and we\'ll go through it together before it goes in.',
@@ -1886,6 +1889,7 @@ export const ABSENCE_DEBUGGING_OBSERVATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DEBUGGING_OBSERVATION",
   question:      'Something\'s broken — what did you actually see?',
   pinchFallback: 'Describe it first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEBUGGING_OBSERVATION'],
   L1: [
     {
       option: '1. Before I look at the bug — describe what happened.\n2. Share with me: what did you expect to happen, and what actually happened instead?\n3. Then tell me: is there an error message, and if so, what does it say?',

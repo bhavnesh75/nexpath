@@ -6297,6 +6297,7 @@ const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CREATIVE_VS_CORE_RATIO",
   question:      'Session balance — how much went to core vs. creative features?',
   pinchFallback: 'Core value first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CREATIVE_VS_CORE_RATIO'],
   L1: [
     {
       option: 'Value-driven development: \'features that generate the maximum value for the users without creating the maximum cost.\' Before the next creative or aesthetic feature — look at this session: what proportion of prompts went to core product functionality vs. creative/extra features? If more than 30-40% is creative, the core is under-served.',
