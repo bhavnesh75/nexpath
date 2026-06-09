@@ -410,6 +410,10 @@ export async function installAction(
 
   if (!skipClipboardCheck) {
     await ensureLinuxClipboard({ autoConfirm: opts.yes });
+    // Keystroke tool for the Windsurf in-editor auto-inject (clipboard → focus
+    // Cascade → Ctrl+V). Also raises the Cursor popup window on Linux. So the
+    // Windsurf advisory lands in chat with zero manual setup.
+    await ensureLinuxInjectTools({ autoConfirm: opts.yes });
   }
 }
 
@@ -498,6 +502,72 @@ export async function ensureLinuxClipboard(
     }
   } catch {
     console.log(`\u26a0 ${pkgName} installation failed \u2014 install manually: sudo ${pm.cmd} install ${pkgName}`);
+  }
+}
+
+/**
+ * On Linux, ensure the keystroke tool the Windsurf in-editor auto-inject needs
+ * (`xdotool` on X11, `wtype` on Wayland) is installed — so the popup selection
+ * auto-pastes into Cascade instead of falling back to "copy to clipboard". The
+ * same tool also raises the Cursor advisory popup. macOS/Windows use built-in
+ * automation (osascript / SendKeys), so this is Linux-only. If skipped/failed,
+ * Windsurf advisories degrade gracefully to the clipboard path.
+ */
+export async function ensureLinuxInjectTools(
+  deps: {
+    platform?: string;
+    spawnFn?: typeof spawnSync;
+    execFn?: typeof execSync;
+    confirmFn?: ConfirmFn;
+    autoConfirm?: boolean;
+    waylandDisplay?: string;
+  } = {},
+): Promise<void> {
+  const plat  = deps.platform ?? process.platform;
+  const spawn = deps.spawnFn  ?? spawnSync;
+  const exec  = deps.execFn   ?? execSync;
+
+  if (plat !== 'linux') return;
+
+  const isWayland = !!(deps.waylandDisplay ?? process.env.WAYLAND_DISPLAY);
+  const toolName  = isWayland ? 'wtype' : 'xdotool'; // package name == tool name
+
+  if (spawn('which', [toolName], { stdio: 'pipe' }).status === 0) return; // already present
+
+  const pkgManagers = PKG_MANAGERS.map((p) => ({
+    cmd: p.cmd,
+    install: p.install.map((arg) => (arg === 'xclip' ? toolName : arg)),
+  }));
+  const pm = pkgManagers.find((p) => spawn('which', [p.cmd], { stdio: 'pipe' }).status === 0);
+  if (!pm) {
+    console.log(`⚠ No keystroke tool (${toolName}) found — install it for Windsurf auto-inject.`);
+    return;
+  }
+
+  console.log('');
+  console.log(`Windsurf auto-inject (paste into Cascade) requires ${toolName} (not found on this system).`);
+
+  if (!deps.autoConfirm) {
+    const confirmFn = deps.confirmFn ?? (async () => {
+      const answer = await confirm({ message: `Install ${toolName} using ${pm.cmd}?` });
+      return !isCancel(answer) && answer === true;
+    });
+    const ok = await confirmFn();
+    if (!ok) {
+      console.log('⚠ Skipped — Windsurf advisories will fall back to "copy to clipboard".');
+      return;
+    }
+  }
+
+  try {
+    exec(pm.install.join(' '), { stdio: 'inherit' });
+    if (spawn('which', [toolName], { stdio: 'pipe' }).status === 0) {
+      console.log(`✓ ${toolName} installed successfully`);
+    } else {
+      console.log(`⚠ ${toolName} install command ran but ${toolName} not found — check output above`);
+    }
+  } catch {
+    console.log(`⚠ ${toolName} installation failed — install manually: sudo ${pm.cmd} install ${toolName}`);
   }
 }
 

@@ -31,6 +31,7 @@ import {
   writeHookEntry,
   removeHookEntry,
   ensureLinuxClipboard,
+  ensureLinuxInjectTools,
 } from './install.js';
 
 afterEach(() => vi.restoreAllMocks());
@@ -1775,5 +1776,69 @@ describe('ensureLinuxClipboard', () => {
       waylandDisplay: 'wayland-0',
     });
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('wl-copy'));
+  });
+});
+
+// ── ensureLinuxInjectTools (Windsurf auto-inject keystroke tool) ──────────────
+
+describe('ensureLinuxInjectTools', () => {
+  const mockSpawn = vi.fn();
+  const mockExec  = vi.fn();
+  afterEach(() => vi.restoreAllMocks());
+
+  it('skips on macOS / Windows (built-in osascript / SendKeys)', async () => {
+    await ensureLinuxInjectTools({ platform: 'darwin', spawnFn: mockSpawn as any });
+    await ensureLinuxInjectTools({ platform: 'win32', spawnFn: mockSpawn as any });
+    expect(mockSpawn).not.toHaveBeenCalled();
+  });
+
+  it('skips on Linux/X11 when xdotool is already installed', async () => {
+    mockSpawn.mockImplementation((cmd: string, args: string[]) =>
+      cmd === 'which' && args[0] === 'xdotool' ? { status: 0 } : { status: 1 });
+    const logSpy = vi.spyOn(console, 'log');
+    await ensureLinuxInjectTools({ platform: 'linux', spawnFn: mockSpawn as any });
+    expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining('xdotool'));
+  });
+
+  it('installs xdotool via apt on X11 when missing (auto-confirm)', async () => {
+    let installed = false;
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'which' && args[0] === 'apt') return { status: 0 };
+      if (cmd === 'which' && args[0] === 'xdotool') return { status: installed ? 0 : 1 };
+      return { status: 1 };
+    });
+    mockExec.mockImplementation(() => { installed = true; });
+    const logSpy = vi.spyOn(console, 'log');
+    await ensureLinuxInjectTools({
+      platform: 'linux', spawnFn: mockSpawn as any, execFn: mockExec as any, autoConfirm: true,
+    });
+    expect(mockExec).toHaveBeenCalledWith('sudo apt install -y xdotool', { stdio: 'inherit' });
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('installed successfully'));
+  });
+
+  it('installs wtype on Wayland', async () => {
+    let installed = false;
+    mockSpawn.mockImplementation((cmd: string, args: string[]) => {
+      if (cmd === 'which' && args[0] === 'apt') return { status: 0 };
+      if (cmd === 'which' && args[0] === 'wtype') return { status: installed ? 0 : 1 };
+      return { status: 1 };
+    });
+    mockExec.mockImplementation(() => { installed = true; });
+    await ensureLinuxInjectTools({
+      platform: 'linux', spawnFn: mockSpawn as any, execFn: mockExec as any,
+      autoConfirm: true, waylandDisplay: 'wayland-0',
+    });
+    expect(mockExec).toHaveBeenCalledWith('sudo apt install -y wtype', { stdio: 'inherit' });
+  });
+
+  it('declining the prompt degrades to clipboard (no exec)', async () => {
+    mockSpawn.mockImplementation((cmd: string, args: string[]) =>
+      cmd === 'which' && args[0] === 'apt' ? { status: 0 } : { status: 1 });
+    const logSpy = vi.spyOn(console, 'log');
+    await ensureLinuxInjectTools({
+      platform: 'linux', spawnFn: mockSpawn as any, execFn: mockExec as any, confirmFn: async () => false,
+    });
+    expect(mockExec).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('copy to clipboard'));
   });
 });
