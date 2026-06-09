@@ -125,7 +125,27 @@ export interface DecisionSessionInput {
  */
 export type SelectFn = (opts: {
   message: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{
+    value:        string;
+    label:        string;
+    /** Per-option desc-base text — rendered as a `↳`-prefixed sub-line by the Path A render-loop path; ignored by legacy clack-based fallbacks. */
+    descBase?:    string;
+    /** True for blank-row OPTION_SEPARATOR padding entries — render-loop skips focus and renders a blank row. */
+    isSeparator?: boolean;
+    /** True for SHOW_SIMPLER / SKIP_NOW / HELP_LABEL meta entries — render-loop omits the desc-base sub-line for these. */
+    isMeta?:      boolean;
+  }>;
+  /**
+   * Structured render fields — consumed by the Path A render-loop renderer
+   * (TtySelectFn :: buildMjsScript) when present. The legacy `message`
+   * string remains the source-of-truth for clack-based fallback paths
+   * (e.g. the sub-menu action prompt + freq / role / root menu .mjs
+   * builders) which only know about `message + options`.
+   */
+  pinchLabel?:    string;
+  subtitle?:      string;
+  question?:      string;
+  whyHelpBlock?:  string;
 }) => Promise<string | symbol>;
 
 /**
