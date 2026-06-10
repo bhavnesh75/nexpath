@@ -27,6 +27,11 @@ import { createAdvisoryFallback, type AdvisoryFallback } from './advisory-fallba
 import { createAdvisoryPoller, type AdvisoryPoller } from './advisory-poller.js';
 import { readLatestAdvisory, readInjectedPrompt } from './advisory-store-reader.js';
 import { raiseWindsurfWindow, pasteKeystroke } from './windsurf-autopaste.js';
+import {
+  injectViaCascadeAction,
+  SEND_CHAT_ACTION_COMMAND,
+  OPEN_CHAT_PANEL_JSON,
+} from './windsurf-cascade-action.js';
 import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
 
 /** globalState key gating the one-time "use the status bar fallback" hint. */
@@ -78,13 +83,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // the keystroke was dispatched (suppresses the clipboard toast); false leaves the
   // clipboard + toast fallback in place.
   const windsurfInject = async (text: string): Promise<boolean> => {
-    await vscode.env.clipboard.writeText(text); // for the paste AND as the fallback
+    // PRIMARY — direct insert via Windsurf's real `sendChatActionMessage` command:
+    // focus the Cascade panel (`openChatPanel`) then add the text to its input
+    // (`addCascadeInput`). No clipboard, no keystroke, no window/focus race, and it
+    // targets the EXISTING conversation (not a new chat). Command + protobuf shape
+    // are verified against the Windsurf 2.3.x workbench bundle. See
+    // windsurf-cascade-action.ts.
+    const direct = await injectViaCascadeAction(text, {
+      executeCommand: (id, ...args) => vscode.commands.executeCommand(id, ...args),
+      getCommands: (filter) => vscode.commands.getCommands(filter),
+    });
+    if (direct) {
+      log('[nexpath] windsurf inject → inserted into Cascade via sendChatActionMessage(addCascadeInput)');
+      return true;
+    }
+
+    // FALLBACK — older builds without `sendChatActionMessage`: clipboard + focus
+    // the panel (same `openChatPanel` action when present) + simulate paste.
+    await vscode.env.clipboard.writeText(text); // for the paste AND as the last-ditch fallback
     raiseWindsurfWindow();
-    // Best-effort focus of the Cascade input before pasting.
-    try { await vscode.commands.executeCommand('windsurf.prioritized.chat.open'); } catch { /* ignore */ }
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 150));
+    let focused = false;
+    try {
+      await vscode.commands.executeCommand(SEND_CHAT_ACTION_COMMAND, OPEN_CHAT_PANEL_JSON);
+      focused = true;
+    } catch { /* command absent on this build — paste into whatever has focus */ }
+    await new Promise((r) => setTimeout(r, focused ? 400 : 250));
     const ok = pasteKeystroke();
-    log(`[nexpath] windsurf inject → ${ok ? 'auto-pasted into Cascade (Ctrl+V)' : 'no keystroke tool; left on clipboard'}`);
+    log(`[nexpath] windsurf inject (fallback) → ${ok ? `auto-pasted into Cascade (${focused ? 'openChatPanel → ' : ''}Ctrl+V)` : 'no keystroke tool; left on clipboard'}`);
     return ok;
   };
   const injectIntoChat = (text: string): Promise<void> =>
@@ -213,7 +239,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       onArm: (root) => advisoryFallback.armIfPending(root),
     });
     advisoryPoller.start();
-    log('[nexpath] windsurf inject = clipboard + focus Cascade + paste keystroke (xdotool/osascript/SendKeys). Run "Nexpath: Test Cascade Inject" to verify.');
+    log('[nexpath] windsurf inject = direct sendChatActionMessage(openChatPanel→addCascadeInput); clipboard+keystroke is the fallback. Run "Nexpath: Test Cascade Inject" to verify.');
     context.subscriptions.push({ dispose: () => advisoryPoller?.stop() });
     log(`[nexpath] windsurf advisory poller started for roots: ${roots.join(' | ')}`);
   }
