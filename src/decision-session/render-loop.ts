@@ -48,6 +48,7 @@ import type { LineKind } from './styler.js';
 import { styler } from './styler.js';
 import type { OptionEntry } from './options.js';
 import { writeRenderDebug } from './render-telemetry.js';
+import { CHROME_MAX_PREFIX_WIDTH, applyChrome } from './render-loop-chrome.js';
 
 // ── Public types ────────────────────────────────────────────────────────────
 
@@ -136,6 +137,13 @@ export interface RenderedLayout {
   emissions:        readonly LineEmission[];
   /** Per-line styled output (parallel to emissions). What goes to stdout WHEN no viewport clipping is applied. */
   styledLines:      readonly string[];
+  /**
+   * Per-line chrome-decorated output (parallel to emissions). Each entry
+   * is the corresponding `styledLines` entry with the per-LineKind chrome
+   * prefix (corner glyph, left rail, option bullet, focus highlight)
+   * prepended. This is what the interactive renderLoop writes to stdout.
+   */
+  chromedLines:     readonly string[];
   /** Per-option visible-range map — startIdx/endIdx into emissions for each option's lines. */
   optionLineRanges: readonly { startIdx: number; endIdx: number; itemIndex: number }[];
   /**
@@ -168,14 +176,18 @@ export interface RenderedLayout {
    *   totalOptionRows     : total emission row count across all options
    *                         (informational; lets the shell decide if
    *                         scrolling is needed at all)
-   *   visibleStyledLines  : styled lines to write to stdout — header
-   *                         rows always included; option rows clipped
-   *                         to the viewport window
+   *   visibleStyledLines  : styled lines (no chrome) to write to stdout
+   *                         — header rows always included; option rows
+   *                         clipped to the viewport window
+   *   visibleChromedLines : chrome-decorated lines parallel to
+   *                         visibleStyledLines — the interactive
+   *                         writeFrame writes these
    */
   viewport: {
     appliedScrollOffset: number;
     totalOptionRows:     number;
     visibleStyledLines:  readonly string[];
+    visibleChromedLines: readonly string[];
   };
 }
 
@@ -477,7 +489,13 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
       if (!item.isMeta && item.descBase && item.descBase.length > 0) {
         const cap      = isExpanded ? preExpandedCap : D1_TRUNCATED_LINE_CAP;
         const kind     = isExpanded ? 'desc-base-expanded' : 'desc-base-truncated';
-        const subLines = renderDescBaseSubLines(item.descBase, opts.cols, cap);
+        // Reserve CHROME_MAX_PREFIX_WIDTH columns from the wrap budget so
+        // post-chrome lines stay within opts.cols. Without this reservation
+        // the chrome prefix would push wrapped lines over the terminal
+        // width and the cursor-rewind row count in writeFrame would
+        // under-count visual rows.
+        const chromeReservedCols = Math.max(1, opts.cols - CHROME_MAX_PREFIX_WIDTH);
+        const subLines = renderDescBaseSubLines(item.descBase, chromeReservedCols, cap);
         for (const ln of subLines) {
           emissions.push({ kind, text: ln, optionIndex: i, isPadding: false });
         }
@@ -516,10 +534,19 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   }
 
   // ── Styler dispatch (D6) ───────────────────────────────────────────────────
-  // Every emitted line passes through styler(text, kind). Pass-through today
-  // (Phase 1 styler returns input unchanged); Bhavnesh R10 work replaces the
-  // body with per-kind ANSI mapping. The dispatch site stays the same.
+  // Every emitted line passes through styler(text, kind). Per-kind ANSI
+  // mapping is applied here; chrome decoration runs below as a separate
+  // layer so the styler dispatch table stays focused on per-LineKind
+  // content styling only.
   const styledLines = emissions.map((e) => styler(e.text, e.kind));
+
+  // ── Chrome decoration ──────────────────────────────────────────────────────
+  // Apply the per-LineKind chrome prefix (corner glyph, left rail, option
+  // bullet, focus highlight) to the styled lines. Runs AFTER the styler
+  // so the styler's dev-only ESC-byte guard does not trip on the chrome
+  // prefix's ANSI codes. Parallel array shape — chromedLines[i] is
+  // styledLines[i] with the chrome prefix prepended.
+  const chromedLines = applyChrome(styledLines, emissions, { focusedOptionIndex: state.focusedIndex });
 
   // ── Budget computation (§11.4 / §11.8 / §11.12) ────────────────────────────
   // Adapt the TtySelectFn.ts:72-92 precedent — header rows count as
@@ -575,12 +602,20 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   const windowed     = optionStyled.slice(appliedScrollOffset, appliedScrollOffset + avail);
   const visibleStyledLines: readonly string[] = [...headerStyled, ...windowed];
 
+  // Same windowing applied to chromedLines so writeFrame can pick either
+  // level (with or without chrome) without re-windowing.
+  const headerChromed  = chromedLines.slice(0, headerEnd);
+  const optionChromed  = chromedLines.slice(headerEnd);
+  const windowedChromed = optionChromed.slice(appliedScrollOffset, appliedScrollOffset + avail);
+  const visibleChromedLines: readonly string[] = [...headerChromed, ...windowedChromed];
+
   return {
     emissions,
     styledLines,
+    chromedLines,
     optionLineRanges,
     budget:   { fixedLines, avail, maxItems, fittedItems },
-    viewport: { appliedScrollOffset, totalOptionRows, visibleStyledLines },
+    viewport: { appliedScrollOffset, totalOptionRows, visibleStyledLines, visibleChromedLines },
   };
 }
 
@@ -729,7 +764,7 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
       out.write('\r');
     }
 
-    const lines = layout.viewport.visibleStyledLines;
+    const lines = layout.viewport.visibleChromedLines;
     for (const line of lines) {
       out.write(line);
       out.write('\n');
