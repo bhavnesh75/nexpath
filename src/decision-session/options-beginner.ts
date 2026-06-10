@@ -1,10 +1,12 @@
 import type { DecisionContent } from './options.js';
 import type { Stage } from '../classifier/types.js';
+import { WHY_HELP_BY_SIGNAL_TYPE } from './why-help-by-signal-type.js';
 
 const IDEA_TO_PRD_BEGINNER: DecisionContent = {
   signalType:   "IDEA_TO_PRD",
   question:      'Before building — is the plan written?',
   pinchFallback: 'Before coding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IDEA_TO_PRD'],
   L1: [
     {
       option: '1. Help me describe what I\'m building in plain terms — what it does and who it\'s for.\n2. Share your understanding with me before we go further so I can confirm we\'re on the same page.\n3. Then tell me: what\'s the most important thing to figure out before we start building?',
@@ -47,6 +49,7 @@ const PRD_TO_ARCHITECTURE_BEGINNER: DecisionContent = {
   signalType:   "PRD_TO_ARCHITECTURE",
   question:      'Spec ready — is the architecture decided?',
   pinchFallback: 'Design first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['PRD_TO_ARCHITECTURE'],
   L1: [
     {
       option: '1. List the main parts of what we\'re building and how they connect — in plain language, no technical terms.\n2. Share that list with me before we move on so I can confirm it covers everything.\n3. Then tell me: what\'s the one thing we need to decide before writing any code?',
@@ -88,6 +91,7 @@ const ARCHITECTURE_TO_TASKS_BEGINNER: DecisionContent = {
   signalType:   "ARCHITECTURE_TO_TASKS",
   question:      'Architecture done — is the task list ordered?',
   pinchFallback: 'Break it down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ARCHITECTURE_TO_TASKS'],
   L1: [
     {
       option: '1. Break this down into small steps — each one should be something you can build in a single session.\n2. Share the list with me so I can check the order makes sense before you start.\n3. Then tell me: what\'s the first thing to build that shows the whole thing actually works?',
@@ -130,6 +134,7 @@ export const TASK_REVIEW_BEGINNER: DecisionContent = {
   signalType:   "TASK_REVIEW",
   question:      'Task done — reviewed and tested?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['TASK_REVIEW'],
   L1: [
     {
       option: '1. Review what was just built — does it do what this task asked for, in plain terms?\n2. Share your review with me before I mark this done, and flag anything that looks off.\n3. Then check: is there anything that might break something that was already working?',
@@ -171,6 +176,7 @@ const IMPLEMENTATION_TO_REVIEW_BEGINNER: DecisionContent = {
   signalType:   "IMPLEMENTATION_TO_REVIEW",
   question:      'Phase done — full review before moving on?',
   pinchFallback: 'Phase done?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IMPLEMENTATION_TO_REVIEW'],
   L1: [
     {
       option: '1. Go through everything built in this phase — does it all work together the way it should?\n2. Share that with me before we move on and flag anything that looks incomplete or broken.\n3. Then check: is there anything a real person using this could run into that we haven\'t covered?',
@@ -212,6 +218,7 @@ const REVIEW_TO_RELEASE_BEGINNER: DecisionContent = {
   signalType:   "REVIEW_TO_RELEASE",
   question:      'Ready to ship — final checks done?',
   pinchFallback: 'Almost there.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['REVIEW_TO_RELEASE'],
   L1: [
     {
       option: '1. Check that everything still works — go through the main things that need to pass before we ship.\n2. Share the results with me before we release anything.\n3. Then tell me: is there anything that could go wrong once this is live that we haven\'t tested in here?',
@@ -253,6 +260,7 @@ const RELEASE_TO_FEEDBACK_BEGINNER: DecisionContent = {
   signalType:   "RELEASE_TO_FEEDBACK",
   question:      'Just shipped — is the feedback loop active?',
   pinchFallback: 'Watch it live.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['RELEASE_TO_FEEDBACK'],
   L1: [
     {
       option: '1. Check that what was just built is actually working now that it\'s live — try the main thing it does and see if it works the way you expected.\n2. Share what you find with me before we move on and flag anything that looks off or unexpected.\n3. Then check: will we know if something breaks after we stop watching, or will it fail without showing an obvious error?',
@@ -294,6 +302,7 @@ const BEHAVIOUR_TESTING_BEGINNER: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: '1. Walk through this feature as if you\'re a real user — tell me each step, what you\'d click or type, and whether it works the way it should.\n2. Share what you find with me before we move on.\n3. Flag anything that feels wrong or missing along the way.',
@@ -336,6 +345,7 @@ export const ABSENCE_TEST_CREATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: '1. Write a test for what was just built — start with the main thing it\'s supposed to do.\n2. Share the test with me so I can check it covers the right thing.\n3. Then tell me: is there anything else in what was just built that could break without a test catching it?',
@@ -378,6 +388,7 @@ export const ABSENCE_REGRESSION_CHECK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: '1. Run the existing tests for this project now that what was just built has been added.\n2. Share the results with me — which ones pass, which ones fail.\n3. Then tell me: is there anything that used to work that might not work anymore?',
@@ -420,6 +431,7 @@ export const ABSENCE_SPEC_ACCEPTANCE_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_ACCEPTANCE'],
   L1: [
     {
       option: '1. Look at what was just built and compare it to what we planned to build.\n2. Share with me: does it do everything it was supposed to, or is something missing or different?\n3. Then check: are there any situations it should handle that it doesn\'t?',
@@ -462,6 +474,7 @@ export const ABSENCE_CROSS_CONFIRMING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_CONFIRMING'],
   L1: [
     {
       option: '1. Read through what was just built carefully — not just to check if it looks right, but to understand what it actually does.\n2. Share with me: is there anything that seems off, confusing, or that you\'re not sure about?\n3. Then tell me: is there anything in what was just built you haven\'t manually checked yet?',
@@ -503,6 +516,7 @@ export const ABSENCE_SECURITY_CHECK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Built something — any security checks done?',
   pinchFallback: 'Security gap.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_CHECK'],
   L1: [
     {
       option: '1. Look at what was just built and check if it handles anything a user types in or sends to the app.\n2. Share with me: could someone type something unexpected and cause a problem?\n3. Then check: does anything in what was just built need a login or permission to use, and is that actually enforced?',
@@ -544,6 +558,7 @@ export const ABSENCE_ERROR_HANDLING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — what happens when it breaks?',
   pinchFallback: 'Error handling.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_HANDLING'],
   L1: [
     {
       option: '1. Look at what was just built and think: what happens if it doesn\'t work the way it\'s supposed to?\n2. Share with me: is there anything that could break without showing a useful message?\n3. Then check: what happens if a user does something unexpected — does the app handle it or crash?',
@@ -585,6 +600,7 @@ export const ABSENCE_DOCUMENTATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — is anything documented?',
   pinchFallback: 'Docs missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION'],
   L1: [
     {
       option: '1. Look at what was just built and find one part that would be hard to understand for someone who didn\'t write it.\n2. Add a short explanation of why it works that way and share it with me.\n3. Then check: is there anything else in what was just built that needs explaining before we move on?',
@@ -628,6 +644,7 @@ export const ABSENCE_OBSERVABILITY_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OBSERVABILITY'],
   L1: [
     {
       option: '1. Think about what was just built running in the real world — if it stopped working, how would you find out?\n2. Share with me: is there anything that records what it\'s doing, or would it just fail without warning?\n3. Then tell me: what\'s the most important thing to log so you\'d know it\'s working?',
@@ -671,6 +688,7 @@ export const ABSENCE_COMPREHENSION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI wrote it — do you actually get it?',
   pinchFallback: 'Comprehension check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COMPREHENSION'],
   L1: [
     {
       option: '1. Read through what was just built slowly — not to check if it looks right, but to understand what each part actually does.\n2. Share with me: is there anything you\'re not sure about or that doesn\'t make sense to you?\n3. Then tell me: is there any part you just accepted because it looked okay without actually understanding it?',
@@ -714,6 +732,7 @@ export const ABSENCE_REFACTORING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING",
   question:      'Long build run — anything to clean up?',
   pinchFallback: 'Refactor check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING'],
   L1: [
     {
       option: '1. Read through what was just built from start to finish — does it still feel organised and easy to follow?\n2. Share with me: is there anything that feels messy, repeated, or harder to understand than it needs to be?\n3. Then tell me: is there anything that should be tidied up before we add more features on top?',
@@ -757,6 +776,7 @@ export const ABSENCE_NO_PUSHBACK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_NO_PUSHBACK'],
   L1: [
     {
       option: '1. Look at the last few suggestions made while building this feature.\n2. Share with me: is there anything you accepted just because it sounded right, without checking if it was really the best option?\n3. Then pick one and tell me: why did you go with that suggestion over other ways of doing it?',
@@ -800,6 +820,7 @@ export const ABSENCE_CORRECTION_SEEKING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: '1. Look at what was just built again — but this time, find what might be wrong with it.\n2. Share what you find with me.\n3. Then tell me: does what you found make sense, or does something still seem off?',
@@ -843,6 +864,7 @@ export const ABSENCE_PROBLEM_CORRECTION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Spotted a bug — did it actually get fixed?',
   pinchFallback: 'Bug unresolved.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROBLEM_CORRECTION'],
   L1: [
     {
       option: '1. Think back through this session — was there anything that didn\'t work or looked wrong earlier on?\n2. Share with me: is that thing actually fixed now, or did we move on without dealing with it?\n3. Then check: are there any other problems in what was just built that haven\'t been properly sorted out?',
@@ -884,6 +906,7 @@ export const ABSENCE_ALTERNATIVES_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: '1. Think about the biggest decision that was made while building this feature.\n2. Share with me: what other ways could it have been done, and why did we go with this one?\n3. Then tell me: is this still the best approach now that you think about it, or would something else have been simpler?',
@@ -927,6 +950,7 @@ export const ABSENCE_ARCH_CONFLICT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: '1. Look at what was just built and compare it to how other parts of the project are written.\n2. Share with me: does it feel like it belongs, or does it do things in a different way than everything else?\n3. Then tell me: is there anything that could cause problems when we try to connect it with the rest of the project?',
@@ -968,6 +992,7 @@ export const ABSENCE_PROMPT_CONTEXT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: '1. Think about what you\'ve been building in this session.\n2. Share with me: have you seen the original plan for what we\'re building, or have you just been following each instruction without knowing the bigger picture?\n3. Then paste the plan or the task description into the conversation and check that what was just built matches what was planned.',
@@ -1009,6 +1034,7 @@ export const ABSENCE_ROLLBACK_PLANNING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ROLLBACK_PLANNING'],
   L1: [
     {
       option: '1. Think about what would happen if this feature caused a problem when it went live.\n2. Share with me: what would you do to undo the deployment if something went wrong?\n3. Then check: is there anything in this feature that would be hard to reverse once it\'s live?',
@@ -1051,6 +1077,7 @@ export const ABSENCE_DEPLOYMENT_PLANNING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPLOYMENT_PLANNING'],
   L1: [
     {
       option: '1. Think about how this feature is going to get from your computer to where users will use it.\n2. Share with me: is there a plan for that, or is it still not figured out?\n3. Then check: is there anything the live environment needs that isn\'t set up yet — like settings or secret keys?',
@@ -1093,6 +1120,7 @@ export const ABSENCE_DEPENDENCY_MGMT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_MGMT'],
   L1: [
     {
       option: '1. Look at the new packages that were added while building this feature.\n2. Share with me: do any of them have known problems, or did you just install them because they looked like what you needed?\n3. Then check: do they work alongside everything else that\'s already installed, or could they cause a conflict?',
@@ -1135,6 +1163,7 @@ export const ABSENCE_PHASE_TRANSITION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Been in this phase a while — what comes next?',
   pinchFallback: 'Phase check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PHASE_TRANSITION'],
   L1: [
     {
       option: '1. Think about what phase of development this project is currently in.\n2. Share with me: have you finished what you set out to do in this phase, or are you still in the middle of it?\n3. Then tell me: what needs to be done before it makes sense to move on to the next phase?',
@@ -1176,6 +1205,7 @@ export const ABSENCE_SPEC_CROSS_CONFIRM_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_CROSS_CONFIRM'],
   L1: [
     {
       option: '1. Read through this project\'s spec and check: does everything in it come from something that was actually decided or agreed on?\n2. Share with me: is there anything in the spec that looks like an assumption rather than a confirmed requirement?\n3. Then tell me: is there anything that could be misunderstood or built in the wrong way because it\'s not specific enough?',
@@ -1217,6 +1247,7 @@ export const ABSENCE_SPEC_REVISION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_REVISION'],
   L1: [
     {
       option: '1. Look at this project\'s spec and then look at what has actually been built so far.\n2. Share with me: are they still in sync, or have things changed since the spec was first written?\n3. Then tell me: what would need to be updated in the spec to make it match what\'s actually happening?',
@@ -1262,6 +1293,7 @@ export const ABSENCE_IDEA_SCOPING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea forming — what exactly are we building?',
   pinchFallback: 'Scope unclear.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_SCOPING'],
   L1: [
     {
       option: '1. Help me describe this project in plain words — what it does and what problem it solves.\n2. Share your description with me before we go further so I can check it sounds right.\n3. Then tell me: is there anything about what we\'re building that\'s still unclear or not decided yet?',
@@ -1303,6 +1335,7 @@ export const ABSENCE_IDEA_CONSTRAINT_CHECK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea forming — what\'s out of scope?',
   pinchFallback: 'No non-goals set.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_CONSTRAINT_CHECK'],
   L1: [
     {
       option: '1. Think about this project — what is it NOT going to do?\n2. Share a list of at least two things we\'re leaving out of this project on purpose, even if they seem obvious.\n3. Then tell me: why is it helpful to say those things out loud now?',
@@ -1344,6 +1377,7 @@ export const ABSENCE_IDEA_USER_DEFINITION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea forming — who is this actually for?',
   pinchFallback: 'User not defined.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_USER_DEFINITION'],
   L1: [
     {
       option: '1. Think about who will use this project — who is the main person it\'s for?\n2. Share a description of that person with me: who they are and what they\'re trying to do.\n3. Then tell me: what does that mean for how we build this project?',
@@ -1387,6 +1421,7 @@ export const ABSENCE_TASK_ORDERING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — what order do we do them in?',
   pinchFallback: 'No order set.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_ORDERING'],
   L1: [
     {
       option: '1. Look at the tasks for this project.\n2. Share with me: which one should we do first, and which ones can\'t be done until something else is finished?\n3. Then tell me: what\'s the order we should follow to build this?',
@@ -1428,6 +1463,7 @@ export const ABSENCE_TASK_SIZING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks listed — are they small enough to do in one go?',
   pinchFallback: 'Tasks too big.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_SIZING'],
   L1: [
     {
       option: '1. Look at the tasks for this project.\n2. Share with me: is there any task that feels too big to finish in one sitting?\n3. Then tell me: how would you split that task into smaller pieces that are easier to finish one at a time?',
@@ -1469,6 +1505,7 @@ export const ABSENCE_TASK_DEFINITION_OF_DONE_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks set — how do we know when each one\'s done?',
   pinchFallback: 'Done criteria missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_DEFINITION_OF_DONE'],
   L1: [
     {
       option: '1. Pick one task from this project.\n2. Share with me: how would you know when that task is finished? What would you check?\n3. Then do the same for each of the other tasks — for each one, tell me what \'done\' looks like.',
@@ -1512,6 +1549,7 @@ export const ABSENCE_USER_FEEDBACK_REVIEW_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback in — have we actually gone through it?',
   pinchFallback: 'Feedback not reviewed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_FEEDBACK_REVIEW'],
   L1: [
     {
       option: '1. Look at the feedback users have given about this project.\n2. Share with me: what are the most common things people are saying? What keeps coming up?\n3. Then tell me: what\'s the one piece of feedback that feels most important to address?',
@@ -1553,6 +1591,7 @@ export const ABSENCE_ITERATION_PLANNING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — what are we building next?',
   pinchFallback: 'Next iteration unplanned.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ITERATION_PLANNING'],
   L1: [
     {
       option: '1. Look at the feedback for this project.\n2. Share with me: what\'s the most important thing users want fixed or added?\n3. Then tell me: what would you work on first in the next version, and why?',
@@ -1596,6 +1635,7 @@ export const ABSENCE_INCREMENTAL_BUILD_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Building something — verifying each piece as you go?',
   pinchFallback: 'One piece at a time.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_INCREMENTAL_BUILD'],
   L1: [
     {
       option: '1. Before adding the next thing — quickly test what was just built.\n2. Share with me: does it do what you expected, or is something off?\n3. Then tell me: is it safe to move on, or should we fix something first?',
@@ -1637,6 +1677,7 @@ export const ABSENCE_ERROR_UNDERSTANDING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ERROR_UNDERSTANDING",
   question:      'Got an error — do you know what it means?',
   pinchFallback: 'Understand the error.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_UNDERSTANDING'],
   L1: [
     {
       option: '1. Before asking to fix this error — read the error message carefully.\n2. Share with me: what do you think it\'s saying went wrong?\n3. Then tell me: does your explanation match where the problem is in the code?',
@@ -1678,6 +1719,7 @@ export const ABSENCE_DOCUMENTATION_BEFORE_ASK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION_BEFORE_ASK",
   question:      'About to ask — have you checked the docs?',
   pinchFallback: 'Docs first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION_BEFORE_ASK'],
   L1: [
     {
       option: '1. Before asking me this question — check the official documentation for this library or API.\n2. Share with me: what did you find, and is the answer there?\n3. Then ask me what you still couldn\'t find in the docs.',
@@ -1721,6 +1763,7 @@ export const ABSENCE_OUTPUT_VERIFICATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_OUTPUT_VERIFICATION",
   question:      'Code generated — have you actually tried it?',
   pinchFallback: 'Test it first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OUTPUT_VERIFICATION'],
   L1: [
     {
       option: '1. Before moving on from what was just built — actually run it or try it.\n2. Share with me: does it behave the way you expected?\n3. If anything looks off, tell me what happened and we\'ll look at it together.',
@@ -1762,6 +1805,7 @@ export const ABSENCE_REQUIREMENT_CLARITY_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_REQUIREMENT_CLARITY",
   question:      'About to build — is the requirement clear?',
   pinchFallback: 'Clarify first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REQUIREMENT_CLARITY'],
   L1: [
     {
       option: '1. Before I build this — tell me specifically what you want it to do.\n2. Share with me: what does it look like when it\'s working correctly?\n3. Then tell me: what should NOT happen — is there anything it should avoid doing?',
@@ -1803,6 +1847,7 @@ export const ABSENCE_COPY_PASTE_AWARENESS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_COPY_PASTE_AWARENESS",
   question:      'Code generated — do you understand it before using it?',
   pinchFallback: 'Understand first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COPY_PASTE_AWARENESS'],
   L1: [
     {
       option: '1. Before adding the generated code to your project — read through it.\n2. Share with me: what does each part do in plain words?\n3. If there\'s a part you\'re not sure about, point it out and we\'ll go through it together before it goes in.',
@@ -1844,6 +1889,7 @@ export const ABSENCE_DEBUGGING_OBSERVATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DEBUGGING_OBSERVATION",
   question:      'Something\'s broken — what did you actually see?',
   pinchFallback: 'Describe it first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEBUGGING_OBSERVATION'],
   L1: [
     {
       option: '1. Before I look at the bug — describe what happened.\n2. Share with me: what did you expect to happen, and what actually happened instead?\n3. Then tell me: is there an error message, and if so, what does it say?',
@@ -1885,6 +1931,7 @@ export const ABSENCE_LEARNING_CONSOLIDATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_LEARNING_CONSOLIDATION",
   question:      'We\'ve built a lot — do you feel like you understood it?',
   pinchFallback: 'Recap learning.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_LEARNING_CONSOLIDATION'],
   L1: [
     {
       option: '1. We\'ve covered a lot in this session — take a moment and think about what you actually learned.\n2. Share with me: what\'s the most important thing you now understand that you didn\'t before?\n3. Then tell me: is there anything we covered that still feels unclear or confusing?',
@@ -1926,6 +1973,7 @@ export const ABSENCE_SIMPLE_SOLUTION_FIRST_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SIMPLE_SOLUTION_FIRST",
   question:      'Building this — is there a simpler way to do it?',
   pinchFallback: 'Simplest first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SIMPLE_SOLUTION_FIRST'],
   L1: [
     {
       option: '1. Before building something complex — ask: is there a simpler way to get the same result? The simplest solution that works is almost always the right one to start with.\n2. Share what you\'re trying to do in plain terms. Let\'s find the simple version first.',
@@ -1967,6 +2015,7 @@ export const ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING_BEGINNER: DecisionContent =
   signalType:   "ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING",
   question:      'Asking a lot at once — let\'s do one thing at a time',
   pinchFallback: 'One thing at a time.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SINGLE_RESPONSIBILITY_PROMPTING'],
   L1: [
     {
       option: '1. When you send several things at once, the results get messy and hard to check. Try focusing on just one thing per message.\n2. What\'s the most important thing to do right now? Start with that — then we\'ll move to the next.',
@@ -2008,6 +2057,7 @@ export const ABSENCE_ROLLBACK_AWARENESS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ROLLBACK_AWARENESS",
   question:      'About to change things — do you know how to undo it?',
   pinchFallback: 'Save before changing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ROLLBACK_AWARENESS'],
   L1: [
     {
       option: '1. Before making a big change to your code — do a git commit first. This saves a snapshot you can always go back to if something breaks.\n2. Not sure how? Try: git add . then git commit -m \'working before change\'. Then make your change safely.',
@@ -2049,6 +2099,7 @@ export const ABSENCE_BUILD_VS_UNDERSTAND_RATIO_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_BUILD_VS_UNDERSTAND_RATIO",
   question:      'We\'ve been building — do you understand what we\'ve built?',
   pinchFallback: 'Pause and understand.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_BUILD_VS_UNDERSTAND_RATIO'],
   L1: [
     {
       option: '1. We\'ve added a lot of code — can you explain in your own words what it does? Even a rough description is fine.\n2. Understanding what you\'ve built is as important as building it. Code you don\'t understand becomes a problem you can\'t fix later.',
@@ -2093,6 +2144,7 @@ export const ABSENCE_SCOPE_CREEP_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_CREEP'],
   L1: [
     {
       option: '1. Look at what was just built and make a list of everything it does now. 2. Compare that list to what you originally planned to build. 3. Share anything that wasn\'t in the original plan with me before we continue.',
@@ -2134,6 +2186,7 @@ export const ABSENCE_CONTEXT_LOSS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CONTEXT_LOSS'],
   L1: [
     {
       option: '1. Think about everything we\'ve done with what was just built this session. 2. Write down what\'s working and what still needs to be done. 3. Share that with me before we keep going — it\'ll help us stay on track.',
@@ -2175,6 +2228,7 @@ export const ABSENCE_API_DESIGN_REVIEW_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: '1. Look at what was just built and check whether it could break anything that\'s already using this API. 2. List any changes to how it works — what it expects and what it sends back. 3. Share your list with me before we continue.',
@@ -2216,6 +2270,7 @@ export const ABSENCE_ACCESSIBILITY_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCESSIBILITY'],
   L1: [
     {
       option: '1. Go through what was just built and check that every button and link has a clear label describing what it does. 2. Try tabbing through the whole feature using only the keyboard — no mouse. 3. Share what you find with me before we continue.',
@@ -2259,6 +2314,7 @@ export const ABSENCE_ENV_AND_SECRETS_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ENV_AND_SECRETS'],
   L1: [
     {
       option: '1. Go through what was just built and check — are any passwords, API keys, or other secrets written directly in the code? 2. If they are, those need to be moved to a separate `.env` file. 3. Share what you find with me before we continue.',
@@ -2302,6 +2358,7 @@ export const ABSENCE_DATA_VALIDATION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATA_VALIDATION'],
   L1: [
     {
       option: '1. Think about what happens in this feature if someone sends the wrong data — a missing field, a number where text is expected, or something completely unexpected. 2. Try sending some bad data and see what happens. 3. Share what you find with me before we continue.',
@@ -2345,6 +2402,7 @@ export const ABSENCE_CI_PIPELINE_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CI_PIPELINE'],
   L1: [
     {
       option: '1. Check whether this project has anything set up to run the tests automatically whenever code is pushed. 2. If not, this is a good time to set that up so mistakes get caught before they reach the final code. 3. Share what you find with me before we continue.',
@@ -2387,6 +2445,7 @@ export const ABSENCE_RATE_LIMITING_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RATE_LIMITING'],
   L1: [
     {
       option: '1. Think about what would happen if someone sent a huge number of requests to this feature very quickly. 2. Check whether the app has any limit on how many times it can be called in a short period. 3. Share what you find with me before we continue.',
@@ -2429,6 +2488,7 @@ export const ABSENCE_FEATURE_SCOPE_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Building this — what should it actually do?',
   pinchFallback: 'Scope first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_SCOPE'],
   L1: [
     {
       option: '1. Before we keep going — help me describe in plain words what this part of the app should do and what \'finished\' looks like for it.\n2. Share that back with me so we\'re both on the same page.\n3. Then tell me: is there anything about what I want that is still unclear to you?',
@@ -2470,6 +2530,7 @@ export const ABSENCE_IMPLEMENTATION_CHECKPOINT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Built something new — does it actually work?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IMPLEMENTATION_CHECKPOINT'],
   L1: [
     {
       option: '1. Before adding anything else — can you quickly try out what was just built?\n2. Tell me: does it do what we expected, or is something not working yet?\n3. If something\'s off, let\'s fix it before we keep going — it\'s easier to catch now than after more code is added on top.',
@@ -2511,6 +2572,7 @@ export const ABSENCE_SPEC_BEFORE_CODE_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Coding this — what\'s it supposed to do?',
   pinchFallback: 'Spec first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_BEFORE_CODE'],
   L1: [
     {
       option: '1. Before we write more code — describe in plain words what this is supposed to do.\n2. What should happen when it works correctly? Share that with me first.\n3. Then we\'ll write it — having that clear makes the code much simpler.',
@@ -2554,6 +2616,7 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Accepting without reviewing — applied critical check recently?',
   pinchFallback: 'Streak alert.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DECISION_FATIGUE_PATTERN'],
   L1: [
     {
       option: 'Look back at the last few suggestions made — is there anything that looks right but you have not double-checked?',
@@ -2602,6 +2665,7 @@ export const ABSENCE_WORK_RHYTHM_CHECK_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Sending fast — read the last response fully before continuing?',
   pinchFallback: 'Slow down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_WORK_RHYTHM_CHECK'],
   L1: [
     {
       option: 'Read the last response carefully before continuing — is there anything that looks right but you have not actually checked?',
@@ -2650,6 +2714,7 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Working on many things — finished any of them yet?',
   pinchFallback: 'Focus drift.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FOCUS_DRIFT_DETECTION'],
   L1: [
     {
       option: 'Let us focus on one thing at a time — what is the most important thing to finish in this session before we start anything new?',
@@ -2698,6 +2763,7 @@ export const ABSENCE_SESSION_LENGTH_CHECKPOINT_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Working for a while — what have you built so far?',
   pinchFallback: 'Checkpoint due.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SESSION_LENGTH_CHECKPOINT'],
   L1: [
     {
       option: 'Summarize what we have built so far in this session — what is working, what is still in progress, and what we still need to do.',
@@ -2746,6 +2812,7 @@ export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_BEGINNER: DecisionContent = {
   signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Built a lot — have you written down what you made?',
   pinchFallback: 'Document now.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROGRESS_CONSOLIDATION_GAP'],
   L1: [
     {
       option: 'Write a short note about what we built in this session, even just a few sentences, before we continue.',

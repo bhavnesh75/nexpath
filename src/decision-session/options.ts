@@ -6,6 +6,7 @@ import {
   TRANSITION_CONTENT_BEGINNER,
   TASK_REVIEW_BEGINNER,
 } from './options-beginner.js';
+import { WHY_HELP_BY_SIGNAL_TYPE } from './why-help-by-signal-type.js';
 
 /**
  * Per-stage decision session content (from spec-driven-stages-research.md Part 3).
@@ -101,6 +102,7 @@ const IDEA_TO_PRD: DecisionContent = {
   signalType:   "IDEA_TO_PRD",
   question:      'Before building — is the plan written?',
   pinchFallback: 'Before coding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IDEA_TO_PRD'],
   L1: [
     {
       option: 'Write a PRD for this project: define the problem, target user, core features with acceptance criteria, what is explicitly out of scope, and any technical constraints.',
@@ -162,6 +164,7 @@ const PRD_TO_ARCHITECTURE: DecisionContent = {
   signalType:   "PRD_TO_ARCHITECTURE",
   question:      'Spec ready — is the architecture decided?',
   pinchFallback: 'Design first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['PRD_TO_ARCHITECTURE'],
   L1: [
     {
       option: 'Design the system architecture for this project: list the main components, how they interact, the data model, API contracts (if any), and the tech stack with rationale for key choices.',
@@ -231,6 +234,7 @@ const ARCHITECTURE_TO_TASKS: DecisionContent = {
   signalType:   "ARCHITECTURE_TO_TASKS",
   question:      'Architecture done — is the task list ordered?',
   pinchFallback: 'Break it down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ARCHITECTURE_TO_TASKS'],
   L1: [
     {
       option: 'Break the implementation into an ordered task list: each task should be completable in one coding session, delivered as a vertical slice where possible, and have a clear definition of done.',
@@ -299,6 +303,7 @@ const TASK_REVIEW: DecisionContent = {
   signalType:   "TASK_REVIEW",
   question:      'Task done — reviewed and tested?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['TASK_REVIEW'],
   L1: [
     {
       option: 'Review what was just built for this task: does the implementation match the spec and acceptance criteria? List any discrepancies, missing logic, hallucinated code, or potential issues before I mark this done.',
@@ -359,6 +364,7 @@ const TASK_REVIEW_CASUAL: DecisionContent = {
   signalType:   "TASK_REVIEW",
   question:      'Task done — quick check before moving on?',
   pinchFallback: 'Quick check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['TASK_REVIEW'],
   L1: [
     {
       option: 'Quick look at what was just built — does it do what the task asked for? Anything off, anything missing, any weird generated code before I say it\'s done?',
@@ -418,6 +424,7 @@ const IMPLEMENTATION_TO_REVIEW: DecisionContent = {
   signalType:   "IMPLEMENTATION_TO_REVIEW",
   question:      'Phase done — full review before moving on?',
   pinchFallback: 'Phase done?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['IMPLEMENTATION_TO_REVIEW'],
   L1: [
     {
       option: 'Run the full test suite for this phase: unit tests, integration tests, and any regression tests. Report results, failures, and what needs to be fixed.',
@@ -495,6 +502,7 @@ const REVIEW_TO_RELEASE: DecisionContent = {
   signalType:   "REVIEW_TO_RELEASE",
   question:      'Ready to ship — final checks done?',
   pinchFallback: 'Almost there.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['REVIEW_TO_RELEASE'],
   L1: [
     {
       option: 'Run all tests one final time before release: unit, integration, and regression. Confirm everything passes or tell me what is still failing.',
@@ -562,6 +570,7 @@ const RELEASE_TO_FEEDBACK: DecisionContent = {
   signalType:   "RELEASE_TO_FEEDBACK",
   question:      'Just shipped — is the feedback loop active?',
   pinchFallback: 'Watch it live.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['RELEASE_TO_FEEDBACK'],
   L1: [
     {
       option: 'Verify the production monitoring setup for what was just built: confirm error tracking is active, alert thresholds are configured, and dashboards show live metrics — list what is collecting and what still needs to be set up.',
@@ -621,6 +630,7 @@ const BEHAVIOUR_TESTING: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: 'Write a manual test scenario for the main user journey: list each step a real user would take, what they would see, and what would confirm it is working correctly.',
@@ -681,6 +691,7 @@ const BEHAVIOUR_TESTING_CASUAL: DecisionContent = {
   signalType:   "BEHAVIOUR_TESTING",
   question:      'Implementation done — user scenarios tested?',
   pinchFallback: 'User scenario?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['BEHAVIOUR_TESTING'],
   L1: [
     {
       option: 'Put yourself in a user\'s shoes and go through what was just built from start to finish — what\'s the main thing it does, does it actually work, and is anything confusing or broken along the way?',
@@ -743,6 +754,7 @@ const ABSENCE_TEST_CREATION: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Code added — where are the tests?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: 'Write tests for what was just built: unit tests for each function added or modified, and at least one integration test that covers the main path through this feature.',
@@ -803,6 +815,7 @@ const ABSENCE_REGRESSION_CHECK: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changes made — regression verified?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: 'Identify which existing tests cover the code paths changed in what was just built, run them, and flag any regressions — anything that was passing before this session that is now failing.',
@@ -861,6 +874,7 @@ const ABSENCE_SPEC_ACCEPTANCE: DecisionContent = {
   signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Implementation done — spec checked?',
   pinchFallback: 'Check the spec.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_ACCEPTANCE'],
   L1: [
     {
       option: 'Review what was just built against the spec and acceptance criteria: go through each requirement and confirm whether it is fully implemented, partially implemented, or missing from what was just built.',
@@ -920,6 +934,7 @@ const ABSENCE_CROSS_CONFIRMING: DecisionContent = {
   signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI generated it — have you verified it?',
   pinchFallback: 'Verify the output.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_CONFIRMING'],
   L1: [
     {
       option: 'Review what was just built critically: identify any hallucinated functions or APIs, logic that looks plausible but is incorrect, edge cases not handled, and any code that was generated but not verified against the actual system it will run in.',
@@ -977,6 +992,7 @@ const ABSENCE_SECURITY_CHECK: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Feature built — security reviewed?',
   pinchFallback: 'Security gap.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_CHECK'],
   L1: [
     {
       option: 'Review what was just built for security vulnerabilities: check authentication and authorization logic, input validation for injection risks (SQL, XSS, command), and any API endpoints for missing rate limiting, improper error responses, or exposed sensitive data.',
@@ -1036,6 +1052,7 @@ const ABSENCE_ERROR_HANDLING: DecisionContent = {
   signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — error paths handled?',
   pinchFallback: 'Error handling.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_HANDLING'],
   L1: [
     {
       option: 'Review what was just built for error handling gaps: identify all failure modes (network errors, invalid input, missing dependencies, unexpected state), confirm each is handled explicitly, and flag any that are silently swallowed or produce unhelpful error messages.',
@@ -1095,6 +1112,7 @@ const ABSENCE_DOCUMENTATION: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — any documentation added?',
   pinchFallback: 'Docs missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION'],
   L1: [
     {
       option: 'Review what was just built for documentation coverage: identify functions, classes, and modules with non-obvious behaviour that lack docstrings or inline comments, and add documentation that explains the why — the constraint, the invariant, the tradeoff — not just the what.',
@@ -1154,6 +1172,7 @@ const ABSENCE_OBSERVABILITY: DecisionContent = {
   signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — how will you know it\'s working?',
   pinchFallback: 'No observability.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OBSERVABILITY'],
   L1: [
     {
       option: 'Review what was just built for observability gaps: identify what this feature does in production that is currently invisible — requests, failures, latency, state changes — and add structured logging for the events that would allow you to diagnose a production incident without SSH access.',
@@ -1213,6 +1232,7 @@ const ABSENCE_COMPREHENSION: DecisionContent = {
   signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI generated it — do you understand it?',
   pinchFallback: 'Comprehension check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COMPREHENSION'],
   L1: [
     {
       option: 'Review what was just built for comprehension: trace through the main execution path and explain what each significant function, class, and data structure does — independently, without relying on comments generated alongside the code.',
@@ -1272,6 +1292,7 @@ const ABSENCE_REFACTORING: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING",
   question:      'Extended implementation — code health reviewed?',
   pinchFallback: 'Refactor check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING'],
   L1: [
     {
       option: 'Review what was just built for refactoring opportunities: identify code duplication, functions that do more than one thing, abstractions that have grown inconsistent with their usage, and naming that no longer reflects current behaviour — prioritize by maintenance risk.',
@@ -1331,6 +1352,7 @@ const ABSENCE_NO_PUSHBACK: DecisionContent = {
   signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI suggesting — are you evaluating critically?',
   pinchFallback: 'No pushback.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_NO_PUSHBACK'],
   L1: [
     {
       option: 'Review the recent generated outputs used in what was just built: identify any decisions, implementations, or suggestions you accepted without explicitly verifying the reasoning, checking for alternatives, or questioning the assumptions embedded in the response.',
@@ -1390,6 +1412,7 @@ const ABSENCE_CORRECTION_SEEKING: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'AI output — self-verification requested?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: 'Self-review what was just built: identify any assumptions that may be incorrect, logic that could fail under edge cases, and any parts of the implementation you are not confident about.',
@@ -1449,6 +1472,7 @@ const ABSENCE_PROBLEM_CORRECTION: DecisionContent = {
   signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Bug noticed — explicitly corrected?',
   pinchFallback: 'Bug unresolved.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROBLEM_CORRECTION'],
   L1: [
     {
       option: 'Review the outstanding bugs and issues identified in this session: for each one, confirm whether it has been explicitly fixed, explicitly deferred with a tracking note, or left unaddressed. Address any that are unresolved and blocking correctness of what was just built.',
@@ -1507,6 +1531,7 @@ const ABSENCE_ALTERNATIVES: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — alternatives considered?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: 'Review the key decisions made in what was just built: name the alternatives that were not chosen, explain the tradeoffs between each approach, and confirm that the chosen solution is the best fit for the constraints of this project — not just the first viable option.',
@@ -1566,6 +1591,7 @@ const ABSENCE_ARCH_CONFLICT: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — architecture consistency checked?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: 'Review what was just built for architectural consistency: does this feature follow the same patterns, abstractions, and conventions established in the existing codebase, or does it introduce a parallel approach that will diverge over time and increase maintenance cost?',
@@ -1623,6 +1649,7 @@ const ABSENCE_PROMPT_CONTEXT: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Prompts sent — spec and arch referenced?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: 'Review the prompts used to build this feature: are they grounded in the project\'s spec, architecture decisions, and task breakdown, or are they ad hoc instructions that you are implementing without access to the full planning context? If context is missing, inject it now before the next prompt.',
@@ -1680,6 +1707,7 @@ const ABSENCE_ROLLBACK_PLANNING: DecisionContent = {
   signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Release pending — rollback plan defined?',
   pinchFallback: 'No rollback plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ROLLBACK_PLANNING'],
   L1: [
     {
       option: 'Define the rollback procedure for this feature before shipping: identify the steps to revert if the deployment fails, confirm the rollback can be completed within your acceptable downtime window, and verify that database migrations or data changes are reversible.',
@@ -1738,6 +1766,7 @@ const ABSENCE_DEPLOYMENT_PLANNING: DecisionContent = {
   signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Release pending — deployment plan confirmed?',
   pinchFallback: 'No deploy plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPLOYMENT_PLANNING'],
   L1: [
     {
       option: 'Define the deployment plan for this feature before shipping: confirm the target environment configuration, document any environment variables or secrets that need to be provisioned, and verify that the deployment process has been tested outside of production.',
@@ -1796,6 +1825,7 @@ const ABSENCE_DEPENDENCY_MGMT: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Dependencies added — conflicts and risks reviewed?',
   pinchFallback: 'Dependency risk.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_MGMT'],
   L1: [
     {
       option: 'Review the new dependencies introduced in what was just built: check for version conflicts with existing packages, known security vulnerabilities in the chosen version, and whether a more stable or widely-adopted alternative exists for the same purpose.',
@@ -1854,6 +1884,7 @@ const ABSENCE_PHASE_TRANSITION: DecisionContent = {
   signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Extended phase — transition readiness assessed?',
   pinchFallback: 'Phase check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PHASE_TRANSITION'],
   L1: [
     {
       option: 'Assess transition readiness for this project: define what must be complete before moving to the next phase, confirm which of those criteria are currently met, and identify what is blocking the transition. If no criteria are defined, define them now.',
@@ -1911,6 +1942,7 @@ const ABSENCE_SPEC_CROSS_CONFIRM: DecisionContent = {
   signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec written — cross-confirmed against requirements?',
   pinchFallback: 'Spec not confirmed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_CROSS_CONFIRM'],
   L1: [
     {
       option: 'Cross-confirm this project\'s spec against its source requirements: for each requirement in the spec, verify it traces back to a stated user need or stakeholder decision, covers the acceptance criteria completely, and does not contain assumptions that were not explicitly agreed upon.',
@@ -1969,6 +2001,7 @@ const ABSENCE_SPEC_REVISION: DecisionContent = {
   signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec drafted — revised since initial version?',
   pinchFallback: 'Spec unrevised.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_REVISION'],
   L1: [
     {
       option: 'Revise this project\'s spec to reflect what has been learned since the initial draft: update any requirements that turned out to be more or less complex than anticipated, add acceptance criteria for edge cases discovered during implementation, and remove or defer any scope that has been implicitly dropped.',
@@ -2028,6 +2061,7 @@ const ABSENCE_TEST_CREATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TEST_CREATION",
   question:      'Built something — any tests written yet?',
   pinchFallback: 'Tests missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_CREATION'],
   L1: [
     {
       option: 'Write tests for what was just built — unit tests for anything new or changed, and one test that runs the main flow. What\'s the most likely thing that could break?',
@@ -2088,6 +2122,7 @@ const ABSENCE_REGRESSION_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REGRESSION_CHECK",
   question:      'Changed something — did anything break?',
   pinchFallback: 'Regression check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REGRESSION_CHECK'],
   L1: [
     {
       option: 'Run the tests for this project and check — did what was just built break anything that was working before? Report what\'s failing and why.',
@@ -2146,6 +2181,7 @@ const ABSENCE_SPEC_ACCEPTANCE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_ACCEPTANCE",
   question:      'Built something — does it match what was planned?',
   pinchFallback: 'Check the spec.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_ACCEPTANCE'],
   L1: [
     {
       option: 'Check what was just built against the original plan — does it actually do what it was supposed to? List anything that\'s off, missing, or different from what was asked for.',
@@ -2204,6 +2240,7 @@ const ABSENCE_CROSS_CONFIRMING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CROSS_CONFIRMING",
   question:      'AI wrote it — have you actually checked it?',
   pinchFallback: 'Verify the output.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_CONFIRMING'],
   L1: [
     {
       option: 'Take a real look at what was just built — not just \'does it look right\', but does it actually work correctly? Check for made-up functions, wrong assumptions, or logic that sounds good but doesn\'t hold up.',
@@ -2261,6 +2298,7 @@ const ABSENCE_SECURITY_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_CHECK",
   question:      'Built something — any security checks done?',
   pinchFallback: 'Security gap.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_CHECK'],
   L1: [
     {
       option: 'Look at what was just built — is there anything that handles user input or touches auth that hasn\'t been checked for obvious security problems? What could an attacker do with this as it stands?',
@@ -2318,6 +2356,7 @@ const ABSENCE_ERROR_HANDLING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ERROR_HANDLING",
   question:      'Feature built — what happens when it breaks?',
   pinchFallback: 'Error handling.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_HANDLING'],
   L1: [
     {
       option: 'Look at what was just built — what happens when something goes wrong? Check for unhandled errors, anything that fails silently, and cases where the error message would tell an attacker more than the user needs to know.',
@@ -2375,6 +2414,7 @@ const ABSENCE_DOCUMENTATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DOCUMENTATION",
   question:      'Code written — is anything documented?',
   pinchFallback: 'Docs missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DOCUMENTATION'],
   L1: [
     {
       option: 'Look at what was just built — what parts would confuse someone reading it for the first time? Add short comments explaining the why, not just the what, for anything that isn\'t obvious from the code itself.',
@@ -2434,6 +2474,7 @@ const ABSENCE_OBSERVABILITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_OBSERVABILITY",
   question:      'Feature built — will you know when it breaks?',
   pinchFallback: 'No observability.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OBSERVABILITY'],
   L1: [
     {
       option: 'Look at what was just built — if it breaks in production tonight, what would you see in your logs? If the answer is "not much", add logging for the key events: requests coming in, failures happening, anything that changed state.',
@@ -2493,6 +2534,7 @@ const ABSENCE_COMPREHENSION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_COMPREHENSION",
   question:      'AI wrote it — do you actually get it?',
   pinchFallback: 'Comprehension check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COMPREHENSION'],
   L1: [
     {
       option: 'Look at what was just built — is there any part you couldn\'t explain to someone else right now? Find the bit you\'re least confident about and trace through it until you actually understand what it does.',
@@ -2552,6 +2594,7 @@ const ABSENCE_REFACTORING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING",
   question:      'Long build run — anything to clean up?',
   pinchFallback: 'Refactor check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING'],
   L1: [
     {
       option: 'Look at what was just built as a whole — is there anything that\'s gotten messy, duplicated, or harder to read than it needs to be? Flag the bits that would slow down the next person who touches this.',
@@ -2611,6 +2654,7 @@ const ABSENCE_NO_PUSHBACK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_NO_PUSHBACK",
   question:      'AI keeps suggesting — are you actually evaluating?',
   pinchFallback: 'No pushback.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_NO_PUSHBACK'],
   L1: [
     {
       option: 'Look at the recent responses that produced what was just built — is there anything you accepted without really thinking about whether it was the right call? Pick the one you\'re least sure about and push back on it now.',
@@ -2670,6 +2714,7 @@ const ABSENCE_CORRECTION_SEEKING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CORRECTION_SEEKING",
   question:      'Has the AI checked its own work?',
   pinchFallback: 'No verification.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CORRECTION_SEEKING'],
   L1: [
     {
       option: 'Take a second look at what was just built — not to explain it, but to actually critique it. What would you do differently, what assumptions did you make that might be wrong, and what are the riskiest parts?',
@@ -2729,6 +2774,7 @@ const ABSENCE_PROBLEM_CORRECTION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PROBLEM_CORRECTION",
   question:      'Spotted a bug — did it actually get fixed?',
   pinchFallback: 'Bug unresolved.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROBLEM_CORRECTION'],
   L1: [
     {
       option: 'Go through what was just built and check: is there anything that was flagged as broken or wrong earlier in this session that hasn\'t actually been fixed yet? Don\'t let it get buried under new code.',
@@ -2786,6 +2832,7 @@ const ABSENCE_ALTERNATIVES_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ALTERNATIVES",
   question:      'Decision made — any alternatives looked at?',
   pinchFallback: 'No alternatives.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ALTERNATIVES'],
   L1: [
     {
       option: 'Look at the biggest decision made in what was just built — is it the right call, or just the first thing that came to mind? Name one or two other ways it could have been done and explain why this approach beats them.',
@@ -2845,6 +2892,7 @@ const ABSENCE_ARCH_CONFLICT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ARCH_CONFLICT",
   question:      'Feature added — does it fit the codebase?',
   pinchFallback: 'Arch conflict.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCH_CONFLICT'],
   L1: [
     {
       option: 'Look at what was just built and check if it fits with the rest of the codebase — does it follow the same patterns, or does it do things in a new way that the rest of the project doesn\'t? Flag anything that would make a future developer say "why is this one different?"',
@@ -2902,6 +2950,7 @@ const ABSENCE_PROMPT_CONTEXT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PROMPT_CONTEXT",
   question:      'Sending prompts — have you shared the spec?',
   pinchFallback: 'Missing context.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROMPT_CONTEXT'],
   L1: [
     {
       option: 'Check the prompts used to build this feature — do you actually know what the spec says, what the architecture looks like, and what the task is supposed to achieve? If you\'ve just been getting ad hoc instructions, paste the relevant context in now so you\'re building the right thing.',
@@ -2959,6 +3008,7 @@ const ABSENCE_ROLLBACK_PLANNING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ROLLBACK_PLANNING",
   question:      'Shipping soon — what\'s the rollback plan?',
   pinchFallback: 'No rollback plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ROLLBACK_PLANNING'],
   L1: [
     {
       option: 'Before you ship this feature, work out what you\'d do if the deployment goes wrong — what\'s the rollback plan, how long would it take, and is there anything in this feature that can\'t be undone cleanly?',
@@ -3017,6 +3067,7 @@ const ABSENCE_DEPLOYMENT_PLANNING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DEPLOYMENT_PLANNING",
   question:      'Shipping soon — is the deployment actually planned?',
   pinchFallback: 'No deploy plan.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPLOYMENT_PLANNING'],
   L1: [
     {
       option: 'Before shipping this feature, check: do you actually have a deployment plan? What environment config does it need, what secrets need to be in place, and has anything been tested outside your local setup?',
@@ -3075,6 +3126,7 @@ const ABSENCE_DEPENDENCY_MGMT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_MGMT",
   question:      'Added packages — any issues checked?',
   pinchFallback: 'Dependency risk.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_MGMT'],
   L1: [
     {
       option: 'Check the packages added in what was just built — do they conflict with anything already installed, is there a security issue with the version you picked, and is there a better or more popular alternative you didn\'t consider?',
@@ -3133,6 +3185,7 @@ const ABSENCE_PHASE_TRANSITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PHASE_TRANSITION",
   question:      'Been in this phase a while — what comes next?',
   pinchFallback: 'Phase check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PHASE_TRANSITION'],
   L1: [
     {
       option: 'Step back from this project and think about where you are in the overall flow — have you actually finished this phase, or have you just been in it for a while? What needs to be done before it makes sense to move on?',
@@ -3190,6 +3243,7 @@ const ABSENCE_SPEC_CROSS_CONFIRM_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_CROSS_CONFIRM",
   question:      'Spec exists — has it been checked against the plan?',
   pinchFallback: 'Spec not confirmed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_CROSS_CONFIRM'],
   L1: [
     {
       option: 'Go through this project\'s spec and check it against the original plan — does every requirement actually come from something that was agreed on, or did some assumptions sneak in that no one has explicitly signed off on?',
@@ -3247,6 +3301,7 @@ const ABSENCE_SPEC_REVISION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_REVISION",
   question:      'Spec written — has it been updated since the first draft?',
   pinchFallback: 'Spec unrevised.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_REVISION'],
   L1: [
     {
       option: 'Update this project\'s spec to match what you know now — any requirements that turned out harder or simpler than expected, any edge cases that came up during building, and any things that got quietly dropped or changed in scope.',
@@ -3308,6 +3363,7 @@ const ABSENCE_IDEA_SCOPING: DecisionContent = {
   signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea in mind — is the scope defined?',
   pinchFallback: 'Scope undefined.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_SCOPING'],
   L1: [
     {
       option: 'Define the scope of this project precisely: what is the core problem it solves, what are the primary capabilities it must deliver, and what does a complete first version look like?',
@@ -3365,6 +3421,7 @@ const ABSENCE_IDEA_SCOPING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IDEA_SCOPING",
   question:      'Idea forming — what exactly are we building?',
   pinchFallback: 'Scope unclear.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_SCOPING'],
   L1: [
     {
       option: 'Walk me through this project — what\'s the main idea, what problem does it solve, and what\'s in vs out for the first version?',
@@ -3422,6 +3479,7 @@ const ABSENCE_IDEA_CONSTRAINT_CHECK: DecisionContent = {
   signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea scoped — are the non-goals defined?',
   pinchFallback: 'Non-goals missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_CONSTRAINT_CHECK'],
   L1: [
     {
       option: 'Define the constraints and non-goals for this project: what is explicitly out of scope for the first version, what functionality will not be built, and what technical constraints limit the solution space?',
@@ -3479,6 +3537,7 @@ const ABSENCE_IDEA_CONSTRAINT_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IDEA_CONSTRAINT_CHECK",
   question:      'Idea forming — what\'s out of scope?',
   pinchFallback: 'No non-goals set.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_CONSTRAINT_CHECK'],
   L1: [
     {
       option: 'What are we NOT building in the first version of this project? Walk me through what\'s intentionally out of scope — things that could be asked for but we\'re not doing yet.',
@@ -3536,6 +3595,7 @@ const ABSENCE_IDEA_USER_DEFINITION: DecisionContent = {
   signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea scoped — is the target user defined?',
   pinchFallback: 'Target user undefined.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_USER_DEFINITION'],
   L1: [
     {
       option: 'Define the target user for this project precisely: who is the primary user, what is their context and skill level, what problem do they have that this project solves, and what does success look like from their perspective?',
@@ -3593,6 +3653,7 @@ const ABSENCE_IDEA_USER_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IDEA_USER_DEFINITION",
   question:      'Idea forming — who is this actually for?',
   pinchFallback: 'User not defined.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_USER_DEFINITION'],
   L1: [
     {
       option: 'Who is this project for? Walk me through who the main user is, what they\'re trying to do, and what they know going in — be specific enough that we could make decisions about this project on their behalf.',
@@ -3652,6 +3713,7 @@ const ABSENCE_TASK_ORDERING: DecisionContent = {
   signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — have they been ordered?',
   pinchFallback: 'Tasks unordered.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_ORDERING'],
   L1: [
     {
       option: 'Order the tasks for this project by dependency and priority: identify which tasks block others, which can be done in parallel, and establish the sequence that minimises rework and delivers the earliest working state.',
@@ -3709,6 +3771,7 @@ const ABSENCE_TASK_ORDERING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TASK_ORDERING",
   question:      'Tasks listed — what order do we do them in?',
   pinchFallback: 'No order set.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_ORDERING'],
   L1: [
     {
       option: 'Put the tasks for this project in order — which ones have to happen before others, which ones are independent, and what\'s the sequence that gets us to something working as fast as possible?',
@@ -3766,6 +3829,7 @@ const ABSENCE_TASK_SIZING: DecisionContent = {
   signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks defined — are they scoped to single sessions?',
   pinchFallback: 'Tasks oversized.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_SIZING'],
   L1: [
     {
       option: 'Review the task list for this project and validate sizing: each task should be completable in a single focused session. Identify any tasks that span multiple concerns, require too many unknowns to resolve in one sitting, or are so large that progress cannot be verified at the end of a session.',
@@ -3823,6 +3887,7 @@ const ABSENCE_TASK_SIZING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TASK_SIZING",
   question:      'Tasks listed — are they small enough to do in one go?',
   pinchFallback: 'Tasks too big.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_SIZING'],
   L1: [
     {
       option: 'Go through the tasks for this project — are any of them too big to finish in one session? If so, break them down into smaller pieces that each have a clear endpoint.',
@@ -3880,6 +3945,7 @@ const ABSENCE_TASK_DEFINITION_OF_DONE: DecisionContent = {
   signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks ordered — does each task have a definition of done?',
   pinchFallback: 'No done criteria.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_DEFINITION_OF_DONE'],
   L1: [
     {
       option: 'Define the completion criteria for each task in this project: for every task, state what must be true for the task to be considered complete — what output exists, what has been verified, and what has not been left in an ambiguous or partially done state.',
@@ -3937,6 +4003,7 @@ const ABSENCE_TASK_DEFINITION_OF_DONE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TASK_DEFINITION_OF_DONE",
   question:      'Tasks set — how do we know when each one\'s done?',
   pinchFallback: 'Done criteria missing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TASK_DEFINITION_OF_DONE'],
   L1: [
     {
       option: 'For each task in this project, define what done looks like — not just \'it works\' but what specifically is true when the task is finished. What can be checked? What exists that didn\'t before?',
@@ -3996,6 +4063,7 @@ const ABSENCE_USER_FEEDBACK_REVIEW: DecisionContent = {
   signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback received — has it been reviewed systematically?',
   pinchFallback: 'Feedback not reviewed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_FEEDBACK_REVIEW'],
   L1: [
     {
       option: 'Review the feedback received for this project systematically: collect all available feedback, categorize it by theme or feature area, and identify the recurring complaints, requests, and points of confusion that appear across multiple users.',
@@ -4053,6 +4121,7 @@ const ABSENCE_USER_FEEDBACK_REVIEW_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_FEEDBACK_REVIEW",
   question:      'Feedback in — have we actually gone through it?',
   pinchFallback: 'Feedback not reviewed.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_FEEDBACK_REVIEW'],
   L1: [
     {
       option: 'Go through the feedback for this project — collect what users have said, group it by theme, and tell me what comes up over and over. What are the most common complaints or requests?',
@@ -4110,6 +4179,7 @@ const ABSENCE_ITERATION_PLANNING: DecisionContent = {
   signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — has the next iteration been planned?',
   pinchFallback: 'Next iteration unplanned.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ITERATION_PLANNING'],
   L1: [
     {
       option: 'Define the priorities for the next iteration of this project based on the feedback: rank the issues identified, determine what must be addressed in this iteration versus what can be deferred, and establish the scope of the next version.',
@@ -4167,6 +4237,7 @@ const ABSENCE_ITERATION_PLANNING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ITERATION_PLANNING",
   question:      'Feedback reviewed — what are we building next?',
   pinchFallback: 'Next iteration unplanned.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ITERATION_PLANNING'],
   L1: [
     {
       option: 'Figure out what to build next for this project based on the feedback — what needs to be fixed or added in the next round, what can wait, and what\'s the scope of the next version?',
@@ -4226,6 +4297,7 @@ const ABSENCE_SCOPE_CREEP: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_CREEP'],
   L1: [
     {
       option: 'Audit what was just built against the original scope for this iteration: list what is complete, what is still in progress, and what has been added that was not in the original plan — and decide whether each addition stays in scope, gets deferred, or gets cut.',
@@ -4283,6 +4355,7 @@ const ABSENCE_CONTEXT_LOSS: DecisionContent = {
   signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CONTEXT_LOSS'],
   L1: [
     {
       option: 'Summarize the current state of what was just built: what decisions have been made, what is working, what remains incomplete, and what has changed since the session started — use this as a re-anchor before continuing.',
@@ -4340,6 +4413,7 @@ const ABSENCE_API_DESIGN_REVIEW: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: 'Review the API surface of what was just built for backwards compatibility: list any changes to existing endpoints, parameters, or response shapes, and confirm whether each change is backwards compatible or constitutes a breaking change that requires a version bump.',
@@ -4397,6 +4471,7 @@ const ABSENCE_ACCESSIBILITY: DecisionContent = {
   signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCESSIBILITY'],
   L1: [
     {
       option: 'Audit the ARIA labelling and semantic structure of what was just built: identify every interactive element and confirm it has an accessible name — via native semantics, aria-label, or aria-labelledby — and that its role is correctly communicated to assistive technologies.',
@@ -4456,6 +4531,7 @@ const ABSENCE_ENV_AND_SECRETS: DecisionContent = {
   signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ENV_AND_SECRETS'],
   L1: [
     {
       option: 'Audit the secrets storage pattern for what was just built: identify every credential, API key, and environment-specific value used — confirm none are hardcoded in source, all are loaded from environment variables, and the variable names are documented in a `.env.example` file.',
@@ -4515,6 +4591,7 @@ const ABSENCE_DATA_VALIDATION: DecisionContent = {
   signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATA_VALIDATION'],
   L1: [
     {
       option: 'Define the input schema for what was just built: for every endpoint or form, document the expected shape — required fields, optional fields, data types, and any constraints (min/max, allowed values) — and implement schema validation using a library such as Zod, Yup, or Joi.',
@@ -4574,6 +4651,7 @@ const ABSENCE_CI_PIPELINE: DecisionContent = {
   signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CI_PIPELINE'],
   L1: [
     {
       option: 'Confirm automated test execution is configured for this project: check that a CI workflow (e.g. GitHub Actions) runs the full test suite on every pull request and push to main — verify the workflow file exists, the test command is correct, and test failures block merges.',
@@ -4632,6 +4710,7 @@ const ABSENCE_RATE_LIMITING: DecisionContent = {
   signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RATE_LIMITING'],
   L1: [
     {
       option: 'Define the rate limiting strategy for what was just built: specify the throttle limits per user, per API key, or per IP address — confirm which identifier is used for tracking, what the limit is (requests per second or per minute), and what happens when the limit is exceeded.',
@@ -4690,6 +4769,7 @@ const ABSENCE_FEATURE_SCOPE: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Feature started — Definition of Ready confirmed?',
   pinchFallback: 'Scope this first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_SCOPE'],
   L1: [
     {
       option: 'Define the scope and acceptance criteria for this feature before implementation continues: what is the feature doing, what are the explicit out-of-scope items, and what conditions must be true for the feature to be accepted as done? This is the Definition of Ready for sprint planning.',
@@ -4747,6 +4827,7 @@ const ABSENCE_IMPLEMENTATION_CHECKPOINT: DecisionContent = {
   signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Implementation continued — current state verified?',
   pinchFallback: 'Verify first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IMPLEMENTATION_CHECKPOINT'],
   L1: [
     {
       option: 'Run an implementation checkpoint before continuing: verify the last unit of work is in a passing state — either by running the relevant tests or by manually tracing the main path through the recently added code. Per TDD Red-Green-Refactor practice, only continue building once the current state is green.',
@@ -4804,6 +4885,7 @@ const ABSENCE_SPEC_BEFORE_CODE: DecisionContent = {
   signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Implementation started — behaviour specified first?',
   pinchFallback: 'Spec before code.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_BEFORE_CODE'],
   L1: [
     {
       option: 'Write a behaviour specification before continuing implementation: using BDD Given/When/Then format, define at least the primary scenario — Given [context], When [action], Then [expected outcome]. Per spec-driven development practice, the specification is the source of truth; code is the verification.',
@@ -4863,6 +4945,7 @@ const ABSENCE_SCOPE_CREEP_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_CREEP",
   question:      'Scope expanding — still on original plan?',
   pinchFallback: 'Scope check?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_CREEP'],
   L1: [
     {
       option: 'Take a look at what was just built and compare it to what you originally set out to do — is anything in there that wasn\'t part of the plan? Go through it and flag any extras before adding more.',
@@ -4920,6 +5003,7 @@ const ABSENCE_CONTEXT_LOSS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CONTEXT_LOSS",
   question:      'Long session — context recapped?',
   pinchFallback: 'Context recap?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CONTEXT_LOSS'],
   L1: [
     {
       option: 'Let\'s get back on the same page — go through what was just built and give me a quick rundown: what\'s done, what\'s working, and what\'s still left to do.',
@@ -4977,6 +5061,7 @@ const ABSENCE_API_DESIGN_REVIEW_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_API_DESIGN_REVIEW",
   question:      'API being built — design reviewed?',
   pinchFallback: 'API design?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_DESIGN_REVIEW'],
   L1: [
     {
       option: 'Take a look at what was just built and check whether it could break anything that already uses this API — are there any changes to how endpoints work, what they expect, or what they return that might surprise existing callers?',
@@ -5034,6 +5119,7 @@ const ABSENCE_ACCESSIBILITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ACCESSIBILITY",
   question:      'UI being built — accessibility checked?',
   pinchFallback: 'Accessibility?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCESSIBILITY'],
   L1: [
     {
       option: 'Go through what was just built and check whether a screen reader could make sense of it — does every button and link have a clear label, and are there any parts that would be confusing or silent for someone using one?',
@@ -5093,6 +5179,7 @@ const ABSENCE_ENV_AND_SECRETS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ENV_AND_SECRETS",
   question:      'Credentials in use — secrets management reviewed?',
   pinchFallback: 'Secrets setup?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ENV_AND_SECRETS'],
   L1: [
     {
       option: 'Take a look at what was just built and check whether any API keys, passwords, or credentials are written directly into the code — if so, move them out now and load them from a separate config file instead.',
@@ -5152,6 +5239,7 @@ const ABSENCE_DATA_VALIDATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DATA_VALIDATION",
   question:      'Accepting input — data validation in place?',
   pinchFallback: 'Input validation?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATA_VALIDATION'],
   L1: [
     {
       option: 'Take a look at what was just built and check what happens when someone sends unexpected data — a missing field, the wrong type, or a completely random value. Is the app handling it gracefully or just crashing?',
@@ -5211,6 +5299,7 @@ const ABSENCE_CI_PIPELINE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CI_PIPELINE",
   question:      'Moving toward release — CI pipeline configured?',
   pinchFallback: 'CI pipeline?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CI_PIPELINE'],
   L1: [
     {
       option: 'Take a look at whether this project has something set up to automatically run the tests whenever code is pushed — if not, setting up a simple GitHub Actions workflow now means you catch failures before they reach the main branch.',
@@ -5269,6 +5358,7 @@ const ABSENCE_RATE_LIMITING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_RATE_LIMITING",
   question:      'API endpoint built — rate limiting designed?',
   pinchFallback: 'Rate limiting?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RATE_LIMITING'],
   L1: [
     {
       option: 'Take a look at what was just built and think about what happens if someone calls this endpoint way too many times in a short period — is there anything stopping them from doing that, and if not, what would happen to the app?',
@@ -5327,6 +5417,7 @@ const ABSENCE_FEATURE_SCOPE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_SCOPE",
   question:      'Started building — is scope defined?',
   pinchFallback: 'What\'s in scope?',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_SCOPE'],
   L1: [
     {
       option: 'Before going further — write a quick scope statement for this feature: what it does, what it doesn\'t do, and what done looks like. One paragraph is enough. This prevents mid-build scope drift.',
@@ -5384,6 +5475,7 @@ const ABSENCE_IMPLEMENTATION_CHECKPOINT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IMPLEMENTATION_CHECKPOINT",
   question:      'Kept building — is the last change verified?',
   pinchFallback: 'Checkpoint.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IMPLEMENTATION_CHECKPOINT'],
   L1: [
     {
       option: 'Quick checkpoint before continuing — does what was last built actually work end to end? Try running it or walk through the main path manually. If it\'s broken, fix it now before the next change makes the bug harder to locate.',
@@ -5441,6 +5533,7 @@ const ABSENCE_SPEC_BEFORE_CODE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SPEC_BEFORE_CODE",
   question:      'Building this — behaviour defined first?',
   pinchFallback: 'Spec it first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SPEC_BEFORE_CODE'],
   L1: [
     {
       option: 'Before writing more code — write a quick behaviour spec: what inputs does this take, what should it do, and what output or side effect should it produce? One paragraph is enough. Spec before code avoids building the wrong thing.',
@@ -5500,6 +5593,7 @@ const ABSENCE_INCREMENTAL_BUILD_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Building incrementally — verifying between steps?',
   pinchFallback: 'Verify between steps.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_INCREMENTAL_BUILD'],
   L1: [
     {
       option: 'Between each change — stop and verify what was just built actually works before adding the next layer. Debugging compound changes is harder than debugging one change at a time.',
@@ -5557,6 +5651,7 @@ const ABSENCE_INCREMENTAL_BUILD: DecisionContent = {
   signalType:   "ABSENCE_INCREMENTAL_BUILD",
   question:      'Incremental build — is each step verified before the next?',
   pinchFallback: 'Verify before proceeding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_INCREMENTAL_BUILD'],
   L1: [
     {
       option: 'Review the build cadence: is each incremental change being verified before the next is added? Compounding unverified changes increases debugging complexity — verify at each increment.',
@@ -5616,6 +5711,7 @@ const ABSENCE_FEATURE_COMPLETION_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_COMPLETION_CHECK",
   question:      'Adding more — is the previous feature actually done?',
   pinchFallback: 'Finish before starting next.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_COMPLETION_CHECK'],
   L1: [
     {
       option: 'Checkpoint: what\'s the state of the last feature started? Is it done and tested end-to-end? Scrum\'s Definition of Done exists because partially-done features compound — starting new ones before previous ones meet DoD means carrying technical debt through every subsequent sprint.',
@@ -5673,6 +5769,7 @@ const ABSENCE_FINISHING_LINE_AWARENESS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FINISHING_LINE_AWARENESS",
   question:      'Multiple things in progress — how many are complete?',
   pinchFallback: 'Finish one before starting next.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FINISHING_LINE_AWARENESS'],
   L1: [
     {
       option: 'Count check: how many features are currently in-progress vs. complete end-to-end? A partially-done feature delivers zero user value. Three features 40% each is worse than one feature 100% — the user can use one, and none of three.',
@@ -5730,6 +5827,7 @@ const ABSENCE_POLISH_VS_FUNCTION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_POLISH_VS_FUNCTION",
   question:      'Working on the look — does the core work end-to-end?',
   pinchFallback: 'Function before polish.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_POLISH_VS_FUNCTION'],
   L1: [
     {
       option: 'Lean MVP principle: polish comes after function. Before spending more prompts on UI improvements — does the core functionality work end-to-end? \'MVP UI should be clean and usable, not museum-quality.\' Fix the working before fixing the looking.',
@@ -5787,6 +5885,7 @@ const ABSENCE_MVP_SCOPE_DISCIPLINE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MVP_SCOPE_DISCIPLINE",
   question:      'Adding features — is each one actually MVP scope?',
   pinchFallback: 'MVP discipline check.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MVP_SCOPE_DISCIPLINE'],
   L1: [
     {
       option: 'Eric Ries MVP heuristic: start with what you believe is needed, then eliminate half the features, then eliminate half again. Each addition should answer: does this test the core hypothesis? Is it the minimum needed to get real user feedback? If neither — it\'s gold-plating an unvalidated MVP.',
@@ -5844,6 +5943,7 @@ const ABSENCE_IDEA_TO_SPEC_BRIDGE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_IDEA_TO_SPEC_BRIDGE",
   question:      'New idea — defined what it does before building?',
   pinchFallback: 'Spec the idea first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_IDEA_TO_SPEC_BRIDGE'],
   L1: [
     {
       option: 'Spec-driven development principle: a feature idea is not a spec. Before building — write a one-paragraph description: what does this feature do? What does it NOT do? How does it fit into what already exists? The spec becomes the source of truth; code is its expression.',
@@ -5901,6 +6001,7 @@ const ABSENCE_DEMO_VS_PRODUCT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DEMO_VS_PRODUCT",
   question:      'Is this demo quality or production quality — explicit distinction?',
   pinchFallback: 'Demo vs. production: name which.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEMO_VS_PRODUCT'],
   L1: [
     {
       option: 'Production readiness check: what quality standard applies to what\'s being built? Demo code and production code have different requirements. If this is a demo — mark it explicitly: hardcoded data, no edge cases, visual-only. If it\'s the actual product — it needs real data connected, error states handled, and edge cases working.',
@@ -5958,6 +6059,7 @@ const ABSENCE_USER_JOURNEY_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_JOURNEY_CHECK",
   question:      'Feature being built — is the full user journey mapped?',
   pinchFallback: 'Map the user journey first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_JOURNEY_CHECK'],
   L1: [
     {
       option: 'Jeff Patton User Story Mapping: once a basic happy path is in place, consider edge cases, alternatives, and exceptions. Before building more — answer: (1) what does the user see the first time they encounter this feature? (2) what happens when there\'s no data — the empty state? (3) what happens when something goes wrong — the error state? Each is a must-handle state.',
@@ -6015,6 +6117,7 @@ const ABSENCE_TECHNICAL_SPIKE_TREATMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TECHNICAL_SPIKE_TREATMENT",
   question:      'Exploring / experimenting — spike or production code?',
   pinchFallback: 'Spike or production: name which.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TECHNICAL_SPIKE_TREATMENT'],
   L1: [
     {
       option: 'XP spike solution principle (Kent Beck / James Shore): \'Never copy spike code into production code. Even if it is exactly what you need, rewrite it using TDD so that it meets production standards.\' The purpose of exploratory code is knowledge, not shipping. Name what\'s being done: spike (to learn) or production (to ship)?',
@@ -6072,6 +6175,7 @@ const ABSENCE_DEPENDENCY_ADVENTURE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_ADVENTURE",
   question:      'Adding a dependency — evaluated the need and maintenance cost?',
   pinchFallback: 'Evaluate before adding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_ADVENTURE'],
   L1: [
     {
       option: 'Dependency management principle: \'Dependencies are not free and extract an ongoing maintenance cost.\' Every library added for interest rather than specific need becomes code you did not write but have localized responsibility for. Before adding this — what specific problem does it solve that you can\'t solve without it?',
@@ -6135,6 +6239,7 @@ const ABSENCE_RESTART_IMPULSE_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_RESTART_IMPULSE_CHECK",
   question:      'Hitting friction — debugged before considering a restart?',
   pinchFallback: 'Debug before restarting.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RESTART_IMPULSE_CHECK'],
   L1: [
     {
       option: 'Joel Spolsky: \'When you start from scratch there is absolutely no reason to believe that you are going to do a better job than you did the first time. Each fixed bug took weeks or years of real-world usage to be discovered — when you throw away code, all the knowledge that went into it is lost.\' Before restarting: what specifically went wrong and why?',
@@ -6192,6 +6297,7 @@ const ABSENCE_CREATIVE_VS_CORE_RATIO_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CREATIVE_VS_CORE_RATIO",
   question:      'Session balance — how much went to core vs. creative features?',
   pinchFallback: 'Core value first.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CREATIVE_VS_CORE_RATIO'],
   L1: [
     {
       option: 'Value-driven development: \'features that generate the maximum value for the users without creating the maximum cost.\' Before the next creative or aesthetic feature — look at this session: what proportion of prompts went to core product functionality vs. creative/extra features? If more than 30-40% is creative, the core is under-served.',
@@ -6251,6 +6357,7 @@ const ABSENCE_CODE_DOCUMENTATION_GAP_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_CODE_DOCUMENTATION_GAP",
   question:      'Complex logic added — documented the why?',
   pinchFallback: 'Add the why comment.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CODE_DOCUMENTATION_GAP'],
   L1: [
     {
       option: 'Clean Code principle: \'Don\'t use comments to explain WHAT the code is doing — use them to explain WHY you did it.\' For the non-obvious logic just added — add a comment explaining the reasoning, constraint, or edge case it handles. Future maintainers (including you) will need this context.',
@@ -6310,6 +6417,7 @@ const ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT",
   question:      'Shortcut taken — tagged it as debt?',
   pinchFallback: 'Tag the shortcut.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TECHNICAL_DEBT_ACKNOWLEDGMENT'],
   L1: [
     {
       option: 'Martin Fowler\'s Technical Debt Quadrant: \'Prudent Deliberate\' debt — acknowledged and added to the backlog — is acceptable. \'Reckless Deliberate\' — shortcuts taken without acknowledgment — compounds invisibly. Tag any shortcut with a TODO or FIXME comment before moving on.',
@@ -6369,6 +6477,7 @@ const ABSENCE_TEST_DEPTH_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TEST_DEPTH_CHECK",
   question:      'Tests written — covering beyond the happy path?',
   pinchFallback: 'Add edge and error path tests.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TEST_DEPTH_CHECK'],
   L1: [
     {
       option: 'Testing pyramid (Mike Cohn, 2009): tests must cover happy paths, edge cases, and negative scenarios. \'Start with happy path tests, then add error cases that verify graceful failure handling.\' Happy-path-only tests provide false confidence — everything looks green but real-world conditions break the code.',
@@ -6428,6 +6537,7 @@ const ABSENCE_ARCHITECTURE_NOTE_ABSENCE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ARCHITECTURE_NOTE_ABSENCE",
   question:      'Architecture decision made — noted the rationale?',
   pinchFallback: 'Add an architecture note.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ARCHITECTURE_NOTE_ABSENCE'],
   L1: [
     {
       option: 'Architecture Decision Records (Michael Nygard, 2011): \'An ADR captures a single architectural decision and its rationale. People months or years later need to understand why the system is constructed the way that it is.\' For the structural decision just made — add a short note: context, decision, consequences. A code comment block or doc entry works.',
@@ -6489,6 +6599,7 @@ const ABSENCE_DEPENDENCY_AUDIT_GAP_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_AUDIT_GAP",
   question:      'New dependency added — evaluated it before adopting?',
   pinchFallback: 'Check the dependency before adding.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_AUDIT_GAP'],
   L1: [
     {
       option: 'NIST SSDF requires evaluating third-party components for maintenance status, license compatibility, and security properties before integration. For the dependency just added: Is it actively maintained (last release date, open issues trend)? Is the license compatible? Are there lighter-weight alternatives? A few minutes of evaluation now prevents being stuck with an abandoned or license-incompatible package later.',
@@ -6549,6 +6660,7 @@ const ABSENCE_SECURITY_REVIEW_GAP_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_REVIEW_GAP",
   question:      'Security surface touched — applied security checks?',
   pinchFallback: 'Apply security checks now.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_REVIEW_GAP'],
   L1: [
     {
       option: 'OWASP Secure by Design: security must be designed in, not bolted on. For what was just implemented — what security surfaces were introduced? Input validation (are all inputs sanitized?), authorization (is access properly gated?), injection prevention (SQL, command, path traversal). These checks belong during implementation, not as a post-implementation audit. Shift-left: add the check when the surface is created.',
@@ -6608,6 +6720,7 @@ const ABSENCE_API_CONTRACT_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_API_CONTRACT_DEFINITION",
   question:      'API being built — defined the contract first?',
   pinchFallback: 'Define the interface before implementing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_API_CONTRACT_DEFINITION'],
   L1: [
     {
       option: 'OpenAPI contract-first principle: define the API interface before writing the handler. For the endpoint being built — what does it accept (request schema: required fields, types, validation rules)? What does it return (response schema: success shape, error shape, status codes)? What is the error response format? Defining this first prevents implicit contracts that drift between callers and implementors — and makes mock servers and tests possible before the backend exists.',
@@ -6667,6 +6780,7 @@ const ABSENCE_ERROR_HANDLING_COVERAGE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_ERROR_HANDLING_COVERAGE",
   question:      'Implementation done — covered the error paths?',
   pinchFallback: 'Add error handling for failure cases.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ERROR_HANDLING_COVERAGE'],
   L1: [
     {
       option: 'McConnell\'s defensive programming (Code Complete): \'Defensive programming mandates covering all failure paths, not just happy paths.\' For what was just implemented — what are the error states? What happens when an external call fails? What happens when input is malformed? What happens when a database write fails? Each needs explicit handling: error state, fallback behavior, user-facing message. Code that only works on the happy path is incomplete by construction standards.',
@@ -6728,6 +6842,7 @@ const ABSENCE_REFACTORING_CHECKPOINT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_REFACTORING_CHECKPOINT",
   question:      'Adding to messy code — refactored first?',
   pinchFallback: 'Do a cleanup pass before extending.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REFACTORING_CHECKPOINT'],
   L1: [
     {
       option: 'Boy Scout Rule (Clean Code): \'Leave the code cleaner than you found it.\' Before adding a feature to code that was already acknowledged as messy or complex — do a refactoring pass first. The alternative is adding features on top of complexity, which makes the next change harder, not the same difficulty. The refactoring pass before extending is the investment that prevents compound complexity debt.',
@@ -6787,6 +6902,7 @@ const ABSENCE_BACKWARDS_COMPATIBILITY_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_BACKWARDS_COMPATIBILITY_CHECK",
   question:      'Interface changed — checked existing consumers?',
   pinchFallback: 'Check what calls this before changing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_BACKWARDS_COMPATIBILITY_CHECK'],
   L1: [
     {
       option: 'Semantic Versioning (semver.org): MAJOR version = backwards-incompatible change. The formal rule: any change to an interface used by existing callers must enumerate those callers and assess the impact before implementation. For the function signature, API contract, or interface just changed — what calls it? What are the downstream effects? Have those callers been updated or is the change backwards-compatible?',
@@ -6846,6 +6962,7 @@ const ABSENCE_SELF_REVIEW_HABIT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SELF_REVIEW_HABIT",
   question:      'Long implementation run — done a review pass?',
   pinchFallback: 'Read back through what was built.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SELF_REVIEW_HABIT'],
   L1: [
     {
       option: 'Google Engineering Practices: \'The author is the first reviewer.\' Before submitting or continuing, read back through the diff: does the code do what was intended? Are there naming inconsistencies? Is anything more complex than it needs to be? Are tests missing? The self-review pass catches what was obvious in the context of writing but invisible in isolation — logic errors, naming drift, gaps in coverage.',
@@ -6905,6 +7022,7 @@ const ABSENCE_PERFORMANCE_AWARENESS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PERFORMANCE_AWARENESS",
   question:      'Data-heavy operation — considered performance?',
   pinchFallback: 'Check for performance implications.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PERFORMANCE_AWARENESS'],
   L1: [
     {
       option: 'Knuth (1974): \'We should not pass up our opportunities in that critical 3%.\' The full quote is not an excuse to avoid performance — it\'s a prioritization rule: ignore the 97% of noncritical paths, but act on the critical 3%. For what was just built — is this in the critical 3%? A full-table fetch, N+1 in a loop, or unthrottled list render qualifies. The check here is awareness, not micro-optimization: is there an obvious performance problem worth addressing before it ships?',
@@ -6966,6 +7084,7 @@ const ABSENCE_DECISION_RECORD_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DECISION_RECORD_ABSENCE",
   question:      'Architectural decision made — ADR recorded?',
   pinchFallback: 'Record the decision with context and consequences.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DECISION_RECORD_ABSENCE'],
   L1: [
     {
       option: 'Write an architecture decision record for the key design decision made here: document the context (what problem was being solved), the decision made, the alternatives that were considered and rejected, and the consequences — so future engineers understand why this exists as it does.',
@@ -7023,6 +7142,7 @@ const ABSENCE_OVER_ENGINEERING_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OVER_ENGINEERING_CHECK",
   question:      'Is this abstraction required by current requirements?',
   pinchFallback: 'Apply YAGNI — build only what current requirements require.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OVER_ENGINEERING_CHECK'],
   L1: [
     {
       option: 'Apply YAGNI to what was just built: identify any abstraction, interface, or configuration option that was added speculatively — not required by a current story or use case — and remove or defer it.',
@@ -7086,6 +7206,7 @@ const ABSENCE_PAIR_REVIEW_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_PAIR_REVIEW_ABSENCE",
   question:      'Critical implementation complete — review plan established?',
   pinchFallback: 'Establish a review plan before merging.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PAIR_REVIEW_ABSENCE'],
   L1: [
     {
       option: 'Establish a review plan for this change before merging: define who reviews it, what the review checklist covers (design correctness, error handling, edge cases, security, performance implications), and what the merge gate is — confirm the plan is in place before the branch is merged.',
@@ -7145,6 +7266,7 @@ const ABSENCE_OBSERVABILITY_FIRST_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OBSERVABILITY_FIRST",
   question:      'Feature shipping — observability instrumented?',
   pinchFallback: 'Add logging, metrics, and tracing before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OBSERVABILITY_FIRST'],
   L1: [
     {
       option: 'Add observability to this feature before shipping: instrument all three pillars — structured logging at each significant event boundary, metrics for request rate, error rate, and latency, and distributed trace spans for every external call — so production behavior is visible from day one.',
@@ -7206,6 +7328,7 @@ const ABSENCE_FAILURE_MODE_ANALYSIS_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_FAILURE_MODE_ANALYSIS",
   question:      'External dependencies integrated — failure modes enumerated?',
   pinchFallback: 'Enumerate failure modes for each dependency.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FAILURE_MODE_ANALYSIS'],
   L1: [
     {
       option: 'Enumerate failure modes for every external dependency this feature relies on: for each dependency, name the failure mode (timeout, error response, partial data, unavailability), specify the stability pattern that handles it (circuit breaker, timeout + fallback, bulkhead, retry with backoff), and confirm the pattern is implemented before shipping.',
@@ -7267,6 +7390,7 @@ const ABSENCE_CONTRACT_TESTING_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CONTRACT_TESTING_GAP",
   question:      'Service boundary established — contract tests defined?',
   pinchFallback: 'Define consumer-driven contract tests for this boundary.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CONTRACT_TESTING_GAP'],
   L1: [
     {
       option: 'Define consumer-driven contract tests for this service boundary before independent deployment: write the contract from the consumer\'s perspective, verify the provider satisfies it in isolation, and add provider verification to the CI pipeline.',
@@ -7326,6 +7450,7 @@ const ABSENCE_CAPACITY_PLANNING_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CAPACITY_PLANNING_GAP",
   question:      'Load-adding feature — capacity estimate done?',
   pinchFallback: 'Complete a capacity estimate before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CAPACITY_PLANNING_GAP'],
   L1: [
     {
       option: 'Estimate capacity requirements for this feature before shipping: project peak request rate (RPS), storage growth over 90 days, and required infrastructure headroom — then verify current infrastructure can serve the estimated peak load.',
@@ -7383,6 +7508,7 @@ const ABSENCE_SECURITY_THREAT_MODELING_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SECURITY_THREAT_MODELING",
   question:      'Security-sensitive feature — STRIDE threat model completed?',
   pinchFallback: 'Complete a STRIDE threat model before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SECURITY_THREAT_MODELING'],
   L1: [
     {
       option: 'Enumerate applicable STRIDE threats for this feature and define a mitigation control per threat: Spoofing (identity verification), Tampering (input validation + integrity checks), Repudiation (audit logging), Information Disclosure (data exposure scope), Denial of Service (rate limiting + timeouts), Elevation of Privilege (authorization checks) — confirm each relevant threat has a control before shipping.',
@@ -7444,6 +7570,7 @@ const ABSENCE_DATABASE_MIGRATION_SAFETY_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DATABASE_MIGRATION_SAFETY",
   question:      'Schema change — expand-migrate-contract pattern applied?',
   pinchFallback: 'Apply backwards-compatible phased migration.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DATABASE_MIGRATION_SAFETY'],
   L1: [
     {
       option: 'Apply the expand-migrate-contract sequence to this database change: confirm the schema change can be split into a backward-compatible add phase, a data migration phase, and a cleanup phase — so each phase deploys independently without downtime or rollback risk.',
@@ -7508,6 +7635,7 @@ const ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE",
   question:      'Significant feature shipping — deployment strategy defined?',
   pinchFallback: 'Define deployment strategy and rollback plan before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPLOYMENT_STRATEGY_ABSENCE'],
   L1: [
     {
       option: 'Define the deployment strategy for this feature before shipping: choose the strategy (canary, feature flag, blue-green, staged rollout), define the rollback procedure, and confirm the rollback can be completed within the acceptable downtime window.',
@@ -7572,6 +7700,7 @@ const ABSENCE_OPERATIONAL_RUNBOOK_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_OPERATIONAL_RUNBOOK_GAP",
   question:      'New service/feature shipping — operational runbook written?',
   pinchFallback: 'Write the runbook before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OPERATIONAL_RUNBOOK_GAP'],
   L1: [
     {
       option: 'Write the operational runbook for this feature before shipping: document what the feature does, how to deploy it, the key health metrics to monitor, how to diagnose the most likely failure scenarios, and the escalation path if on-call cannot resolve the issue.',
@@ -7629,6 +7758,7 @@ const ABSENCE_SLO_DEFINITION_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SLO_DEFINITION_GAP",
   question:      'User-facing feature/service — SLOs defined?',
   pinchFallback: 'Define SLOs before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SLO_DEFINITION_GAP'],
   L1: [
     {
       option: 'Define SLOs for this feature before shipping: specify the availability target, the latency p99 budget, and the error rate budget — then confirm alerting and on-call escalation are tied to each SLO before launch.',
@@ -7688,6 +7818,7 @@ export const ABSENCE_USER_VALUE_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_VALUE_CHECK",
   question: 'Has this feature been validated with real users?',
   pinchFallback: 'Check user signal before committing to this build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_VALUE_CHECK'],
   L1: [
     {
       option: 'The single biggest waste in product development is building something nobody asked for. Lean Startup core loop: before any feature build, check whether you have a user signal — a conversation, a behavioral observation, a direct request, or survey data — that confirms the problem you\'re solving is real for your users. Without signal, you\'re making a bet, not a decision.',
@@ -7745,6 +7876,7 @@ export const ABSENCE_OUTCOME_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_OUTCOME_DEFINITION",
   question: 'What does success look like for this feature?',
   pinchFallback: 'Define the success metric before building starts.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_OUTCOME_DEFINITION'],
   L1: [
     {
       option: 'An output is something you ship. An outcome is the change in user behavior that justifies shipping it. The OKR discipline applied to product: before building, write one sentence that completes "This feature is successful if...". Without that sentence, you can\'t evaluate whether the feature worked, you can\'t communicate success criteria to teammates, and you can\'t decide when the feature is done enough to ship.',
@@ -7802,6 +7934,7 @@ export const ABSENCE_FEATURE_PRIORITIZATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEATURE_PRIORITIZATION",
   question: 'Why is this the highest-priority thing to build right now?',
   pinchFallback: 'Confirm this is the highest-impact item before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEATURE_PRIORITIZATION'],
   L1: [
     {
       option: 'Building what comes to mind next — rather than what has the highest impact — is the feature factory pattern. Every hour of engineering time spent on a lower-impact feature is an hour not spent on a higher-impact one. Backlog prioritization question: what evidence suggests this feature delivers more value to users than any alternative you could build with the same engineering time?',
@@ -7859,6 +7992,7 @@ export const ABSENCE_USER_PERSONA_CLARITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_PERSONA_CLARITY",
   question: 'Who specifically is this feature for?',
   pinchFallback: 'Name the specific user this feature is designed for.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_PERSONA_CLARITY'],
   L1: [
     {
       option: 'Name the specific user this feature serves: 2 sentences describing who they are, what context they use the product in, and what they are trying to accomplish — concrete enough that a design decision can be tested against "would Marcus understand this?" rather than "would users in general?"',
@@ -7916,6 +8050,7 @@ export const ABSENCE_COMPETITIVE_AWARENESS_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_COMPETITIVE_AWARENESS",
   question: 'Have you checked how competitors handle this?',
   pinchFallback: 'Run a quick competitive check before committing to this build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_COMPETITIVE_AWARENESS'],
   L1: [
     {
       option: 'Building a feature without knowing the competitive landscape means you\'re solving a problem that may already be solved — possibly better than you\'ll solve it. Before committing to any non-trivial feature, answer three questions: does a competitor already have this? If yes, how have they implemented it? And what would make your version a reason to switch rather than a reason to stay with the incumbent?',
@@ -7973,6 +8108,7 @@ export const ABSENCE_MVP_BOUNDARY_DISCIPLINE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MVP_BOUNDARY_DISCIPLINE",
   question: 'Is this addition within MVP scope?',
   pinchFallback: 'Check whether this is needed to test the core hypothesis.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MVP_BOUNDARY_DISCIPLINE'],
   L1: [
     {
       option: 'Apply MVP discipline to this addition: name the riskiest hypothesis the MVP is meant to test, then state whether this addition reduces uncertainty about that hypothesis. If it does not, propose deferring it to post-validation scope.',
@@ -8030,6 +8166,7 @@ export const ABSENCE_USER_ACQUISITION_CONSIDERATION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_USER_ACQUISITION_CONSIDERATION",
   question: 'How will target users find and access this feature?',
   pinchFallback: 'Define the acquisition path before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_ACQUISITION_CONSIDERATION'],
   L1: [
     {
       option: 'A feature\'s value is zero for any user who never encounters it. Distribution fit is as important as product-market fit — and it has to be designed in, not discovered after launch. Before committing to a feature build, answer: what is the specific path through which target users will find and start using this feature? SEO, referral loop, in-app discovery, sharing mechanic, onboarding hook, community post — name the channel.',
@@ -8087,6 +8224,7 @@ export const ABSENCE_RETENTION_MECHANISM_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_RETENTION_MECHANISM_CHECK",
   question: 'How does this feature bring users back?',
   pinchFallback: 'Consider the retention angle before building.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RETENTION_MECHANISM_CHECK'],
   L1: [
     {
       option: 'Features that acquire users but don\'t retain them have diminishing returns forever. Every significant feature should have an answer to: why does a user return to this feature after the first use, and how does using it once make the next use more likely? Without a retention angle, you\'re building acquisition features, not engagement features.',
@@ -8144,6 +8282,7 @@ export const ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT",
   question: 'How will you know if this feature is working after you ship it?',
   pinchFallback: 'Add a feedback mechanism before shipping.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FEEDBACK_LOOP_ESTABLISHMENT'],
   L1: [
     {
       option: 'Shipping without a way to measure whether the feature worked means the engineering investment produces no validated learning. The Lean Startup loop: Build → Measure → Learn. Skipping the Measure step after Build means the loop stops at the most expensive point and never produces the insight that informs the next build. Define your measurement mechanism before shipping, not after.',
@@ -8201,6 +8340,7 @@ export const ABSENCE_HYPOTHESIS_BEFORE_BUILD_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_HYPOTHESIS_BEFORE_BUILD",
   question: 'What hypothesis does this feature test?',
   pinchFallback: 'Define the hypothesis before starting the build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_HYPOTHESIS_BEFORE_BUILD'],
   L1: [
     {
       option: 'Write the experiment hypothesis for this feature in the form: "We believe [feature/change] will cause [observable outcome] for [user type]. We will know this is true when [signal] appears within [timeframe]." If any bracket cannot be filled, propose what data or decision would resolve it before continuing.',
@@ -8258,6 +8398,7 @@ export const ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE_CASUAL: DecisionContent =
   signalType:   "ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE",
   question: 'When did you last check product direction — not just implementation?',
   pinchFallback: 'Take a product perspective before continuing to build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TECHNICAL_VS_PRODUCT_TIME_BALANCE'],
   L1: [
     {
       option: 'Pause implementation and run a product-direction check: count the last 10-15 prompts by category (implementation instructions vs product-direction questions). If heavily skewed to implementation, answer one product question before continuing — is this still the right feature to be building for the right user toward the right outcome?',
@@ -8315,6 +8456,7 @@ export const ABSENCE_NORTH_STAR_ALIGNMENT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_NORTH_STAR_ALIGNMENT",
   question: 'How does this feature connect to your product\'s core metric?',
   pinchFallback: 'Check north star alignment before adding this feature.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_NORTH_STAR_ALIGNMENT'],
   L1: [
     {
       option: 'Trace this feature to the product\'s north star metric in one or two steps: state how it moves the metric directly, or how it enables a downstream feature that does. If no traceable connection exists, propose deferring or removing it.',
@@ -8374,6 +8516,7 @@ export const ABSENCE_TIME_TO_VALUE_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TIME_TO_VALUE_CHECK",
   question: 'Is this solution the right size for your current scale?',
   pinchFallback: 'Check whether this complexity is justified at current user count.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TIME_TO_VALUE_CHECK'],
   L1: [
     {
       option: 'Right-size this solution for current scale: name the current user count, name the simplest technology that solves the problem at that scale (a database query, a single API call, a flat file), and propose using it. Defer infrastructure complexity until scale actually requires it.',
@@ -8431,6 +8574,7 @@ export const ABSENCE_SHIP_READINESS_DEFINITION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SHIP_READINESS_DEFINITION",
   question: 'What needs to be true for this to be ready to ship?',
   pinchFallback: 'Write ship criteria before continuing to build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SHIP_READINESS_DEFINITION'],
   L1: [
     {
       option: 'Write the ship criteria for this build before more is added: list the specific, binary conditions that must be true to ship — "users can sign up", "the core workflow completes end-to-end", etc. This list is your Definition of Done; everything beyond it is post-launch scope.',
@@ -8488,6 +8632,7 @@ export const ABSENCE_MANUAL_BEFORE_AUTOMATE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MANUAL_BEFORE_AUTOMATE",
   question: 'Have you done this manually to confirm it works before automating?',
   pinchFallback: 'Do it manually first, then automate the proven version.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MANUAL_BEFORE_AUTOMATE'],
   L1: [
     {
       option: 'Apply Paul Graham\'s "do things that don\'t scale" rule: do this workflow manually for the first users before automating it. Run the process by hand, capture what users actually need vs what you assumed, and only then automate the validated version.',
@@ -8545,6 +8690,7 @@ export const ABSENCE_TECH_STACK_COMPLEXITY_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_TECH_STACK_COMPLEXITY_CHECK",
   question: 'Can you maintain this architecture alone, at 2am, when it breaks?',
   pinchFallback: 'Apply the solo maintainability test before adding this complexity.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_TECH_STACK_COMPLEXITY_CHECK'],
   L1: [
     {
       option: 'Every technology choice for a solo indie project is a choice you\'ll maintain alone — debugging it at 2am, extending it when requirements change, understanding it after 3 months away. Complexity that would be distributed across a team of engineers is complexity a solo builder pays in full. The right lens: "is this the simplest stack I can maintain alone, or is this the most impressive stack I can technically justify?"',
@@ -8602,6 +8748,7 @@ export const ABSENCE_LAUNCH_STRATEGY_ABSENCE_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_LAUNCH_STRATEGY_ABSENCE",
   question: 'How are people going to find out this product exists when you launch?',
   pinchFallback: 'Define a launch strategy before getting closer to ship date.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_LAUNCH_STRATEGY_ABSENCE'],
   L1: [
     {
       option: 'Shipping without a launch plan means launching into silence. Good products do not attract users by themselves — distribution is a discipline that must be planned and executed, not discovered. The minimum viable launch strategy: name one specific channel where you will announce this product, write the post before launch day, and identify who in your network or community should see it. That\'s a launch plan.',
@@ -8665,6 +8812,7 @@ export const ABSENCE_EARLY_USER_FEEDBACK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_EARLY_USER_FEEDBACK",
   question: 'When did you last get a real user\'s reaction to what you\'re building?',
   pinchFallback: 'Show what you\'ve built to at least one real user before continuing.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_EARLY_USER_FEEDBACK'],
   L1: [
     {
       option: 'Break out of silo-building before more is built: identify one real user to show the current build to today — for a 10-minute screen-share, a Loom walk-through, or a screenshot review. Capture their actual reaction, not your interpretation, and adjust direction based on what you see.',
@@ -8722,6 +8870,7 @@ export const ABSENCE_SOLO_MAINTAINABILITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SOLO_MAINTAINABILITY",
   question: 'Is this addition maintainable by you alone, long-term?',
   pinchFallback: 'Run the solo maintainability check before adding this complexity.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SOLO_MAINTAINABILITY'],
   L1: [
     {
       option: 'Every integration, service, or abstraction you add to a solo project is complexity you\'ll maintain alone — debugging it in production, extending it when requirements change, understanding it after weeks away. The solo maintainability question is not "does this work?" but "can I own the full blast radius of this when it breaks, by myself, without help?" If the answer requires reading documentation for 30 minutes every time something goes wrong, the complexity cost is real and ongoing.',
@@ -8779,6 +8928,7 @@ export const ABSENCE_DISTRIBUTION_THINKING_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DISTRIBUTION_THINKING",
   question: 'How will users discover and access this feature?',
   pinchFallback: 'Consider the distribution angle before building this feature.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DISTRIBUTION_THINKING'],
   L1: [
     {
       option: 'Distribution is a design constraint, not a marketing task. Features that assume users will discover them organically are features built on distribution magic. Before building any significant feature, answer: what is the specific path through which a new user discovers this feature exists and reaches it for the first time? The answer shapes the implementation — SEO-friendly URLs, in-product sharing mechanics, referral hooks, and community-compatible output formats are all distribution design, not afterthoughts.',
@@ -8836,6 +8986,7 @@ export const ABSENCE_MONETIZATION_PATH_CLARITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_MONETIZATION_PATH_CLARITY",
   question: 'How does this feature connect to how the product makes money?',
   pinchFallback: 'Consider the monetization connection before building this feature.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_MONETIZATION_PATH_CLARITY'],
   L1: [
     {
       option: 'Building features without monetization awareness builds a free product by default — regardless of intent. Every significant feature should have an articulated answer to "how does this connect to the revenue model?" It doesn\'t need to be direct: "this is a retention feature that reduces churn, which improves LTV" is a valid connection. "This makes the product better" is not — it\'s the answer that leads to technically excellent, commercially unsustainable products.',
@@ -8893,6 +9044,7 @@ export const ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY",
   question: 'Is this a milestone worth sharing publicly?',
   pinchFallback: 'Consider sharing this milestone publicly before moving to the next.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_BUILD_IN_PUBLIC_OPPORTUNITY'],
   L1: [
     {
       option: 'Share this milestone publicly today before continuing: draft a short post (tweet, Loom, community update) describing what you just shipped and what you learned. Audiences built during the build survive launch-day failures; audiences built launch-week do not.',
@@ -8957,6 +9109,7 @@ export const ABSENCE_SCOPE_VS_TIME_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_VS_TIME_CHECK",
   question: 'Is the current scope still within your available time and energy?',
   pinchFallback: 'Run a scope-vs-time check before adding more to the build.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_VS_TIME_CHECK'],
   L1: [
     {
       option: 'Run the scope-vs-time check on this build before more is added: name the current scope, estimate the shipping date at current pace, and compare to the original target. If the date has slipped twice in a row, cut scope to fit the original timeline — list specifically what gets deferred to post-launch.',
@@ -9016,6 +9169,7 @@ export const ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV",
   question: 'Are acceptance criteria defined for this story before development begins?',
   pinchFallback: 'Define acceptance criteria for this story before starting implementation.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_ACCEPTANCE_CRITERIA_BEFORE_DEV'],
   L1: [
     {
       option: 'Write the acceptance criteria for this story before any implementation prompt: state each criterion as an independently verifiable condition, in Given/When/Then or "this is done when [X]" form. List at least three covering the primary scenario and the most likely edge case.',
@@ -9073,6 +9227,7 @@ export const ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK",
   question: 'Have relevant stakeholders been aligned on this feature before development begins?',
   pinchFallback: 'Verify stakeholder alignment before proceeding with significant development work.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_STAKEHOLDER_ALIGNMENT_CHECK'],
   L1: [
     {
       option: 'Identify every stakeholder with a legitimate opinion on this feature, name the alignment touchpoint required for each (sign-off, design review, security review, eng-lead consult), and confirm each is completed or scheduled before implementation begins. Document the date and outcome.',
@@ -9135,6 +9290,7 @@ export const ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG",
   question: 'Are there ambiguous quality attributes in these requirements that need a measurable definition?',
   pinchFallback: 'Resolve ambiguous quality attributes to measurable criteria before implementation.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_REQUIREMENTS_AMBIGUITY_FLAG'],
   L1: [
     {
       option: 'Audit this feature\'s requirements for ambiguity: identify every quality-attribute placeholder ("better", "faster", "improved", "user-friendly") and replace each with a measurable target — name the metric, the measurement method, and the success threshold.',
@@ -9192,6 +9348,7 @@ export const ABSENCE_DEPENDENCY_MAPPING_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DEPENDENCY_MAPPING",
   question: 'Have upstream and downstream dependencies for this work been identified before starting?',
   pinchFallback: 'Map dependencies before beginning this work to prevent blocked integration.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEPENDENCY_MAPPING'],
   L1: [
     {
       option: 'Dependency identification is a foundational project management discipline (WBS, critical path method). Before any work begins: what does this work depend on (upstream), and what depends on this work completing (downstream)? Unmapped upstream dependencies create blocked work discovered mid-sprint; unmapped downstream dependencies create integration surprises at the worst time — when another team has built against an unstated assumption.',
@@ -9249,6 +9406,7 @@ export const ABSENCE_DEFINITION_OF_DONE_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DEFINITION_OF_DONE",
   question: 'Is there an explicit Definition of Done for this sprint item?',
   pinchFallback: 'Define the completion criteria for this item before starting work.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DEFINITION_OF_DONE'],
   L1: [
     {
       option: 'Write the Definition of Done for this sprint item before work begins: state the functional condition, the quality gate (testing or review pass), the documentation requirement, and the target deployment state. Use the form "this item is done when [X] AND [Y]."',
@@ -9306,6 +9464,7 @@ export const ABSENCE_CROSS_TEAM_IMPACT_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_CROSS_TEAM_IMPACT_CHECK",
   question: 'Have teams affected by this change been notified before development begins?',
   pinchFallback: 'Identify and notify affected teams before building this change to shared systems.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_CROSS_TEAM_IMPACT_CHECK'],
   L1: [
     {
       option: 'Identify every team affected by this change to a shared system (API, schema, infrastructure), draft the notification message, send it, and document delivery in the sprint item before implementation begins. A pre-change Slack message costs minutes; a post-change broken integration costs team-days.',
@@ -9368,6 +9527,7 @@ export const ABSENCE_SUCCESS_METRIC_DEFINITION_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SUCCESS_METRIC_DEFINITION",
   question: 'Is there a success metric defined for this feature before development begins?',
   pinchFallback: 'Define how success will be measured for this feature before starting implementation.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SUCCESS_METRIC_DEFINITION'],
   L1: [
     {
       option: 'Define the success metric for this feature before development: name the metric, the measurement method, the success threshold, and the measurement timeline — e.g. "feature adoption rate, tracked via feature_used analytics event, threshold 30% of active users within 30 days." Add to the sprint item.',
@@ -9425,6 +9585,7 @@ export const ABSENCE_PRIORITY_JUSTIFICATION_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_PRIORITY_JUSTIFICATION",
   question: 'Is there an explicit justification for why this item is the current highest priority?',
   pinchFallback: 'Articulate the priority justification for this item before beginning work.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PRIORITY_JUSTIFICATION'],
   L1: [
     {
       option: 'State the priority justification for this sprint item in one sentence before development begins: name the user or business value, the urgency or time criticality, the risk reduction or strategic alignment — and the next-highest-priority alternative being deferred to make room for this item.',
@@ -9482,6 +9643,7 @@ export const ABSENCE_USER_STORY_COMPLETENESS_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_USER_STORY_COMPLETENESS",
   question: 'Is this work item expressed as a complete user story with who, what, and why?',
   pinchFallback: 'Reframe this work item as a user story — who benefits, what they need, why it matters.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_USER_STORY_COMPLETENESS'],
   L1: [
     {
       option: 'Rewrite this work item in Connextra format before implementation: "As a [specific user type], I want [the capability this feature enables], so that [the value or outcome delivered]." If the "so that" cannot be completed, that is the most important thing to resolve — propose what stakeholder conversation closes it.',
@@ -9539,6 +9701,7 @@ export const ABSENCE_RISK_FLAG_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_RISK_FLAG",
   question: 'Have risks been identified for this decision or scope change before proceeding?',
   pinchFallback: 'Identify and document risks before proceeding with this significant decision.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RISK_FLAG'],
   L1: [
     {
       option: 'Identify the risks for this decision before proceeding: for each risk category (technical, scope, stakeholder, dependency, timeline), name the specific risk, estimate likelihood (H/M/L) and impact (H/M/L), and state the mitigation or acceptance decision. Document each in the sprint item.',
@@ -9596,6 +9759,7 @@ export const ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT",
   question: 'Has the impact of this scope change on the current sprint been assessed?',
   pinchFallback: 'Assess sprint impact before accepting this scope change.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SCOPE_CHANGE_IMPACT_ASSESSMENT'],
   L1: [
     {
       option: 'Before accepting this mid-sprint scope change, complete the four-point impact assessment: (1) what existing in-progress item is displaced, (2) does the sprint end date shift, (3) which downstream teams have a date dependency on what this change affects, (4) what is explicitly removed or deferred to make room. Document all four answers in the sprint item before the change enters scope.',
@@ -9653,6 +9817,7 @@ export const ABSENCE_RETROSPECTIVE_HABIT_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_RETROSPECTIVE_HABIT",
   question: 'Has this sprint or iteration been closed with a retrospective before starting the next?',
   pinchFallback: 'Run a retrospective on this sprint before moving to the next cycle.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_RETROSPECTIVE_HABIT'],
   L1: [
     {
       option: 'Run the sprint retrospective now before the next sprint begins: list what went well (preserve and reinforce), what did not go well (process problems without blame), and one or two specific, actionable process changes to try in the next sprint. Document the chosen action items.',
@@ -9712,6 +9877,7 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DECISION_FATIGUE_PATTERN'],
   L1: [
     {
       option: 'Review the last few AI responses critically — especially for edge cases, hidden assumptions, and anything that was accepted without being read carefully.',
@@ -9769,6 +9935,7 @@ export const ABSENCE_WORK_RHYTHM_CHECK_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_WORK_RHYTHM_CHECK'],
   L1: [
     {
       option: 'Read and verify the last AI response before continuing — check for anything that looks right at a glance but might be wrong: logic gaps, unchecked edge cases, incomplete error handling.',
@@ -9826,6 +9993,7 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FOCUS_DRIFT_DETECTION'],
   L1: [
     {
       option: 'Finish one thing before starting another: identify what is open right now, pick the most important one, and close it completely before touching anything else.',
@@ -9883,6 +10051,7 @@ export const ABSENCE_SESSION_LENGTH_CHECKPOINT_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SESSION_LENGTH_CHECKPOINT'],
   L1: [
     {
       option: 'Drop a context checkpoint before continuing: what has been built, what decisions were made, what is still open, and what the current goal is.',
@@ -9940,6 +10109,7 @@ export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_CASUAL: DecisionContent = {
   signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROGRESS_CONSOLIDATION_GAP'],
   L1: [
     {
       option: 'Consolidate: update the README, write a brief description of what was built, or add clarifying comments before continuing.',
@@ -9999,6 +10169,7 @@ export const ABSENCE_DECISION_FATIGUE_PATTERN_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_DECISION_FATIGUE_PATTERN",
   question:      'Long acceptance streak — applied critical review recently?',
   pinchFallback: 'Streak alert.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_DECISION_FATIGUE_PATTERN'],
   L1: [
     {
       option: 'Apply deliberate critical review to the most recent AI responses: identify any assumptions that have not been validated, logic that could fail under edge cases, and changes made without explicit verification.',
@@ -10056,6 +10227,7 @@ export const ABSENCE_WORK_RHYTHM_CHECK_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_WORK_RHYTHM_CHECK",
   question:      'Rapid prompting — verified each response before continuing?',
   pinchFallback: 'Slow down.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_WORK_RHYTHM_CHECK'],
   L1: [
     {
       option: 'Read and verify the last AI response in full before sending the next prompt: check any logic or state assumptions, confirm any generated code is complete and correct, and identify anything that was not explicitly validated.',
@@ -10113,6 +10285,7 @@ export const ABSENCE_FOCUS_DRIFT_DETECTION_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_FOCUS_DRIFT_DETECTION",
   question:      'Multiple areas open — completed any end-to-end?',
   pinchFallback: 'Focus drift.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_FOCUS_DRIFT_DETECTION'],
   L1: [
     {
       option: 'Sequence your work: identify the highest-priority open concern in this session, complete it end-to-end, and define done for that domain before opening any additional concerns.',
@@ -10170,6 +10343,7 @@ export const ABSENCE_SESSION_LENGTH_CHECKPOINT_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_SESSION_LENGTH_CHECKPOINT",
   question:      'Extended session — context checkpoint done?',
   pinchFallback: 'Checkpoint due.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_SESSION_LENGTH_CHECKPOINT'],
   L1: [
     {
       option: 'Summarize the current state of what was just built: what decisions have been made, what is working, what remains incomplete, and what has changed since the session started — use this as a re-anchor before continuing.',
@@ -10227,6 +10401,7 @@ export const ABSENCE_PROGRESS_CONSOLIDATION_GAP_FORMAL: DecisionContent = {
   signalType:   "ABSENCE_PROGRESS_CONSOLIDATION_GAP",
   question:      'Extended implementation — progress documented?',
   pinchFallback: 'Document now.',
+  whyHelp:       WHY_HELP_BY_SIGNAL_TYPE['ABSENCE_PROGRESS_CONSOLIDATION_GAP'],
   L1: [
     {
       option: 'Consolidate the current build state: document what has been implemented, capture the key decisions made, and record any outstanding work before continuing.',

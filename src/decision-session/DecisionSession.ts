@@ -19,6 +19,7 @@ import { type RecentPromptMetadata } from '../telemetry/recent-prompts.js';
 import type { WhyHelpEntry } from './why-help.js';
 import { composeWhyHelpBlock, type WhyHelpRegister } from './why-help-compose.js';
 import { profileToRegister } from './register.js';
+import { SHORTCUT_HINT_TEXT } from './render-loop.js';
 
 /**
  * Decision session terminal UI (per decision-session-ux-research.md).
@@ -124,7 +125,27 @@ export interface DecisionSessionInput {
  */
 export type SelectFn = (opts: {
   message: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{
+    value:        string;
+    label:        string;
+    /** Per-option desc-base text — rendered as a `↳`-prefixed sub-line by the Path A render-loop path; ignored by legacy clack-based fallbacks. */
+    descBase?:    string;
+    /** True for blank-row OPTION_SEPARATOR padding entries — render-loop skips focus and renders a blank row. */
+    isSeparator?: boolean;
+    /** True for SHOW_SIMPLER / SKIP_NOW / HELP_LABEL meta entries — render-loop omits the desc-base sub-line for these. */
+    isMeta?:      boolean;
+  }>;
+  /**
+   * Structured render fields — consumed by the Path A render-loop renderer
+   * (TtySelectFn :: buildMjsScript) when present. The legacy `message`
+   * string remains the source-of-truth for clack-based fallback paths
+   * (e.g. the sub-menu action prompt + freq / role / root menu .mjs
+   * builders) which only know about `message + options`.
+   */
+  pinchLabel?:    string;
+  subtitle?:      string;
+  question?:      string;
+  whyHelpBlock?:  string;
 }) => Promise<string | symbol>;
 
 /**
@@ -248,42 +269,63 @@ export async function runLevel(
       }
     : content;
   const { options } = buildOptionList(effective, level);
+  const register     = profileToRegister(input.profile);
+  const subtitle     = getLevelSubtitle(level) ?? undefined;
+  const whyHelpBlock = content.whyHelp && register
+    ? (composeWhyHelpBlock(content.whyHelp, register, input.profile?.mood, input.profile?.role) ?? undefined)
+    : undefined;
   const message  = buildSelectMessage(input.pinchLabel, content.question, level, {
     whyHelpEntry: content.whyHelp,
-    register:     profileToRegister(input.profile),
+    register,
     mood:         input.profile?.mood,
     role:         input.profile?.role,
   });
+
+  // Per-level OptionEntry list — used to map each content option's desc-base
+  // into the extended `clackOptions[].descBase` field for the path A
+  // render-loop renderer (legacy clack callers ignore the new field).
+  const levelEntries = level === 1 ? effective.L1 : level === 2 ? effective.L2 : effective.L3;
+  const descBaseByOption = new Map<string, string>();
+  for (const entry of levelEntries) descBaseByOption.set(entry.option, entry.descBase);
 
   // Inject blank separator items between visual groups:
   //   content options → 2 blank lines → SHOW_SIMPLER (if present) → 1 blank line → SKIP_NOW
   //   when SHOW_SIMPLER absent: content options → 2 blank lines → SKIP_NOW
   //   after SKIP_NOW: 2 blank lines → help hint (first 3 appearances only)
   const hasShowSimpler = options.some((o) => o === SHOW_SIMPLER);
-  const clackOptions: Array<{ value: string; label: string }> = [];
+  const clackOptions: Array<{
+    value:        string;
+    label:        string;
+    descBase?:    string;
+    isSeparator?: boolean;
+    isMeta?:      boolean;
+  }> = [];
   let sepIdx = 0;
   for (const opt of options) {
     if (opt === SHOW_SIMPLER) {
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
     } else if (opt === SKIP_NOW) {
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
       if (!hasShowSimpler) {
-        clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+        clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
       }
     }
+    const isMeta = opt === SKIP_NOW || opt === SHOW_SIMPLER;
     clackOptions.push({
       value: opt,
       label: opt === SKIP_NOW    ? SKIP_NOW_LABEL    :
              opt === SHOW_SIMPLER ? SHOW_SIMPLER_LABEL :
              formatOptionLabel(opt),
+      ...(isMeta ? { isMeta: true } : {}),
+      ...(isMeta ? {} : { descBase: descBaseByOption.get(opt) ?? '' }),
     });
   }
   // Help hint — 2 blank lines of breathing room then the styled hint row
   if (input.decisionSessionCount < 12) {
-    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-    clackOptions.push({ value: `${OPTION_SEPARATOR}help`, label: HELP_LABEL });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}help`, label: HELP_LABEL, isMeta: true });
   }
 
   writeTelemetry(input.projectRoot, 'level_rendered', {
@@ -300,7 +342,16 @@ export async function runLevel(
       .filter(o => !o.value.startsWith(OPTION_SEPARATOR) || o.label !== '')
       .map(o => `  ${o.label}`)
       .join('\n');
-    process.stdout.write(`\n[SIM] level:${level} options:${optionKind}\n${message}\n${allOptions}\n[SIM] Auto-selecting: ${label}\n`);
+    const levelEntries = level === 1 ? effective.L1 : level === 2 ? effective.L2 : effective.L3;
+    const descBaseLines = levelEntries
+      .map((entry, idx) => `  ${idx + 1}. ${entry.descBase || '(no desc-base)'}`)
+      .join('\n');
+    process.stdout.write(
+      `\n[SIM] level:${level} options:${optionKind}\n${message}\n${allOptions}\n` +
+      `[SIM] desc-base per option:\n${descBaseLines}\n` +
+      `[SIM] shortcut-hint: ${SHORTCUT_HINT_TEXT}\n` +
+      `[SIM] Auto-selecting: ${label}\n`
+    );
     await new Promise<void>(r => setTimeout(r, 400));
     writeTelemetry(input.projectRoot, 'decision_session_sim_dismissed', {
       level, autoSelectedText: label.slice(0, 120),
@@ -308,7 +359,14 @@ export async function runLevel(
     return value as string;
   }
 
-  const result = await selectFn({ message, options: clackOptions });
+  const result = await selectFn({
+    message,
+    options: clackOptions,
+    pinchLabel: input.pinchLabel,
+    subtitle,
+    question:   content.question,
+    whyHelpBlock,
+  });
 
   // Item A: 5 context fields from input (no lookups) + Item I: skip count from store.
   // Snapshot once; reused across whichever dismissal branch fires.
