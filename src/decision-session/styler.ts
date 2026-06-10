@@ -135,9 +135,23 @@ function stylerInner(line: string, kind: LineKind): string {
   // Non-TTY output (pipe / redirect / CI) — skip ANSI emission.
   if (!process.stdout.isTTY) return line;
 
-  // Dev-only double-styling guard. Layout must emit raw text; if an ESC
-  // byte already slipped through, the styler would compound the ANSI and
-  // mask the underlying layout leak.
+  // Inherit kinds return the input verbatim — they do NOT add any ANSI
+  // themselves, so even when the input is intentionally pre-styled by an
+  // upstream formatter (e.g., the pinch-label / question header values
+  // arrive pre-wrapped with bold-cyan / bold-white SGR codes), there is
+  // no risk of compounding. Resolve them BEFORE the dev-only guard so
+  // pre-styled input flows through cleanly.
+  switch (kind) {
+    case 'option-label':
+    case 'pinch-label':
+    case 'question':
+      return line;
+  }
+
+  // Dev-only double-styling guard — only meaningful for kinds where the
+  // styler would compound ANSI on already-styled input. If an ESC byte
+  // is already present in a styled-kind input the dispatch body below
+  // would wrap it in additional SGR codes and mask the layout leak.
   if (process.env['NODE_ENV'] !== 'production' && line.includes('\x1b')) {
     throw new Error(`styler received pre-styled input (kind=${kind}); layout must emit raw text only`);
   }
@@ -147,10 +161,6 @@ function stylerInner(line: string, kind: LineKind): string {
     case 'desc-base-expanded':  return pc.gray(line);
     case 'desc-base-truncated': return pc.dim(pc.gray(line));
     case 'shortcut-hint':       return pc.dim(pc.italic(line));
-    case 'option-label':
-    case 'pinch-label':
-    case 'question':
-      return line;
     default:
       // Unknown kind — graceful fallback per the LineKind extensibility rule.
       return line;

@@ -119,14 +119,48 @@ describe('styler — defensive contracts', () => {
     expect(styler(sample, unknownKind)).toBe(sample);
   });
 
-  it('throws in dev builds when the input contains an ESC byte for any LineKind (layout-leak guard)', () => {
-    // Layout's contract is to emit raw text for every line-kind, including
-    // inherit kinds — the guard surfaces a leak regardless of where it
-    // originates so the diagnostic is uniform.
+  it('throws in dev builds when the input contains an ESC byte for STYLED LineKinds (layout-leak guard)', () => {
+    // Styled kinds (popup-why-help, desc-base-truncated, desc-base-expanded,
+    // shortcut-hint) wrap their input in additional SGR codes. Receiving an
+    // already-ANSI-wrapped input would compound the styling and mask the
+    // layout leak — the guard surfaces this in dev builds.
     const preStyled = '\x1b[31mred\x1b[0m';
-    for (const kind of ALL_LINE_KINDS) {
-      expect(() => styler(preStyled, kind)).toThrow(/styler received pre-styled input/);
+    const styledKinds: LineKind[] = ['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint'];
+    for (const kind of styledKinds) {
+      expect(() => styler(preStyled, kind), `kind=${kind}`).toThrow(/styler received pre-styled input/);
     }
+  });
+
+  it('passes ESC bytes through verbatim for INHERIT LineKinds (pre-styled inputs are an intentional contract)', () => {
+    // Inherit kinds (option-label, pinch-label, question) return the input
+    // unchanged — they never add ANSI themselves so there is no compounding
+    // risk. The contract upstream is that header values may arrive
+    // pre-styled (e.g., formatPinchLabel / formatQuestion outputs wrapped
+    // with bold-cyan / bold-white SGR codes). The dev-only guard MUST NOT
+    // fire for these kinds or the popup would crash on first render.
+    const preStyled = '\x1b[1;96mBefore coding.\x1b[0m';
+    const inheritKinds: LineKind[] = ['option-label', 'pinch-label', 'question'];
+    for (const kind of inheritKinds) {
+      expect(() => styler(preStyled, kind), `kind=${kind}`).not.toThrow();
+      expect(styler(preStyled, kind), `kind=${kind}`).toBe(preStyled);
+    }
+  });
+
+  it('regression — pinch-label / question accept already-styled formatter outputs without crashing the render loop', () => {
+    // Reproduces the real-world flow: parent process wraps header values
+    // with formatPinchLabel / formatQuestion (which produce ANSI-wrapped
+    // strings), the .mjs child reads them from the optFile, and renderLoop
+    // emits them as pinch-label / question LineKinds. Before this contract
+    // was clarified the styler's dev-only guard would throw on the first
+    // pinch-label emission, aborting the render loop and causing the popup
+    // to render once then immediately disappear ("blink and disappear").
+    const styledPinch    = '\x1b[1;96mBefore coding.\x1b[0m';
+    const styledQuestion = '\x1b[1;97mIs the plan written?\x1b[0m';
+    const styledSubtitle = '\x1b[2;33mQuick check.\x1b[0m';  // subtitle is emitted as kind='pinch-label' per computeLayout
+
+    expect(styler(styledPinch,    'pinch-label')).toBe(styledPinch);
+    expect(styler(styledSubtitle, 'pinch-label')).toBe(styledSubtitle);
+    expect(styler(styledQuestion, 'question')).toBe(styledQuestion);
   });
 });
 
