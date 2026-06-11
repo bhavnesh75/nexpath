@@ -38,6 +38,25 @@ import { Buffer } from 'node:buffer';
 /** The registered Windsurf command that routes an action to the chat client. */
 export const SEND_CHAT_ACTION_COMMAND = 'windsurf.sendChatActionMessage';
 
+/**
+ * Candidate ids for the send-chat-action command across builds. Windsurf was
+ * rebranded to "Devin" (Devin Desktop), and forks routinely re-namespace their
+ * commands (`windsurf.*` → `devin.*`), so we probe the whole family and use the
+ * first one the host actually registers. `windsurf.sendChatActionMessage` stays
+ * first (the verified id on Windsurf 2.3.x).
+ */
+export const SEND_CHAT_ACTION_COMMAND_CANDIDATES = [
+  'windsurf.sendChatActionMessage',
+  'devin.sendChatActionMessage',
+  'cascade.sendChatActionMessage',
+  'codeium.sendChatActionMessage',
+] as const;
+
+/** Pick the first candidate send-chat-action command the host registers (or null). */
+export function pickCascadeActionCommand(available: readonly string[]): string | null {
+  return SEND_CHAT_ACTION_COMMAND_CANDIDATES.find((c) => available.includes(c)) ?? null;
+}
+
 /** Focus/reveal the Cascade chat panel (the panel's own `focus()` action). */
 export const OPEN_CHAT_PANEL_JSON = JSON.stringify({ actionType: 'openChatPanel' });
 
@@ -97,21 +116,25 @@ export async function injectViaCascadeAction(
   text: string,
   deps: CascadeActionDeps,
 ): Promise<boolean> {
-  // Gate on availability when we can enumerate — avoids a guaranteed-throw on a
-  // build that lacks the command. If enumeration fails, optimistically try.
+  // Resolve which candidate command this host registers. When we can enumerate,
+  // pick the first present one (or bail if none — avoids a guaranteed-throw on a
+  // build that lacks the command). If enumeration fails, optimistically try the
+  // canonical id.
+  let command: string = SEND_CHAT_ACTION_COMMAND;
   if (deps.getCommands) {
     try {
-      const available = await deps.getCommands(true);
-      if (!available.includes(SEND_CHAT_ACTION_COMMAND)) return false;
+      const picked = pickCascadeActionCommand(await deps.getCommands(true));
+      if (!picked) return false;
+      command = picked;
     } catch {
-      // fall through and try anyway
+      // fall through and try the canonical id anyway
     }
   }
   try {
     // Reveal + focus the Cascade chat panel (existing conversation).
-    await deps.executeCommand(SEND_CHAT_ACTION_COMMAND, OPEN_CHAT_PANEL_JSON);
+    await deps.executeCommand(command, OPEN_CHAT_PANEL_JSON);
     // Insert the advisory text into its input.
-    await deps.executeCommand(SEND_CHAT_ACTION_COMMAND, buildAddCascadeInputJson(text));
+    await deps.executeCommand(command, buildAddCascadeInputJson(text));
     return true;
   } catch {
     return false;

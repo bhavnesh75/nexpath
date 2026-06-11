@@ -30,6 +30,7 @@ import { raiseWindsurfWindow, pasteKeystroke } from './windsurf-autopaste.js';
 import {
   injectViaCascadeAction,
   SEND_CHAT_ACTION_COMMAND,
+  SEND_CHAT_ACTION_COMMAND_CANDIDATES,
   OPEN_CHAT_PANEL_JSON,
 } from './windsurf-cascade-action.js';
 import type { ChatHistoryEvent, WatchTarget } from './chat-history-types.js';
@@ -68,8 +69,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   log('[nexpath] extension activated');
 
   // 1. Detect host (Cursor / Windsurf / vscode-generic). Stable for the
-  //    lifetime of this extension instance.
+  //    lifetime of this extension instance. Log the raw identity too — the
+  //    Windsurf→Devin rebrand changed appName/uriScheme, so this line is the
+  //    first thing to check when a host shows up as vscode-generic unexpectedly.
   const host = detectHost();
+  log(`[nexpath] host=${host} (appName=${JSON.stringify(vscode.env.appName)}, uriScheme=${JSON.stringify(vscode.env.uriScheme)})`);
 
   // 2. Construct + register the view provider with the B4 injectFn-aware
   //    onSelect. injectFn falls through to clipboard when the host has no
@@ -232,7 +236,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       // Popup selection → inject into Cascade + clear the fallback.
       onSelection: async (prompt) => {
         advisoryFallback.clear();
-        log('[nexpath] windsurf: bridging popup selection → Cascade via windsurf.sendTextToChat');
+        log('[nexpath] windsurf: bridging popup selection → Cascade via sendChatActionMessage(addCascadeInput)');
         await injectIntoChat(prompt);
       },
       // Popup ran but no selection → surface the in-editor fallback.
@@ -242,6 +246,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log('[nexpath] windsurf inject = direct sendChatActionMessage(openChatPanel→addCascadeInput); clipboard+keystroke is the fallback. Run "Nexpath: Test Cascade Inject" to verify.');
     context.subscriptions.push({ dispose: () => advisoryPoller?.stop() });
     log(`[nexpath] windsurf advisory poller started for roots: ${roots.join(' | ')}`);
+    // Diagnostic: which inject command does THIS host expose? The Devin rebrand
+    // can re-namespace `windsurf.* → devin.*`; log what's present so direct
+    // insert (vs the clipboard fallback) can be confirmed without console eval.
+    void vscode.commands.getCommands(true).then((cmds) => {
+      const present = SEND_CHAT_ACTION_COMMAND_CANDIDATES.filter((c) => cmds.includes(c));
+      const chatish = cmds.filter((c) => /sendchataction|cascade|chat|devin|windsurf|codeium/i.test(c));
+      log(`[nexpath] windsurf inject-command present: ${present.join(', ') || 'NONE (will use clipboard fallback)'}`);
+      log(`[nexpath] windsurf chat-related commands (${chatish.length}): ${chatish.slice(0, 50).join(', ')}`);
+    }, () => { /* getCommands unavailable — ignore */ });
   }
 
   const wsStorage = workspaceStorageDir({ host });

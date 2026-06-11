@@ -139,4 +139,14 @@ describe('injectViaCascadeAction', () => {
     expect(ok).toBe(true);
     expect(executeCommand).toHaveBeenCalledTimes(2);
   });
+
+  it('uses the devin.* command on the rebranded build (windsurf id absent)', async () => {
+    const executeCommand = vi.fn().mockResolvedValue(undefined);
+    const getCommands = vi.fn().mockResolvedValue(['devin.sendChatActionMessage', 'foo.bar']);
+    const ok = await injectViaCascadeAction('hello devin', { executeCommand, getCommands });
+    expect(ok).toBe(true);
+    expect(executeCommand).toHaveBeenCalledTimes(2);
+    expect(executeCommand.mock.calls[0][0]).toBe('devin.sendChatActionMessage');
+    expect(executeCommand.mock.calls[1][0]).toBe('devin.sendChatActionMessage');
+  });
 });
