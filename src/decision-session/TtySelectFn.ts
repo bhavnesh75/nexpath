@@ -58,7 +58,12 @@ import { spawnSync } from 'node:child_process';
 import { emitKeypressEvents } from 'node:readline';
 import { tmpdir } from 'node:os';
 
-process.stdout.write(${JSON.stringify(NEXPATH_HEADER)});
+// NOTE: NEXPATH_HEADER is no longer written here. It is now passed into
+// the renderLoop layout as the pageHeader field below, so the header
+// rows live INSIDE the writeFrame cursor-rewind block. This keeps the
+// header pinned at the top of the popup across redraws — including the
+// case where the popup approaches or exceeds terminal rows and would
+// otherwise scroll the header off the top of the visible buffer.
 
 const opts    = JSON.parse(readFileSync('${optFileFwd}', 'utf8'));
 const _dbg = tmpdir() + '/nexpath-render-debug.txt';
@@ -155,6 +160,7 @@ process.stdin.on('keypress', (ch, key) => {
 // whyHelpBlock / per-option descBase / isSeparator / isMeta) feed the
 // renderLoop layout directly.
 const _layout = {
+  pageHeader:   ${JSON.stringify(NEXPATH_HEADER)},
   pinchLabel:   opts.pinchLabel,
   subtitle:     opts.subtitle,
   question:     opts.question,

@@ -41,7 +41,8 @@ export type LineKind =
   | 'shortcut-hint'
   | 'option-label'
   | 'pinch-label'
-  | 'question';
+  | 'question'
+  | 'page-header';
 
 /** All LineKind values as a const array — useful for exhaustive iteration in tests / dispatch tables. */
 export const ALL_LINE_KINDS: readonly LineKind[] = [
@@ -52,6 +53,7 @@ export const ALL_LINE_KINDS: readonly LineKind[] = [
   'option-label',
   'pinch-label',
   'question',
+  'page-header',
 ] as const;
 
 /**
@@ -145,6 +147,7 @@ function stylerInner(line: string, kind: LineKind): string {
     case 'option-label':
     case 'pinch-label':
     case 'question':
+    case 'page-header':
       return line;
   }
 

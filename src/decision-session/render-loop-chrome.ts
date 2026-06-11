@@ -82,6 +82,12 @@ export function computeChromePrefix(
   seenFirstPinch:   boolean,
 ): string {
   switch (e.kind) {
+    case 'page-header':
+      // The page-header carries its own visual identity (e.g. the
+      // `▲ N E X P A T H  C L I` wordmark + dim rule). Adding the cyan
+      // `│` rail prefix would visually conflict with the header's
+      // glyphs, so emit no chrome prefix for this kind.
+      return '';
     case 'pinch-label':
       return seenFirstPinch ? cyan('│') + ' ' : cyan('◆') + ' ';
     case 'question':

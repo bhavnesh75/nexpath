@@ -22,7 +22,8 @@ import {
   type RenderLoopOptions,
   type SelectableItem,
 } from './render-loop.js';
-import { ALL_LINE_KINDS } from './styler.js';
+import { ALL_LINE_KINDS, styler } from './styler.js';
+import { computeChromePrefix } from './render-loop-chrome.js';
 
 // Force isTTY=true so the styler emits ANSI on its styled kinds — without
 // this the non-TTY safeguard short-circuits the styler dispatch to
@@ -1345,6 +1346,152 @@ describe('render-loop — stripAnsi + visualRows helpers', () => {
       // not divide by zero. Fall back to segments.length.
       expect(visualRows('A\nB', 0)).toBe(2);
       expect(visualRows('A\nB', -1)).toBe(2);
+    });
+  });
+});
+
+describe('render-loop — page-header emission + cursor visibility', () => {
+  const makeOptsP = (overrides: Partial<RenderLoopOptions> = {}): RenderLoopOptions => ({
+    pinchLabel: 'P',
+    question:   'Q',
+    rows: 40, cols: 80,
+    options: [
+      { value: 'a', label: 'A' },
+      { value: 'b', label: 'B' },
+    ],
+    ...overrides,
+  });
+
+  describe('computeLayout — pageHeader', () => {
+    it('emits page-header lines first when opts.pageHeader is set', () => {
+      const r = computeLayout(makeOptsP({ pageHeader: 'HEADER\nRULE' }), FRESH_STATE);
+      expect(r.emissions[0]).toMatchObject({ kind: 'page-header', text: 'HEADER' });
+      expect(r.emissions[1]).toMatchObject({ kind: 'page-header', text: 'RULE' });
+      expect(r.emissions[2]).toMatchObject({ kind: 'pinch-label', text: 'P' });
+    });
+
+    it('skips page-header emissions when opts.pageHeader is undefined or empty', () => {
+      const rUndef = computeLayout(makeOptsP(), FRESH_STATE);
+      expect(rUndef.emissions[0]).toMatchObject({ kind: 'pinch-label' });
+      expect(rUndef.emissions.find((e) => e.kind === 'page-header')).toBeUndefined();
+
+      const rEmpty = computeLayout(makeOptsP({ pageHeader: '' }), FRESH_STATE);
+      expect(rEmpty.emissions[0]).toMatchObject({ kind: 'pinch-label' });
+      expect(rEmpty.emissions.find((e) => e.kind === 'page-header')).toBeUndefined();
+    });
+
+    it('counts page-header lines in preFixedLines so option budget reserves space', () => {
+      const baseline = computeLayout(makeOptsP(), FRESH_STATE);
+      const withHeader = computeLayout(makeOptsP({ pageHeader: 'A\nB\nC' }), FRESH_STATE);
+      expect(withHeader.budget.fixedLines - baseline.budget.fixedLines).toBe(3);
+    });
+  });
+
+  describe('chrome — page-header empty prefix', () => {
+    it('computeChromePrefix returns empty string for page-header kind', () => {
+      const prefix = computeChromePrefix(
+        { kind: 'page-header', text: 'HEADER', optionIndex: null, isPadding: false },
+        { focusedOptionIndex: 0 },
+        false,
+      );
+      expect(prefix).toBe('');
+    });
+  });
+
+  describe('styler — page-header inherit', () => {
+    it('returns page-header input verbatim (inherit), preserving pre-styled SGR', () => {
+      const preStyled = '\x1b[1;96m▲\x1b[0m  \x1b[1;97mN E X P A T H  C L I\x1b[0m';
+      expect(styler(preStyled, 'page-header')).toBe(preStyled);
+    });
+  });
+
+  describe('renderLoop — cursor hide/show', () => {
+    it('emits \\x1b[?25l (hide-cursor) before first frame when isTTY is true', async () => {
+      const out = new PassThrough();
+      const chunks: Buffer[] = [];
+      out.on('data', (c: Buffer) => chunks.push(c));
+      await renderLoop({
+        layout: makeOptsP({ pinchLabel: '__P_MARKER__' }),
+        out,
+        keyEvents: (async function*() { yield { name: 'enter' as const }; })(),
+      });
+      const seen = Buffer.concat(chunks).toString('utf8');
+      const hideIdx = seen.indexOf('\x1b[?25l');
+      const markerIdx = seen.indexOf('__P_MARKER__');
+      expect(hideIdx).toBeGreaterThanOrEqual(0);
+      expect(markerIdx).toBeGreaterThan(0);
+      expect(hideIdx).toBeLessThan(markerIdx);
+    });
+
+    it('emits \\x1b[?25h (show-cursor) after iterator exhausts (cancel path)', async () => {
+      const out = new PassThrough();
+      const chunks: Buffer[] = [];
+      out.on('data', (c: Buffer) => chunks.push(c));
+      await renderLoop({
+        layout: makeOptsP(),
+        out,
+        keyEvents: (async function*() { /* no events — iterator exhausts immediately */ })(),
+      });
+      const seen = Buffer.concat(chunks).toString('utf8');
+      expect(seen.endsWith('\x1b[?25h')).toBe(true);
+    });
+
+    it('emits \\x1b[?25h on Enter (return picked)', async () => {
+      const out = new PassThrough();
+      const chunks: Buffer[] = [];
+      out.on('data', (c: Buffer) => chunks.push(c));
+      await renderLoop({
+        layout: makeOptsP(),
+        out,
+        keyEvents: (async function*() { yield { name: 'enter' as const }; })(),
+      });
+      const seen = Buffer.concat(chunks).toString('utf8');
+      expect(seen.endsWith('\x1b[?25h')).toBe(true);
+    });
+
+    it('does not emit cursor hide/show when isTTY is false (non-TTY)', async () => {
+      const prevIsTTY = process.stdout.isTTY;
+      process.stdout.isTTY = false;
+      try {
+        const out = new PassThrough();
+        const chunks: Buffer[] = [];
+        out.on('data', (c: Buffer) => chunks.push(c));
+        await renderLoop({
+          layout: makeOptsP(),
+          out,
+          keyEvents: (async function*() { yield { name: 'enter' as const }; })(),
+        });
+        const seen = Buffer.concat(chunks).toString('utf8');
+        expect(seen.includes('\x1b[?25l')).toBe(false);
+        expect(seen.includes('\x1b[?25h')).toBe(false);
+      } finally {
+        process.stdout.isTTY = prevIsTTY;
+      }
+    });
+  });
+
+  describe('renderLoop — page-header pinned inside rewind block', () => {
+    it('rewinds wrap-aware visual rows that include page-header lines (header stays in rewind block)', async () => {
+      const out = new PassThrough();
+      const chunks: Buffer[] = [];
+      out.on('data', (c: Buffer) => chunks.push(c));
+      const HEADER = '__HEADER__\n__RULE__';
+      await renderLoop({
+        layout: makeOptsP({ pageHeader: HEADER }),
+        out,
+        keyEvents: (async function*() { yield { name: 'arrow-down' as const }; yield { name: 'enter' as const }; })(),
+      });
+      const seen = Buffer.concat(chunks).toString('utf8');
+
+      // Both header rows must appear in the rendered output. The arrow-down
+      // triggers a redraw, and the rewind invariant must include the header
+      // rows — observable as: header markers appear in BOTH frames (i.e.,
+      // the marker count exceeds 1, matching the number of frames rendered).
+      const headerMarkers = (seen.match(/__HEADER__/g) || []).length;
+      const ruleMarkers   = (seen.match(/__RULE__/g) || []).length;
+      // Initial frame + arrow-down frame = 2 frames; both contain the header.
+      expect(headerMarkers).toBeGreaterThanOrEqual(2);
+      expect(ruleMarkers).toBeGreaterThanOrEqual(2);
     });
   });
 });

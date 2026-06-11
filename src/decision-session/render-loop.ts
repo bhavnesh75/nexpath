@@ -101,6 +101,19 @@ export interface RenderLoopOptions {
    * padding row still separates the question from the first option.
    */
   whyHelpBlock?:  string;
+  /**
+   * Optional top-of-popup page-header block (e.g. the `▲ N E X P A T H  C L I`
+   * wordmark + dim rule). When set, each `\n`-split line emits as a separate
+   * `page-header` LineKind element at the very start of the layout. Including
+   * the header in the layout brings its rows inside the writeFrame cursor-
+   * rewind block, so the header stays pinned at the top of the popup across
+   * redraws even when the popup approaches or exceeds terminal rows. The
+   * budget math counts each header line under `preFixedLines` so the option-
+   * region budget reserves space for the header naturally and the popup is
+   * less likely to overflow terminal rows in the first place. Undefined or
+   * empty: emissions list is identical to the no-header behaviour.
+   */
+  pageHeader?:    string;
   /** Option list (already includes any bottom OPTION_SEPARATOR rows + meta entries). */
   options:        readonly SelectableItem[];
   /** Terminal rows. */
@@ -470,10 +483,27 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   if (opts.whyHelpBlock && opts.whyHelpBlock.length > 0) {
     preFixedLines += opts.whyHelpBlock.split('\n').length;
   }
+  // Page-header (optional, top-of-popup) — each `\n`-split line counts as a
+  // fixed row so the option-region budget reserves space for the header.
+  if (opts.pageHeader && opts.pageHeader.length > 0) {
+    preFixedLines += opts.pageHeader.split('\n').length;
+  }
   preFixedLines += D4_PADDING_ROW_COUNT;
   const preAvail        = Math.max(0, opts.rows - preFixedLines - 2);
   const preExpandedCap  = effectiveExpandedCap(preAvail);
   const expansionAllowed = preExpandedCap >= D5_MIN_EFFECTIVE_CAP;
+
+  // ── Page-header (optional, top-of-popup) ───────────────────────────────────
+  // Emitted BEFORE the pinch-label / question header pair so the wordmark +
+  // rule sits at the very top of the popup. Each `\n`-split line is its own
+  // emission so the cursor-rewind block (visualRows-aware) handles them
+  // exactly like every other multi-line content source.
+  if (opts.pageHeader && opts.pageHeader.length > 0) {
+    const headerLines = opts.pageHeader.split('\n');
+    for (const ln of headerLines) {
+      emissions.push({ kind: 'page-header', text: ln, optionIndex: null, isPadding: false });
+    }
+  }
 
   // ── Header pair ────────────────────────────────────────────────────────────
   emissions.push({ kind: 'pinch-label', text: opts.pinchLabel, optionIndex: null, isPadding: false });
@@ -800,6 +830,17 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
   // until the user dismisses (Esc / Enter) and re-triggers.
   let previousFrameHeight = 0;
 
+  // Hide the terminal cursor for the duration of the popup. The popup is a
+  // non-text-input UI (arrow keys + Space + Enter); a blinking cursor row
+  // below the last emission has no semantic role and is perceived as a
+  // stray glitch. Universally supported via DECTCEM (`?25l` / `?25h`) on
+  // every modern terminal. Restored unconditionally in `finally` so Esc /
+  // Ctrl+C cancel, Enter return, and uncaught exception paths all
+  // restore the cursor. Skipped on non-TTY output so captured streams
+  // stay clean of control sequences.
+  const cursorWasHidden = process.stdout.isTTY === true;
+  if (cursorWasHidden) out.write('\x1b[?25l');
+
   const writeFrame = () => {
     const layout = computeLayout(opts.layout, state);
     // Persist the auto-adjusted scroll offset back into state so subsequent
@@ -841,9 +882,10 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
     previousFrameHeight = visualRowCount;
   };
 
-  writeFrame();
+  try {
+    writeFrame();
 
-  for await (const ev of opts.keyEvents) {
+    for await (const ev of opts.keyEvents) {
     switch (ev.name) {
       case 'arrow-up':
         state = { ...state, focusedIndex: moveFocus(opts.layout.options, state.focusedIndex, -1) };
@@ -897,8 +939,14 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
     writeFrame();
   }
 
-  // Iterator exhausted without a terminal event — treat as cancel.
-  return null;
+    // Iterator exhausted without a terminal event — treat as cancel.
+    return null;
+  } finally {
+    // Restore the terminal cursor regardless of how we exit: Enter
+    // resolved with `return picked`, Esc/Ctrl+C with `return null`,
+    // iterator exhaustion with `return null`, or any thrown exception.
+    if (cursorWasHidden) out.write('\x1b[?25h');
+  }
 }
 
 /**

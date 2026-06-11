@@ -16,8 +16,8 @@ afterAll(() => {
 });
 
 describe('styler — line-kind contract', () => {
-  it('ALL_LINE_KINDS contains exactly the 7 locked kinds', () => {
-    expect(ALL_LINE_KINDS).toHaveLength(7);
+  it('ALL_LINE_KINDS contains exactly the 8 locked kinds', () => {
+    expect(ALL_LINE_KINDS).toHaveLength(8);
     expect(ALL_LINE_KINDS).toEqual([
       'popup-why-help',
       'desc-base-truncated',
@@ -26,6 +26,7 @@ describe('styler — line-kind contract', () => {
       'option-label',
       'pinch-label',
       'question',
+      'page-header',
     ]);
   });
 
