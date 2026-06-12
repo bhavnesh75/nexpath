@@ -102,7 +102,7 @@ export interface RenderLoopOptions {
    */
   whyHelpBlock?:  string;
   /**
-   * Optional top-of-popup page-header block (e.g. the `▲ N E X P A T H  C L I`
+   * Optional top-of-popup page-header block (e.g. the `▲ NEXPATH CLI`
    * wordmark + dim rule). When set, each `\n`-split line emits as a separate
    * `page-header` LineKind element at the very start of the layout. Including
    * the header in the layout brings its rows inside the writeFrame cursor-

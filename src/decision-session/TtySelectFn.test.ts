@@ -1352,7 +1352,7 @@ describe('Regression: .mjs script content is platform-consistent', () => {
       expect(script).toContain('emitKeypressEvents');
       // Branded Nexpath wordmark header must be written to stdout before the prompt renders.
       expect(script).toContain('process.stdout.write(');
-      expect(script).toContain('N E X P A T H  C L I');
+      expect(script).toContain('NEXPATH CLI');
     }
 
     // Clipboard differs: Linux has xclip chain, macOS has pbcopy

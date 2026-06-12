@@ -1400,7 +1400,7 @@ describe('render-loop — page-header emission + cursor visibility', () => {
 
   describe('styler — page-header inherit', () => {
     it('returns page-header input verbatim (inherit), preserving pre-styled SGR', () => {
-      const preStyled = '\x1b[1;96m▲\x1b[0m  \x1b[1;97mN E X P A T H  C L I\x1b[0m';
+      const preStyled = '\x1b[1;96m▲\x1b[0m  \x1b[1;97mNEXPATH CLI\x1b[0m';
       expect(styler(preStyled, 'page-header')).toBe(preStyled);
     });
   });
