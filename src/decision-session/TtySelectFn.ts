@@ -24,6 +24,7 @@ import { SKIP_NOW, SHOW_SIMPLER } from './options.js';
 import type { Store } from '../store/db.js';
 import { getConfig, setConfig } from '../store/config.js';
 import { ROLE_OPTIONS, buildRoleDescriptionLines, buildRoleMenuLines } from '../cli/shared/role-description.js';
+import { detectScreenResolution, computePopupGeometry, type PopupGeometry } from './screen-geometry.js';
 
 // ── New-window helpers: .mjs script builders ─────────────────────────────────
 
@@ -482,8 +483,7 @@ function readCurrentRole(store: Store | undefined, projectRoot: string | undefin
 function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): SelectFn {
   const clackUrl = resolveClackEsmUrl();
 
-  return (opts) =>
-    new Promise<string | symbol>((resolve) => {
+  return async (opts) => {
       const id         = randomUUID();
       const optFile    = join(tmpdir(), `nexpath-opt-${id}.json`);
       const resultFile = join(tmpdir(), `nexpath-res-${id}.txt`);
@@ -525,12 +525,23 @@ function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): Sel
 
       // cmd /c start → ShellExecuteEx → reliable foreground activation
       // Title arg appears in taskbar and Alt+Tab for discoverability
-      spawnSync(
-        'cmd.exe',
-        ['/c', 'start', '/WAIT', 'Nexpath \u2014 Action Required',
-          'node', scriptFile],
-        { stdio: 'ignore' },
-      );
+      // Compute geometry ONCE per select call. Both the MAIN popup and any
+      // sub-menu spawn (root chooser triggered by Ctrl+T) share the same
+      // closure so the sub-menu inherits the same 70% sizing without an
+      // extra detection round-trip.
+      const screen = await detectScreenResolution();
+      const geom   = screen ? computePopupGeometry(screen) : null;
+      const hasWt  = windowsCommandExists('wt.exe');
+
+      // Shared spawn closure. Reused below by spawnRootChooserFlow so the
+      // sub-menu spawn callback uses the same dispatch + geometry.
+      const spawnConsole: SpawnWindowFn = (title, script) => {
+        const plan = planWindowsPopupSpawn(geom, hasWt, title, script);
+        spawnSync(plan.cmd, plan.args, { stdio: 'ignore' });
+      };
+
+      // Title arg appears in taskbar and Alt+Tab for discoverability
+      spawnConsole(WINDOW_TITLE, scriptFile);
 
       // Result file format:
       //   '__CLIP__'               → user chose "Copy to clipboard" (clip.exe already called)
@@ -548,13 +559,7 @@ function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): Sel
         } else if (raw === '__NEXPATH_OPT_OUT__') {
           result = OPT_OUT_SENTINEL;
         } else if (raw === '__ROOT_MENU_PENDING__') {
-          result = spawnRootChooserFlow(clackUrl, (title, script) => {
-            spawnSync(
-              'cmd.exe',
-              ['/c', 'start', '/WAIT', title, 'node', script],
-              { stdio: 'ignore' },
-            );
-          }, store, projectRoot);
+          result = spawnRootChooserFlow(clackUrl, spawnConsole, store, projectRoot);
         } else if (raw.startsWith('__FREQ__:')) {
           result = raw;
         } else if (raw.startsWith('__ROLE__:')) {
@@ -568,8 +573,8 @@ function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): Sel
         try { unlinkSync(f); } catch { /* ignore */ }
       }
 
-      resolve(result);
-    });
+      return result;
+    };
 }
 
 // ── Linux: new terminal window via detected emulator ─────────────────────────
@@ -615,6 +620,67 @@ function resolveClackCoreEsmUrl(): string {
 function commandExists(cmd: string): boolean {
   const r = spawnSync('which', [cmd], { stdio: 'pipe', timeout: 2000 });
   return r.status === 0;
+}
+
+/** Windows-side `where <cmd>` probe — returns true when the named executable is on %PATH%. Failures (missing `where`, spawnSync error) resolve to false so callers fall back to the legacy spawn path. */
+function windowsCommandExists(cmd: string): boolean {
+  try {
+    const r = spawnSync('where', [cmd], { stdio: 'pipe', timeout: 2000 });
+    return r?.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Pure: build the `cmd + args` pair to spawn a Windows popup window
+ * running the given .mjs `scriptPath` under the given window `title`.
+ *
+ * Three-branch dispatch:
+ *   1. When a geometry IS available AND `wt.exe` (Windows Terminal) is
+ *      on %PATH%, use `wt --pos X,Y --size COLS,ROWS new-tab --title T
+ *      cmd /c node "<script>"`. This sizes + positions the window
+ *      exactly.
+ *   2. When a geometry IS available but `wt.exe` is NOT on %PATH%,
+ *      fall back to `cmd /c start /WAIT "T" cmd /c "mode CON: COLS=X
+ *      LINES=Y && node <script>"`. The legacy conhost honours
+ *      `mode CON`; the window opens at whatever position Windows
+ *      chooses, sized to the requested cells.
+ *   3. When NO geometry is available (detection failed), use the
+ *      original `cmd /c start /WAIT "T" node <script>` so the spawn
+ *      site is byte-identical to the pre-change behaviour.
+ *
+ * Exported for unit testability.
+ */
+export function planWindowsPopupSpawn(
+  geom:               PopupGeometry | null,
+  hasWindowsTerminal: boolean,
+  title:              string,
+  scriptPath:         string,
+): { cmd: string; args: string[] } {
+  if (geom && hasWindowsTerminal) {
+    return {
+      cmd:  'wt.exe',
+      args: [
+        '--pos',  `${geom.xPx},${geom.yPx}`,
+        '--size', `${geom.cols},${geom.rows}`,
+        'new-tab',
+        '--title', title,
+        'cmd', '/c', `node "${scriptPath}"`,
+      ],
+    };
+  }
+  if (geom) {
+    const sized = `mode CON: COLS=${geom.cols} LINES=${geom.rows} && node "${scriptPath}"`;
+    return {
+      cmd:  'cmd.exe',
+      args: ['/c', 'start', '/WAIT', title, 'cmd', '/c', sized],
+    };
+  }
+  return {
+    cmd:  'cmd.exe',
+    args: ['/c', 'start', '/WAIT', title, 'node', scriptPath],
+  };
 }
 
 interface TerminalSpec {

@@ -11,6 +11,15 @@ vi.mock('node:child_process', () => ({
   spawnSync: vi.fn(),
 }));
 
+// Mock screen-geometry so Phase 2's per-popup detection round-trip does NOT
+// add extra spawnSync calls into the per-test mock-call timeline. Returning
+// null forces the planWindowsPopupSpawn passthrough branch (legacy spawn
+// shape) so the pre-Phase-2 test assertions keep working unchanged.
+vi.mock('./screen-geometry.js', () => ({
+  detectScreenResolution: vi.fn(() => Promise.resolve(null)),
+  computePopupGeometry:   vi.fn(() => null),
+}));
+
 // Deferred import so mocks are in place before module is evaluated
 const {
   createTtySelectFn,
@@ -19,6 +28,7 @@ const {
   runCtrlTRootChooser,
   runFrequencySubMenu,
   runRoleSubMenu,
+  planWindowsPopupSpawn,
 } = await import('./TtySelectFn.js');
 const { OPT_OUT_SENTINEL }       = await import('./DecisionSession.js');
 const { SHOW_SIMPLER, SKIP_NOW } = await import('./options.js');
@@ -132,11 +142,22 @@ describe('createTtySelectFn — Windows (win32)', () => {
     expect(typeof result).toBe('symbol');
   });
 
+  // Helper: skip the `where wt.exe` probe call added in Phase 2 and locate
+  // the actual popup-window spawn call. With the screen-geometry mock
+  // returning null, planWindowsPopupSpawn always returns the legacy
+  // cmd.exe / start / WAIT shape, so the popup call always targets cmd.exe.
+  function popupSpawnCall(): [string, string[]] {
+    const calls = (spawnSync as ReturnType<typeof vi.fn>).mock.calls;
+    const popup = calls.find((c) => c[0] === 'cmd.exe' || c[0] === 'wt.exe');
+    if (!popup) throw new Error('no popup spawn call captured');
+    return popup as [string, string[]];
+  }
+
   it('uses cmd.exe /c start /WAIT for reliable foreground activation', async () => {
     (spawnSync as ReturnType<typeof vi.fn>).mockReturnValue({ status: 0 });
     await createTtySelectFn()!(makeOpts());
 
-    const [cmd, args] = (spawnSync as ReturnType<typeof vi.fn>).mock.calls[0] as [string, string[]];
+    const [cmd, args] = popupSpawnCall();
     expect(cmd).toBe('cmd.exe');
     expect(args[0]).toBe('/c');
     expect(args[1]).toBe('start');
@@ -149,7 +170,7 @@ describe('createTtySelectFn — Windows (win32)', () => {
     (spawnSync as ReturnType<typeof vi.fn>).mockReturnValue({ status: 0 });
     await createTtySelectFn()!(makeOpts());
 
-    const args = (spawnSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string[];
+    const [, args] = popupSpawnCall();
     const title = args[3];
     expect(title).toContain('Nexpath');
   });
@@ -158,7 +179,7 @@ describe('createTtySelectFn — Windows (win32)', () => {
     (spawnSync as ReturnType<typeof vi.fn>).mockReturnValue({ status: 0 });
     await createTtySelectFn()!(makeOpts());
 
-    const args = (spawnSync as ReturnType<typeof vi.fn>).mock.calls[0][1] as string[];
+    const [, args] = popupSpawnCall();
     const scriptArg = args[args.length - 1];
     expect(scriptArg).toContain('nexpath-sel-');
     expect(scriptArg).toContain('.mjs');
@@ -289,7 +310,11 @@ describe('createTtySelectFn — Windows (win32)', () => {
     const FREQ_SCRIPT_FILE = join(tmpdir(), `nexpath-freq-sel-${UUID}.mjs`);
     let capturedFreqScript = '';
     let callCount = 0;
-    (spawnSync as ReturnType<typeof vi.fn>).mockImplementation((_cmd: string, args: string[]) => {
+    (spawnSync as ReturnType<typeof vi.fn>).mockImplementation((cmd: string, args: string[]) => {
+      // Phase 2 added a `where wt.exe` probe to the Windows spawn flow —
+      // skip it so the popup-window spawn calls retain their original 1/2/3
+      // ordering inside this test.
+      if (cmd === 'where') return;
       callCount++;
       if (callCount === 1) {
         // Main window: user pressed Ctrl+T → emit root chooser sentinel
@@ -1783,5 +1808,136 @@ describe('runRoleSubMenu (Unix path)', () => {
     } finally {
       store.db.close();
     }
+  });
+});
+
+// ── planWindowsPopupSpawn ────────────────────────────────────────────────────
+//
+// Pure-function unit tests for the Windows spawn-plan helper. The helper
+// returns `{ cmd, args }` and is then invoked via spawnSync at the call
+// site, so verifying the shape of the returned plan is sufficient to lock
+// in the entire 3-branch dispatch contract without touching the actual
+// terminal-window spawn surface.
+
+describe('planWindowsPopupSpawn — geometry available AND wt.exe present', () => {
+  const geom = {
+    widthPx:  1344,
+    heightPx: 756,
+    xPx:      288,
+    yPx:      162,
+    cols:     134,
+    rows:     37,
+  };
+
+  it('targets wt.exe (Windows Terminal) as the spawn cmd', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.cmd).toBe('wt.exe');
+  });
+
+  it('passes --pos with the centered xPx,yPx pair', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'My Title', 'C:/tmp/script.mjs');
+    const posIdx = plan.args.indexOf('--pos');
+    expect(posIdx).toBeGreaterThanOrEqual(0);
+    expect(plan.args[posIdx + 1]).toBe('288,162');
+  });
+
+  it('passes --size with the cols,rows pair', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'My Title', 'C:/tmp/script.mjs');
+    const sizeIdx = plan.args.indexOf('--size');
+    expect(sizeIdx).toBeGreaterThanOrEqual(0);
+    expect(plan.args[sizeIdx + 1]).toBe('134,37');
+  });
+
+  it('passes --title with the supplied window title', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'My Title', 'C:/tmp/script.mjs');
+    const titleIdx = plan.args.indexOf('--title');
+    expect(titleIdx).toBeGreaterThanOrEqual(0);
+    expect(plan.args[titleIdx + 1]).toBe('My Title');
+  });
+
+  it('ends the args with a cmd /c node "<script>" invocation', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.args.slice(-3)).toEqual(['cmd', '/c', 'node "C:/tmp/script.mjs"']);
+  });
+});
+
+describe('planWindowsPopupSpawn — geometry available BUT wt.exe absent (mode CON fallback)', () => {
+  const geom = {
+    widthPx:  1344,
+    heightPx: 756,
+    xPx:      288,
+    yPx:      162,
+    cols:     134,
+    rows:     37,
+  };
+
+  it('targets cmd.exe as the spawn cmd (legacy console)', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.cmd).toBe('cmd.exe');
+  });
+
+  it('uses /c start /WAIT to open a new console window', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.args.slice(0, 3)).toEqual(['/c', 'start', '/WAIT']);
+  });
+
+  it('passes the title as the 4th arg (start title parameter)', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.args[3]).toBe('My Title');
+  });
+
+  it('embeds mode CON: COLS=… LINES=… in the inner cmd /c string', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'My Title', 'C:/tmp/script.mjs');
+    const innerCmd = plan.args[plan.args.length - 1];
+    expect(innerCmd).toContain('mode CON: COLS=134 LINES=37');
+    expect(innerCmd).toContain('node "C:/tmp/script.mjs"');
+  });
+
+  it('chains mode CON and node via && in the inner cmd /c string', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'My Title', 'C:/tmp/script.mjs');
+    const innerCmd = plan.args[plan.args.length - 1];
+    expect(innerCmd).toBe('mode CON: COLS=134 LINES=37 && node "C:/tmp/script.mjs"');
+  });
+});
+
+describe('planWindowsPopupSpawn — geometry null (detection-failure passthrough)', () => {
+  it('targets cmd.exe with the original /c start /WAIT title node script shape', () => {
+    const plan = planWindowsPopupSpawn(null, false, 'My Title', 'C:/tmp/script.mjs');
+    expect(plan.cmd).toBe('cmd.exe');
+    expect(plan.args).toEqual([
+      '/c', 'start', '/WAIT',
+      'My Title',
+      'node', 'C:/tmp/script.mjs',
+    ]);
+  });
+
+  it('passes through the original shape even when wt.exe IS available (no geom → no wt path)', () => {
+    const plan = planWindowsPopupSpawn(null, true, 'T', 'S');
+    expect(plan.cmd).toBe('cmd.exe');
+    expect(plan.args).toEqual(['/c', 'start', '/WAIT', 'T', 'node', 'S']);
+  });
+
+  it('does NOT include mode CON when geom is null (legacy default size applies)', () => {
+    const plan = planWindowsPopupSpawn(null, false, 'T', 'S');
+    const joinedArgs = plan.args.join(' ');
+    expect(joinedArgs).not.toContain('mode CON');
+  });
+});
+
+describe('planWindowsPopupSpawn — title and path passthrough', () => {
+  const geom = {
+    widthPx: 1344, heightPx: 756, xPx: 288, yPx: 162, cols: 134, rows: 37,
+  };
+
+  it('handles a title with spaces and an em-dash (real WINDOW_TITLE shape)', () => {
+    const plan = planWindowsPopupSpawn(geom, true, 'Nexpath — Action Required', 'C:/tmp/s.mjs');
+    const titleIdx = plan.args.indexOf('--title');
+    expect(plan.args[titleIdx + 1]).toBe('Nexpath — Action Required');
+  });
+
+  it('handles a script path with forward slashes (used after Windows path normalization)', () => {
+    const plan = planWindowsPopupSpawn(geom, false, 'T', 'C:/Users/me/AppData/Local/Temp/nexpath-sel-abc.mjs');
+    const innerCmd = plan.args[plan.args.length - 1];
+    expect(innerCmd).toContain('node "C:/Users/me/AppData/Local/Temp/nexpath-sel-abc.mjs"');
   });
 });
