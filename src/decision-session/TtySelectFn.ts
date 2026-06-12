@@ -531,12 +531,11 @@ function buildWindowsNewWindowSelectFn(store?: Store, projectRoot?: string): Sel
       // extra detection round-trip.
       const screen = await detectScreenResolution();
       const geom   = screen ? computePopupGeometry(screen) : null;
-      const hasWt  = windowsCommandExists('wt.exe');
 
       // Shared spawn closure. Reused below by spawnRootChooserFlow so the
       // sub-menu spawn callback uses the same dispatch + geometry.
       const spawnConsole: SpawnWindowFn = (title, script) => {
-        const plan = planWindowsPopupSpawn(geom, hasWt, title, script);
+        const plan = planWindowsPopupSpawn(geom, title, script);
         spawnSync(plan.cmd, plan.args, { stdio: 'ignore' });
       };
 
@@ -622,54 +621,30 @@ function commandExists(cmd: string): boolean {
   return r.status === 0;
 }
 
-/** Windows-side `where <cmd>` probe — returns true when the named executable is on %PATH%. Failures (missing `where`, spawnSync error) resolve to false so callers fall back to the legacy spawn path. */
-function windowsCommandExists(cmd: string): boolean {
-  try {
-    const r = spawnSync('where', [cmd], { stdio: 'pipe', timeout: 2000 });
-    return r?.status === 0;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Pure: build the `cmd + args` pair to spawn a Windows popup window
  * running the given .mjs `scriptPath` under the given window `title`.
  *
- * Three-branch dispatch:
- *   1. When a geometry IS available AND `wt.exe` (Windows Terminal) is
- *      on %PATH%, use `wt --pos X,Y --size COLS,ROWS new-tab --title T
- *      cmd /c node "<script>"`. This sizes + positions the window
- *      exactly.
- *   2. When a geometry IS available but `wt.exe` is NOT on %PATH%,
- *      fall back to `cmd /c start /WAIT "T" cmd /c "mode CON: COLS=X
- *      LINES=Y && node <script>"`. The legacy conhost honours
- *      `mode CON`; the window opens at whatever position Windows
- *      chooses, sized to the requested cells.
- *   3. When NO geometry is available (detection failed), use the
- *      original `cmd /c start /WAIT "T" node <script>` so the spawn
- *      site is byte-identical to the pre-change behaviour.
+ * Two-branch dispatch — both branches use `cmd /c start /WAIT` so the
+ * parent `spawnSync` blocks for the entire popup lifetime and the temp
+ * `.mjs` survives until the spawned `node` invocation has loaded it:
+ *
+ *   1. When a geometry IS available, `cmd /c start /WAIT "T" cmd /c
+ *      "mode CON: COLS=X LINES=Y && node <script>"`. `mode CON` sets
+ *      the console size in cells; the window opens at whatever
+ *      position Windows chooses.
+ *   2. When NO geometry is available (detection failed), the original
+ *      `cmd /c start /WAIT "T" node <script>` shape — byte-identical
+ *      to the pre-change spawn site so any host where detection
+ *      cannot run keeps the previous behaviour.
  *
  * Exported for unit testability.
  */
 export function planWindowsPopupSpawn(
-  geom:               PopupGeometry | null,
-  hasWindowsTerminal: boolean,
-  title:              string,
-  scriptPath:         string,
+  geom:       PopupGeometry | null,
+  title:      string,
+  scriptPath: string,
 ): { cmd: string; args: string[] } {
-  if (geom && hasWindowsTerminal) {
-    return {
-      cmd:  'wt.exe',
-      args: [
-        '--pos',  `${geom.xPx},${geom.yPx}`,
-        '--size', `${geom.cols},${geom.rows}`,
-        'new-tab',
-        '--title', title,
-        'cmd', '/c', `node "${scriptPath}"`,
-      ],
-    };
-  }
   if (geom) {
     const sized = `mode CON: COLS=${geom.cols} LINES=${geom.rows} && node "${scriptPath}"`;
     return {
