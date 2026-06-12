@@ -688,12 +688,23 @@ interface TerminalSpec {
   args: (title: string, scriptFile: string) => string[];
   /** Optional extra validation after commandExists passes (e.g. version check). */
   validate?: () => boolean;
+  /**
+   * Optional geometry args inserted BEFORE the regular `args` output.
+   * Returns [] when the emulator has no geometry flag (konsole, wezterm,
+   * xdg-terminal-exec, x-terminal-emulator) — the spawn then runs at the
+   * emulator's default size. Cells-based emulators consume the `cols` +
+   * `rows` fields of the geometry; pixel-based emulators consume
+   * `widthPx` + `heightPx`; X11 emulators that accept a geometry offset
+   * append `+xPx+yPx` for centering. Wayland emulators ignore position.
+   */
+  geometryArgs?: (geom: PopupGeometry) => string[];
 }
 
 const LINUX_TERMINALS: TerminalSpec[] = [
   {
     cmd: 'xdg-terminal-exec',
     args: (_t, s) => ['node', s],
+    // No direct geometry flag — runs at backend-emulator default.
   },
   {
     cmd: 'gnome-terminal',
@@ -705,40 +716,77 @@ const LINUX_TERMINALS: TerminalSpec[] = [
       if (!m) return true; // can't determine version — assume OK
       return parseInt(m[1]) > 3 || (parseInt(m[1]) === 3 && parseInt(m[2]) >= 36);
     },
+    geometryArgs: (g) => [`--geometry=${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
   },
   {
     cmd: 'konsole',
     args: (t, s) => ['-p', `tabtitle=${t}`, '-e', 'node', s],
+    // No direct geometry flag — runs at konsolerc default.
   },
   {
     cmd: 'xfce4-terminal',
     args: (t, s) => ['--disable-server', `--title=${t}`, '-e', `node ${s}`],
+    geometryArgs: (g) => [`--geometry=${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
   },
   {
     cmd: 'kitty',
     args: (t, s) => ['--title', t, 'node', s],
+    geometryArgs: (g) => [
+      '-o', `initial_window_width=${g.widthPx}px`,
+      '-o', `initial_window_height=${g.heightPx}px`,
+      '-o', 'remember_window_size=no',
+    ],
   },
   {
     cmd: 'alacritty',
     args: (t, s) => ['--title', t, '-e', 'node', s],
+    geometryArgs: (g) => ['--dimensions', `${g.cols}`, `${g.rows}`],
   },
   {
     cmd: 'wezterm',
     args: (_t, s) => ['start', '--', 'node', s],
+    // No direct geometry flag — runs at wezterm config default.
   },
   {
     cmd: 'foot',
     args: (t, s) => [`--title=${t}`, 'node', s],
+    geometryArgs: (g) => [`--window-size-pixels=${g.widthPx}x${g.heightPx}`],
   },
   {
     cmd: 'x-terminal-emulator',
     args: (_t, s) => ['-e', 'node', s],
+    // Symlink — depends on backend emulator. Skip geometry.
   },
   {
     cmd: 'xterm',
     args: (t, s) => ['-T', t, '-fa', 'Monospace', '-fs', '12', '-e', 'node', s],
+    geometryArgs: (g) => ['-geometry', `${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
   },
 ];
+
+/**
+ * Pure: build the `cmd + args` pair for spawning a Linux terminal-emulator
+ * popup window with the given title + script under the given geometry.
+ *
+ * When the spec has no `geometryArgs` field OR `geom` is null, the spawn
+ * args are byte-identical to the pre-Phase-3 shape — the popup opens at
+ * the emulator's default size. When both are present, the per-emulator
+ * geometry args are prepended to the existing args tail.
+ *
+ * Exported for unit testability.
+ */
+export function planLinuxPopupSpawn(
+  spec:       TerminalSpec,
+  geom:       PopupGeometry | null,
+  title:      string,
+  scriptPath: string,
+): { cmd: string; args: string[] } {
+  const baseArgs = spec.args(title, scriptPath);
+  if (!geom || !spec.geometryArgs) {
+    return { cmd: spec.cmd, args: baseArgs };
+  }
+  return { cmd: spec.cmd, args: [...spec.geometryArgs(geom), ...baseArgs] };
+}
 
 /**
  * Detect an installed terminal emulator that supports blocking execution.
@@ -769,8 +817,7 @@ function buildLinuxNewWindowSelectFn(store?: Store, projectRoot?: string): Selec
 
   const clackUrl = resolveClackEsmUrl();
 
-  return (opts) =>
-    new Promise<string | symbol>((resolve) => {
+  return async (opts) => {
       const id         = randomUUID();
       const optFile    = join(tmpdir(), `nexpath-opt-${id}.json`);
       const resultFile = join(tmpdir(), `nexpath-res-${id}.txt`);
@@ -806,7 +853,20 @@ function buildLinuxNewWindowSelectFn(store?: Store, projectRoot?: string): Selec
 
       process.stderr.write('\n[nexpath] Please select an action in the new window\n');
 
-      spawnSync(terminal.cmd, terminal.args(WINDOW_TITLE, scriptFile), { stdio: 'ignore' });
+      // Compute geometry ONCE per select call and share with the sub-menu
+      // spawn callback so the Ctrl+T-triggered root chooser inherits the
+      // same 70% sizing without an extra detection round-trip.
+      const screen = await detectScreenResolution();
+      const geom   = screen ? computePopupGeometry(screen) : null;
+
+      // Shared spawn closure — captures spec + geom. Used by the MAIN popup
+      // below AND by the sub-menu spawn callback inside spawnRootChooserFlow.
+      const spawnConsole: SpawnWindowFn = (title, script) => {
+        const plan = planLinuxPopupSpawn(terminal, geom, title, script);
+        spawnSync(plan.cmd, plan.args, { stdio: 'ignore' });
+      };
+
+      spawnConsole(WINDOW_TITLE, scriptFile);
 
       let result: string | symbol = Symbol('cancelled');
       if (existsSync(resultFile)) {
@@ -816,9 +876,7 @@ function buildLinuxNewWindowSelectFn(store?: Store, projectRoot?: string): Selec
         } else if (raw === '__NEXPATH_OPT_OUT__') {
           result = OPT_OUT_SENTINEL;
         } else if (raw === '__ROOT_MENU_PENDING__') {
-          result = spawnRootChooserFlow(clackUrl, (title, script) => {
-            spawnSync(terminal.cmd, terminal.args(title, script), { stdio: 'ignore' });
-          }, store, projectRoot);
+          result = spawnRootChooserFlow(clackUrl, spawnConsole, store, projectRoot);
         } else if (raw.startsWith('__FREQ__:')) {
           result = raw;
         } else if (raw.startsWith('__ROLE__:')) {
@@ -832,8 +890,8 @@ function buildLinuxNewWindowSelectFn(store?: Store, projectRoot?: string): Selec
         try { unlinkSync(f); } catch { /* ignore */ }
       }
 
-      resolve(result);
-    });
+      return result;
+    };
 }
 
 // ── macOS: new Terminal.app window via osascript ─────────────────────────────

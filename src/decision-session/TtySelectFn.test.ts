@@ -29,6 +29,7 @@ const {
   runFrequencySubMenu,
   runRoleSubMenu,
   planWindowsPopupSpawn,
+  planLinuxPopupSpawn,
 } = await import('./TtySelectFn.js');
 const { OPT_OUT_SENTINEL }       = await import('./DecisionSession.js');
 const { SHOW_SIMPLER, SKIP_NOW } = await import('./options.js');
@@ -1939,5 +1940,182 @@ describe('planWindowsPopupSpawn — title and path passthrough', () => {
     const plan = planWindowsPopupSpawn(geom, false, 'T', 'C:/Users/me/AppData/Local/Temp/nexpath-sel-abc.mjs');
     const innerCmd = plan.args[plan.args.length - 1];
     expect(innerCmd).toContain('node "C:/Users/me/AppData/Local/Temp/nexpath-sel-abc.mjs"');
+  });
+});
+
+// ── planLinuxPopupSpawn ──────────────────────────────────────────────────────
+//
+// Pure-function unit tests for the Linux spawn-plan helper. Each TerminalSpec
+// either supplies geometry args (gnome-terminal / xterm / xfce4-terminal /
+// alacritty / kitty / foot) or omits them (konsole / wezterm / xdg-terminal-
+// exec / x-terminal-emulator). The helper prepends the geometry args (when
+// both spec and geom are present) to the existing args tail; otherwise it
+// returns the base args byte-identical to the pre-Phase-3 shape.
+
+const sampleGeom = {
+  widthPx:  1344,
+  heightPx: 756,
+  xPx:      288,
+  yPx:      162,
+  cols:     134,
+  rows:     37,
+};
+
+describe('planLinuxPopupSpawn — geometry args per emulator (cells-based)', () => {
+  it('gnome-terminal prepends --geometry=COLSxROWS+X+Y', () => {
+    const spec = {
+      cmd:  'gnome-terminal',
+      args: (t: string, s: string) => ['--wait', `--title=${t}`, '--', 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => [`--geometry=${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.cmd).toBe('gnome-terminal');
+    expect(plan.args[0]).toBe('--geometry=134x37+288+162');
+    expect(plan.args.slice(1)).toEqual(['--wait', '--title=T', '--', 'node', '/tmp/s.mjs']);
+  });
+
+  it('xterm prepends -geometry COLSxROWS+X+Y (separate flag + value)', () => {
+    const spec = {
+      cmd:  'xterm',
+      args: (t: string, s: string) => ['-T', t, '-e', 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => ['-geometry', `${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.cmd).toBe('xterm');
+    expect(plan.args[0]).toBe('-geometry');
+    expect(plan.args[1]).toBe('134x37+288+162');
+    expect(plan.args.slice(2)).toEqual(['-T', 'T', '-e', 'node', '/tmp/s.mjs']);
+  });
+
+  it('xfce4-terminal prepends --geometry=COLSxROWS+X+Y', () => {
+    const spec = {
+      cmd:  'xfce4-terminal',
+      args: (t: string, s: string) => ['--disable-server', `--title=${t}`, '-e', `node ${s}`],
+      geometryArgs: (g: typeof sampleGeom) => [`--geometry=${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.args[0]).toBe('--geometry=134x37+288+162');
+  });
+
+  it('alacritty prepends --dimensions COLS ROWS (no centering offset)', () => {
+    const spec = {
+      cmd:  'alacritty',
+      args: (t: string, s: string) => ['--title', t, '-e', 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => ['--dimensions', `${g.cols}`, `${g.rows}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.args.slice(0, 3)).toEqual(['--dimensions', '134', '37']);
+    expect(plan.args.slice(3)).toEqual(['--title', 'T', '-e', 'node', '/tmp/s.mjs']);
+  });
+});
+
+describe('planLinuxPopupSpawn — geometry args per emulator (pixel-based)', () => {
+  it('kitty prepends -o initial_window_width / height with explicit px suffix + remember_window_size=no', () => {
+    const spec = {
+      cmd:  'kitty',
+      args: (t: string, s: string) => ['--title', t, 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => [
+        '-o', `initial_window_width=${g.widthPx}px`,
+        '-o', `initial_window_height=${g.heightPx}px`,
+        '-o', 'remember_window_size=no',
+      ],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.args.slice(0, 6)).toEqual([
+      '-o', 'initial_window_width=1344px',
+      '-o', 'initial_window_height=756px',
+      '-o', 'remember_window_size=no',
+    ]);
+    expect(plan.args.slice(6)).toEqual(['--title', 'T', 'node', '/tmp/s.mjs']);
+  });
+
+  it('foot prepends --window-size-pixels=WxH', () => {
+    const spec = {
+      cmd:  'foot',
+      args: (t: string, s: string) => [`--title=${t}`, 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => [`--window-size-pixels=${g.widthPx}x${g.heightPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan.args[0]).toBe('--window-size-pixels=1344x756');
+  });
+});
+
+describe('planLinuxPopupSpawn — emulators WITHOUT a geometryArgs field (default size)', () => {
+  it('konsole returns base args unchanged (no geometry flag exists)', () => {
+    const spec = {
+      cmd:  'konsole',
+      args: (t: string, s: string) => ['-p', `tabtitle=${t}`, '-e', 'node', s],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({
+      cmd:  'konsole',
+      args: ['-p', 'tabtitle=T', '-e', 'node', '/tmp/s.mjs'],
+    });
+  });
+
+  it('wezterm returns base args unchanged', () => {
+    const spec = {
+      cmd:  'wezterm',
+      args: (_t: string, s: string) => ['start', '--', 'node', s],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({ cmd: 'wezterm', args: ['start', '--', 'node', '/tmp/s.mjs'] });
+  });
+
+  it('xdg-terminal-exec returns base args unchanged (backend-emulator decides)', () => {
+    const spec = {
+      cmd:  'xdg-terminal-exec',
+      args: (_t: string, s: string) => ['node', s],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({ cmd: 'xdg-terminal-exec', args: ['node', '/tmp/s.mjs'] });
+  });
+
+  it('x-terminal-emulator returns base args unchanged (symlink — depends on backend)', () => {
+    const spec = {
+      cmd:  'x-terminal-emulator',
+      args: (_t: string, s: string) => ['-e', 'node', s],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({ cmd: 'x-terminal-emulator', args: ['-e', 'node', '/tmp/s.mjs'] });
+  });
+});
+
+describe('planLinuxPopupSpawn — geometry null (detection-failure passthrough)', () => {
+  it('returns base args byte-identical to pre-Phase-3 shape when geom is null (even if spec has geometryArgs)', () => {
+    const spec = {
+      cmd:  'gnome-terminal',
+      args: (t: string, s: string) => ['--wait', `--title=${t}`, '--', 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => [`--geometry=${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, null, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({
+      cmd:  'gnome-terminal',
+      args: ['--wait', '--title=T', '--', 'node', '/tmp/s.mjs'],
+    });
+  });
+
+  it('returns base args unchanged when geom is null AND spec has no geometryArgs', () => {
+    const spec = {
+      cmd:  'konsole',
+      args: (t: string, s: string) => ['-p', `tabtitle=${t}`, '-e', 'node', s],
+    };
+    const plan = planLinuxPopupSpawn(spec, null, 'T', '/tmp/s.mjs');
+    expect(plan).toEqual({
+      cmd:  'konsole',
+      args: ['-p', 'tabtitle=T', '-e', 'node', '/tmp/s.mjs'],
+    });
+  });
+});
+
+describe('planLinuxPopupSpawn — title and path passthrough', () => {
+  it('passes the title through both base-args and geometry path', () => {
+    const spec = {
+      cmd:  'xterm',
+      args: (t: string, s: string) => ['-T', t, '-e', 'node', s],
+      geometryArgs: (g: typeof sampleGeom) => ['-geometry', `${g.cols}x${g.rows}+${g.xPx}+${g.yPx}`],
+    };
+    const plan = planLinuxPopupSpawn(spec, sampleGeom, 'Nexpath — Action Required', '/tmp/s.mjs');
+    expect(plan.args).toContain('Nexpath — Action Required');
   });
 });
