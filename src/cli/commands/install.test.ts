@@ -1019,6 +1019,7 @@ describe('installAction', () => {
 
   it('does NOT double-invoke the claude-code adapter from the registry loop', async () => {
     const { dir, cleanup } = tmpDir();
+    markClaudeInstalled(dir);
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       vi.stubEnv('HOME', dir);
