@@ -837,52 +837,60 @@ describe('render-loop — writeFrame cursor management', () => {
     return Buffer.concat(chunks).toString('utf8');
   }
 
-  // ── writeFrame save/restore + per-line erase primitives ───────────────────
+  // ── writeFrame alt-buffer + cursor-home + per-line erase primitives ──────
   //
-  // The save/restore + per-line erase primitives replace the row-counted
-  // \x1b[A + \x1b[2K rewind:
+  // The alt-buffer + cursor-home approach replaces the cursor save/restore
+  // pair entirely, because neither the ANSI variant (\x1b[s / \x1b[u) nor
+  // the DEC variant (\x1b7 / \x1b8) of cursor save/restore is reliably
+  // honored across the popup spawn context on Ubuntu gnome-terminal,
+  // macOS Terminal.app, and Windows Terminal. Both variants were
+  // observed to be silently dropped in production.
   //
-  //   - \x1b7  (DEC DECSC) saves the cursor position ONCE before the first frame
-  //   - \x1b8  (DEC DECRC) + \x1b[J restore to that saved position and clear from
-  //     there to end of screen on every subsequent frame
-  //   - \x1b[K clears each line before writing its content so a shorter
-  //     new-frame line never leaves trailing characters from a longer
-  //     prior-frame line on the same row (per-line overlap fix)
+  //   - \x1b[?1049h  enters the alt screen buffer ONCE at renderLoop start
+  //                  — a dedicated, fresh, scrollback-free screen state
+  //   - \x1b[H       cursor home (row 1, col 1) — ABSOLUTE positioning
+  //                  emitted at the start of EVERY frame (no save needed)
+  //   - \x1b[J       clear from cursor to end of screen
+  //   - \x1b[K       clears each line before writing its content (per-line
+  //                  overlap fix — unchanged from prior takes)
+  //   - \x1b[?1049l  exits the alt screen buffer in the renderLoop finally
+  //                  block, restoring the user's prior terminal state
   //
-  // The DEC variant (\x1b7 / \x1b8) is the original VT100 cursor save/restore
-  // pair, standardized since 1978. Universally supported across xterm-derived
-  // terminals, macOS Terminal.app, and Windows Terminal. The ANSI variant
-  // (\x1b[s / \x1b[u) is silently dropped by macOS Terminal.app and Windows
-  // Terminal in the popup spawn context, so we standardize on DEC.
-  describe('writeFrame save/restore + per-line erase primitives', () => {
-    it('emits \\x1b7 exactly once before the first frame content (DEC cursor position save)', async () => {
+  // Alt buffer + cursor home is the standard TUI mechanism (vim, less,
+  // htop, dialog all use it). It works correctly in every popup spawn
+  // context because it doesn't depend on a previously-saved state.
+  describe('writeFrame alt-buffer + cursor-home + per-line erase primitives', () => {
+    it('emits \\x1b[?1049h exactly once before the first frame content (alt-buffer enter)', async () => {
       const seen = await captureRenderOutput(['enter']);
-      const saveMatches = seen.match(/\x1b7/g) || [];
-      expect(saveMatches).toHaveLength(1);
-      // The save must precede the first frame's content so the saved
-      // position captures the popup's true starting row, not a row
-      // after content already pushed the cursor down.
-      const saveIdx         = seen.indexOf('\x1b7');
-      // Pinch label 'P' / question 'Q' / option label 'A' — all uppercase.
-      // \x1b[?25l, \x1b7, \x1b[K, \x1b8 use only digits and lowercase
-      // parameters, so the first uppercase char is content.
+      const enterMatches = seen.match(/\x1b\[\?1049h/g) || [];
+      expect(enterMatches).toHaveLength(1);
+      // The alt-buffer enter must precede the first frame's content so
+      // the writeFrame body's \x1b[H positions the cursor inside the
+      // fresh alt-buffer screen, not the user's normal scrollback.
+      const enterIdx        = seen.indexOf('\x1b[?1049h');
       const firstContentIdx = seen.search(/[A-Z]/);
-      expect(saveIdx).toBeGreaterThanOrEqual(0);
-      expect(firstContentIdx).toBeGreaterThan(saveIdx);
+      expect(enterIdx).toBeGreaterThanOrEqual(0);
+      expect(firstContentIdx).toBeGreaterThan(enterIdx);
     });
 
-    it('emits \\x1b8 + \\x1b[J on the second frame instead of row-counted cursor-up walks', async () => {
+    it('emits \\x1b[H + \\x1b[J on every frame including the first (cursor home + clear)', async () => {
       const seen = await captureRenderOutput(['arrow-down', 'enter']);
-      expect(seen).toContain('\x1b8');
-      expect(seen).toContain('\x1b[J');
-      // The row-counted rewind primitives are replaced; should NOT
-      // appear when save/restore is wired.
+      // 2 writeFrame calls expected: initial frame + arrow-down redraw.
+      // Each emits \x1b[H + \x1b[J at the top.
+      const homeCount  = (seen.match(/\x1b\[H/g) || []).length;
+      const clearCount = (seen.match(/\x1b\[J/g) || []).length;
+      expect(homeCount).toBeGreaterThanOrEqual(2);
+      expect(clearCount).toBeGreaterThanOrEqual(2);
+      // The row-counted rewind primitives are replaced; should NOT appear.
       expect(seen.match(/\x1b\[A/g)).toBeNull();
       expect(seen.match(/\x1b\[2K/g)).toBeNull();
-      // The ANSI-variant save/restore pair must also not appear — only
-      // DEC variant is shipped to ensure cross-OS compatibility.
+      // The ANSI-variant cursor save/restore pair must not appear.
       expect(seen.match(/\x1b\[s/g)).toBeNull();
       expect(seen.match(/\x1b\[u/g)).toBeNull();
+      // The DEC-variant cursor save/restore pair must not appear either —
+      // both variants are unreliable in the popup spawn context.
+      expect(seen.match(/\x1b7/g)).toBeNull();
+      expect(seen.match(/\x1b8/g)).toBeNull();
     });
 
     it('emits \\x1b[K before each frame-content line (per-line erase)', async () => {
@@ -911,17 +919,35 @@ describe('render-loop — writeFrame cursor management', () => {
         ],
       }, ['arrow-down', 'enter']);
 
-      // Locate the frame-2 boundary: \x1b8 is the DEC restore that
-      // precedes frame 2's content writes.
-      const restoreIdx = seen.indexOf('\x1b8');
-      expect(restoreIdx).toBeGreaterThan(0);
-      const frame2 = seen.substring(restoreIdx);
+      // Locate the frame-2 boundary: the SECOND \x1b[H emission is the
+      // cursor home that precedes frame 2's content writes. (The first
+      // \x1b[H precedes frame 1.)
+      const firstHomeIdx  = seen.indexOf('\x1b[H');
+      expect(firstHomeIdx).toBeGreaterThanOrEqual(0);
+      const secondHomeIdx = seen.indexOf('\x1b[H', firstHomeIdx + 1);
+      expect(secondHomeIdx).toBeGreaterThan(firstHomeIdx);
+      const frame2 = seen.substring(secondHomeIdx);
 
       // Frame 2 must have at least one \x1b[K before each line write.
       const frame2LineCount  = (frame2.match(/\n/g)    || []).length;
       const frame2ClearCount = (frame2.match(/\x1b\[K/g) || []).length;
       expect(frame2LineCount).toBeGreaterThan(0);
       expect(frame2ClearCount).toBeGreaterThanOrEqual(frame2LineCount);
+    });
+
+    it('emits \\x1b[?1049l exactly once at the end (alt-buffer exit in finally block)', async () => {
+      const seen = await captureRenderOutput(['enter']);
+      const exitMatches = seen.match(/\x1b\[\?1049l/g) || [];
+      expect(exitMatches).toHaveLength(1);
+      // The exit must be the LAST control sequence in the captured stream
+      // so the user's prior terminal state is restored cleanly.
+      expect(seen.endsWith('\x1b[?1049l')).toBe(true);
+      // The cursor-show must precede the alt-buffer exit so the cursor
+      // visibility is restored before the screen state flip.
+      const showIdx = seen.lastIndexOf('\x1b[?25h');
+      const exitIdx = seen.lastIndexOf('\x1b[?1049l');
+      expect(showIdx).toBeGreaterThanOrEqual(0);
+      expect(showIdx).toBeLessThan(exitIdx);
     });
   });
 });
@@ -1307,7 +1333,7 @@ describe('render-loop — page-header emission + cursor visibility', () => {
       expect(hideIdx).toBeLessThan(markerIdx);
     });
 
-    it('emits \\x1b[?25h (show-cursor) after iterator exhausts (cancel path)', async () => {
+    it('emits \\x1b[?25h (show-cursor) before alt-buffer exit on iterator-exhaust (cancel path)', async () => {
       const out = new PassThrough();
       const chunks: Buffer[] = [];
       out.on('data', (c: Buffer) => chunks.push(c));
@@ -1317,10 +1343,17 @@ describe('render-loop — page-header emission + cursor visibility', () => {
         keyEvents: (async function*() { /* no events — iterator exhausts immediately */ })(),
       });
       const seen = Buffer.concat(chunks).toString('utf8');
-      expect(seen.endsWith('\x1b[?25h')).toBe(true);
+      // The stream ends with \x1b[?1049l (alt-buffer exit), preceded by
+      // \x1b[?25h (cursor show). Show-cursor must precede the alt-buffer
+      // exit so the cursor visibility is restored before the screen flip.
+      expect(seen.endsWith('\x1b[?1049l')).toBe(true);
+      const showIdx = seen.lastIndexOf('\x1b[?25h');
+      const exitIdx = seen.lastIndexOf('\x1b[?1049l');
+      expect(showIdx).toBeGreaterThanOrEqual(0);
+      expect(showIdx).toBeLessThan(exitIdx);
     });
 
-    it('emits \\x1b[?25h on Enter (return picked)', async () => {
+    it('emits \\x1b[?25h before alt-buffer exit on Enter (return picked)', async () => {
       const out = new PassThrough();
       const chunks: Buffer[] = [];
       out.on('data', (c: Buffer) => chunks.push(c));
@@ -1330,10 +1363,14 @@ describe('render-loop — page-header emission + cursor visibility', () => {
         keyEvents: (async function*() { yield { name: 'enter' as const }; })(),
       });
       const seen = Buffer.concat(chunks).toString('utf8');
-      expect(seen.endsWith('\x1b[?25h')).toBe(true);
+      expect(seen.endsWith('\x1b[?1049l')).toBe(true);
+      const showIdx = seen.lastIndexOf('\x1b[?25h');
+      const exitIdx = seen.lastIndexOf('\x1b[?1049l');
+      expect(showIdx).toBeGreaterThanOrEqual(0);
+      expect(showIdx).toBeLessThan(exitIdx);
     });
 
-    it('does not emit cursor hide/show when isTTY is false (non-TTY)', async () => {
+    it('does not emit cursor hide/show OR alt-buffer enter/exit when isTTY is false (non-TTY)', async () => {
       const prevIsTTY = process.stdout.isTTY;
       process.stdout.isTTY = false;
       try {
@@ -1348,6 +1385,8 @@ describe('render-loop — page-header emission + cursor visibility', () => {
         const seen = Buffer.concat(chunks).toString('utf8');
         expect(seen.includes('\x1b[?25l')).toBe(false);
         expect(seen.includes('\x1b[?25h')).toBe(false);
+        expect(seen.includes('\x1b[?1049h')).toBe(false);
+        expect(seen.includes('\x1b[?1049l')).toBe(false);
       } finally {
         process.stdout.isTTY = prevIsTTY;
       }

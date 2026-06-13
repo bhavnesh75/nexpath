@@ -819,40 +819,39 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
     scrollOffset:    0,
   };
 
-  // Track whether the next writeFrame call is the first frame. The first
-  // frame writes content from the saved cursor position downward; every
-  // subsequent frame issues `\x1b8` (DEC DECRC — restore to the saved
-  // position) + `\x1b[J` (clear from there to end of screen) before
-  // re-writing the content, so no row-counted cursor walk is needed.
-  let isFirstFrame = true;
-
-  // Hide the terminal cursor for the duration of the popup. The popup is a
-  // non-text-input UI (arrow keys + Space + Enter); a blinking cursor row
-  // below the last emission has no semantic role and is perceived as a
-  // stray glitch. Universally supported via DECTCEM (`?25l` / `?25h`) on
-  // every modern terminal. Restored unconditionally in `finally` so Esc /
-  // Ctrl+C cancel, Enter return, and uncaught exception paths all
-  // restore the cursor. Skipped on non-TTY output so captured streams
-  // stay clean of control sequences.
+  // Enter the alternate screen buffer and hide the terminal cursor for
+  // the duration of the popup. The popup is a non-text-input UI (arrow
+  // keys + Space + Enter); a blinking cursor row below the last emission
+  // has no semantic role and is perceived as a stray glitch. Both
+  // primitives are universally supported across xterm-derived terminals,
+  // macOS Terminal.app, and Windows Terminal. Skipped on non-TTY output
+  // so captured streams stay clean of control sequences.
   //
-  // The cursor-save (`\x1b7` — DEC DECSC) runs in the SAME conditional
-  // block, immediately AFTER the hide. The save captures the popup's true
-  // starting row — the row where the first content line is about to be
-  // written — independent of any console banner that may have pushed the
-  // popup down before node started. Subsequent frames restore to this
-  // exact row via `\x1b8` (DEC DECRC).
+  // The alternate screen buffer (`\x1b[?1049h` enter / `\x1b[?1049l`
+  // exit) gives the popup a dedicated, fresh, scrollback-free screen
+  // state. Inside the alt buffer, `\x1b[H` (cursor home — row 1, col 1)
+  // and `\x1b[J` (clear from cursor to end of screen) work deterministically
+  // because there is nothing in the buffer's state to confuse them. This
+  // replaces the cursor save/restore pair — neither the ANSI variant
+  // (`\x1b[s` / `\x1b[u`) nor the DEC variant (`\x1b7` / `\x1b8`) is
+  // reliably honored across the popup spawn context (the spawned terminal
+  // window opened by TtySelectFn). Both variants were silently dropped
+  // on Ubuntu gnome-terminal, macOS Terminal.app, and Windows Terminal,
+  // causing each redraw to write BELOW the previous frame instead of
+  // overwriting it. Alt buffer + absolute positioning sidesteps that
+  // entirely — it's the same mechanism vim, less, htop, and dialog use.
   //
-  // We use the DEC variant (`\x1b7` / `\x1b8`) rather than the ANSI variant
-  // (`\x1b[s` / `\x1b[u`) because the DEC variant is the original VT100
-  // standard (1978) and is universally honored across xterm-derived
-  // terminals, macOS Terminal.app, and Windows Terminal. The ANSI variant
-  // is silently dropped on macOS Terminal.app and on Windows Terminal in
-  // the popup spawn context, which causes the redraw to write below the
-  // previous frame instead of overwriting it.
+  // Cursor visibility (DECTCEM `?25l` / `?25h`) is set INSIDE the alt
+  // buffer state, immediately after the alt-buffer enter. The exit
+  // sequence in the `finally` block runs in reverse order: show the
+  // cursor first, then exit the alt buffer — so the user's prior
+  // terminal state (cursor visibility, content) is restored cleanly
+  // regardless of whether the popup ends via Enter, Esc, Ctrl+C, an
+  // iterator-exhaust cancel, or an uncaught exception.
   const cursorWasHidden = process.stdout.isTTY === true;
   if (cursorWasHidden) {
+    out.write('\x1b[?1049h');
     out.write('\x1b[?25l');
-    out.write('\x1b7');
   }
 
   const writeFrame = () => {
@@ -864,15 +863,16 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
       state = { ...state, scrollOffset: layout.viewport.appliedScrollOffset };
     }
 
-    // Cursor rewind: on every frame after the first, restore the cursor
-    // to the saved popup-start position (`\x1b8` — DEC DECRC) and clear
-    // from there to the end of the visible screen (`\x1b[J`). This pair
-    // replaces the row-counted `\x1b[A` + `\x1b[2K` walk — no row count
-    // needed, no per-OS undercount risk, no banner-offset miscount.
-    // Skipped on non-TTY output (pipe / redirect / CI) so the captured
-    // stream stays clean of ANSI control sequences.
-    if (!isFirstFrame && process.stdout.isTTY) {
-      out.write('\x1b8');
+    // Cursor rewind: emit `\x1b[H` (cursor home — row 1, col 1) and
+    // `\x1b[J` (clear from cursor to end of visible screen) at the START
+    // of EVERY frame. ABSOLUTE positioning — no save/restore primitive
+    // needed. Works the same on the first frame (alt buffer is empty,
+    // so `\x1b[H` + `\x1b[J` is a no-op visually) and on every
+    // subsequent frame (overwrites the prior frame in place). Skipped
+    // on non-TTY output (pipe / redirect / CI) so the captured stream
+    // stays clean of ANSI control sequences.
+    if (process.stdout.isTTY) {
+      out.write('\x1b[H');
       out.write('\x1b[J');
     }
 
@@ -888,8 +888,6 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
       out.write(line);
       out.write('\n');
     }
-
-    isFirstFrame = false;
   };
 
   try {
@@ -952,10 +950,20 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
     // Iterator exhausted without a terminal event — treat as cancel.
     return null;
   } finally {
-    // Restore the terminal cursor regardless of how we exit: Enter
-    // resolved with `return picked`, Esc/Ctrl+C with `return null`,
-    // iterator exhaustion with `return null`, or any thrown exception.
-    if (cursorWasHidden) out.write('\x1b[?25h');
+    // Restore the terminal cursor visibility AND exit the alternate
+    // screen buffer regardless of how we exit: Enter resolved with
+    // `return picked`, Esc/Ctrl+C with `return null`, iterator
+    // exhaustion with `return null`, or any thrown exception.
+    //
+    // Order matters: show the cursor first (inside the alt buffer
+    // state), then exit the alt buffer. This way the user's prior
+    // terminal state (cursor visibility, content, scrollback) is
+    // restored cleanly when the alt buffer flips back to the normal
+    // screen buffer.
+    if (cursorWasHidden) {
+      out.write('\x1b[?25h');
+      out.write('\x1b[?1049l');
+    }
   }
 }
 
