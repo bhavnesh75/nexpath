@@ -32,7 +32,7 @@ export type WindsurfHookEvent = (typeof WINDSURF_HOOK_EVENTS)[number];
 export const WINDSURF_WRITE_EVENTS = ['pre_user_prompt', 'post_cascade_response'] as const;
 export type WindsurfWriteEvent = (typeof WINDSURF_WRITE_EVENTS)[number];
 
-interface HookEntry { command?: string; [k: string]: unknown }
+interface HookEntry { command?: string; powershell?: string; [k: string]: unknown }
 
 /** Path to Windsurf's user-level hooks file: `~/.codeium/windsurf/hooks.json`. */
 export function getWindsurfHooksPath(home: string): string {
@@ -40,25 +40,75 @@ export function getWindsurfHooksPath(home: string): string {
 }
 
 /**
- * The hooks.json command for one event: `node "<cliPath>" windsurf-hook <event>`.
- * Absolute node + cli path (forward slashes for Windows safety) so it runs under
- * Windsurf's sanitized hook env — the same shape as the Claude Code hook command.
+ * The macOS/Linux hook command (Cascade runs `command` via **`bash -c`**):
+ *   `"<nodePath>" "<cliPath>" windsurf-hook <event>`
+ *
+ * **Absolute `node` AND cli path**, both forward-slashed. The language server spawns
+ * hook commands with a **sanitized PATH** that may not contain `node`, so a bare
+ * `node` can ENOENT silently → the hook never runs → capture is 0. Embedding
+ * `process.execPath` (the absolute node binary running `nexpath install`) removes
+ * that PATH dependency. `nodePath` is injectable for tests.
  */
-export function buildWindsurfHookCommand(cliPath: string, event: WindsurfHookEvent): string {
+export function buildWindsurfHookCommand(
+  cliPath: string,
+  event: WindsurfHookEvent,
+  nodePath: string = process.execPath,
+): string {
+  const node = nodePath.replace(/\\/g, '/');
   const abs = resolve(cliPath).replace(/\\/g, '/');
-  return `node "${abs}" windsurf-hook ${event}`;
+  return `"${node}" "${abs}" windsurf-hook ${event}`;
+}
+
+/**
+ * The Windows hook command (Cascade runs `powershell` via **`powershell -Command`**).
+ *
+ * Two PowerShell facts make the plain `command` field fail on Windows — which is
+ * why capture worked on Linux (bash) but was 0 on Devin/Devin Next (Windows):
+ *   1. PowerShell will NOT execute an executable given as a *quoted* path unless it
+ *      is preceded by the **`&` call operator** — without it the string is just
+ *      echoed, never run.
+ *   2. `node` may not be on the spawned PowerShell's PATH → absolute node is required.
+ *
+ * So the Windows variant is `& "<node>" "<cli>" windsurf-hook <event>` with NATIVE
+ * paths (back-slashes on Windows — JSON-escaped on write). Cascade falls back to
+ * `command` under PowerShell when no `powershell` field is present, hence the prior
+ * silent failure; supplying `powershell` fixes it.
+ */
+export function buildWindsurfHookPowershell(
+  cliPath: string,
+  event: WindsurfHookEvent,
+  nodePath: string = process.execPath,
+): string {
+  return `& "${nodePath}" "${resolve(cliPath)}" windsurf-hook ${event}`;
+}
+
+/**
+ * One hook entry carrying BOTH platform commands — `command` (bash, macOS/Linux)
+ * and `powershell` (Windows). Providing both is what makes capture work on every OS;
+ * the installer/test machine's own paths are baked in.
+ */
+export function buildWindsurfHookEntry(
+  cliPath: string,
+  event: WindsurfHookEvent,
+  nodePath: string = process.execPath,
+): HookEntry {
+  return {
+    command: buildWindsurfHookCommand(cliPath, event, nodePath),
+    powershell: buildWindsurfHookPowershell(cliPath, event, nodePath),
+  };
 }
 
 /** True if a hook entry is one nexpath wrote (identified by the windsurf-hook command). */
 export function isNexpathWindsurfHook(entry: HookEntry): boolean {
-  return typeof entry.command === 'string' && entry.command.includes('windsurf-hook');
+  const hasMarker = (v: unknown): boolean => typeof v === 'string' && v.includes('windsurf-hook');
+  return hasMarker(entry.command) || hasMarker(entry.powershell);
 }
 
 /** Build the hook entries nexpath writes: capture (auto) + popup (stop). */
 export function buildWindsurfHooksConfig(cliPath: string): Record<WindsurfWriteEvent, HookEntry[]> {
   return {
-    pre_user_prompt:       [{ command: buildWindsurfHookCommand(cliPath, 'pre_user_prompt') }],
-    post_cascade_response: [{ command: buildWindsurfHookCommand(cliPath, 'post_cascade_response') }],
+    pre_user_prompt:       [buildWindsurfHookEntry(cliPath, 'pre_user_prompt')],
+    post_cascade_response: [buildWindsurfHookEntry(cliPath, 'post_cascade_response')],
   };
 }
 

@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import {
   getWindsurfHooksPath,
   buildWindsurfHookCommand,
+  buildWindsurfHookPowershell,
+  buildWindsurfHookEntry,
   buildWindsurfHooksConfig,
   isNexpathWindsurfHook,
   writeWindsurfHooks,
@@ -25,17 +27,45 @@ describe('paths + command', () => {
   it('hooks.json lives under ~/.codeium/windsurf', () => {
     expect(getWindsurfHooksPath('/home/u')).toBe('/home/u/.codeium/windsurf/hooks.json');
   });
-  it('command is absolute `node "<cli>" windsurf-hook <event>` with forward slashes', () => {
-    const cmd = buildWindsurfHookCommand('/abs/dist/cli/index.js', 'pre_user_prompt');
-    expect(cmd).toBe('node "/abs/dist/cli/index.js" windsurf-hook pre_user_prompt');
+  it('command embeds absolute node + cli (both quoted, forward-slashed)', () => {
+    const cmd = buildWindsurfHookCommand('/abs/dist/cli/index.js', 'pre_user_prompt', '/usr/bin/node');
+    expect(cmd).toBe('"/usr/bin/node" "/abs/dist/cli/index.js" windsurf-hook pre_user_prompt');
   });
-  it('config writes both events: pre_user_prompt (capture) + post_cascade_response (popup)', () => {
+  it('forward-slashes a Windows node path (sanitized-PATH safety)', () => {
+    const cmd = buildWindsurfHookCommand(
+      '/abs/cli.js',
+      'post_cascade_response',
+      'C:\\Program Files\\nodejs\\node.exe',
+    );
+    expect(cmd).toBe(
+      '"C:/Program Files/nodejs/node.exe" "/abs/cli.js" windsurf-hook post_cascade_response',
+    );
+  });
+  it('powershell variant uses the & call operator + native node path (Windows)', () => {
+    const ps = buildWindsurfHookPowershell(
+      '/abs/cli.js',
+      'pre_user_prompt',
+      'C:\\Program Files\\nodejs\\node.exe',
+    );
+    // PowerShell needs `&` to run a quoted executable path; node path stays native.
+    expect(ps).toBe('& "C:\\Program Files\\nodejs\\node.exe" "/abs/cli.js" windsurf-hook pre_user_prompt');
+  });
+  it('hook entry carries BOTH command (bash) and powershell (Windows)', () => {
+    const e = buildWindsurfHookEntry('/abs/cli.js', 'post_cascade_response', '/usr/bin/node');
+    expect(e.command).toBe('"/usr/bin/node" "/abs/cli.js" windsurf-hook post_cascade_response');
+    expect(e.powershell).toBe('& "/usr/bin/node" "/abs/cli.js" windsurf-hook post_cascade_response');
+  });
+  it('config writes both events with both platform commands', () => {
     const cfg = buildWindsurfHooksConfig('/abs/cli.js');
     expect(cfg.pre_user_prompt[0].command).toContain('windsurf-hook pre_user_prompt');
+    expect(cfg.pre_user_prompt[0].powershell).toContain('& ');
+    expect(cfg.pre_user_prompt[0].powershell).toContain('windsurf-hook pre_user_prompt');
     expect(cfg.post_cascade_response[0].command).toContain('windsurf-hook post_cascade_response');
+    expect(cfg.post_cascade_response[0].powershell).toContain('windsurf-hook post_cascade_response');
   });
-  it('isNexpathWindsurfHook matches only our command', () => {
+  it('isNexpathWindsurfHook matches our command OR powershell', () => {
     expect(isNexpathWindsurfHook({ command: 'node x windsurf-hook pre_user_prompt' })).toBe(true);
+    expect(isNexpathWindsurfHook({ powershell: '& "node" "x" windsurf-hook stop' })).toBe(true);
     expect(isNexpathWindsurfHook({ command: 'python3 audit.py' })).toBe(false);
     expect(isNexpathWindsurfHook({})).toBe(false);
   });
