@@ -819,16 +819,12 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
     scrollOffset:    0,
   };
 
-  // Track the rendered line count of the previous frame so subsequent
-  // frames can rewind the cursor and clear those lines before emitting
-  // the new frame. Without this, every keypress stacks a new frame
-  // vertically below the previous one instead of redrawing in place.
-  //
-  // Known limitation: terminal-resize during the popup is NOT handled.
-  // After a mid-popup resize, previousFrameHeight may not match the
-  // actual rendered row count and the popup can render incorrectly
-  // until the user dismisses (Esc / Enter) and re-triggers.
-  let previousFrameHeight = 0;
+  // Track whether the next writeFrame call is the first frame. The first
+  // frame writes content from the saved cursor position downward; every
+  // subsequent frame issues `\x1b[u` (restore to the saved position) +
+  // `\x1b[J` (clear from there to end of screen) before re-writing the
+  // content, so no row-counted cursor walk is needed.
+  let isFirstFrame = true;
 
   // Hide the terminal cursor for the duration of the popup. The popup is a
   // non-text-input UI (arrow keys + Space + Enter); a blinking cursor row
@@ -838,8 +834,18 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
   // Ctrl+C cancel, Enter return, and uncaught exception paths all
   // restore the cursor. Skipped on non-TTY output so captured streams
   // stay clean of control sequences.
+  //
+  // The cursor-save (`\x1b[s`) runs in the SAME conditional block,
+  // immediately AFTER the hide. The save captures the popup's true
+  // starting row — the row where the first content line is about to be
+  // written — independent of any console banner that may have pushed the
+  // popup down before node started. Subsequent frames restore to this
+  // exact row via `\x1b[u`.
   const cursorWasHidden = process.stdout.isTTY === true;
-  if (cursorWasHidden) out.write('\x1b[?25l');
+  if (cursorWasHidden) {
+    out.write('\x1b[?25l');
+    out.write('\x1b[s');
+  }
 
   const writeFrame = () => {
     const layout = computeLayout(opts.layout, state);
@@ -850,49 +856,32 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
       state = { ...state, scrollOffset: layout.viewport.appliedScrollOffset };
     }
 
-    // Cursor rewind: when a previous frame exists, walk the cursor up
-    // over every line we emitted last time and erase each one entirely
-    // before writing the new frame. Skipped on non-TTY output (pipe /
-    // redirect / CI) so the captured stream stays clean of ANSI control
-    // sequences. Each rewind iteration uses cursor-up + erase-line; the
-    // trailing carriage-return resets the cursor column to 0 in case
-    // the last erased line did not end at column 0.
-    //
-    // Page-header safety margin: when `pageHeader` is set, the rewind
-    // walks an additional `pageHeader.split('\n').length` rows beyond
-    // `previousFrameHeight`. Excess `\x1b[A` clamps at row 0 on every
-    // terminal and `\x1b[2K` is idempotent on an already-empty row, so
-    // the extra walks are visually inert but defensively cover the
-    // page-header rows against rewind-count under-attribution that the
-    // line counter alone cannot guarantee on every terminal. No-op when
-    // `pageHeader` is unset (`pageHeaderLines === 0`).
-    const pageHeaderLines = opts.layout.pageHeader
-      ? opts.layout.pageHeader.split('\n').length
-      : 0;
-    const walkRows = previousFrameHeight + pageHeaderLines;
-    if (walkRows > 0 && process.stdout.isTTY) {
-      for (let i = 0; i < walkRows; i++) {
-        out.write('\x1b[A\x1b[2K');
-      }
-      out.write('\r');
+    // Cursor rewind: on every frame after the first, restore the cursor
+    // to the saved popup-start position (`\x1b[u`) and clear from there
+    // to the end of the visible screen (`\x1b[J`). This pair replaces
+    // the row-counted `\x1b[A` + `\x1b[2K` walk — no row count needed,
+    // no per-OS undercount risk, no banner-offset miscount. Skipped on
+    // non-TTY output (pipe / redirect / CI) so the captured stream stays
+    // clean of ANSI control sequences.
+    if (!isFirstFrame && process.stdout.isTTY) {
+      out.write('\x1b[u');
+      out.write('\x1b[J');
     }
 
     const lines = layout.viewport.visibleChromedLines;
-    let visualRowCount = 0;
     for (const line of lines) {
+      // Per-line erase: `\x1b[K` clears from the cursor to end of the
+      // current line BEFORE writing the new line content. Without this,
+      // a shorter new-frame line leaves trailing characters from a
+      // longer prior-frame line on the same row visible after the
+      // overwrite — the `\n` terminator advances the cursor but does
+      // not erase per-row leftovers.
+      if (process.stdout.isTTY) out.write('\x1b[K');
       out.write(line);
       out.write('\n');
-      // Visual rows produced by this entry account for two effects:
-      // (1) embedded '\n' continuation rows (a single emission carrying
-      // multi-line content via a continuation-line formatter), and
-      // (2) terminal-driven wrap when a segment's visible length
-      // exceeds opts.layout.cols. visualRows strips SGR sequences
-      // before measuring visible width so wrap detection does not
-      // misfire from styled-content byte inflation.
-      visualRowCount += visualRows(line, opts.layout.cols);
     }
 
-    previousFrameHeight = visualRowCount;
+    isFirstFrame = false;
   };
 
   try {

@@ -795,31 +795,6 @@ describe('render-loop — writeFrame cursor management', () => {
     expect(seen.match(/\x1b\[A/g)).toBeNull();
   });
 
-  it('emits cursor-up + clear-line for each previous-frame line on subsequent frames', async () => {
-    const seen = await captureRenderOutput(['arrow-down', 'enter']);
-    const cursorUpCount  = (seen.match(/\x1b\[A/g)  || []).length;
-    const clearLineCount = (seen.match(/\x1b\[2K/g) || []).length;
-    // Each rewind iteration emits exactly one cursor-up + one clear-line.
-    expect(cursorUpCount).toBeGreaterThan(0);
-    expect(cursorUpCount).toBe(clearLineCount);
-    expect(seen).toContain('\r');  // carriage return resets the cursor column after the rewind
-  });
-
-  it('cursor-up count on the second frame equals the rendered line count of the first frame', async () => {
-    const seen = await captureRenderOutput(['arrow-down', 'enter']);
-    // Locate the boundary between first frame and the rewind block — the
-    // first cursor-up byte marks the start of the rewind that precedes
-    // the second frame.
-    const rewindStart = seen.indexOf('\x1b[A');
-    expect(rewindStart).toBeGreaterThan(0);
-    const firstFrameOutput = seen.substring(0, rewindStart);
-    // Newlines inside the first-frame slice equal the number of lines
-    // we emitted (each line was followed by a '\n').
-    const firstFrameLineCount = (firstFrameOutput.match(/\n/g) || []).length;
-    const cursorUpCount       = (seen.match(/\x1b\[A/g) || []).length;
-    expect(cursorUpCount).toBe(firstFrameLineCount);
-  });
-
   it('skips the cursor-rewind block when process.stdout.isTTY is false (clean pipe output)', async () => {
     const savedIsTTY = process.stdout.isTTY;
     try {
@@ -847,54 +822,6 @@ describe('render-loop — writeFrame cursor management', () => {
     }
   });
 
-  // ── Visual-row counter for multi-line emissions ──────────────────────────
-  //
-  // Some upstream content (e.g. continuation-line formatting on multi-line
-  // option labels) lands in a single LineEmission whose text contains
-  // embedded '\n' characters. The terminal renders multiple visual rows
-  // from that single entry. The cursor-rewind invariant is that the
-  // next-frame rewind walks the cursor up exactly the number of VISUAL
-  // ROWS the previous frame produced, not the JS array length. The tests
-  // below pin both the per-frame invariant and the multi-frame invariant.
-
-  /**
-   * Parse the captured PassThrough stream into alternating frame-content
-   * segments and rewind-counts. Each rewind group is a run of
-   * `\x1b[A\x1b[2K` pairs optionally followed by `\r`. Returns:
-   *
-   *   segments[0]      = frame 1 content
-   *   rewindCounts[0]  = rewind group before frame 2
-   *   segments[1]      = frame 2 content
-   *   rewindCounts[1]  = rewind group before frame 3
-   *   ...
-   *   segments[N]      = last frame content (no trailing rewind)
-   */
-  function parseFrameSegments(seen: string): { segments: string[]; rewindCounts: number[] } {
-    const segments: string[] = [];
-    const rewindCounts: number[] = [];
-    const REWIND_UNIT = '\x1b[A\x1b[2K';
-    let current = '';
-    let i = 0;
-    while (i < seen.length) {
-      if (seen.startsWith(REWIND_UNIT, i)) {
-        segments.push(current);
-        current = '';
-        let count = 0;
-        while (seen.startsWith(REWIND_UNIT, i)) {
-          count++;
-          i += REWIND_UNIT.length;
-        }
-        if (seen[i] === '\r') i++;
-        rewindCounts.push(count);
-      } else {
-        current += seen[i];
-        i++;
-      }
-    }
-    segments.push(current);
-    return { segments, rewindCounts };
-  }
-
   async function captureWithLayout(
     layout:    RenderLoopOptions,
     events:    KeyEvent['name'][],
@@ -910,135 +837,86 @@ describe('render-loop — writeFrame cursor management', () => {
     return Buffer.concat(chunks).toString('utf8');
   }
 
-  it('cursor-up count on the second frame equals the VISUAL row count of the first frame even when an option label is multi-line', async () => {
-    // Single option-label emission whose text contains embedded '\n' —
-    // mirrors what the continuation-line formatter emits for multi-line
-    // option text. The terminal renders 3 visual rows from this single
-    // emission while the JS array contributes only 1 entry.
-    const seen = await captureWithLayout({
-      pinchLabel: 'P',
-      question:   'Q',
-      rows: 40, cols: 80,
-      options: [
-        { value: 'multi',  label: 'A1\n│    A2\n│    A3', descBase: 'a desc' },
-        { value: 'single', label: 'B',                                descBase: 'b desc' },
-      ],
-    }, ['arrow-down', 'enter']);
+  // ── writeFrame save/restore + per-line erase primitives ───────────────────
+  //
+  // The save/restore + per-line erase primitives replace the row-counted
+  // \x1b[A + \x1b[2K rewind:
+  //
+  //   - \x1b[s saves the cursor position ONCE before the first frame
+  //   - \x1b[u + \x1b[J restore to that saved position and clear from
+  //     there to end of screen on every subsequent frame
+  //   - \x1b[K clears each line before writing its content so a shorter
+  //     new-frame line never leaves trailing characters from a longer
+  //     prior-frame line on the same row (per-line overlap fix)
+  //
+  // These four tests pin the new contract. They FAIL against the current
+  // row-counted rewind implementation; they pass once writeFrame is
+  // switched to save/restore + per-line erase.
+  describe('writeFrame save/restore + per-line erase primitives', () => {
+    it('emits \\x1b[s exactly once before the first frame content (cursor position save)', async () => {
+      const seen = await captureRenderOutput(['enter']);
+      const saveMatches = seen.match(/\x1b\[s/g) || [];
+      expect(saveMatches).toHaveLength(1);
+      // The save must precede the first frame's content so the saved
+      // position captures the popup's true starting row, not a row
+      // after content already pushed the cursor down.
+      const saveIdx         = seen.indexOf('\x1b[s');
+      // Pinch label 'P' / question 'Q' / option label 'A' — all uppercase.
+      // \x1b[?25l, \x1b[s, \x1b[K, \x1b[u use only lowercase parameters
+      // and lowercase terminators, so the first uppercase char is content.
+      const firstContentIdx = seen.search(/[A-Z]/);
+      expect(saveIdx).toBeGreaterThanOrEqual(0);
+      expect(firstContentIdx).toBeGreaterThan(saveIdx);
+    });
 
-    const firstRewindStart = seen.indexOf('\x1b[A');
-    expect(firstRewindStart).toBeGreaterThan(0);
+    it('emits \\x1b[u + \\x1b[J on the second frame instead of row-counted cursor-up walks', async () => {
+      const seen = await captureRenderOutput(['arrow-down', 'enter']);
+      expect(seen).toContain('\x1b[u');
+      expect(seen).toContain('\x1b[J');
+      // The row-counted rewind primitives are replaced; should NOT
+      // appear when save/restore is wired.
+      expect(seen.match(/\x1b\[A/g)).toBeNull();
+      expect(seen.match(/\x1b\[2K/g)).toBeNull();
+    });
 
-    const firstFrameOutput     = seen.substring(0, firstRewindStart);
-    const firstFrameVisualRows = (firstFrameOutput.match(/\n/g) || []).length;
-    const cursorUpCount        = (seen.match(/\x1b\[A/g) || []).length;
+    it('emits \\x1b[K before each frame-content line (per-line erase)', async () => {
+      const seen = await captureRenderOutput(['enter']);
+      // The first frame writes one content line per emission. Each line
+      // write must be preceded by \x1b[K so shorter new-frame lines
+      // never leave trailing characters from prior-frame content.
+      const clearCount = (seen.match(/\x1b\[K/g) || []).length;
+      expect(clearCount).toBeGreaterThan(0);
+    });
 
-    // Under the JS-array-length count, cursorUpCount would be strictly
-    // less than firstFrameVisualRows because the multi-line emission's
-    // 3 visual rows would contribute only 1 to the count. Under the
-    // visual-row counter, they match.
-    expect(cursorUpCount).toBe(firstFrameVisualRows);
-  });
+    it('variable-line-length frame transition emits \\x1b[K before every second-frame line (no per-line overlap)', async () => {
+      // Frame 1: long pinch label + option-A with long desc-base.
+      // Frame 2 (after arrow-down): focus moves to option-B which has
+      // NO desc-base, so the second frame's overall line lengths differ
+      // from the first. Per-line \x1b[K before every line in frame 2
+      // ensures a shorter line cannot leave residual characters from
+      // the corresponding longer line in frame 1.
+      const seen = await captureWithLayout({
+        pinchLabel: 'A reasonably long pinch label spanning many columns',
+        question:   'Short Q',
+        rows: 40, cols: 80,
+        options: [
+          { value: 'opt-a', label: 'A', descBase: 'option-a desc-base text that is reasonably long' },
+          { value: 'opt-b', label: 'B' },  // no desc-base — frame 2 will be shorter on the option region
+        ],
+      }, ['arrow-down', 'enter']);
 
-  it('successive frame rewinds each match the VISUAL row count of their preceding frame', async () => {
-    const seen = await captureWithLayout({
-      pinchLabel: 'P',
-      question:   'Q',
-      rows: 40, cols: 80,
-      options: [
-        { value: 'multi',  label: 'A1\n│    A2\n│    A3', descBase: 'a desc' },
-        { value: 'b',      label: 'B',                                descBase: 'b desc' },
-        { value: 'c',      label: 'C',                                descBase: 'c desc' },
-      ],
-    }, ['arrow-down', 'arrow-down', 'enter']);
+      // Locate the frame-2 boundary: \x1b[u is the restore that precedes
+      // frame 2's content writes.
+      const restoreIdx = seen.indexOf('\x1b[u');
+      expect(restoreIdx).toBeGreaterThan(0);
+      const frame2 = seen.substring(restoreIdx);
 
-    const { segments, rewindCounts } = parseFrameSegments(seen);
-
-    // 3 frames rendered (initial + 2 arrow-downs); 2 rewind groups in
-    // between. enter exits without an additional re-render.
-    expect(rewindCounts).toHaveLength(2);
-
-    for (let k = 0; k < rewindCounts.length; k++) {
-      const visualRows = (segments[k].match(/\n/g) || []).length;
-      expect(rewindCounts[k], `rewind ${k} should match visual rows of frame ${k}`).toBe(visualRows);
-    }
-  });
-
-  it('Space-toggle expand/collapse cycle on the focused option redraws cleanly when a sibling option has a multi-line label', async () => {
-    // The multi-line option-label sibling is the bug-trigger condition;
-    // the focused option has a desc-base long enough to differ between
-    // truncated (2-line) and expanded (8-line) states so the Space-key
-    // toggle exercises both directions of the cycle.
-    const seen = await captureWithLayout({
-      pinchLabel: 'P',
-      question:   'Q',
-      rows: 40, cols: 80,
-      options: [
-        { value: 'multi',     label: 'A1\n│    A2\n│    A3', descBase: 'a desc' },
-        { value: 'expandable', label: 'Focused option',
-          descBase: 'L1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9' },
-      ],
-    }, ['arrow-down', 'space', 'space', 'enter']);
-
-    const { segments, rewindCounts } = parseFrameSegments(seen);
-
-    // 4 frames (initial + arrow-down + space + space); 3 rewind groups
-    // in between. Each rewind must match its preceding frame's visual
-    // rows or the new frame would write below stale rows.
-    expect(rewindCounts).toHaveLength(3);
-
-    for (let k = 0; k < rewindCounts.length; k++) {
-      const visualRows = (segments[k].match(/\n/g) || []).length;
-      expect(rewindCounts[k], `rewind ${k} should match visual rows of frame ${k}`).toBe(visualRows);
-    }
-  });
-
-  it('rewinds wrap-aware visual rows when a header line exceeds cols (terminal-wrap)', async () => {
-    // A pinch label wider than cols forces terminal-driven wrap. The
-    // prior accumulator (1 + embedded \n count) recorded 1 row for
-    // that emission; the wrap-aware accumulator records ceil(visible /
-    // cols). The captured stream's '\n' count for the frame equals the
-    // emission boundaries (no extra '\n' written for wrap rows), so
-    // rewindCount > segment's '\n' count is the observable signature
-    // of a wrap row being counted.
-    const widePinch = 'P'.repeat(120);  // visible 120 chars; wraps to 2 rows at cols=80
-    const seen = await captureWithLayout({
-      pinchLabel: widePinch,
-      question:   'Q',
-      rows: 40, cols: 80,
-      options: [
-        { value: 'a', label: 'A' },
-        { value: 'b', label: 'B' },
-      ],
-    }, ['arrow-down', 'enter']);
-
-    const { segments, rewindCounts } = parseFrameSegments(seen);
-    expect(rewindCounts.length).toBeGreaterThan(0);
-    const newlineCount = (segments[0].match(/\n/g) || []).length;
-    expect(rewindCounts[0]).toBeGreaterThan(newlineCount);
-  });
-
-  it('preserves cursor-fix embedded-\\n behavior when no wrap is needed (regression-clean)', async () => {
-    // Repeats the cursor-fix fixture: multi-line option label with
-    // embedded \n, all content fits within cols=80. Asserts each
-    // rewind count equals the segment's '\n' count — i.e., the
-    // wrap-aware accumulator collapses to the cursor-fix accumulator
-    // when no wrap is present.
-    const seen = await captureWithLayout({
-      pinchLabel: 'P',
-      question:   'Q',
-      rows: 40, cols: 80,
-      options: [
-        { value: 'multi', label: 'A1\n│    A2\n│    A3' },
-        { value: 'b',     label: 'B' },
-      ],
-    }, ['arrow-down', 'enter']);
-
-    const { segments, rewindCounts } = parseFrameSegments(seen);
-
-    for (let k = 0; k < rewindCounts.length; k++) {
-      const newlineCount = (segments[k].match(/\n/g) || []).length;
-      expect(rewindCounts[k], `rewind ${k} should match \\n count of frame ${k} (no wrap)`).toBe(newlineCount);
-    }
+      // Frame 2 must have at least one \x1b[K before each line write.
+      const frame2LineCount  = (frame2.match(/\n/g)    || []).length;
+      const frame2ClearCount = (frame2.match(/\x1b\[K/g) || []).length;
+      expect(frame2LineCount).toBeGreaterThan(0);
+      expect(frame2ClearCount).toBeGreaterThanOrEqual(frame2LineCount);
+    });
   });
 });
 
