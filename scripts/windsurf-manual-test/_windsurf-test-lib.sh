@@ -149,7 +149,9 @@ db_scalar() {
 # undercounts multi-fire runs; the telemetry line is written once per fire.)
 tel_fires_since_start() {
   local tel="${HOME}/.nexpath/telemetry.jsonl" n=0
-  [[ -f "$tel" ]] && n=$(grep -F "\"projectRoot\":\"${WORK_DIR}\"" "$tel" 2>/dev/null | grep -c 'pipeline_advisory_pending' || true)
+  # Match by the unique workspace basename (canonical project_root in telemetry may
+  # differ from WORK_DIR — see WORK_BASENAME note).
+  [[ -f "$tel" ]] && n=$(grep -F "${WORK_BASENAME}" "$tel" 2>/dev/null | grep -c 'pipeline_advisory_pending' || true)
   printf '%s' "${n:-0}"
 }
 
@@ -258,7 +260,11 @@ prompt_box() {
 }
 
 # ─── verification (capture from prompts table, fires from telemetry) ─────────
-captures_since_start() { db_scalar "SELECT count(*) FROM prompts WHERE project_root = '${WORK_DIR}' AND captured_at >= ${SESSION_START_MS};"; }
+# Match by the unique workspace folder NAME (suffix), not the exact path — the IDE
+# records a canonical project_root (macOS /tmp→/private/tmp, Windows drive-case) that
+# differs from WORK_DIR. The timestamped basename is globally unique, so this is exact
+# enough without needing the captured_at window.
+captures_since_start() { db_scalar "SELECT count(*) FROM prompts WHERE project_root LIKE '%${WORK_BASENAME}';"; }
 
 verify_prompt() {
   local idx="$1" expected="$2" prior="$3"
@@ -325,8 +331,13 @@ windsurf_test_setup() {
   TIMESTAMP=$(now_ms)
   local tmp="${TMPDIR:-/tmp}"; tmp="${tmp%/}"
   WORK_DIR="${tmp}/nexpath-test-${SCENARIO_ID}-windsurf-${TIMESTAMP}"
+  # The unique workspace folder name — used to match captured rows / telemetry by
+  # SUFFIX rather than the full path, so we don't miss rows when the IDE records a
+  # CANONICAL project_root that differs from WORK_DIR (macOS /tmp → /private/tmp;
+  # Windows drive-letter case; any symlinked temp dir). The timestamp makes it unique.
+  WORK_BASENAME="nexpath-test-${SCENARIO_ID}-windsurf-${TIMESTAMP}"
   SESSION_START_MS=$(now_ms)
-  export WORK_DIR SESSION_START_MS
+  export WORK_DIR WORK_BASENAME SESSION_START_MS
 
   resolve_nexpath_repo
   PROMPT_STORE_DB="${HOME}/.nexpath/prompt-store.db"
@@ -433,7 +444,7 @@ windsurf_test_finish() {
     echo "  ✓ CAPTURE + DELIVERY verified — ${SCENARIO_ID} on Windsurf (${OS}). Fires=${ff}."
   else
     echo "  ⚠ Review: capture should be ${TOTAL_PROMPTS}; delivery must be verified once."
-    echo "    sqlite3 ${PROMPT_STORE_DB} \"SELECT prompt_text FROM prompts WHERE project_root='${WORK_DIR}';\""
+    echo "    sqlite3 ${PROMPT_STORE_DB} \"SELECT prompt_text FROM prompts WHERE project_root LIKE '%${WORK_BASENAME}';\""
   fi
   echo ""
   echo "  Cleanup when done: rm -rf ${WORK_DIR}"
