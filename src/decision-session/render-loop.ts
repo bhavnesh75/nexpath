@@ -881,31 +881,33 @@ export async function renderLoop(opts: RenderLoopRunOptions): Promise<Selectable
       state = { ...state, scrollOffset: layout.viewport.appliedScrollOffset };
     }
 
-    // Cursor rewind: emit `\x1b[H` (cursor home — row 1, col 1) and
-    // `\x1b[J` (clear from cursor to end of visible screen) at the START
-    // of EVERY frame. ABSOLUTE positioning — no save/restore primitive
-    // needed. Works the same on the first frame (alt buffer is empty,
-    // so `\x1b[H` + `\x1b[J` is a no-op visually) and on every
-    // subsequent frame (overwrites the prior frame in place). Skipped
-    // on non-TTY output (pipe / redirect / CI) so the captured stream
-    // stays clean of ANSI control sequences.
-    if (process.stdout.isTTY) {
-      out.write('\x1b[H');
-      out.write('\x1b[J');
-    }
-
+    // Cursor rewind + content write — BATCHED into a single out.write()
+    // call per frame so the terminal renders the whole frame atomically.
+    // Previously this issued 2 + 3N separate write() calls (where N is
+    // the visible line count) — the terminal could render partial frames
+    // between writes, producing visible "tearing" / jerkiness during
+    // arrow-key navigation. Concatenating into one buffer eliminates
+    // the in-between render windows; the underlying bytes are identical.
+    //
+    // Per-frame contents:
+    //   - `\x1b[H` cursor home (row 1, col 1) — ABSOLUTE positioning
+    //   - `\x1b[J` clear from cursor to end of visible screen
+    //   - For each visible line: `\x1b[K` (per-line erase) + line + `\n`
+    //
+    // Skipped on non-TTY output (pipe / redirect / CI) so the captured
+    // stream stays clean of ANSI control sequences. Non-TTY path still
+    // batches into a single write, just with no ANSI bytes included.
     const lines = layout.viewport.visibleChromedLines;
-    for (const line of lines) {
-      // Per-line erase: `\x1b[K` clears from the cursor to end of the
-      // current line BEFORE writing the new line content. Without this,
-      // a shorter new-frame line leaves trailing characters from a
-      // longer prior-frame line on the same row visible after the
-      // overwrite — the `\n` terminator advances the cursor but does
-      // not erase per-row leftovers.
-      if (process.stdout.isTTY) out.write('\x1b[K');
-      out.write(line);
-      out.write('\n');
+    const parts: string[] = [];
+    const isTTY = process.stdout.isTTY;
+    if (isTTY) {
+      parts.push('\x1b[H', '\x1b[J');
     }
+    for (const line of lines) {
+      if (isTTY) parts.push('\x1b[K');
+      parts.push(line, '\n');
+    }
+    out.write(parts.join(''));
   };
 
   try {
