@@ -164,6 +164,24 @@ function stylerInner(line: string, kind: LineKind): string {
       return line;
   }
 
+  // option-label-unfocused — ANSI-tolerant dim wrap. Some option labels
+  // are intentionally pre-styled by upstream callers — specifically the
+  // SHOW_SIMPLER_LABEL and HELP_LABEL meta-rows in DecisionSession.ts
+  // wrap their text with dim-gray / italic-dim SGR codes. When those
+  // meta rows are non-focused they emit with this kind, and the
+  // dev-only guard below would throw on the first such emission,
+  // crashing the renderLoop and producing the "blink and disappear"
+  // popup symptom (the exact pattern commit c4678d9 fixed for the
+  // inherit kinds).
+  //
+  // For pre-styled inputs we pass through unchanged — visually a no-op
+  // because the upstream styling already conveys the meta-row's intent.
+  // For plain inputs (the common case: ordinary option labels) we
+  // apply pc.dim so the non-focused option labels visibly fade.
+  if (kind === 'option-label-unfocused') {
+    return line.includes('\x1b') ? line : pc.dim(line);
+  }
+
   // Dev-only double-styling guard — only meaningful for kinds where the
   // styler would compound ANSI on already-styled input. If an ESC byte
   // is already present in a styled-kind input the dispatch body below
@@ -177,7 +195,7 @@ function stylerInner(line: string, kind: LineKind): string {
     case 'desc-base-expanded':     return pc.dim(line);
     case 'desc-base-truncated':    return pc.gray(line);
     case 'shortcut-hint':          return pc.dim(pc.italic(line));
-    case 'option-label-unfocused': return pc.dim(line);
+    // option-label-unfocused handled above (ANSI-tolerant special case).
     default:
       // Unknown kind — graceful fallback per the LineKind extensibility rule.
       return line;

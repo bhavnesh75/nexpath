@@ -141,7 +141,10 @@ describe('styler — defensive contracts', () => {
     // already-ANSI-wrapped input would compound the styling and mask the
     // layout leak — the guard surfaces this in dev builds.
     const preStyled = '\x1b[31mred\x1b[0m';
-    const styledKinds: LineKind[] = ['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint', 'option-label-unfocused'];
+    // option-label-unfocused intentionally omitted — it has an
+    // ANSI-tolerant special-case in styler.ts to support pre-styled
+    // meta-row labels (SHOW_SIMPLER / HELP) from DecisionSession.ts.
+    const styledKinds: LineKind[] = ['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint'];
     for (const kind of styledKinds) {
       expect(() => styler(preStyled, kind), `kind=${kind}`).toThrow(/styler received pre-styled input/);
     }
