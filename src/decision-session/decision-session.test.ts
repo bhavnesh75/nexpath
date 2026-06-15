@@ -264,6 +264,8 @@ import {
   NEXPATH_HEADER_LINES,
 } from './DecisionSession.js';
 import type { DecisionSessionInput, SelectFn } from './DecisionSession.js';
+import { WHY_HELP_PER_CLASS } from './why-help.js';
+import { R4_USER_OPEN } from './r4-bookends.js';
 import type { Store } from '../store/db.js';
 import { openStore } from '../store/db.js';
 import { getSkippedSessions } from '../store/skipped-sessions.js';
@@ -323,7 +325,7 @@ describe('buildOptionList', () => {
     expect(options[options.length - 2]).toBe(SHOW_SIMPLER);
     expect(hasNextLevel).toBe(true);
     // L1 content appears before the special options
-    for (const opt of TASK_REVIEW.L1) {
+    for (const opt of TASK_REVIEW.L1.map((e) => e.option)) {
       expect(options).toContain(opt);
     }
   });
@@ -335,7 +337,7 @@ describe('buildOptionList', () => {
     expect(options[options.length - 1]).toBe(SKIP_NOW);
     expect(options[options.length - 2]).toBe(SHOW_SIMPLER);
     expect(hasNextLevel).toBe(true);
-    for (const opt of TASK_REVIEW.L2) {
+    for (const opt of TASK_REVIEW.L2.map((e) => e.option)) {
       expect(options).toContain(opt);
     }
   });
@@ -346,7 +348,7 @@ describe('buildOptionList', () => {
     expect(options).toContain(SKIP_NOW);
     expect(options[options.length - 1]).toBe(SKIP_NOW);
     expect(hasNextLevel).toBe(false);
-    for (const opt of TASK_REVIEW.L3) {
+    for (const opt of TASK_REVIEW.L3.map((e) => e.option)) {
       expect(options).toContain(opt);
     }
   });
@@ -1368,9 +1370,9 @@ describe('DecisionContent structure', () => {
 
   it('TASK_REVIEW_CASUAL — every option contains "what was just built" (grounding target in all 6)', () => {
     const allOptions = [
-      ...TASK_REVIEW_CASUAL.L1,
-      ...TASK_REVIEW_CASUAL.L2,
-      ...TASK_REVIEW_CASUAL.L3,
+      ...TASK_REVIEW_CASUAL.L1.map((e) => e.option),
+      ...TASK_REVIEW_CASUAL.L2.map((e) => e.option),
+      ...TASK_REVIEW_CASUAL.L3.map((e) => e.option),
     ];
     expect(allOptions).toHaveLength(6);
     for (const opt of allOptions) {
@@ -1532,10 +1534,10 @@ describe('DecisionContent structure', () => {
       ABSENCE_REFACTORING,        ABSENCE_REFACTORING_CASUAL,
     ];
     for (const c of groupAFormalCasual) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 
@@ -1621,10 +1623,10 @@ describe('DecisionContent structure', () => {
       ABSENCE_PROMPT_CONTEXT,     ABSENCE_PROMPT_CONTEXT_CASUAL,
     ];
     for (const c of groupBFormalCasual) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 
@@ -1684,10 +1686,10 @@ describe('DecisionContent structure', () => {
       ABSENCE_PHASE_TRANSITION,     ABSENCE_PHASE_TRANSITION_CASUAL,
     ];
     for (const c of groupCFormalCasual) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 
@@ -1721,10 +1723,10 @@ describe('DecisionContent structure', () => {
       ABSENCE_SPEC_REVISION,       ABSENCE_SPEC_REVISION_CASUAL,
     ];
     for (const c of groupDFormalCasual) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 
@@ -1838,10 +1840,10 @@ describe('DecisionContent structure', () => {
       ABSENCE_RATE_LIMITING,        ABSENCE_RATE_LIMITING_CASUAL,
     ];
     for (const c of groupEFormalCasual) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -1916,10 +1918,10 @@ describe('DecisionContent structure — Group A beginner variants', () => {
 
   it('every Group A beginner entry has non-empty L1[0], L1[1], L2[0], L3[0]', () => {
     for (const c of groupABeginner) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -1994,10 +1996,10 @@ describe('DecisionContent structure — Group B beginner variants', () => {
 
   it('every Group B beginner entry has non-empty L1[0], L1[1], L2[0], L3[0]', () => {
     for (const c of groupBBeginner) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -2058,10 +2060,10 @@ describe('DecisionContent structure — Group C beginner variants', () => {
 
   it('every Group C beginner entry has non-empty L1[0], L1[1], L2[0], L3[0]', () => {
     for (const c of groupCBeginner) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -2108,10 +2110,10 @@ describe('DecisionContent structure — Group D beginner variants', () => {
 
   it('every Group D beginner entry has non-empty L1[0], L1[1], L2[0], L3[0]', () => {
     for (const c of groupDBeginner) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -2200,10 +2202,10 @@ describe('DecisionContent structure — Group E beginner variants', () => {
 
   it('every Group E beginner entry has non-empty L1[0], L1[1], L2[0], L3[0]', () => {
     for (const c of groupEBeginner) {
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -2344,6 +2346,125 @@ describe('buildSelectMessage', () => {
     const msg = buildSelectMessage('Hold up.', 'Is the plan written?', 2);
     expect(msg).toContain('\n');
   });
+
+  // dev-plan §11.2 — popup why-help block extension (Phase 4f)
+  describe('§11.2 why-help block extension', () => {
+    const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+
+    it('omits the why-help block when no whyHelpEntry is provided (backward-compat)', () => {
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1);
+      expect(msg).not.toContain(R4_USER_OPEN);
+    });
+
+    it('appends R4_USER_OPEN + content + R4_USER_CLOSE[register] when whyHelpEntry is provided', () => {
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'formal',
+      });
+      expect(msg).toContain(R4_USER_OPEN);
+      expect(msg).toContain((universalEntry.content as { formal: string }).formal);
+      expect(msg).toContain('— review the options below to determine the next step.');
+    });
+
+    it('places the why-help block AFTER the question (adjacency per C3 lock)', () => {
+      const msg = buildSelectMessage('Hold up.', 'Is the plan written?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+      });
+      const questionPos = msg.indexOf('Is the plan written?');
+      const whyHelpPos  = msg.indexOf(R4_USER_OPEN);
+      expect(questionPos).toBeLessThan(whyHelpPos);
+    });
+
+    it('falls back to no-why-help when the register is not supported by the entry (class7 + formal)', () => {
+      const c7 = WHY_HELP_PER_CLASS.class7_cool_geek_vibe_coder;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: c7,
+        register:     'formal',
+      });
+      expect(msg).not.toContain(R4_USER_OPEN);
+    });
+
+    it('inserts the mood sentence between content and close when mood is rushed', () => {
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+        mood:         'rushed',
+      });
+      expect(msg).toContain(R4_USER_OPEN);
+      // The "rushed" casual mood sentence is non-empty and appears between content and close.
+      const closeIdx = msg.indexOf('— pick from the options below to keep moving.');
+      const openIdx  = msg.indexOf(R4_USER_OPEN);
+      expect(openIdx).toBeLessThan(closeIdx);
+      // The composed block has 4 lines for the rushed-mood case (open + content + mood + close).
+      const block = msg.slice(openIdx, closeIdx + '— pick from the options below to keep moving.'.length);
+      expect(block.split('\n')).toHaveLength(4);
+    });
+
+    it('routes class8-role-cluster via role parameter (founder → founder_casual)', () => {
+      const c8 = WHY_HELP_PER_CLASS.class8_role_cluster;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: c8,
+        register:     'casual',
+        role:         'founder',
+      });
+      expect(msg).toContain((c8.content as { founder_casual: string }).founder_casual);
+    });
+
+    // §11.3 C3 lock — single `\n` separator between question and why-help.
+    it('puts EXACTLY one `\\n` between the question and the R4_USER_OPEN of the why-help block (C3 adjacency)', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Is the plan written?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+      });
+      // Find the question line in the composed message — it has formatQuestion's
+      // BOLD_WHITE wrapper, so search for the inner text + the closing reset code.
+      const questionPlain = 'Is the plan written?';
+      const questionStart = msg.indexOf(questionPlain);
+      expect(questionStart).toBeGreaterThan(-1);
+      // The end of the question line is wherever the BOLD_WHITE reset closes; pick the
+      // first newline AFTER questionStart and assert the substring immediately following
+      // it (up to R4_USER_OPEN) contains zero blank rows.
+      const firstNlAfterQ = msg.indexOf('\n', questionStart);
+      const r4OpenStart   = msg.indexOf(R4_USER_OPEN, firstNlAfterQ);
+      expect(firstNlAfterQ).toBeGreaterThan(-1);
+      expect(r4OpenStart).toBeGreaterThan(-1);
+      // Between the first `\n` after the question and the start of R4_USER_OPEN there
+      // must be NO additional characters (including no extra `\n`).
+      expect(msg.slice(firstNlAfterQ + 1, r4OpenStart)).toBe('');
+    });
+
+    // §11.2 why-help block decomposition — verify the composed block emits the
+    // dev-plan 3-or-4 sub-element structure (R4 open / R6 content / [mood] /
+    // R4 close), each as its own line within the composed message.
+    it('composed why-help block contains 3 sub-element lines (open / content / close) when no mood', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'formal',
+      });
+      const openIdx   = msg.indexOf(R4_USER_OPEN);
+      const closeText = '— review the options below to determine the next step.';
+      const closeIdx  = msg.indexOf(closeText);
+      const slice     = msg.slice(openIdx, closeIdx + closeText.length);
+      expect(slice.split('\n')).toHaveLength(3);
+    });
+
+    it('composed why-help block contains 4 sub-element lines (open / content / mood / close) when mood is rushed', () => {
+      const universalEntry = WHY_HELP_PER_CLASS.class1_stage_transition;
+      const msg = buildSelectMessage('Hold up.', 'Q?', 1, {
+        whyHelpEntry: universalEntry,
+        register:     'casual',
+        mood:         'rushed',
+      });
+      const openIdx   = msg.indexOf(R4_USER_OPEN);
+      const closeText = '— pick from the options below to keep moving.';
+      const closeIdx  = msg.indexOf(closeText);
+      const slice     = msg.slice(openIdx, closeIdx + closeText.length);
+      expect(slice.split('\n')).toHaveLength(4);
+    });
+  });
 });
 
 // ── runLevel ──────────────────────────────────────────────────────────────────
@@ -2351,7 +2472,7 @@ describe('buildSelectMessage', () => {
 describe('runLevel', () => {
   it('returns the selected prompt text when a content option is chosen', async () => {
     const content  = resolveDecisionContent('implementation', 'stage_transition');
-    const firstOpt = content.L1[0];
+    const firstOpt = content.L1[0].option;
     const result   = await runLevel(makeInput(), 1, mockSelect(firstOpt));
     expect(result).toBe(firstOpt);
   });
@@ -2409,14 +2530,14 @@ describe('runLevel', () => {
 
   it('selecting an L2 content option returns that prompt text', async () => {
     const content  = resolveDecisionContent('implementation', 'stage_transition');
-    const l2Option = content.L2[0];
+    const l2Option = content.L2[0].option;
     const result   = await runLevel(makeInput(), 2, mockSelect(l2Option));
     expect(result).toBe(l2Option);
   });
 
   it('selecting an L3 content option returns that prompt text', async () => {
     const content  = resolveDecisionContent('prd', 'stage_transition');
-    const l3Option = content.L3[0];
+    const l3Option = content.L3[0].option;
     const result   = await runLevel(
       makeInput({ stage: 'prd', flagType: 'stage_transition' }),
       3,
@@ -2431,7 +2552,7 @@ describe('runLevel', () => {
 describe('runDecisionSession', () => {
   it('returns { outcome: selected, selectedPrompt } when user picks a content option', async () => {
     const content  = resolveDecisionContent('implementation', 'stage_transition');
-    const firstOpt = content.L1[0];
+    const firstOpt = content.L1[0].option;
     const result   = await runDecisionSession(makeInput(), undefined, mockSelect(firstOpt));
     expect(result.outcome).toBe('selected');
     if (result.outcome === 'selected') {
@@ -2461,7 +2582,7 @@ describe('runDecisionSession', () => {
 
   it('advances to Level 3 when user selects "Show simpler options →" twice', async () => {
     const content  = resolveDecisionContent('implementation', 'stage_transition');
-    const l3Option = content.L3[0];
+    const l3Option = content.L3[0].option;
     const selectFn = vi.fn()
       .mockResolvedValueOnce(SHOW_SIMPLER)  // L1 → L2
       .mockResolvedValueOnce(SHOW_SIMPLER)  // L2 → L3
@@ -2533,7 +2654,7 @@ describe('runDecisionSession', () => {
     const store = await openStore(':memory:');
     try {
       const content = resolveDecisionContent('implementation', 'stage_transition');
-      await runDecisionSession(makeInput({ projectRoot: '/proj/select' }), store, mockSelect(content.L1[0]));
+      await runDecisionSession(makeInput({ projectRoot: '/proj/select' }), store, mockSelect(content.L1[0].option));
       const rows = getSkippedSessions(store, '/proj/select');
       expect(rows).toHaveLength(0);
     } finally {
@@ -2609,25 +2730,25 @@ describe('BEHAVIOUR_TESTING content', () => {
   });
 
   it('L1 option 1 mentions user journey or user steps', () => {
-    expect(BEHAVIOUR_TESTING.L1[0].toLowerCase()).toMatch(/user|journey|step/);
+    expect(BEHAVIOUR_TESTING.L1[0].option.toLowerCase()).toMatch(/user|journey|step/);
   });
 
   it('L1 option 2 mentions acceptance tests or scenarios', () => {
-    expect(BEHAVIOUR_TESTING.L1[1].toLowerCase()).toMatch(/acceptance|scenario/);
+    expect(BEHAVIOUR_TESTING.L1[1].option.toLowerCase()).toMatch(/acceptance|scenario/);
   });
 
   it('L1 option 3 is adversarial framing — mentions automated tests or break', () => {
-    expect(BEHAVIOUR_TESTING.L1[2].toLowerCase()).toMatch(/automated|break/);
+    expect(BEHAVIOUR_TESTING.L1[2].option.toLowerCase()).toMatch(/automated|break/);
   });
 
   it('L3 minimum option ends with a question mark', () => {
-    expect(BEHAVIOUR_TESTING.L3[0]).toMatch(/\?$/);
+    expect(BEHAVIOUR_TESTING.L3[0].option).toMatch(/\?$/);
   });
 
   it('all L1 options are non-empty strings', () => {
-    for (const opt of BEHAVIOUR_TESTING.L1) {
-      expect(typeof opt).toBe('string');
-      expect(opt.trim().length).toBeGreaterThan(0);
+    for (const entry of BEHAVIOUR_TESTING.L1.map((e) => e.option)) {
+      expect(typeof entry).toBe('string');
+      expect(entry.trim().length).toBeGreaterThan(0);
     }
   });
 });
@@ -2656,25 +2777,25 @@ describe('BEHAVIOUR_TESTING_CASUAL content', () => {
   });
 
   it('L1 option 1 is end-to-end user flow — mentions user or go through', () => {
-    expect(BEHAVIOUR_TESTING_CASUAL.L1[0].toLowerCase()).toMatch(/user|go through/);
+    expect(BEHAVIOUR_TESTING_CASUAL.L1[0].option.toLowerCase()).toMatch(/user|go through/);
   });
 
   it('L1 option 2 is scenario variety — mentions different ways or real life', () => {
-    expect(BEHAVIOUR_TESTING_CASUAL.L1[1].toLowerCase()).toMatch(/different ways|real life/);
+    expect(BEHAVIOUR_TESTING_CASUAL.L1[1].option.toLowerCase()).toMatch(/different ways|real life/);
   });
 
   it('L1 option 3 is breakage hunting — mentions automated tests or wrong', () => {
-    expect(BEHAVIOUR_TESTING_CASUAL.L1[2].toLowerCase()).toMatch(/automated|wrong/);
+    expect(BEHAVIOUR_TESTING_CASUAL.L1[2].option.toLowerCase()).toMatch(/automated|wrong/);
   });
 
   it('L3 minimum option ends with a question mark', () => {
-    expect(BEHAVIOUR_TESTING_CASUAL.L3[0]).toMatch(/\?$/);
+    expect(BEHAVIOUR_TESTING_CASUAL.L3[0].option).toMatch(/\?$/);
   });
 
   it('all L1 options are non-empty strings', () => {
-    for (const opt of BEHAVIOUR_TESTING_CASUAL.L1) {
-      expect(typeof opt).toBe('string');
-      expect(opt.trim().length).toBeGreaterThan(0);
+    for (const entry of BEHAVIOUR_TESTING_CASUAL.L1.map((e) => e.option)) {
+      expect(typeof entry).toBe('string');
+      expect(entry.trim().length).toBeGreaterThan(0);
     }
   });
 });
@@ -2732,22 +2853,22 @@ describe('IMPLEMENTATION_TO_REVIEW — v0.3.0 addition', () => {
   });
 
   it('5th L1 option contains "manual acceptance test"', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('manual acceptance test');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[4].option.toLowerCase()).toContain('manual acceptance test');
   });
 
   it('5th L1 option mentions spec scenarios', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toContain('spec scenarios');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[4].option.toLowerCase()).toContain('spec scenarios');
   });
 
   it('5th L1 option mentions boundary conditions or error states', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[4].toLowerCase()).toMatch(/boundary conditions|error states/);
+    expect(IMPLEMENTATION_TO_REVIEW.L1[4].option.toLowerCase()).toMatch(/boundary conditions|error states/);
   });
 
   it('first 4 L1 options are unchanged from before v0.3.0', () => {
-    expect(IMPLEMENTATION_TO_REVIEW.L1[0]).toContain('Run the full test suite');
-    expect(IMPLEMENTATION_TO_REVIEW.L1[1]).toContain('Check the spec acceptance criteria');
-    expect(IMPLEMENTATION_TO_REVIEW.L1[2]).toContain('Cross-confirm the full implementation');
-    expect(IMPLEMENTATION_TO_REVIEW.L1[3]).toContain('Review for regression');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[0].option).toContain('Run the full test suite');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[1].option).toContain('Check the spec acceptance criteria');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[2].option).toContain('Cross-confirm the full implementation');
+    expect(IMPLEMENTATION_TO_REVIEW.L1[3].option).toContain('Review for regression');
   });
 });
 
@@ -3019,7 +3140,7 @@ describe('runLevel — generatedOptions wiring', () => {
     await runLevel(makeInput({ generatedOptions }), 1, spy as SelectFn);
     const opts = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0].options as { value: string }[];
     const values = opts.map((o) => o.value);
-    for (const staticOpt of staticContent.L1) {
+    for (const staticOpt of staticContent.L1.map((e) => e.option)) {
       expect(values).not.toContain(staticOpt);
     }
   });
@@ -3074,7 +3195,7 @@ describe('runLevel — generatedOptions wiring', () => {
     await runLevel(makeInput({ generatedOptions: undefined }), 1, spy as SelectFn);
     const opts = (spy as ReturnType<typeof vi.fn>).mock.calls[0][0].options as { value: string }[];
     const values = opts.map((o) => o.value);
-    expect(values).toContain(staticContent.L1[0]);
+    expect(values).toContain(staticContent.L1[0].option);
   });
 });
 
@@ -3228,7 +3349,7 @@ describe('C-02: beginner content blocks structure', () => {
       expect(content.L3).toHaveLength(1);
     });
     it(`${name}: L1[0] contains \\n (numbered steps)`, () => {
-      expect(content.L1[0]).toContain('\n');
+      expect(content.L1[0].option).toContain('\n');
     });
   }
 });
@@ -3401,7 +3522,7 @@ describe('runLevel — NEXPATH_SIM=1 support', () => {
     const content = resolveDecisionContent('implementation', 'stage_transition');
     const result = await runLevel(makeInput(), 1, selectFn as SelectFn);
     expect(selectFn).not.toHaveBeenCalled();
-    expect(result).toBe(content.L1[0]);
+    expect(result).toBe(content.L1[0].option);
   }, 2000);
 
   it('emits decision_session_sim_dismissed with level and autoSelectedText when NEXPATH_SIM=1', async () => {
@@ -3612,10 +3733,10 @@ describe('DecisionContent structure — Sub-4 Group A formal/casual (idea signal
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3650,10 +3771,10 @@ describe('DecisionContent structure — Sub-4 Group A beginner (idea signals)', 
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3709,10 +3830,10 @@ describe('DecisionContent structure — Sub-4 Group B formal/casual (task_breakd
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3747,10 +3868,10 @@ describe('DecisionContent structure — Sub-4 Group B beginner (task_breakdown s
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3792,10 +3913,10 @@ describe('DecisionContent structure — Sub-4 Group C formal/casual (feedback_lo
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3823,10 +3944,10 @@ describe('DecisionContent structure — Sub-4 Group C beginner (feedback_loop si
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -3843,10 +3964,10 @@ describe('DecisionContent structure — Sub-5 RELEASE_TO_FEEDBACK (non-beginner)
   it('RELEASE_TO_FEEDBACK has non-empty question, pinchFallback, L1[0], L1[1], L2[0], L3[0]', () => {
     expect(RELEASE_TO_FEEDBACK.question.length).toBeGreaterThan(0);
     expect(RELEASE_TO_FEEDBACK.pinchFallback.length).toBeGreaterThan(0);
-    expect(RELEASE_TO_FEEDBACK.L1[0].length).toBeGreaterThan(0);
-    expect(RELEASE_TO_FEEDBACK.L1[1].length).toBeGreaterThan(0);
-    expect(RELEASE_TO_FEEDBACK.L2[0].length).toBeGreaterThan(0);
-    expect(RELEASE_TO_FEEDBACK.L3[0].length).toBeGreaterThan(0);
+    expect(RELEASE_TO_FEEDBACK.L1[0].option.length).toBeGreaterThan(0);
+    expect(RELEASE_TO_FEEDBACK.L1[1].option.length).toBeGreaterThan(0);
+    expect(RELEASE_TO_FEEDBACK.L2[0].option.length).toBeGreaterThan(0);
+    expect(RELEASE_TO_FEEDBACK.L3[0].option.length).toBeGreaterThan(0);
   });
 });
 
@@ -3864,10 +3985,10 @@ describe('DecisionContent structure — Sub-5 RELEASE_TO_FEEDBACK_BEGINNER', () 
     const beginner = TRANSITION_CONTENT_BEGINNER.feedback_loop!;
     expect(beginner.question.length).toBeGreaterThan(0);
     expect(beginner.pinchFallback.length).toBeGreaterThan(0);
-    expect(beginner.L1[0].length).toBeGreaterThan(0);
-    expect(beginner.L1[1].length).toBeGreaterThan(0);
-    expect(beginner.L2[0].length).toBeGreaterThan(0);
-    expect(beginner.L3[0].length).toBeGreaterThan(0);
+    expect(beginner.L1[0].option.length).toBeGreaterThan(0);
+    expect(beginner.L1[1].option.length).toBeGreaterThan(0);
+    expect(beginner.L2[0].option.length).toBeGreaterThan(0);
+    expect(beginner.L3[0].option.length).toBeGreaterThan(0);
   });
 });
 
@@ -3936,9 +4057,9 @@ describe('DecisionContent structure — Sub-7 formal content sets', () => {
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -4008,9 +4129,9 @@ describe('DecisionContent structure — Sub-7 casual content sets', () => {
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -4080,10 +4201,10 @@ describe('DecisionContent structure — Sub-7 beginner content sets', () => {
     for (const c of entries) {
       expect(c.question.length).toBeGreaterThan(0);
       expect(c.pinchFallback.length).toBeGreaterThan(0);
-      expect(c.L1[0].length).toBeGreaterThan(0);
-      expect(c.L1[1].length).toBeGreaterThan(0);
-      expect(c.L2[0].length).toBeGreaterThan(0);
-      expect(c.L3[0].length).toBeGreaterThan(0);
+      expect(c.L1[0].option.length).toBeGreaterThan(0);
+      expect(c.L1[1].option.length).toBeGreaterThan(0);
+      expect(c.L2[0].option.length).toBeGreaterThan(0);
+      expect(c.L3[0].option.length).toBeGreaterThan(0);
     }
   });
 });
@@ -5475,7 +5596,7 @@ describe('Phase 7 content — no count-literal tokens in L1/L2/L3', () => {
 
   for (const { name, c } of constants) {
     it(`${name} L1/L2/L3 entries contain no count-literal tokens`, () => {
-      const all: string[] = [...c.L1, ...c.L2, ...c.L3];
+      const all: string[] = [...c.L1.map((e) => e.option), ...c.L2.map((e) => e.option), ...c.L3.map((e) => e.option)];
       for (let i = 0; i < all.length; i++) {
         const text = all[i];
         for (const { pattern, description } of forbidden) {
@@ -5556,7 +5677,7 @@ describe('D10-D12 academic-register — no citation patterns or tool callouts in
 
   for (const { name, c } of constants) {
     it(`${name} L1/L2 entries contain no academic citation or tool-callout patterns`, () => {
-      const checkable: string[] = [...c.L1, ...c.L2];
+      const checkable: string[] = [...c.L1.map((e) => e.option), ...c.L2.map((e) => e.option)];
       for (let i = 0; i < checkable.length; i++) {
         const text = checkable[i];
         for (const { pattern, description } of forbidden) {
@@ -5638,7 +5759,7 @@ describe('Founder role — no opener-attribution patterns in rewritten L1 slots'
   for (const { name, c, slots } of affectedSlots) {
     for (const slotIndex of slots) {
       it(`${name} L1[${slotIndex}] (rewritten) contains no opener-attribution patterns`, () => {
-        const text = c.L1[slotIndex];
+        const text = c.L1[slotIndex].option;
         for (const { pattern, description } of forbidden) {
           expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
         }
@@ -5720,7 +5841,7 @@ describe('PM role — no opener-citation or framework-only opener tokens in rewr
   for (const { name, c, slots } of affectedSlots) {
     for (const slotIndex of slots) {
       it(`${name} L1[${slotIndex}] (rewritten) contains no citation or framework-opener patterns`, () => {
-        const text = c.L1[slotIndex];
+        const text = c.L1[slotIndex].option;
         for (const { pattern, description } of forbidden) {
           expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
         }
@@ -5793,7 +5914,7 @@ describe('Indie_hacker role — no opener-citation patterns in rewritten L1 slot
   for (const { name, c, slots } of affectedSlots) {
     for (const slotIndex of slots) {
       it(`${name} L1[${slotIndex}] (rewritten) contains no opener-citation patterns`, () => {
-        const text = c.L1[slotIndex];
+        const text = c.L1[slotIndex].option;
         for (const { pattern, description } of forbidden) {
           expect(text, `L1[${slotIndex}] matches ${description}: "${text}"`).not.toMatch(pattern);
         }
@@ -5809,20 +5930,20 @@ describe('Indie_hacker role — no opener-citation patterns in rewritten L1 slot
 
 describe('D7-D9 borderline — ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] invariant', () => {
   it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] starts with an action verb (Add)', () => {
-    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/^Add tests beyond the happy path/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2].option).toMatch(/^Add tests beyond the happy path/);
   });
 
   it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] ends with the per-category write directive', () => {
-    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).toMatch(/Write at least one test per category for what was just built before moving on\.$/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2].option).toMatch(/Write at least one test per category for what was just built before moving on\.$/);
   });
 
   it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[2] does NOT contain the original "misleadingly high" educational closer', () => {
-    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2]).not.toMatch(/misleadingly high/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[2].option).not.toMatch(/misleadingly high/);
   });
 
   it('ABSENCE_TEST_DEPTH_CHECK_CASUAL L1[0] and L1[1] are unchanged from source (not touched by §12.10)', () => {
-    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[0]).toMatch(/Testing pyramid \(Mike Cohn, 2009\)/);
-    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[1]).toMatch(/Branch coverage over line coverage/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[0].option).toMatch(/Testing pyramid \(Mike Cohn, 2009\)/);
+    expect(ABSENCE_TEST_DEPTH_CHECK_CASUAL.L1[1].option).toMatch(/Branch coverage over line coverage/);
   });
 });
 
