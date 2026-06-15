@@ -16,14 +16,15 @@ afterAll(() => {
 });
 
 describe('styler — line-kind contract', () => {
-  it('ALL_LINE_KINDS contains exactly the 8 locked kinds', () => {
-    expect(ALL_LINE_KINDS).toHaveLength(8);
+  it('ALL_LINE_KINDS contains exactly the 9 locked kinds', () => {
+    expect(ALL_LINE_KINDS).toHaveLength(9);
     expect(ALL_LINE_KINDS).toEqual([
       'popup-why-help',
       'desc-base-truncated',
       'desc-base-expanded',
       'shortcut-hint',
       'option-label',
+      'option-label-unfocused',
       'pinch-label',
       'question',
       'page-header',
@@ -47,9 +48,13 @@ describe('styler — line-kind contract', () => {
 // in a single kind reports as one targeted failure instead of collapsing
 // into a loop iteration that loses the failing-kind context.
 //
-// Four kinds receive ANSI styling (popup-why-help, desc-base-truncated,
-// desc-base-expanded, shortcut-hint); three kinds inherit (option-label,
-// pinch-label, question) and are returned unchanged.
+// Five kinds receive ANSI styling (popup-why-help, desc-base-truncated,
+// desc-base-expanded, shortcut-hint, option-label-unfocused); three
+// kinds inherit (option-label, pinch-label, question) and are returned
+// unchanged. The option-label kind is now reserved for the focused
+// option's label (full-weight visual anchor), while option-label-unfocused
+// applies pc.dim to non-focused options so the user's eye lands on the
+// focused option first.
 
 describe('styler — per-kind styled dispatch', () => {
   it('wraps popup-why-help with dim styling', () => {
@@ -82,6 +87,16 @@ describe('styler — per-kind styled dispatch', () => {
     expect(out).not.toBe(sample);
     expect(out).toContain(sample);
     expect(out).toMatch(/\x1b\[/);
+  });
+
+  it('wraps option-label-unfocused with dim styling (non-focused option labels fade)', () => {
+    const sample = 'sample line content';
+    const out = styler(sample, 'option-label-unfocused');
+    expect(out).not.toBe(sample);
+    expect(out).toContain(sample);
+    // Dim SGR sequence — `\x1b[2m` opens, `\x1b[22m` closes.
+    expect(out).toMatch(/\x1b\[2m/);
+    expect(out).toMatch(/\x1b\[22m/);
   });
 });
 
@@ -126,7 +141,7 @@ describe('styler — defensive contracts', () => {
     // already-ANSI-wrapped input would compound the styling and mask the
     // layout leak — the guard surfaces this in dev builds.
     const preStyled = '\x1b[31mred\x1b[0m';
-    const styledKinds: LineKind[] = ['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint'];
+    const styledKinds: LineKind[] = ['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint', 'option-label-unfocused'];
     for (const kind of styledKinds) {
       expect(() => styler(preStyled, kind), `kind=${kind}`).toThrow(/styler received pre-styled input/);
     }

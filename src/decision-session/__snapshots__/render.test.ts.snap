@@ -8,11 +8,11 @@ Before building — is the plan written?
 [2m— review the options below to determine the next step.[22m
 [2m[22m
 Write a PRD
-[90m↳ PRD body sentence.[39m
+[2m↳ PRD body sentence.[22m
 [2m[3mpress Space to toggle details[23m[22m
-Define problem
+[2mDefine problem[22m
 [90m↳ Problem framing sentence.[39m
-Skip for now"
+[2mSkip for now[22m"
 `;
 
 exports[`render — full-popup snapshot (dual styled / unstyled) > produces a stable unstyled snapshot from the fixture popup (NEXPATH_STYLE_PASSTHROUGH=1) > unstyled 1`] = `

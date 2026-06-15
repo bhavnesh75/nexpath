@@ -40,6 +40,7 @@ export type LineKind =
   | 'desc-base-expanded'
   | 'shortcut-hint'
   | 'option-label'
+  | 'option-label-unfocused'
   | 'pinch-label'
   | 'question'
   | 'page-header';
@@ -51,6 +52,7 @@ export const ALL_LINE_KINDS: readonly LineKind[] = [
   'desc-base-expanded',
   'shortcut-hint',
   'option-label',
+  'option-label-unfocused',
   'pinch-label',
   'question',
   'page-header',
@@ -89,7 +91,13 @@ export function isStylePassthroughActive(): boolean {
  *                          the user scans labels first; still legible)
  *   - shortcut-hint      → dim + italic (matches the existing
  *                          dim+italic precedent for hint text)
- *   - option-label       → inherit (existing option-label styling)
+ *   - option-label       → inherit (focused option label — full-weight
+ *                          visual anchor; computeLayout emits this kind
+ *                          ONLY for the currently focused option)
+ *   - option-label-unfocused → dim (non-focused option labels fade so
+ *                          the user's eye lands on the focused option
+ *                          first — restores the clack/prompts.select()
+ *                          default that the local render-loop replaced)
  *   - pinch-label        → inherit (existing pinch-label styling)
  *   - question           → inherit (plain reads naturally)
  *
@@ -165,10 +173,11 @@ function stylerInner(line: string, kind: LineKind): string {
   }
 
   switch (kind) {
-    case 'popup-why-help':      return pc.dim(line);
-    case 'desc-base-expanded':  return pc.dim(line);
-    case 'desc-base-truncated': return pc.gray(line);
-    case 'shortcut-hint':       return pc.dim(pc.italic(line));
+    case 'popup-why-help':         return pc.dim(line);
+    case 'desc-base-expanded':     return pc.dim(line);
+    case 'desc-base-truncated':    return pc.gray(line);
+    case 'shortcut-hint':          return pc.dim(pc.italic(line));
+    case 'option-label-unfocused': return pc.dim(line);
     default:
       // Unknown kind — graceful fallback per the LineKind extensibility rule.
       return line;

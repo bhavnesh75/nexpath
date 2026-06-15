@@ -556,12 +556,23 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
     const item     = opts.options[i];
     const startIdx = emissions.length;
 
+    const isFocused = i === state.focusedIndex;
     if (item.isSeparator) {
       // Blank padding row, no LineKind-specific styling.
       emissions.push({ kind: 'option-label', text: '', optionIndex: i, isPadding: true });
     } else {
-      // option-label line.
-      emissions.push({ kind: 'option-label', text: item.label, optionIndex: i, isPadding: false });
+      // option-label line. Focused option's label is the full-weight
+      // visual anchor (option-label kind, inherit / no extra ANSI);
+      // non-focused options' labels fade to dim (option-label-unfocused
+      // kind, styler routes to pc.dim) so the user's eye lands on the
+      // focused option first. This restores the clack/prompts.select()
+      // default behaviour the local render-loop replaced.
+      emissions.push({
+        kind:        isFocused ? 'option-label' : 'option-label-unfocused',
+        text:        item.label,
+        optionIndex: i,
+        isPadding:   false,
+      });
 
       // desc-base sub-line — only for non-meta items with descBase content.
       // Wrap at terminal width, apply D1 cap (truncated) or D5 cap
@@ -577,7 +588,14 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
       const isExpanded = requestedExpanded && expansionAllowed;
       if (!item.isMeta && item.descBase && item.descBase.length > 0) {
         const cap      = isExpanded ? preExpandedCap : D1_TRUNCATED_LINE_CAP;
-        const kind     = isExpanded ? 'desc-base-expanded' : 'desc-base-truncated';
+        // Kind is broadened to "expanded" (the readable dim tier) for the
+        // focused option even when the user has not pressed Space to
+        // explicitly expand — the styler comment for desc-base-expanded
+        // already describes the tier as "readable while the option is
+        // active". The line CAP stays gated on isExpanded only, so the
+        // focused-but-unexpanded case still shows D1 (2 lines) preview;
+        // only the styling tier follows focus.
+        const kind     = (isExpanded || isFocused) ? 'desc-base-expanded' : 'desc-base-truncated';
         // Reserve CHROME_MAX_PREFIX_WIDTH columns from the wrap budget so
         // post-chrome lines stay within opts.cols. Without this reservation
         // the chrome prefix would push wrapped lines over the terminal

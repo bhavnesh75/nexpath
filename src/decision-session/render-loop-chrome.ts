@@ -95,10 +95,21 @@ export function computeChromePrefix(
     case 'shortcut-hint':
       return cyan('│') + ' ';
     case 'option-label':
+      // computeLayout emits this kind ONLY for the focused option (the
+      // separator-padding case is emitted with isPadding=true). The
+      // focusedOptionIndex check is kept as a defensive fallback so
+      // unit tests that synthesise option-label emissions with mismatched
+      // indices still get a sensible prefix.
       if (e.isPadding) return cyan('│') + ' ';  // separator — rail only
       if (e.optionIndex === options.focusedOptionIndex) {
         return cyan('│') + ' ' + green('●') + ' ';
       }
+      return cyan('│') + ' ' + gray('○') + ' ';
+    case 'option-label-unfocused':
+      // Non-focused option label — gray ○ bullet (matches the
+      // pre-restoration option-label non-focused branch above). Kept as
+      // a separate case so the styler can route this kind to pc.dim
+      // without affecting the focused option's full-weight label.
       return cyan('│') + ' ' + gray('○') + ' ';
     case 'desc-base-truncated':
     case 'desc-base-expanded':

@@ -110,7 +110,14 @@ describe('render-loop — computeLayout vertical order (dev-plan §11.2)', () =>
 
   it('emits option-label + ↳-prefixed desc-base sub-line per option', () => {
     const r = computeLayout(makeOpts(), FRESH_STATE);
-    const labels = r.emissions.filter((e) => e.kind === 'option-label');
+    // Focused option (index 0) emits 'option-label'; non-focused options
+    // emit 'option-label-unfocused' (restores clack/prompts.select() default
+    // — non-focused labels fade to dim so the eye lands on the focused
+    // option first). The test filters for both kinds to assert the label
+    // emission shape regardless of which kind tier the option lands in.
+    const labels = r.emissions.filter(
+      (e) => e.kind === 'option-label' || e.kind === 'option-label-unfocused',
+    );
     expect(labels.map((e) => e.text)).toEqual(['Write a PRD', 'Define problem']);
 
     const subs = r.emissions.filter((e) => e.kind === 'desc-base-truncated' || e.kind === 'desc-base-expanded');
@@ -121,11 +128,14 @@ describe('render-loop — computeLayout vertical order (dev-plan §11.2)', () =>
   });
 
   it('emits the desc-base sub-line as desc-base-truncated by default and desc-base-expanded when index is in expandedOptions', () => {
-    const r = computeLayout(makeOpts(), { ...FRESH_STATE, expandedOptions: new Set([1]) });
+    // Focus option 1 so option 0 is NOT focused. The kind selection then
+    // depends purely on whether the option is in expandedOptions:
+    //   - option 0: not focused, not expanded → desc-base-truncated
+    //   - option 1: focused AND in expandedOptions → desc-base-expanded
+    const r = computeLayout(makeOpts(), { ...FRESH_STATE, focusedIndex: 1, expandedOptions: new Set([1]) });
     const subs = r.emissions.filter((e) => e.kind === 'desc-base-truncated' || e.kind === 'desc-base-expanded');
-    // option 0 → truncated; option 1 → expanded
-    expect(subs[0].kind).toBe('desc-base-truncated');
-    expect(subs[1].kind).toBe('desc-base-expanded');
+    expect(subs[0].kind).toBe('desc-base-truncated');  // option 0 — not focused, not expanded
+    expect(subs[1].kind).toBe('desc-base-expanded');   // option 1 — focused AND in expandedOptions
   });
 
   it('skips the desc-base sub-line for meta items (SKIP_NOW / SHOW_SIMPLER / HELP_LABEL)', () => {
@@ -188,12 +198,12 @@ describe('render-loop — LineKind separate-element invariant (dev-plan §11.11)
     const focSlice    = r.emissions.slice(focused.startIdx,   focused.endIdx);
 
     expect(unfocSlice).toHaveLength(2);
-    expect(unfocSlice[0].kind).toBe('option-label');
-    expect(unfocSlice[1].kind).toBe('desc-base-truncated');
+    expect(unfocSlice[0].kind).toBe('option-label-unfocused');  // non-focused label fades to dim
+    expect(unfocSlice[1].kind).toBe('desc-base-truncated');      // non-focused desc-base stays gray
 
     expect(focSlice).toHaveLength(3);
-    expect(focSlice[0].kind).toBe('option-label');
-    expect(focSlice[1].kind).toBe('desc-base-truncated');
+    expect(focSlice[0].kind).toBe('option-label');               // focused label is full-weight anchor
+    expect(focSlice[1].kind).toBe('desc-base-expanded');         // focused desc-base bumps to readable tier
     expect(focSlice[2].kind).toBe('shortcut-hint');
   });
 });
@@ -206,7 +216,7 @@ describe('render-loop — styler dispatch', () => {
 
   it('styled kinds wrap the emission text with ANSI; inherit kinds pass through verbatim', () => {
     const r = computeLayout(makeOpts({ subtitle: 's', whyHelpBlock: 'a\nb\nc' }), FRESH_STATE);
-    const styledKinds = new Set(['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint']);
+    const styledKinds = new Set(['popup-why-help', 'desc-base-truncated', 'desc-base-expanded', 'shortcut-hint', 'option-label-unfocused']);
     let sawAtLeastOneStyledWrap = false;
     for (let i = 0; i < r.emissions.length; i++) {
       const { text, kind } = r.emissions[i];
@@ -342,7 +352,13 @@ describe('render-loop — computeLayout D1 + D2 integration', () => {
       cols: 80,
     };
     const r = computeLayout(opts, { focusedIndex: 0, expandedOptions: new Set(), scrollOffset: 0 });
-    const descLines = r.emissions.filter((e) => e.kind === 'desc-base-truncated');
+    // The option is focused — its desc-base kind is desc-base-expanded
+    // (focused readability tier). The CAP stays at D1 (2 lines, truncated)
+    // because the option is not in expandedOptions. Filter for both kinds
+    // so the test isolates the cap behaviour from the kind-tier choice.
+    const descLines = r.emissions.filter(
+      (e) => e.kind === 'desc-base-truncated' || e.kind === 'desc-base-expanded',
+    );
     expect(descLines).toHaveLength(D1_TRUNCATED_LINE_CAP);
     expect(descLines[D1_TRUNCATED_LINE_CAP - 1].text.endsWith(D2_TRUNCATION_MARKER)).toBe(true);
   });
@@ -365,10 +381,19 @@ describe('render-loop — computeLayout D1 + D2 integration', () => {
       options: [{ value: 'a', label: 'L', descBase: 'one\ntwo' }],
       rows: 40, cols: 80,
     };
+    // The single option here is focused (focusedIndex: 0) — its desc-base
+    // kind is desc-base-expanded (focused readability tier). The
+    // separate-element invariant holds: all wrapped desc-base lines for
+    // this option share the same kind. The assertion is parameterised on
+    // the actual emitted kind so the invariant is preserved regardless
+    // of the focus-aware tier selection.
     const r = computeLayout(opts, { focusedIndex: 0, expandedOptions: new Set(), scrollOffset: 0 });
-    const descLines = r.emissions.filter((e) => e.kind === 'desc-base-truncated');
+    const descLines = r.emissions.filter(
+      (e) => e.kind === 'desc-base-truncated' || e.kind === 'desc-base-expanded',
+    );
     expect(descLines).toHaveLength(2);
-    for (const e of descLines) expect(e.kind).toBe('desc-base-truncated');
+    const sharedKind = descLines[0].kind;
+    for (const e of descLines) expect(e.kind).toBe(sharedKind);
   });
 });
 
@@ -625,7 +650,14 @@ describe('render-loop — shortcut-hint emission (§11.2 Gap 4 fix)', () => {
   it('the shortcut-hint emission comes AFTER the focused option\'s desc-base sub-line block', () => {
     const r       = computeLayout(makeOpts(), { ...FRESH_STATE, focusedIndex: 0 });
     const hintIdx = r.emissions.findIndex((e) => e.kind === 'shortcut-hint');
-    const descIdx = r.emissions.findIndex((e) => e.kind === 'desc-base-truncated' && e.optionIndex === 0);
+    // Focused option's desc-base kind is desc-base-expanded (focused
+    // readability tier). Filter for either tier so the test stays
+    // robust if the tier selection shifts again in future.
+    const descIdx = r.emissions.findIndex(
+      (e) =>
+        (e.kind === 'desc-base-truncated' || e.kind === 'desc-base-expanded') &&
+        e.optionIndex === 0,
+    );
     expect(descIdx).toBeGreaterThan(-1);
     expect(hintIdx).toBeGreaterThan(descIdx);
   });
@@ -1169,16 +1201,21 @@ describe('render-loop — D5 edge case (c): short-terminal refuse-to-expand', ()
     // Very short terminal: rows=8, so avail = 8 - fixedLines(2 + 1 padding) - 2 = 3.
     // avail - 5 = -2 → secondaryCap = max(0, -2) = 0 → 0 < D5_MIN_EFFECTIVE_CAP(2)
     // → refusal. desc-base lines should be desc-base-truncated, not -expanded.
+    //
+    // Focus a DIFFERENT option (index 1) so the refused option (0) is
+    // non-focused — the kind-vs-cap correlation then still holds:
+    // a refused non-focused option lands in desc-base-truncated.
     const opts = makeOpts({ rows: 8 });
     const stateExpanded: LayoutState = {
       ...FRESH_STATE,
+      focusedIndex:    1,
       expandedOptions: new Set([0]),
     };
     const r = computeLayout(opts, stateExpanded);
-    const focusedRange = r.optionLineRanges.find((rg) => rg.itemIndex === 0)!;
-    const focusedLines = r.emissions.slice(focusedRange.startIdx, focusedRange.endIdx);
-    const expandedLines  = focusedLines.filter((e) => e.kind === 'desc-base-expanded');
-    const truncatedLines = focusedLines.filter((e) => e.kind === 'desc-base-truncated');
+    const refusedRange = r.optionLineRanges.find((rg) => rg.itemIndex === 0)!;
+    const refusedLines = r.emissions.slice(refusedRange.startIdx, refusedRange.endIdx);
+    const expandedLines  = refusedLines.filter((e) => e.kind === 'desc-base-expanded');
+    const truncatedLines = refusedLines.filter((e) => e.kind === 'desc-base-truncated');
     expect(expandedLines.length).toBe(0);
     expect(truncatedLines.length).toBeGreaterThan(0);
   });
@@ -1186,12 +1223,16 @@ describe('render-loop — D5 edge case (c): short-terminal refuse-to-expand', ()
   it('does NOT refuse for options the user did not request expansion on', () => {
     // Same short-terminal scenario but expandedOptions empty — no refusal
     // path triggered (since user did not ask for expansion).
+    //
+    // Focus a DIFFERENT option (index 1) so option 0 is non-focused —
+    // the kind-vs-cap correlation still holds: non-focused, non-expanded
+    // option lands in desc-base-truncated.
     const opts = makeOpts({ rows: 8 });
-    const r = computeLayout(opts, FRESH_STATE);
-    const focusedRange = r.optionLineRanges.find((rg) => rg.itemIndex === 0)!;
-    const focusedLines = r.emissions.slice(focusedRange.startIdx, focusedRange.endIdx);
+    const r = computeLayout(opts, { ...FRESH_STATE, focusedIndex: 1 });
+    const checkRange = r.optionLineRanges.find((rg) => rg.itemIndex === 0)!;
+    const checkLines = r.emissions.slice(checkRange.startIdx, checkRange.endIdx);
     // All desc-base lines should be truncated (default state — not a refusal).
-    const truncatedLines = focusedLines.filter((e) => e.kind === 'desc-base-truncated');
+    const truncatedLines = checkLines.filter((e) => e.kind === 'desc-base-truncated');
     expect(truncatedLines.length).toBeGreaterThan(0);
   });
 });
