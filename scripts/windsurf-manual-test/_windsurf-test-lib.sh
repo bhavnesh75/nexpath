@@ -266,10 +266,29 @@ prompt_box() {
 # enough without needing the captured_at window.
 captures_since_start() { db_scalar "SELECT count(*) FROM prompts WHERE project_root LIKE '%${WORK_BASENAME}';"; }
 
+# Poll captures_since_start until it reaches >= want, or CAPTURE_WAIT_SECS elapses.
+# The Cascade hook → `nexpath auto` write lags a few seconds behind the agent reply
+# (LS hook scheduling + node cold start on the first prompt; `auto` also runs its LLM
+# pipeline), and a read that races `auto`'s sql.js writeFileSync can momentarily see
+# the pre-write file. Polling absorbs both so a captured prompt is never reported as 0.
+# If the hook truly never fires, this just waits the timeout and returns the real (low)
+# count — the shortfall still surfaces in verify_prompt / the prompt-1 warning.
+CAPTURE_WAIT_SECS="${CAPTURE_WAIT_SECS:-15}"
+wait_for_captures() {
+  local want="$1" c i
+  for ((i = 0; i < CAPTURE_WAIT_SECS; i++)); do
+    c=$(captures_since_start)
+    [[ "${c:-0}" -ge "$want" ]] && { printf '%s' "$c"; return 0; }
+    sleep 1
+  done
+  captures_since_start
+}
+
 verify_prompt() {
   local idx="$1" expected="$2" prior="$3"
   local captures fires delta
-  captures=$(captures_since_start); fires=$(tel_fires_since_start)
+  # Cumulative captures should reach idx by now; poll to absorb hook/auto write lag.
+  captures=$(wait_for_captures "$idx"); fires=$(tel_fires_since_start)
   delta=$((fires - prior))
   echo ""
   echo "  ──── Verification for prompt ${idx} ────"
@@ -313,7 +332,7 @@ run_prompt() {
   PRIOR_ADV=$(tel_fires_since_start)
   if [[ "$fire" == "YES" && "$R25_DONE" -eq 0 && "$PRIOR_ADV" -ge 1 ]]; then r25_verify; fi
   if [[ "$idx" == "1" ]]; then
-    local cap; cap=$(captures_since_start)
+    local cap; cap=$(wait_for_captures 1)
     if [[ "$cap" -eq 0 ]]; then
       echo ""
       echo "  ✗ WARNING: 0 prompts captured after prompt 1 — the Cascade hook isn't firing."
