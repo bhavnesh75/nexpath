@@ -142,7 +142,7 @@ open_windsurf() {
 db_scalar() {
   local sql="$1" repo="$NEXPATH_REPO"
   if [[ "$OS" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
-    repo="$(cygpath -w "$NEXPATH_REPO")"
+    repo="$(cygpath -m "$NEXPATH_REPO")"   # 'C:/...' forward slashes: native to Win32 Node, MSYS2-safe argv
   fi
   "$NODE_BIN" --input-type=module -e '
     import { readFileSync, existsSync } from "node:fs";
@@ -236,13 +236,27 @@ resolve_nexpath_repo() {
 # using the real writeWindsurfHooks so it matches exactly what `nexpath install`
 # does. Prints the hooks path. Cross-OS (pathToFileURL for the dynamic import).
 ensure_windsurf_hook() {
+  # CRITICAL (Windows): the harness runs under Git Bash but spawns a WIN32 Node.
+  # Win32 Node's path.resolve/join read a MINGW '/c/...' path as 'C:\c\...' (current
+  # drive + a literal 'c'), so writeWindsurfHooks would bake a BROKEN absolute CLI
+  # path into hooks.json — e.g. node "C:\c\Users\...\dist\cli\index.js" — and the
+  # Cascade hook then fires but ENOENTs → capture 0 (the exact Windows symptom).
+  # Hand WIN32 Node native paths (cygpath -m → 'C:/Users/...' with forward slashes,
+  # so MSYS2 doesn't re-mangle the argv) and resolve() yields the real CLI path.
+  # The real `nexpath install` is unaffected — it uses native process.argv[1].
+  local repo="$NEXPATH_REPO" home="$HOME"
+  if [[ "$OS" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
+    repo="$(cygpath -m "$NEXPATH_REPO")"
+    home="$(cygpath -m "$HOME")"
+  fi
   "$NODE_BIN" --input-type=module -e '
-    const repo = process.argv[1];
+    const [repo, home] = process.argv.slice(1);
     const { pathToFileURL } = await import("node:url");
     const mod = await import(pathToFileURL(repo + "/dist/windsurf-hook/install.js").href);
-    mod.writeWindsurfHooks(mod.getWindsurfHooksPath(process.env.HOME), repo + "/dist/cli/index.js");
-    process.stdout.write(mod.getWindsurfHooksPath(process.env.HOME));
-  ' "$NEXPATH_REPO"
+    const hooksPath = mod.getWindsurfHooksPath(home);
+    mod.writeWindsurfHooks(hooksPath, repo + "/dist/cli/index.js");
+    process.stdout.write(hooksPath);
+  ' "$repo" "$home"
 }
 
 # ─── UI helpers ──────────────────────────────────────────────────────────────
