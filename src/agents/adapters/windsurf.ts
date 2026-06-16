@@ -116,9 +116,22 @@ export const windsurfAdapter: VSCodeExtensionAdapter = {
     // Capture: write the Cascade hook (pre_user_prompt → nexpath auto) so prompts
     // are captured even though Windsurf encrypts Cascade at rest. The advisory is
     // then delivered by the extension's poller (read-only hooks can't inject).
+    const cliPath  = resolve(process.argv[1]);
     const hooksPath = getWindsurfHooksPath(ctx.home);
-    writeWindsurfHooks(hooksPath, resolve(process.argv[1]));
+    writeWindsurfHooks(hooksPath, cliPath);
     console.log(`✓ ${'Windsurf'.padEnd(12)} — Cascade capture hook written to ${hooksPath}`);
+    // Windows/Devin Next does NOT execute the user-level hooks.json (verified
+    // 2026-06-16: 0 hook invocations during a full Cascade walk, while the file was
+    // present at the documented path and `nexpath windsurf-hook` captured fine when
+    // invoked directly). Per the Cascade Hooks spec, hooks also load + merge from the
+    // WORKSPACE-level `.windsurf/hooks.json`, which Devin Next DOES honor — so on
+    // Windows write that too, relative to the project the user runs install in. Gated
+    // to win32 so platforms that already fire the user-level hook don't double-capture.
+    if (process.platform === 'win32') {
+      const wsHooksPath = join(ctx.cwd, '.windsurf', 'hooks.json');
+      writeWindsurfHooks(wsHooksPath, cliPath);
+      console.log(`   ${' '.repeat(12)}   + workspace hook (Windows/Devin Next): ${wsHooksPath}`);
+    }
 
     // Delivery: the extension must be installed for the advisory UI + inject.
     console.log(`   ${' '.repeat(12)}   Then install the Nexpath extension to deliver guidance:`);
@@ -141,6 +154,10 @@ export const windsurfAdapter: VSCodeExtensionAdapter = {
     console.log(removed
       ? `✓ ${'Windsurf'.padEnd(12)} — Cascade capture hook removed`
       : `-  ${'Windsurf'.padEnd(12)} — no Cascade capture hook found`);
+    // Mirror the install: remove the Windows workspace-level hook too (no-op elsewhere).
+    if (process.platform === 'win32') {
+      removeWindsurfHooks(join(ctx.cwd, '.windsurf', 'hooks.json'));
+    }
     console.log(`   ${' '.repeat(12)}   Uninstall the Nexpath extension from the Windsurf Extensions panel`);
     console.log(`    Or via CLI:          windsurf --uninstall-extension ${MARKETPLACE_ID}`);
   },
