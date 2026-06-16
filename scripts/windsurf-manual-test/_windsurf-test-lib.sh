@@ -244,19 +244,37 @@ ensure_windsurf_hook() {
   # Hand WIN32 Node native paths (cygpath -m → 'C:/Users/...' with forward slashes,
   # so MSYS2 doesn't re-mangle the argv) and resolve() yields the real CLI path.
   # The real `nexpath install` is unaffected — it uses native process.argv[1].
-  local repo="$NEXPATH_REPO" home="$HOME"
+  # Windows/Devin Next ONLY: live testing proved Devin Next does NOT execute the
+  # user-level ~/.codeium/windsurf/hooks.json (0 hook invocations during a full walk,
+  # while the file is present at the documented path and the CLI captures fine when
+  # invoked directly). Per the Cascade Hooks spec, hooks also load + merge from the
+  # WORKSPACE-level .windsurf/hooks.json — which is tied to the exact folder Devin has
+  # open and is branding-independent. So on Windows we ALSO write <workspace>/.windsurf/
+  # hooks.json. NOT done on macOS/Linux (user-level already fires there; a second hook
+  # file would double-fire pre_user_prompt → double capture).
+  local repo="$NEXPATH_REPO" home="$HOME" ws="$WORK_DIR" alsoWs="0"
   if [[ "$OS" == "windows" ]] && command -v cygpath >/dev/null 2>&1; then
     repo="$(cygpath -m "$NEXPATH_REPO")"
     home="$(cygpath -m "$HOME")"
+    ws="$(cygpath -m "$WORK_DIR")"
+    alsoWs="1"
   fi
   "$NODE_BIN" --input-type=module -e '
-    const [repo, home] = process.argv.slice(1);
+    const [repo, home, ws, alsoWs] = process.argv.slice(1);
     const { pathToFileURL } = await import("node:url");
+    const { join } = await import("node:path");
     const mod = await import(pathToFileURL(repo + "/dist/windsurf-hook/install.js").href);
-    const hooksPath = mod.getWindsurfHooksPath(home);
-    mod.writeWindsurfHooks(hooksPath, repo + "/dist/cli/index.js");
-    process.stdout.write(hooksPath);
-  ' "$repo" "$home"
+    const cli = repo + "/dist/cli/index.js";
+    const userPath = mod.getWindsurfHooksPath(home);
+    mod.writeWindsurfHooks(userPath, cli);
+    let out = userPath;
+    if (alsoWs === "1") {
+      const wsPath = join(ws, ".windsurf", "hooks.json");
+      mod.writeWindsurfHooks(wsPath, cli);
+      out += "  +  " + wsPath;
+    }
+    process.stdout.write(out);
+  ' "$repo" "$home" "$ws" "$alsoWs"
 }
 
 # ─── UI helpers ──────────────────────────────────────────────────────────────
