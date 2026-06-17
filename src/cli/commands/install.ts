@@ -36,6 +36,12 @@ import {
   writeHookEntry,
   removeHookEntry,
 } from '../../agents/adapters/claude-code.js';
+import {
+  type SupportedPlatform,
+  DEFAULT_PLATFORM,
+  supportedAgentsForPlatform,
+  supportedIdsForPlatform,
+} from './supported-agents-by-platform.js';
 export {
   getClaudeSettingsPath,
   buildHookCommand,
@@ -142,43 +148,9 @@ export type DetectedAgent = {
 };
 
 /**
- * Officially-supported agents in the current nexpath version — single source
- * of truth for the registration allow-list AND the "Not found" notice.
- *
- * Only entries here appear in `detectAgents()` output, get nexpath registration
- * written during install, and show up in `nexpath status`. Agents present on
- * disk but not listed here are silently filtered out.
- *
- * During install, any supported agent NOT detected on disk produces a
- * "Not found: <label>" line so users know which expected agent is missing.
- *
- * To officially support a new agent in a future version:
- *   1. Add { id, label } to this array.
- *   2. Verify the matching push site in detectAgentsForCleanup() builds
- *      the correct DetectedAgent.
- *   3. Verify the registration path (writeMcpEntry / writeOpenCodeEntry / …)
- *      is wired in installAction's per-agent loop.
- *
- * Uninstall uses detectAgentsForCleanup() directly so it can still remove
- * registration entries written by older nexpath versions, even for IDs no
- * longer listed here.
- */
-export const SUPPORTED_AGENTS: ReadonlyArray<{ id: string; label: string }> = [
-  { id: 'claude', label: 'Claude Code' },
-];
-
-/** Derived ID set used by the detectAgents filter. Mirrors SUPPORTED_AGENTS. */
-export const SUPPORTED_AGENT_IDS: ReadonlySet<string> = new Set(
-  SUPPORTED_AGENTS.map((a) => a.id),
-);
-
-/**
  * Detect every agent whose config directory exists on disk, without applying
- * the SUPPORTED_AGENT_IDS filter. Used by the uninstall flow so that legacy
- * registration entries written by older nexpath versions can still be removed.
- *
- * Claude Code is always included — home dir is always present, and the CLI
- * command (claude mcp add) is attempted first regardless.
+ * any platform gate. Used by the uninstall flow so that legacy registration
+ * entries written by older nexpath versions can still be removed.
  */
 export function detectAgentsForCleanup(paths: AgentPaths): DetectedAgent[] {
   const found: DetectedAgent[] = [];
@@ -221,13 +193,17 @@ export function detectAgentsForCleanup(paths: AgentPaths): DetectedAgent[] {
 }
 
 /**
- * Determine which agents to register on install / surface in status.
- *
- * Returns only agents whose `id` appears in SUPPORTED_AGENT_IDS. Agents
- * present on disk but not officially supported are silently filtered out.
+ * Determine which agents to register on install for a given install target.
+ * Returns only agents whose `id` is officially supported on `platform`.
+ * Agents present on disk but outside the platform's supported set are
+ * silently filtered out.
  */
-export function detectAgents(paths: AgentPaths): DetectedAgent[] {
-  return detectAgentsForCleanup(paths).filter((a) => SUPPORTED_AGENT_IDS.has(a.id));
+export function detectAgentsForPlatform(
+  paths: AgentPaths,
+  platform: SupportedPlatform,
+): DetectedAgent[] {
+  const supportedIds = supportedIdsForPlatform(platform);
+  return detectAgentsForCleanup(paths).filter((a) => supportedIds.has(a.id));
 }
 
 // ── Config read / write helpers ───────────────────────────────────────────────
@@ -501,7 +477,7 @@ export interface InstallSummary {
 }
 
 export async function installAction(
-  opts: { yes?: boolean } = {},
+  opts: { yes?: boolean; platform?: SupportedPlatform } = {},
   {
     isWin = process.platform === 'win32',
     paths = resolveAgentPaths(),
@@ -526,6 +502,7 @@ export async function installAction(
     platformForKeychain?: NodeJS.Platform;
   } = {},
 ): Promise<InstallSummary | null> {
+  const platform = opts.platform ?? DEFAULT_PLATFORM;
   intro('Installing nexpath');
 
   const store = await openStore(dbPath);
@@ -585,9 +562,9 @@ export async function installAction(
   }
 
   // ── Step 3: Agent detection + registration ────────────────────────────────
-  const agents      = detectAgents(paths);
+  const agents      = detectAgentsForPlatform(paths, platform);
   const detectedIds = new Set(agents.map((a) => a.id));
-  const missing     = SUPPORTED_AGENTS.filter((sa) => !detectedIds.has(sa.id));
+  const missing     = supportedAgentsForPlatform(platform).filter((sa) => !detectedIds.has(sa.id));
   if (agents.length > 0) {
     console.log(`Detected: ${agents.map((a) => a.label).join(', ')}`);
   }
