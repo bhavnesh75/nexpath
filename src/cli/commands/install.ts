@@ -41,6 +41,7 @@ import {
   DEFAULT_PLATFORM,
   supportedAgentsForPlatform,
   supportedIdsForPlatform,
+  eligibleCategoriesForPlatform,
 } from './supported-agents-by-platform.js';
 export {
   getClaudeSettingsPath,
@@ -697,9 +698,14 @@ export async function installAction(
     yes:  !!opts.yes,
     dbPath,
   };
-  const detectedAdapters = await detectAll(adapterCtx);
+  const detectedAdapters    = await detectAll(adapterCtx);
+  const eligibleCategories  = eligibleCategoriesForPlatform(platform);
   for (const adapter of detectedAdapters) {
     if (adapter.id === 'claude-code') continue;
+    // Platform gate: only run adapter.install() for adapters whose category
+    // matches the chosen install platform. Under --for cli, vscode-extension
+    // and browser-extension adapters stay silent.
+    if (!eligibleCategories.has(adapter.category)) continue;
     try {
       await adapter.install(adapterCtx);
     } catch (err) {
