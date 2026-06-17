@@ -10,6 +10,7 @@ import {
   supportedAgentsForPlatform,
   supportedIdsForPlatform,
   allSupportedIds,
+  eligibleCategoriesForPlatform,
   validatePlatform,
   type SupportedPlatform,
 } from './supported-agents-by-platform.js';
@@ -127,6 +128,36 @@ describe('allSupportedIds', () => {
       for (const id of supportedIdsForPlatform(p)) perPlatform.add(id);
     }
     expect([...allSupportedIds()].sort()).toEqual([...perPlatform].sort());
+  });
+});
+
+describe('eligibleCategoriesForPlatform', () => {
+  it('cli platform eligible categories = { hook, cli-wrap }', () => {
+    expect([...eligibleCategoriesForPlatform('cli')].sort()).toEqual(['cli-wrap', 'hook']);
+  });
+
+  it('vscode platform eligible categories = { vscode-extension }', () => {
+    expect([...eligibleCategoriesForPlatform('vscode')]).toEqual(['vscode-extension']);
+  });
+
+  it('browser platform eligible categories = { browser-extension }', () => {
+    expect([...eligibleCategoriesForPlatform('browser')]).toEqual(['browser-extension']);
+  });
+
+  it('every platform returns a non-empty Set (no platform left without an eligible adapter category)', () => {
+    for (const p of PLATFORM_VALUES) {
+      expect(eligibleCategoriesForPlatform(p).size).toBeGreaterThan(0);
+    }
+  });
+
+  it('the four categories partition cleanly across the three platforms (no category claimed by two platforms)', () => {
+    const seen = new Set<string>();
+    for (const p of PLATFORM_VALUES) {
+      for (const cat of eligibleCategoriesForPlatform(p)) {
+        expect(seen.has(cat)).toBe(false);
+        seen.add(cat);
+      }
+    }
   });
 });
 

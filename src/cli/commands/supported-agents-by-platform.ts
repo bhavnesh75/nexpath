@@ -1,3 +1,5 @@
+import type { AdapterCategory } from '../../agents/types.js';
+
 // Officially-supported agents, bucketed by the runtime platform nexpath is
 // being installed FOR (not the agent's implementation detail).
 //
@@ -72,6 +74,25 @@ export function allSupportedIds(): ReadonlySet<string> {
     for (const id of supportedIdsForPlatform(platform)) ids.add(id);
   }
   return ids;
+}
+
+// AdapterCategory ↔ platform mapping. Used by install.ts to gate the
+// registry-driven `detectAll() + adapter.install()` loop so the platform
+// the user chose actually scopes which adapter install methods run.
+//   - cli platform     : hook adapters (Claude Code) + cli-wrap adapters
+//   - vscode platform  : vscode-extension adapters (Cursor, Windsurf, Cline, …)
+//   - browser platform : browser-extension adapters (Replit, Bolt.new, …)
+// Claude Code's hook adapter is handled by Step 3 of installAction directly
+// and is also skipped from the registry loop on its id, so the cli row of
+// this table cooperates with that skip rather than competing.
+const PLATFORM_TO_CATEGORIES: Record<SupportedPlatform, ReadonlySet<AdapterCategory>> = {
+  cli:     new Set<AdapterCategory>(['hook', 'cli-wrap']),
+  vscode:  new Set<AdapterCategory>(['vscode-extension']),
+  browser: new Set<AdapterCategory>(['browser-extension']),
+};
+
+export function eligibleCategoriesForPlatform(platform: SupportedPlatform): ReadonlySet<AdapterCategory> {
+  return PLATFORM_TO_CATEGORIES[platform];
 }
 
 export function validatePlatform(value: string | undefined): SupportedPlatform {

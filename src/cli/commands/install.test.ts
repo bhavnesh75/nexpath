@@ -929,38 +929,37 @@ describe('installAction', () => {
     } finally { cleanup(); }
   });
 
-  // ── Registry-driven VSCodeExtensionAdapter installs (M2/B4) ─────────────────
-  // These tests stub HOME so the registry adapters (cursor / windsurf) check
-  // for their config dirs INSIDE the tmpDir — keeping the test hermetic and
-  // independent of whether the dev machine actually has Cursor / Windsurf
-  // installed.
+  // ── Registry-driven VSCodeExtensionAdapter installs — platform-gated ────────
+  // The registry loop (detectAll() + adapter.install()) is gated by the
+  // chosen install platform's eligible adapter categories. Under --for cli,
+  // vscode-extension adapters (Cursor / Windsurf) must NOT run their
+  // install() — those hints belong to --for vscode. These tests stub HOME
+  // so the registry adapters check for their config dirs INSIDE the tmpDir,
+  // keeping the test hermetic and independent of the dev machine.
 
-  it('calls cursor adapter and prints deep-link instructions when Cursor is detected', async () => {
+  it('does NOT call cursor adapter under default --for cli, even when Cursor is on disk', async () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      // Cursor config dir present → registry adapter's detect() returns true.
       mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
       vi.stubEnv('HOME', dir);
       const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, {
+      await installAction({ yes: true }, {  // platform defaults to cli
         paths,
         isWin: false,
         execFn: () => {},
         skipClipboardCheck: true,
       });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('Cursor');
-      expect(output).toContain('install the Nexpath extension');
-      expect(output).toContain('Open VSX');
-      expect(output).toContain('cursor --install-extension');
+      expect(output).not.toContain('cursor --install-extension');
+      expect(output).not.toContain('install the Nexpath extension');
     } finally {
       vi.unstubAllEnvs();
       cleanup();
     }
   });
 
-  it('calls windsurf adapter and prints deep-link instructions when Windsurf is detected', async () => {
+  it('does NOT call windsurf adapter under default --for cli, even when Windsurf is on disk', async () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
@@ -974,16 +973,15 @@ describe('installAction', () => {
         skipClipboardCheck: true,
       });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('Windsurf');
-      expect(output).toContain('install the Nexpath extension');
-      expect(output).toContain('windsurf --install-extension');
+      expect(output).not.toContain('windsurf --install-extension');
+      expect(output).not.toContain('install the Nexpath extension');
     } finally {
       vi.unstubAllEnvs();
       cleanup();
     }
   });
 
-  it('prints both cursor + windsurf deep-link blocks when both are detected', async () => {
+  it('does NOT print Cursor or Windsurf deep-links under default --for cli even when both are detected', async () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
@@ -998,8 +996,32 @@ describe('installAction', () => {
         skipClipboardCheck: true,
       });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(output).toContain('cursor --install-extension');
-      expect(output).toContain('windsurf --install-extension');
+      expect(output).not.toContain('cursor --install-extension');
+      expect(output).not.toContain('windsurf --install-extension');
+    } finally {
+      vi.unstubAllEnvs();
+      cleanup();
+    }
+  });
+
+  it('does NOT call cursor adapter under --for browser', async () => {
+    // --for browser short-circuits before Path B is ever reached, so the
+    // adapter loop trivially doesn't run. Covers the case in case the
+    // short-circuit ever moves later in the flow.
+    const { dir, cleanup } = tmpDir();
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
+      vi.stubEnv('HOME', dir);
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({ yes: true, platform: 'browser' }, {
+        paths,
+        isWin: false,
+        execFn: () => {},
+        skipClipboardCheck: true,
+      });
+      const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
+      expect(output).not.toContain('cursor --install-extension');
     } finally {
       vi.unstubAllEnvs();
       cleanup();
@@ -1030,7 +1052,12 @@ describe('installAction', () => {
     }
   });
 
-  it('catches adapter.install errors from the registry loop and prints failed line; loop continues', async () => {
+  it('platform gate prevents broken vscode-extension adapter from being invoked under --for cli', async () => {
+    // Pre-gate behaviour: the registry loop iterated over Cursor / Windsurf
+    // regardless of --for, so a broken adapter could surface its error in the
+    // install output. With the platform gate in place, vscode-extension
+    // adapters never run under --for cli — so the broken-install spy is not
+    // even consulted, and the synthetic error never reaches stdout.
     const { cursorAdapter } = await import('../../agents/adapters/cursor.js');
     const installSpy = vi
       .spyOn(cursorAdapter, 'install')
@@ -1038,24 +1065,19 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      // Need cursor detect()=true so it's in detectAll's results AND windsurf
-      // detect()=true so we can verify the loop continued past the throwing one.
       mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
       mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
       vi.stubEnv('HOME', dir);
       const paths = resolveAgentPaths(dir, dir, dir);
-      await installAction({ yes: true }, {
+      await installAction({ yes: true }, {  // platform defaults to cli
         paths,
         isWin: false,
         execFn: () => {},
         skipClipboardCheck: true,
       });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
-      expect(installSpy).toHaveBeenCalledOnce();
-      // The catch block prints the ✗ line with the error message
-      expect(output).toMatch(/failed:.*synthetic disk failure/);
-      // The loop continued — windsurf's install ran too
-      expect(output).toContain('windsurf --install-extension');
+      expect(installSpy).not.toHaveBeenCalled();
+      expect(output).not.toContain('synthetic disk failure');
     } finally {
       installSpy.mockRestore();
       vi.unstubAllEnvs();
