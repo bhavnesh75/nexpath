@@ -15,10 +15,8 @@ import {
   getClinePath,
   getRooCodePath,
   resolveAgentPaths,
-  detectAgents,
+  detectAgentsForPlatform,
   detectAgentsForCleanup,
-  SUPPORTED_AGENT_IDS,
-  SUPPORTED_AGENTS,
   writeMcpEntry,
   removeMcpEntry,
   writeOpenCodeEntry,
@@ -239,9 +237,9 @@ describe('resolveAgentPaths', () => {
 // ── detectAgentsForCleanup ────────────────────────────────────────────────────
 //
 // detectAgentsForCleanup returns every agent whose config directory exists on
-// disk, without applying the SUPPORTED_AGENT_IDS filter. It is the uninstall
-// flow's detection helper, so the per-agent path-presence assertions live
-// here; the filtered detectAgents() wrapper is exercised separately below.
+// disk, without applying any platform gate. It is the uninstall flow's
+// detection helper, so the per-agent path-presence assertions live here; the
+// platform-gated detectAgentsForPlatform() wrapper is exercised separately below.
 
 describe('detectAgentsForCleanup', () => {
   it('detects Claude Code when ~/.claude.json exists', () => {
@@ -369,49 +367,16 @@ describe('detectAgentsForCleanup', () => {
   });
 });
 
-// ── SUPPORTED_AGENT_IDS ───────────────────────────────────────────────────────
-
-describe('SUPPORTED_AGENT_IDS', () => {
-  it('includes Claude Code (the one officially supported agent in this version)', () => {
-    expect(SUPPORTED_AGENT_IDS.has('claude')).toBe(true);
-  });
-
-  it('does not yet include Cursor, Windsurf, Cline, Roo Code, KiloCode, or OpenCode', () => {
-    for (const id of ['cursor', 'windsurf', 'cline', 'rooCode', 'kiloCode', 'openCode']) {
-      expect(SUPPORTED_AGENT_IDS.has(id)).toBe(false);
-    }
-  });
-});
-
-// ── SUPPORTED_AGENTS (source of truth for filter + Not found notice) ──────────
-
-describe('SUPPORTED_AGENTS', () => {
-  it('contains a Claude Code entry with id "claude" and label "Claude Code"', () => {
-    expect(SUPPORTED_AGENTS).toContainEqual({ id: 'claude', label: 'Claude Code' });
-  });
-
-  it('every entry has non-empty id and label string fields', () => {
-    for (const agent of SUPPORTED_AGENTS) {
-      expect(typeof agent.id).toBe('string');
-      expect(typeof agent.label).toBe('string');
-      expect(agent.id.length).toBeGreaterThan(0);
-      expect(agent.label.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('SUPPORTED_AGENT_IDS is the derived set of SUPPORTED_AGENTS ids (cannot drift)', () => {
-    expect([...SUPPORTED_AGENT_IDS].sort()).toEqual(SUPPORTED_AGENTS.map((a) => a.id).sort());
-  });
-});
-
-// ── detectAgents (filtered wrapper) ───────────────────────────────────────────
+// ── detectAgentsForPlatform (platform-gated wrapper) ──────────────────────────
 //
-// detectAgents applies SUPPORTED_AGENT_IDS to detectAgentsForCleanup's output.
-// These tests verify the filter is the only difference — every id NOT in the
-// supported set is dropped, regardless of on-disk presence.
+// detectAgentsForPlatform applies the chosen platform's supported-id set to
+// detectAgentsForCleanup's output. These tests verify the platform filter is
+// the only difference — agents whose id is not supported on the platform are
+// dropped regardless of on-disk presence. The sub-constant shape itself is
+// tested in supported-agents-by-platform.test.ts.
 
-describe('detectAgents — SUPPORTED_AGENT_IDS filter', () => {
-  it('returns only Claude Code even when every other agent dir exists on disk', () => {
+describe('detectAgentsForPlatform', () => {
+  it('on cli, returns only Claude Code even when every other agent dir exists on disk', () => {
     const { dir, cleanup } = tmpDir();
     try {
       writeFileSync(join(dir, '.claude.json'), '{}');
@@ -424,35 +389,59 @@ describe('detectAgents — SUPPORTED_AGENT_IDS filter', () => {
       mkdirSync(join(dir, '.kilocode'),                                          { recursive: true });
       mkdirSync(join(dir, '.config', 'opencode'),                                { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const agents = detectAgents(paths);
+      const agents = detectAgentsForPlatform(paths, 'cli');
       expect(agents.map((a) => a.id)).toEqual(['claude']);
     } finally { cleanup(); }
   });
 
-  it('preserves Claude Code DetectedAgent shape (id, label, type) when filtered', () => {
+  it('on cli, preserves Claude Code DetectedAgent shape (id, label, type, configPath)', () => {
     const { dir, cleanup } = tmpDir();
     try {
       writeFileSync(join(dir, '.claude.json'), '{}');
       const paths = resolveAgentPaths(dir, dir, dir);
-      const claude = detectAgents(paths).find((a) => a.id === 'claude')!;
+      const claude = detectAgentsForPlatform(paths, 'cli').find((a) => a.id === 'claude')!;
       expect(claude.label).toBe('Claude Code');
       expect(claude.type).toBe('claude-cli');
       expect(claude.configPath).toBe(paths.claudeJson);
     } finally { cleanup(); }
   });
 
-  it('detectAgents is a strict subset of detectAgentsForCleanup', () => {
+  it('result is a strict subset of detectAgentsForCleanup, for every platform', () => {
+    const { dir, cleanup } = tmpDir();
+    try {
+      writeFileSync(join(dir, '.claude.json'), '{}');
+      mkdirSync(join(dir, '.cursor'),              { recursive: true });
+      mkdirSync(join(dir, '.codeium', 'windsurf'), { recursive: true });
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const all = detectAgentsForCleanup(paths).map((a) => a.id);
+      for (const platform of ['cli', 'vscode', 'browser'] as const) {
+        const filtered = detectAgentsForPlatform(paths, platform).map((a) => a.id);
+        for (const id of filtered) {
+          expect(all).toContain(id);
+        }
+        expect(filtered.length).toBeLessThanOrEqual(all.length);
+      }
+    } finally { cleanup(); }
+  });
+
+  it('on vscode today, returns empty even when Cursor / Windsurf / Cline dirs exist (buckets empty)', () => {
     const { dir, cleanup } = tmpDir();
     try {
       mkdirSync(join(dir, '.cursor'),              { recursive: true });
       mkdirSync(join(dir, '.codeium', 'windsurf'), { recursive: true });
+      mkdirSync(join(dir, '.config', 'Code', 'User', 'globalStorage',
+                'saoudrizwan.claude-dev', 'settings'), { recursive: true });
       const paths = resolveAgentPaths(dir, dir, dir);
-      const filtered = detectAgents(paths).map((a) => a.id);
-      const all      = detectAgentsForCleanup(paths).map((a) => a.id);
-      for (const id of filtered) {
-        expect(all).toContain(id);
-      }
-      expect(filtered.length).toBeLessThanOrEqual(all.length);
+      expect(detectAgentsForPlatform(paths, 'vscode')).toEqual([]);
+    } finally { cleanup(); }
+  });
+
+  it('on browser today, returns empty (bucket empty)', () => {
+    const { dir, cleanup } = tmpDir();
+    try {
+      writeFileSync(join(dir, '.claude.json'), '{}');
+      const paths = resolveAgentPaths(dir, dir, dir);
+      expect(detectAgentsForPlatform(paths, 'browser')).toEqual([]);
     } finally { cleanup(); }
   });
 });

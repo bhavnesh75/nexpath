@@ -52,11 +52,17 @@ const PLATFORM_TO_BUCKETS: Record<SupportedPlatform, ReadonlyArray<ReadonlyArray
   browser: [SUPPORTED_BROWSER_AGENTS],
 };
 
+export function supportedAgentsForPlatform(platform: SupportedPlatform): ReadonlyArray<SupportedAgent> {
+  const merged: SupportedAgent[] = [];
+  for (const bucket of PLATFORM_TO_BUCKETS[platform]) {
+    for (const agent of bucket) merged.push(agent);
+  }
+  return merged;
+}
+
 export function supportedIdsForPlatform(platform: SupportedPlatform): ReadonlySet<string> {
   const ids = new Set<string>();
-  for (const bucket of PLATFORM_TO_BUCKETS[platform]) {
-    for (const agent of bucket) ids.add(agent.id);
-  }
+  for (const agent of supportedAgentsForPlatform(platform)) ids.add(agent.id);
   return ids;
 }
 

@@ -7,6 +7,7 @@ import {
   SUPPORTED_IDE_AGENTS,
   SUPPORTED_VSCODE_EXT_AGENTS,
   SUPPORTED_BROWSER_AGENTS,
+  supportedAgentsForPlatform,
   supportedIdsForPlatform,
   allSupportedIds,
   validatePlatform,
@@ -83,6 +84,35 @@ describe('supportedIdsForPlatform', () => {
     first.add('mutation');
     const second = supportedIdsForPlatform('cli');
     expect(second.has('mutation')).toBe(false);
+  });
+});
+
+describe('supportedAgentsForPlatform', () => {
+  it('returns the Claude Code entry for cli today', () => {
+    expect(supportedAgentsForPlatform('cli')).toEqual([{ id: 'claude', label: 'Claude Code' }]);
+  });
+
+  it('returns an empty array for vscode today', () => {
+    expect(supportedAgentsForPlatform('vscode')).toEqual([]);
+  });
+
+  it('returns an empty array for browser today', () => {
+    expect(supportedAgentsForPlatform('browser')).toEqual([]);
+  });
+
+  it('order: ide entries precede vscodeExt entries for the vscode platform', () => {
+    // No-op today (both buckets empty), but the contract is stable so install.ts
+    // can rely on it once buckets fill in.
+    const got = supportedAgentsForPlatform('vscode');
+    expect(got).toEqual([...SUPPORTED_IDE_AGENTS, ...SUPPORTED_VSCODE_EXT_AGENTS]);
+  });
+
+  it('ids match supportedIdsForPlatform exactly', () => {
+    for (const p of PLATFORM_VALUES) {
+      const fromAgents = supportedAgentsForPlatform(p).map((a) => a.id).sort();
+      const fromIds    = [...supportedIdsForPlatform(p)].sort();
+      expect(fromAgents).toEqual(fromIds);
+    }
   });
 });
 
