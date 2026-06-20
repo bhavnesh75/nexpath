@@ -24,11 +24,12 @@ describe('buildSetupRunnerSource', () => {
     expect(src).toContain("'--omit=dev'");
   });
 
-  it('does the two-pass agent registration: --for cli (interactive) then --for vscode --yes', () => {
-    expect(src).toContain("'install', '--for', 'cli'");
-    expect(src).toContain("'install', '--for', 'vscode', '--yes'");
-    // the cli pass must precede the vscode pass
-    expect(src.indexOf("'--for', 'cli'")).toBeLessThan(src.indexOf("'--for', 'vscode'"));
+  it('registers Cursor + Windsurf via a SINGLE interactive --for vscode pass (no --for cli / Claude)', () => {
+    expect(src).toContain("[cliEntry, 'install', '--for', 'vscode']");
+    // the extension is the VS Code platform → no cli/Claude pass, and not --yes
+    // (the user answers the full prompts interactively).
+    expect(src).not.toContain("'--for', 'cli'");
+    expect(src).not.toContain("'--for', 'vscode', '--yes'");
   });
 
   it('inherits stdio so the CLI prompts stay interactive in the terminal', () => {

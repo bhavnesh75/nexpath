@@ -46,16 +46,13 @@ if (!step('installing dependencies (npm install)', 'npm',
   failed = 'npm install';
 }
 
-// 2. Register Claude Code + capture the shared setup (API key, telemetry,
-//    frequency, role) — INTERACTIVE.
-if (!failed && !step('registering Claude Code (interactive)', node,
-                     [cliEntry, 'install', '--for', 'cli'])) {
-  failed = 'install --for cli';
-}
-
-// 3. Register Cursor + Windsurf — no re-prompt (shared config already captured).
-if (!failed && !step('registering Cursor + Windsurf', node,
-                     [cliEntry, 'install', '--for', 'vscode', '--yes'])) {
+// 2. Register Cursor + Windsurf for VS Code — INTERACTIVE. This extension's
+//    platform IS VS Code, so it installs '--for vscode' (the user answers API
+//    key, telemetry, the agent-register confirm, frequency, role — the full
+//    flow, exactly like the CLI). No separate Claude Code / '--for cli' pass:
+//    Claude is a CLI agent set up via the CLI, not this extension.
+if (!failed && !step('registering Cursor + Windsurf (interactive)', node,
+                     [cliEntry, 'install', '--for', 'vscode'])) {
   failed = 'install --for vscode';
 }
 
