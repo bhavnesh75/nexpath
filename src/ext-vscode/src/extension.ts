@@ -80,6 +80,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const host = detectHost();
   log(`[nexpath] host=${host} (appName=${JSON.stringify(vscode.env.appName)}, uriScheme=${JSON.stringify(vscode.env.uriScheme)})`);
 
+  // 1a. Tell Layer C's popup which agent it's sending to, so its "Send to …"
+  //     label names this surface (Cursor / Windsurf) instead of defaulting to
+  //     "Claude". Every `nexpath auto`/`stop` we spawn inherits process.env, so
+  //     setting it here is enough for the Cursor/extension-driven popup path.
+  if (host === 'cursor' || host === 'windsurf') {
+    process.env.NEXPATH_AGENT = host;
+  }
+
   // 1b. CLI auto-installer (additive). The extension drives the nexpath CLI via
   //     IPC; if the user installed only this extension (no manual CLI), nothing
   //     would work. Register the manual "Set up CLI" command, and — deferred so
