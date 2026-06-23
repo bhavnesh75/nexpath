@@ -163,18 +163,23 @@ export interface RenderedLayout {
    * Budget metadata adapted from the TtySelectFn.ts:72-92 precedent.
    * Phase 4 USER deliverable per dev-plan §11.4 / §11.8 step 2 / §11.12.
    *
-   *   fixedLines : count of header / why-help / D4-padding rows above the option list
-   *   avail      : rows - fixedLines - 2 (clamped to 0)
-   *   maxItems   : how many options fit in `avail`, with the
-   *                opts.maxItemsFloor (default 5) applied as a minimum
-   *   fittedItems: raw fitted count BEFORE the floor (informational; lets
-   *                the interactive shell decide whether to scroll)
+   *   fixedVisualRows : VISUAL ROW count for header / why-help / D4-padding
+   *                     emissions above the option list (wrap-aware — each
+   *                     emission's visual height is computed against the
+   *                     CHROMED line at opts.cols, so wrapped lines reserve
+   *                     their real height instead of one row per emission)
+   *   avail           : rows - fixedVisualRows - 2 (clamped to 0); the
+   *                     option region's visual-row budget
+   *   maxItems        : how many options fit in `avail`, with the
+   *                     opts.maxItemsFloor (default 5) applied as a minimum
+   *   fittedItems     : raw fitted count BEFORE the floor (informational;
+   *                     lets the interactive shell decide whether to scroll)
    */
   budget: {
-    fixedLines:  number;
-    avail:       number;
-    maxItems:    number;
-    fittedItems: number;
+    fixedVisualRows: number;
+    avail:           number;
+    maxItems:        number;
+    fittedItems:     number;
   };
   /**
    * Auto-scroll viewport — what's actually visible after applying
@@ -186,7 +191,7 @@ export interface RenderedLayout {
    *   appliedScrollOffset : the scrollOffset actually used after
    *                         auto-adjustment (may differ from
    *                         state.scrollOffset when focus forced a shift)
-   *   totalOptionRows     : total emission row count across all options
+   *   totalOptionRows     : total VISUAL ROW count across all options
    *                         (informational; lets the shell decide if
    *                         scrolling is needed at all)
    *   visibleStyledLines  : styled lines (no chrome) to write to stdout
@@ -664,19 +669,33 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   // styledLines[i] with the chrome prefix prepended.
   const chromedLines = applyChrome(styledLines, emissions, { focusedOptionIndex: state.focusedIndex });
 
-  // ── Budget computation (§11.4 / §11.8 / §11.12) ────────────────────────────
-  // Adapt the TtySelectFn.ts:72-92 precedent — header rows count as
-  // _fixedLines; remaining rows minus a 2-line gutter is _avail;
-  // _maxItems is the count of options whose total emission cost fits
-  // within _avail, bumped up to the maxItemsFloor (default 5) so the
-  // popup always tries to render at least that many.
-  const fixedLines = emissions.filter((e) => e.optionIndex === null).length;
-  const avail      = Math.max(0, opts.rows - fixedLines - 2);
+  // ── Budget computation (visual-row-aware) ─────────────────────────────────
+  // Header rows reserve their FULL VISUAL height (wrap-aware) instead of one
+  // row per emission so the popup viewport cannot overflow when long lines
+  // wrap on narrow terminals. Each line's visual cost is computed from the
+  // CHROMED line at opts.cols because chromedLines are what writeFrame writes
+  // to stdout — visual width must include the chrome prefix.
+  const optionRegionStart = emissions.findIndex((e) => e.optionIndex !== null);
+  const headerEnd         = optionRegionStart === -1 ? emissions.length : optionRegionStart;
 
+  // Per-emission visual row count cached once for reuse across budget /
+  // fittedItems / viewport windowing — avoids three independent walks of
+  // chromedLines through the visualRows helper.
+  const visualRowsByIdx: number[] = chromedLines.map((line) => visualRows(line, opts.cols));
+
+  let fixedVisualRows = 0;
+  for (let i = 0; i < headerEnd; i++) fixedVisualRows += visualRowsByIdx[i];
+
+  const avail = Math.max(0, opts.rows - fixedVisualRows - 2);
+
+  // Per-option visual cost = sum of visual rows for that option's emissions.
+  // Walks optionLineRanges in order, accumulating cost until avail exhausted —
+  // strict, no partial-option inclusion.
   let budget = 0;
   let fittedItems = 0;
   for (const range of optionLineRanges) {
-    const cost = range.endIdx - range.startIdx;
+    let cost = 0;
+    for (let i = range.startIdx; i < range.endIdx; i++) cost += visualRowsByIdx[i];
     if (budget + cost > avail) break;
     budget += cost;
     fittedItems++;
@@ -685,44 +704,71 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   const maxItems = Math.max(fittedItems, floor);
 
   // ── Viewport / auto-scroll (§11.7 step 5 + §11.9 step 5) ──────────────────
-  // Header emissions always render; option emissions are the scrolled band.
-  // Determine where the option region starts in the emissions array.
-  const optionRegionStart = emissions.findIndex((e) => e.optionIndex !== null);
-  const headerEnd         = optionRegionStart === -1 ? emissions.length : optionRegionStart;
-  const totalOptionRows   = emissions.length - headerEnd;
+  // Header emissions always render; option emissions form the scrolled band.
+  // scrollOffset is in VISUAL ROW units (same units as avail). Focused-option
+  // visual range derived via a prefix-sum over per-emission visual rows so
+  // auto-scroll math operates entirely in visual-row coordinates.
+  const optionVisualPrefix: number[] = [0];
+  for (let i = headerEnd; i < chromedLines.length; i++) {
+    optionVisualPrefix.push(optionVisualPrefix[optionVisualPrefix.length - 1] + visualRowsByIdx[i]);
+  }
+  const totalOptionRows = optionVisualPrefix[optionVisualPrefix.length - 1];
 
-  // Focused-option emission range within the OPTION REGION (offset from headerEnd).
-  // Find the optionLineRange whose itemIndex matches state.focusedIndex.
   const focusedRange   = optionLineRanges.find((r) => r.itemIndex === state.focusedIndex);
-  const focusedStartOR = focusedRange ? focusedRange.startIdx - headerEnd : 0;
-  const focusedEndOR   = focusedRange ? focusedRange.endIdx   - headerEnd : 0;
+  const focusedStartVR = focusedRange ? optionVisualPrefix[focusedRange.startIdx - headerEnd] : 0;
+  const focusedEndVR   = focusedRange ? optionVisualPrefix[focusedRange.endIdx   - headerEnd] : 0;
 
-  // Auto-adjust scrollOffset so the focused option's emissions stay
-  // inside [scroll, scroll + avail]. Clamp to non-negative + to
+  // Auto-adjust scrollOffset so the focused option's visual range stays
+  // inside [scroll, scroll + avail]. Clamp to non-negative and to
   // `max(0, totalOptionRows - avail)` so we never scroll past the end.
   let appliedScrollOffset = Math.max(0, state.scrollOffset);
   if (focusedRange) {
-    if (focusedEndOR > appliedScrollOffset + avail) {
-      appliedScrollOffset = Math.max(0, focusedEndOR - avail);
+    if (focusedEndVR > appliedScrollOffset + avail) {
+      appliedScrollOffset = Math.max(0, focusedEndVR - avail);
     }
-    if (focusedStartOR < appliedScrollOffset) {
-      appliedScrollOffset = focusedStartOR;
+    if (focusedStartVR < appliedScrollOffset) {
+      appliedScrollOffset = focusedStartVR;
     }
   }
   const maxScroll = Math.max(0, totalOptionRows - avail);
   if (appliedScrollOffset > maxScroll) appliedScrollOffset = maxScroll;
 
-  // Build the visible styled lines: header (always) + windowed option rows.
-  const headerStyled = styledLines.slice(0, headerEnd);
-  const optionStyled = styledLines.slice(headerEnd);
-  const windowed     = optionStyled.slice(appliedScrollOffset, appliedScrollOffset + avail);
-  const visibleStyledLines: readonly string[] = [...headerStyled, ...windowed];
+  // Snap appliedScrollOffset UP to the nearest emission boundary so windowing
+  // operates on whole emissions (each emission is one line in stdout — half-
+  // line rendering is not a primitive). Snap-up never violates the auto-
+  // scroll invariant (focused range fully visible) because the snap only
+  // widens the effective scroll, never narrows it.
+  let startEmissionORIdx = 0;
+  while (
+    startEmissionORIdx < optionVisualPrefix.length - 1 &&
+    optionVisualPrefix[startEmissionORIdx] < appliedScrollOffset
+  ) {
+    startEmissionORIdx++;
+  }
+  appliedScrollOffset = optionVisualPrefix[startEmissionORIdx];
 
-  // Same windowing applied to chromedLines so writeFrame can pick either
-  // level (with or without chrome) without re-windowing.
-  const headerChromed  = chromedLines.slice(0, headerEnd);
-  const optionChromed  = chromedLines.slice(headerEnd);
-  const windowedChromed = optionChromed.slice(appliedScrollOffset, appliedScrollOffset + avail);
+  // Walk option emissions from startEmissionORIdx accumulating visual rows
+  // until budget would be exceeded. Strict — partial emissions never
+  // included so writeFrame never produces a frame whose visible visual
+  // rows exceed opts.rows (the load-bearing invariant for the sticky-
+  // header guarantee).
+  const headerStyled  = styledLines.slice(0, headerEnd);
+  const headerChromed = chromedLines.slice(0, headerEnd);
+  const optionStyled  = styledLines.slice(headerEnd);
+  const optionChromed = chromedLines.slice(headerEnd);
+
+  let visualUsed = 0;
+  const windowed: string[] = [];
+  const windowedChromed: string[] = [];
+  for (let i = startEmissionORIdx; i < optionStyled.length; i++) {
+    const cost = visualRowsByIdx[headerEnd + i];
+    if (visualUsed + cost > avail) break;
+    windowed.push(optionStyled[i]);
+    windowedChromed.push(optionChromed[i]);
+    visualUsed += cost;
+  }
+
+  const visibleStyledLines:  readonly string[] = [...headerStyled,  ...windowed];
   const visibleChromedLines: readonly string[] = [...headerChromed, ...windowedChromed];
 
   return {
@@ -730,7 +776,7 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
     styledLines,
     chromedLines,
     optionLineRanges,
-    budget:   { fixedLines, avail, maxItems, fittedItems },
+    budget:   { fixedVisualRows, avail, maxItems, fittedItems },
     viewport: { appliedScrollOffset, totalOptionRows, visibleStyledLines, visibleChromedLines },
   };
 }

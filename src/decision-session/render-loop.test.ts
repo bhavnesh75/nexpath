@@ -523,7 +523,6 @@ describe('render-loop — auto-scroll viewport (§11.7 step 5 + §11.9 step 5)',
   it('visibleStyledLines length === fixedVisualRows + min(avail, totalOptionRows - appliedScrollOffset)', () => {
     const opts = makeManyOpts(10);
     const r    = computeLayout(opts, { focusedIndex: 5, expandedOptions: new Set(), scrollOffset: 0 });
-    // @ts-expect-error fixedVisualRows lands in Phase 2 Candidate A — rename completes the visual-row-aware budget transition.
     const expectedVisible = r.budget.fixedVisualRows + Math.min(r.budget.avail, r.viewport.totalOptionRows - r.viewport.appliedScrollOffset);
     expect(r.viewport.visibleStyledLines.length).toBe(expectedVisible);
   });
@@ -607,31 +606,34 @@ describe('render-loop — visual-row-aware budget (ui-bug-fix plan §5.4 Candida
   });
 
   it('T3 — narrow + deep popup approximating the Image 2 repro: total visible visual rows ≤ opts.rows - 2 (no terminal overflow possible)', () => {
-    // Realistic scenario built from the production content shape:
-    //   - NEXPATH page header (3 emissions, 3 visual rows on cols=30)
-    //   - Long pinch label that wraps to 3 visual rows on cols=30
-    //   - Long question that wraps to 4 visual rows on cols=30
-    //   - 3-line whyHelp block, each line long enough to wrap on cols=30
+    // Realistic scenario built from the production content shape on a narrow
+    // popup (cols=40 — comparable to a small Windows Terminal column count):
+    //   - NEXPATH page header (3 emissions, 3 visual rows)
+    //   - Pinch label that wraps to 2 visual rows on cols=40
+    //   - Question that wraps to 2 visual rows on cols=40
+    //   - 2-line whyHelp block (each line wraps to 2 visual rows)
     //   - D4 padding (1 row)
     //   - 5 options each with a long label + long descBase that wrap
-    // On rows=18 with the current emission-count budget, visibleStyledLines
-    // exceeds the terminal viewport in VISUAL rows — the terminal auto-scrolls
-    // inside the alt buffer and the pinch label / NEXPATH header scrolls OFF.
+    // Under an EMISSION-count budget, visibleStyledLines easily exceeds the
+    // terminal viewport in VISUAL rows — the terminal auto-scrolls inside
+    // the alt buffer and the pinch label / NEXPATH header scrolls off the
+    // top. The dimensions deliberately leave room for fixedVisualRows to
+    // fit so the test exercises the option-region clamp (not the separate
+    // "header alone exceeds viewport" edge case flagged in the plan).
     const NEXPATH_PAGE_HEADER  = '▲  NEXPATH CLI\n────────────────────────\n';
     const opts = makeOpts({
       pageHeader:   NEXPATH_PAGE_HEADER,
-      pinchLabel:   'Service boundary established — contract tests defined for downstream?',
-      question:     'Have we anchored the consumer-driven contract test coverage across all consumer surfaces?',
+      pinchLabel:   'Service boundary established — contract tests?',
+      question:     'Have we anchored consumer-driven contract coverage?',
       whyHelpBlock:
-        'Recent prompts indicate a transition from one development stage to the next stage.\n' +
-        'Confirmation that the prior stage outputs are complete has not surfaced in any prompt.\n' +
-        '— review the options below to determine the next step before moving forward.',
-      cols: 30,
-      rows: 18,
+        'Recent prompts moved into implementation stage with steady velocity.\n' +
+        '— review the options below for the next step before moving forward.',
+      cols: 40,
+      rows: 22,
       options: Array.from({ length: 5 }, (_, i) => ({
         value:    `opt-${i}`,
-        label:    `Establish consumer-driven contract tests for option ${i} across all the interfaces`,
-        descBase: `(I'm flagging this because:) Service contracts have evolved without consumer-driven contract testing keeping pace with the recent changes.`,
+        label:    `Establish contract tests for option ${i} across all consumer interfaces`,
+        descBase: `(I'm flagging this because:) Service contracts evolved without consumer-driven contract testing keeping pace.`,
       })),
     });
     const r = computeLayout(opts, { focusedIndex: 3, expandedOptions: new Set(), scrollOffset: 0 });
@@ -654,7 +656,7 @@ describe('render-loop — visual-row-aware budget (ui-bug-fix plan §5.4 Candida
     expect(visibleText).toContain('NEXPATH CLI');               // page-header wordmark
     expect(visibleText).toContain('Service boundary established');  // pinch label
     expect(visibleText).toContain('Have we anchored');          // question
-    expect(visibleText).toContain('Recent prompts indicate');   // whyHelp first line
+    expect(visibleText).toContain('Recent prompts moved');      // whyHelp first line
   });
 });
 
@@ -662,14 +664,12 @@ describe('render-loop — budget computation (§11.4 / §11.8 / §11.12)', () =>
   it('fixedVisualRows counts all header / why-help / D4-padding emissions (optionIndex === null) in visual-row units', () => {
     const r = computeLayout(makeOpts({ whyHelpBlock: 'w1\nw2\nw3' }), FRESH_STATE);
     // No wrap at cols=80 → 1 visual row per emission: pinch (1) + question (1) + whyHelp (3) + D4 padding (1) = 6
-    // @ts-expect-error fixedVisualRows lands in Phase 2 Candidate A — rename completes the visual-row-aware budget transition.
     expect(r.budget.fixedVisualRows).toBe(6);
   });
 
   it('fixedVisualRows includes the subtitle row when present', () => {
     const r = computeLayout(makeOpts({ subtitle: 'lighter' }), FRESH_STATE);
     // No wrap at cols=80 → 1 visual row per emission: pinch (1) + subtitle (1) + question (1) + D4 padding (1) = 4 (no whyHelp here)
-    // @ts-expect-error fixedVisualRows lands in Phase 2 Candidate A — rename completes the visual-row-aware budget transition.
     expect(r.budget.fixedVisualRows).toBe(4);
   });
 
@@ -1481,7 +1481,6 @@ describe('render-loop — page-header emission + cursor visibility', () => {
     it('counts page-header lines in preFixedLines so option budget reserves space', () => {
       const baseline = computeLayout(makeOptsP(), FRESH_STATE);
       const withHeader = computeLayout(makeOptsP({ pageHeader: 'A\nB\nC' }), FRESH_STATE);
-      // @ts-expect-error fixedVisualRows lands in Phase 2 Candidate A — rename completes the visual-row-aware budget transition.
       expect(withHeader.budget.fixedVisualRows - baseline.budget.fixedVisualRows).toBe(3);
     });
   });
