@@ -26,7 +26,7 @@ import { resolveWorkspaceFromDbPath, canonicalizeCwd } from './resolve-db-worksp
 import { createAdvisoryFallback, type AdvisoryFallback } from './advisory-fallback.js';
 import { createAdvisoryPoller, type AdvisoryPoller } from './advisory-poller.js';
 import { readLatestAdvisoryMeta, readInjectedPrompt } from './advisory-store-reader.js';
-import { raiseWindsurfWindow, pasteKeystroke } from './windsurf-autopaste.js';
+import { raiseWindsurfWindow, raiseAppWindow, pasteKeystroke } from './windsurf-autopaste.js';
 import {
   injectViaCascadeAction,
   SEND_CHAT_ACTION_COMMAND,
@@ -154,9 +154,52 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     log(`[nexpath] windsurf inject (fallback) → ${ok ? `auto-pasted into Cascade (${focused ? 'openChatPanel → ' : ''}Ctrl+V)` : 'no keystroke tool; left on clipboard'}`);
     return ok;
   };
+  // Cursor inject — land the advisory in the user's EXISTING chat (like Windsurf/
+  // CLI), never a new Agent/Composer tab. Cursor exposes no extension-callable
+  // "insert into the current chat input" command (composer.newChat opens a NEW
+  // chat), so we mirror Windsurf's reliable path: copy → focus the existing chat
+  // input → simulate the paste shortcut. Only focus commands that ACTUALLY exist
+  // are run (so nothing ever opens a new chat); workbench.action.focusAuxiliaryBar
+  // is a built-in present on every Cursor and focuses the chat (right side bar).
+  const CURSOR_CHAT_FOCUS_COMMANDS = [
+    'aichat.focusChat',
+    'composer.focusComposer',
+    'aichat.gotochat',
+    'workbench.action.focusAuxiliaryBar',
+  ];
+  const cursorInject = async (text: string): Promise<boolean> => {
+    await vscode.env.clipboard.writeText(text);
+    raiseAppWindow('cursor');
+    await new Promise((r) => setTimeout(r, 150));
+    let focused = false;
+    let focusedVia = '';
+    let available: Set<string>;
+    try {
+      available = new Set(await vscode.commands.getCommands(true));
+    } catch {
+      available = new Set();
+    }
+    for (const cmd of CURSOR_CHAT_FOCUS_COMMANDS) {
+      if (!available.has(cmd)) continue;
+      try {
+        await vscode.commands.executeCommand(cmd);
+        focused = true;
+        focusedVia = cmd;
+        break;
+      } catch { /* try next focus command */ }
+    }
+    await new Promise((r) => setTimeout(r, focused ? 400 : 250));
+    const ok = pasteKeystroke();
+    log(`[nexpath] cursor inject → ${ok ? `auto-pasted into existing chat (${focused ? focusedVia + ' → ' : ''}Ctrl+V)` : 'no keystroke tool found; left on clipboard'}`);
+    return ok;
+  };
+
   const injectIntoChat = (text: string): Promise<void> =>
     handleOptionSelection(text, {
-      injectFn: host === 'windsurf' ? windsurfInject : (t) => chatInputInject(t, { host }),
+      injectFn:
+        host === 'windsurf' ? windsurfInject
+        : host === 'cursor' ? cursorInject
+        : (t) => chatInputInject(t, { host }),
     });
 
   // Diagnostic (Cursor): which insert command does THIS Cursor expose? We never
