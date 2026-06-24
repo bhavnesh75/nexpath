@@ -89,13 +89,28 @@ async function stagedGetRow(
   }
 
   const mod = (await import('better-sqlite3')) as unknown as {
-    default: new (path: string, options?: { readonly?: boolean }) => {
+    default: new (path: string, options?: { readonly?: boolean; nativeBinding?: string }) => {
       prepare(sql: string): { get(...params: unknown[]): Record<string, unknown> | undefined };
       close(): void;
     };
   };
   const Database = mod.default;
-  const db = new Database(staged, { readonly: true });
+  // Load the better-sqlite3 binary matching THIS host's Electron ABI
+  // (process.versions.modules) from the bundled prebuilds — exactly like the
+  // chat-history watcher. Without this, a plain import loads the default
+  // build/Release binary (the primary ABI only), so on any other Electron the
+  // native module throws, the poller silently swallows it (catch → null), and
+  // the Windsurf popup selection is never injected. See resolveBundledNativeBinding.
+  const { resolveBundledNativeBinding } = await import('./chat-history-watcher.js');
+  const dbOptions: { readonly: boolean; nativeBinding?: string } = { readonly: true };
+  const binding = resolveBundledNativeBinding(
+    process.env.NEXPATH_EXT_ROOT,
+    process.versions.modules,
+    existsSync,
+    pjoin,
+  );
+  if (binding) dbOptions.nativeBinding = binding;
+  const db = new Database(staged, dbOptions);
   try {
     return db.prepare(sql).get(param) ?? null;
   } catch {
