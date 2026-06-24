@@ -163,11 +163,16 @@ export interface RenderedLayout {
    * Budget metadata adapted from the TtySelectFn.ts:72-92 precedent.
    * Phase 4 USER deliverable per dev-plan §11.4 / §11.8 step 2 / §11.12.
    *
-   *   fixedVisualRows : VISUAL ROW count for header / why-help / D4-padding
-   *                     emissions above the option list (wrap-aware — each
-   *                     emission's visual height is computed against the
-   *                     CHROMED line at opts.cols, so wrapped lines reserve
-   *                     their real height instead of one row per emission)
+   *   fixedVisualRows : VISUAL ROW count for the header content that actually
+   *                     remains visible. Header emissions are walked in two
+   *                     tiers — Tier 1 (page-header + pinch-label, including
+   *                     the optional subtitle which is also pinch-label kind)
+   *                     is always included; Tier 2 (question + popup-why-help,
+   *                     which includes whyHelp content and D4 padding) is
+   *                     included only while the running total stays within
+   *                     opts.rows - 2. Each line's visual cost is measured
+   *                     against the CHROMED line at opts.cols so wrapped lines
+   *                     reserve their real height.
    *   avail           : rows - fixedVisualRows - 2 (clamped to 0); the
    *                     option region's visual-row budget
    *   maxItems        : how many options fit in `avail`, with the
@@ -683,8 +688,33 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   // chromedLines through the visualRows helper.
   const visualRowsByIdx: number[] = chromedLines.map((line) => visualRows(line, opts.cols));
 
+  // Sticky-header priority tiers — Tier 1 (page-header + pinch-label, which
+  // also covers the optional subtitle since it is emitted as kind
+  // 'pinch-label') is the uncroppable identity + context anchor; Tier 2
+  // (question + popup-why-help, which covers whyHelp content + D4 padding)
+  // is droppable when the fixed region would otherwise exceed the viewport.
+  // Walking in display order: once a Tier 2 emission would push the running
+  // total past opts.rows - 2, every subsequent Tier 2 emission is also
+  // dropped so no gaps appear in the middle of the visible header region.
   let fixedVisualRows = 0;
-  for (let i = 0; i < headerEnd; i++) fixedVisualRows += visualRowsByIdx[i];
+  const includedHeaderIdx: number[] = [];
+  let dropRemainingTier2 = false;
+  for (let i = 0; i < headerEnd; i++) {
+    const kind    = emissions[i].kind;
+    const isTier1 = kind === 'page-header' || kind === 'pinch-label';
+    const cost    = visualRowsByIdx[i];
+    if (isTier1) {
+      fixedVisualRows += cost;
+      includedHeaderIdx.push(i);
+    } else if (!dropRemainingTier2) {
+      if (fixedVisualRows + cost + 2 <= opts.rows) {
+        fixedVisualRows += cost;
+        includedHeaderIdx.push(i);
+      } else {
+        dropRemainingTier2 = true;
+      }
+    }
+  }
 
   const avail = Math.max(0, opts.rows - fixedVisualRows - 2);
 
@@ -752,8 +782,8 @@ export function computeLayout(opts: RenderLoopOptions, state: LayoutState): Rend
   // included so writeFrame never produces a frame whose visible visual
   // rows exceed opts.rows (the load-bearing invariant for the sticky-
   // header guarantee).
-  const headerStyled  = styledLines.slice(0, headerEnd);
-  const headerChromed = chromedLines.slice(0, headerEnd);
+  const headerStyled  = includedHeaderIdx.map((i) => styledLines[i]);
+  const headerChromed = includedHeaderIdx.map((i) => chromedLines[i]);
   const optionStyled  = styledLines.slice(headerEnd);
   const optionChromed = chromedLines.slice(headerEnd);
 

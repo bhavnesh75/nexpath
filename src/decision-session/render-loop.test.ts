@@ -658,6 +658,48 @@ describe('render-loop — visual-row-aware budget (ui-bug-fix plan §5.4 Candida
     expect(visibleText).toContain('Have we anchored');          // question
     expect(visibleText).toContain('Recent prompts moved');      // whyHelp first line
   });
+
+  it('T4 — at cols=30/rows=18 (Image 2 dims) where fixed region exceeds viewport: NEXPATH page header + pinch label remain sticky via Tier 2 drop', () => {
+    // The original Image 2 repro environment: cols=30/rows=18 where the long
+    // pinch label + question + 3-line whyHelp wrap aggressively and the FULL
+    // header region's visual rows exceed opts.rows. The sticky-header priority
+    // tiers drop question + whyHelp + D4 padding from the bottom so that the
+    // uncroppable NEXPATH page header + pinch label stay in view and total
+    // visible visual rows fit the viewport.
+    const NEXPATH_PAGE_HEADER  = '▲  NEXPATH CLI\n────────────────────────\n';
+    const opts = makeOpts({
+      pageHeader:   NEXPATH_PAGE_HEADER,
+      pinchLabel:   'Service boundary established — contract tests defined for downstream?',
+      question:     'Have we anchored the consumer-driven contract test coverage across all consumer surfaces?',
+      whyHelpBlock:
+        'Recent prompts indicate a transition from one development stage to the next stage.\n' +
+        'Confirmation that the prior stage outputs are complete has not surfaced in any prompt.\n' +
+        '— review the options below to determine the next step before moving forward.',
+      cols: 30,
+      rows: 18,
+      options: Array.from({ length: 5 }, (_, i) => ({
+        value:    `opt-${i}`,
+        label:    `Establish consumer-driven contract tests for option ${i} across all the interfaces`,
+        descBase: `(I'm flagging this because:) Service contracts have evolved without consumer-driven contract testing keeping pace with the recent changes.`,
+      })),
+    });
+    const r = computeLayout(opts, { focusedIndex: 3, expandedOptions: new Set(), scrollOffset: 0 });
+
+    const visibleVR = totalVisualRows(r.viewport.visibleStyledLines, opts.cols);
+
+    // No-overflow invariant: total visible visual rows fit within the viewport
+    // even at this tight popup size, because Tier 2 drop releases room from
+    // the bottom of the header region.
+    expect(visibleVR).toBeLessThanOrEqual(opts.rows - 2);
+
+    // Tier 1 uncroppable guarantee: NEXPATH wordmark + pinch label MUST
+    // remain in the visible output. These are the user's visual identity
+    // and the per-session context anchor — the bug report specifically
+    // targets their loss when the popup viewport is tight.
+    const visibleText = r.viewport.visibleStyledLines.join('\n');
+    expect(visibleText).toContain('NEXPATH CLI');                   // page-header wordmark
+    expect(visibleText).toContain('Service boundary established');  // pinch label
+  });
 });
 
 describe('render-loop — budget computation (§11.4 / §11.8 / §11.12)', () => {
