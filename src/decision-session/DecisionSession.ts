@@ -1,10 +1,11 @@
 import { select, isCancel } from '@clack/prompts';
-import type { Stage, UserProfile } from '../classifier/types.js';
+import type { Stage, UserMood, UserProfile, UserRole } from '../classifier/types.js';
 import type { FlagType } from '../classifier/Stage2Trigger.js';
 import type { Store } from '../store/db.js';
 import { insertSkippedSession, getSkippedSessions } from '../store/skipped-sessions.js';
 import { incrementDecisionSessionCount } from '../store/projects.js';
 import { setConfig } from '../store/config.js';
+import type { DecisionContent } from './options.js';
 import {
   resolveDecisionContent,
   buildOptionList,
@@ -15,6 +16,10 @@ import {
 import type { GeneratedOptions } from './OptionGenerator.js';
 import { writeTelemetry } from '../telemetry/index.js';
 import { type RecentPromptMetadata } from '../telemetry/recent-prompts.js';
+import type { WhyHelpEntry } from './why-help.js';
+import { composeWhyHelpBlock, type WhyHelpRegister } from './why-help-compose.js';
+import { profileToRegister } from './register.js';
+import { SHORTCUT_HINT_TEXT } from './render-loop.js';
 
 /**
  * Decision session terminal UI (per decision-session-ux-research.md).
@@ -50,15 +55,16 @@ const BOLD         = '\x1b[1m';
 /**
  * Branded Nexpath wordmark, shown at the top of every popup window.
  *
- *   ▲  N E X P A T H  C L I
+ *   ▲  NEXPATH CLI
  *   ────────────────────────
  *
- * Triangle bold bright cyan, wordmark bold bright white with 2-space
- * tracking, rule dim gray. Trailing blank line gives breathing room
- * before the clack prompt area starts rendering.
+ * Triangle bold bright cyan, wordmark bold bright white (compact —
+ * no inter-letter tracking — for at-a-glance readability), rule dim
+ * gray. Trailing blank line gives breathing room before the clack
+ * prompt area starts rendering.
  */
 export const NEXPATH_HEADER =
-  `${BOLD_CYAN}▲${RESET}  ${BOLD_WHITE}N E X P A T H  C L I${RESET}\n` +
+  `${BOLD_CYAN}▲${RESET}  ${BOLD_WHITE}NEXPATH CLI${RESET}\n` +
   `${DIM_GRAY}────────────────────────${RESET}\n\n`;
 
 /** Visible row count the header consumes — wordmark (1) + rule (1) + blank (1). */
@@ -120,7 +126,27 @@ export interface DecisionSessionInput {
  */
 export type SelectFn = (opts: {
   message: string;
-  options: Array<{ value: string; label: string }>;
+  options: Array<{
+    value:        string;
+    label:        string;
+    /** Per-option desc-base text — rendered as a `↳`-prefixed sub-line by the Path A render-loop path; ignored by legacy clack-based fallbacks. */
+    descBase?:    string;
+    /** True for blank-row OPTION_SEPARATOR padding entries — render-loop skips focus and renders a blank row. */
+    isSeparator?: boolean;
+    /** True for SHOW_SIMPLER / SKIP_NOW / HELP_LABEL meta entries — render-loop omits the desc-base sub-line for these. */
+    isMeta?:      boolean;
+  }>;
+  /**
+   * Structured render fields — consumed by the Path A render-loop renderer
+   * (TtySelectFn :: buildMjsScript) when present. The legacy `message`
+   * string remains the source-of-truth for clack-based fallback paths
+   * (e.g. the sub-menu action prompt + freq / role / root menu .mjs
+   * builders) which only know about `message + options`.
+   */
+  pinchLabel?:    string;
+  subtitle?:      string;
+  question?:      string;
+  whyHelpBlock?:  string;
 }) => Promise<string | symbol>;
 
 /**
@@ -157,19 +183,46 @@ export type DecisionSessionResult =
 
 // ── Message builder ────────────────────────────────────────────────────────────
 
+/** Optional inputs for the dev-plan §11.2 why-help block extension to the popup message. */
+export interface BuildSelectMessageOptions {
+  whyHelpEntry?: WhyHelpEntry | null;
+  register?:     WhyHelpRegister;
+  mood?:         UserMood;
+  role?:         UserRole | null;
+}
+
 /**
  * Build the `message` string for @clack/prompts' select prompt.
- * Combines: pinch label, optional subtitle, question line.
+ * Combines: pinch label, optional subtitle, question line, and (when
+ * `options.whyHelpEntry` is provided) the dev-plan §11.2 popup
+ * why-help block (R4 user-facing open + R6 content + optional R6-Sub2
+ * mood sentence + R4 user-facing close).
+ *
+ * The extended path is non-breaking — when `options` is omitted or the
+ * `whyHelpEntry` is null/missing-register, the function returns the
+ * original pinch + subtitle + question composition unchanged.
  */
 export function buildSelectMessage(
   pinchLabel: string,
   question:   string,
   level:      1 | 2 | 3,
+  options?:   BuildSelectMessageOptions,
 ): string {
   const subtitle = getLevelSubtitle(level);
   const parts: string[] = [formatPinchLabel(pinchLabel)];
   if (subtitle) parts.push(formatSubtitle(subtitle));
   parts.push(formatQuestion(question));
+
+  if (options?.whyHelpEntry && options?.register) {
+    const wh = composeWhyHelpBlock(
+      options.whyHelpEntry,
+      options.register,
+      options.mood,
+      options.role,
+    );
+    if (wh) parts.push(wh);
+  }
+
   return parts.join('\n');
 }
 
@@ -191,41 +244,89 @@ export async function runLevel(
 ): Promise<'skip' | 'next' | 'clipboard_only' | string> {
   const content  = resolveDecisionContent(input.stage, input.flagType, input.profile);
   const gen      = input.generatedOptions;
-  const effective = gen
-    ? { ...content, L1: gen.l1, L2: gen.l2, L3: gen.l3 }
+  // Generated options carry only the user-facing text. Each option's
+  // desc-base comes from either the runtime-substituted output on
+  // `gen.generatedDescBases` (post R5 prompt-evidence injection +
+  // R4 bookend substitution + F7 L2 escalation) when OptionGenerator
+  // produced it, OR from the static DecisionContent as a fallback.
+  const wrapGen = (
+    texts:  string[],
+    source: { L1: typeof content.L1; L2: typeof content.L2; L3: typeof content.L3; },
+    key:    'L1' | 'L2' | 'L3',
+  ) => {
+    const lowerKey  = key.toLowerCase() as 'l1' | 'l2' | 'l3';
+    const substituted = gen?.generatedDescBases?.[lowerKey];
+    return texts.map((text, i) => ({
+      option:   text,
+      descBase: substituted?.[i] ?? source[key][i]?.descBase ?? '',
+    }));
+  };
+  const effective: DecisionContent = gen
+    ? {
+        ...content,
+        L1: wrapGen(gen.l1, content, 'L1'),
+        L2: wrapGen(gen.l2, content, 'L2'),
+        L3: wrapGen(gen.l3, content, 'L3'),
+      }
     : content;
   const { options } = buildOptionList(effective, level);
-  const message  = buildSelectMessage(input.pinchLabel, content.question, level);
+  const register     = profileToRegister(input.profile);
+  const subtitle     = getLevelSubtitle(level) ?? undefined;
+  const whyHelpBlock = content.whyHelp && register
+    ? (composeWhyHelpBlock(content.whyHelp, register, input.profile?.mood, input.profile?.role) ?? undefined)
+    : undefined;
+  const message  = buildSelectMessage(input.pinchLabel, content.question, level, {
+    whyHelpEntry: content.whyHelp,
+    register,
+    mood:         input.profile?.mood,
+    role:         input.profile?.role,
+  });
+
+  // Per-level OptionEntry list — used to map each content option's desc-base
+  // into the extended `clackOptions[].descBase` field for the path A
+  // render-loop renderer (legacy clack callers ignore the new field).
+  const levelEntries = level === 1 ? effective.L1 : level === 2 ? effective.L2 : effective.L3;
+  const descBaseByOption = new Map<string, string>();
+  for (const entry of levelEntries) descBaseByOption.set(entry.option, entry.descBase);
 
   // Inject blank separator items between visual groups:
   //   content options → 2 blank lines → SHOW_SIMPLER (if present) → 1 blank line → SKIP_NOW
   //   when SHOW_SIMPLER absent: content options → 2 blank lines → SKIP_NOW
   //   after SKIP_NOW: 2 blank lines → help hint (first 3 appearances only)
   const hasShowSimpler = options.some((o) => o === SHOW_SIMPLER);
-  const clackOptions: Array<{ value: string; label: string }> = [];
+  const clackOptions: Array<{
+    value:        string;
+    label:        string;
+    descBase?:    string;
+    isSeparator?: boolean;
+    isMeta?:      boolean;
+  }> = [];
   let sepIdx = 0;
   for (const opt of options) {
     if (opt === SHOW_SIMPLER) {
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
     } else if (opt === SKIP_NOW) {
-      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+      clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
       if (!hasShowSimpler) {
-        clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
+        clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
       }
     }
+    const isMeta = opt === SKIP_NOW || opt === SHOW_SIMPLER;
     clackOptions.push({
       value: opt,
       label: opt === SKIP_NOW    ? SKIP_NOW_LABEL    :
              opt === SHOW_SIMPLER ? SHOW_SIMPLER_LABEL :
              formatOptionLabel(opt),
+      ...(isMeta ? { isMeta: true } : {}),
+      ...(isMeta ? {} : { descBase: descBaseByOption.get(opt) ?? '' }),
     });
   }
   // Help hint — 2 blank lines of breathing room then the styled hint row
   if (input.decisionSessionCount < 12) {
-    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '' });
-    clackOptions.push({ value: `${OPTION_SEPARATOR}help`, label: HELP_LABEL });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}${sepIdx++}`, label: '', isSeparator: true });
+    clackOptions.push({ value: `${OPTION_SEPARATOR}help`, label: HELP_LABEL, isMeta: true });
   }
 
   writeTelemetry(input.projectRoot, 'level_rendered', {
@@ -242,7 +343,16 @@ export async function runLevel(
       .filter(o => !o.value.startsWith(OPTION_SEPARATOR) || o.label !== '')
       .map(o => `  ${o.label}`)
       .join('\n');
-    process.stdout.write(`\n[SIM] level:${level} options:${optionKind}\n${message}\n${allOptions}\n[SIM] Auto-selecting: ${label}\n`);
+    const levelEntries = level === 1 ? effective.L1 : level === 2 ? effective.L2 : effective.L3;
+    const descBaseLines = levelEntries
+      .map((entry, idx) => `  ${idx + 1}. ${entry.descBase || '(no desc-base)'}`)
+      .join('\n');
+    process.stdout.write(
+      `\n[SIM] level:${level} options:${optionKind}\n${message}\n${allOptions}\n` +
+      `[SIM] desc-base per option:\n${descBaseLines}\n` +
+      `[SIM] shortcut-hint: ${SHORTCUT_HINT_TEXT}\n` +
+      `[SIM] Auto-selecting: ${label}\n`
+    );
     await new Promise<void>(r => setTimeout(r, 400));
     writeTelemetry(input.projectRoot, 'decision_session_sim_dismissed', {
       level, autoSelectedText: label.slice(0, 120),
@@ -250,7 +360,14 @@ export async function runLevel(
     return value as string;
   }
 
-  const result = await selectFn({ message, options: clackOptions });
+  const result = await selectFn({
+    message,
+    options: clackOptions,
+    pinchLabel: input.pinchLabel,
+    subtitle,
+    question:   content.question,
+    whyHelpBlock,
+  });
 
   // Item A: 5 context fields from input (no lookups) + Item I: skip count from store.
   // Snapshot once; reused across whichever dismissal branch fires.
