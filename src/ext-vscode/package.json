@@ -115,7 +115,7 @@
     "comment": "better-sqlite3 native binding ABIs bundled in the .vsix. `electron`/`electronAbi` is the PRIMARY (build/Release) for back-compat + the lock test. `electronVersions` is the SCALABLE set: the packager builds a binary per version into prebuilds/<NODE_MODULE_VERSION>/ and the watcher loads the one matching the host's process.versions.modules — so it works on ANY Cursor/VS Code Electron in range. Add a version here when Cursor/VS Code ships a new Electron (verify the ABI with node-abi.getAbi('<electron>','electron')).",
     "electron": "40.10.3",
     "electronAbi": 143,
-    "electronVersions": ["38.0.0", "39.0.0", "40.10.3", "41.0.0"]
+    "electronVersions": ["34.0.0", "35.0.0", "36.0.0", "37.0.0", "38.0.0", "39.0.0", "40.10.3", "41.0.0"]
   },
   "dependencies": {
     "better-sqlite3": "^12"
