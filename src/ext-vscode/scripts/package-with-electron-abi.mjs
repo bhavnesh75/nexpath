@@ -85,6 +85,24 @@ function readElectronVersions(primary) {
 const electronVersion = readTargetElectron();
 const versionsToBuild = readElectronVersions(electronVersion);
 const extraArgs = process.argv.slice(2);
+
+// ── Cross-compile support ────────────────────────────────────────────────────
+// Derive the TARGET cpu arch from the `--target <os>-<arch>` flag that the CI
+// forwards to `vsce package` (e.g. "darwin-x64" → "x64"). We pass it to
+// @electron/rebuild as `--arch`, so a build host can produce a binary for a
+// DIFFERENT arch of the same OS family. Concretely: the darwin-x64 (Intel-Mac)
+// binary is cross-compiled on the Apple-Silicon runner (macos-14) — the macOS
+// toolchain is universal, so this yields a genuine Intel-Mac binary WITHOUT a
+// (scarce, deprecated) Intel macOS runner. When the target arch already matches
+// the host it's a normal native build; with no `--target` (local `npm run
+// package`) it falls back to the host arch — unchanged behaviour.
+function readTargetArch(argv) {
+  const i = argv.indexOf('--target');
+  const target = i >= 0 ? argv[i + 1] : undefined; // e.g. "darwin-x64"
+  const arch = typeof target === 'string' ? target.split('-')[1] : undefined;
+  return arch || process.arch; // x64 | arm64 | …
+}
+const targetArch = readTargetArch(extraArgs);
 const releaseBinary = resolve(subPkgRoot, 'node_modules', 'better-sqlite3', 'build', 'Release', 'better_sqlite3.node');
 const prebuildsDir = resolve(subPkgRoot, 'prebuilds');
 
@@ -101,9 +119,9 @@ rmSync(prebuildsDir, { recursive: true, force: true });
 for (const v of versionsToBuild) {
   const abi = String(nodeAbi.getAbi(v, 'electron'));
   const rebuildCode = run(
-    `Rebuild better-sqlite3 → Electron ${v} (ABI ${abi})`,
+    `Rebuild better-sqlite3 → Electron ${v} (ABI ${abi}, arch ${targetArch})`,
     'npx',
-    ['electron-rebuild', '--version', v, '--force', '--only', 'better-sqlite3', '--module-dir', '.'],
+    ['electron-rebuild', '--version', v, '--arch', targetArch, '--force', '--only', 'better-sqlite3', '--module-dir', '.'],
   );
   if (rebuildCode !== 0 || !existsSync(releaseBinary)) {
     console.error(`✗ electron-rebuild failed for Electron ${v} (exit ${rebuildCode}) — aborting before vsce package.`);

@@ -31,6 +31,9 @@ jobs:
   package:
     name: Package (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
+    # Catch a genuinely hung job (vs the queue) so it fails fast instead of
+    # running for hours. Generous: the macOS cross-compile rebuilds 8 ABIs.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +45,12 @@ jobs:
           - target: linux-x64
             runner: ubuntu-22.04
           - target: darwin-x64
-            runner: macos-13         # Intel mac for x64 prebuild
+            # Apple Silicon runner — the x64 (Intel-Mac) binary is CROSS-COMPILED
+            # here via `--arch x64` (see package-with-electron-abi.mjs). GitHub's
+            # Intel macOS (macos-13) runners are scarce/deprecated and queue for
+            # hours; Apple-Silicon runners are plentiful and the macOS toolchain
+            # is universal, so this produces a genuine Intel-Mac binary with no wait.
+            runner: macos-14
           - target: darwin-arm64
             runner: macos-14         # Apple Silicon (pinned; previously macos-latest)
           - target: win32-x64
