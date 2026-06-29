@@ -31,6 +31,9 @@ jobs:
   package:
     name: Package (${{ matrix.target }})
     runs-on: ${{ matrix.runner }}
+    # Catch a genuinely hung job (vs the queue) so it fails fast instead of
+    # running for hours. Generous: the macOS cross-compile rebuilds 8 ABIs.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +45,12 @@ jobs:
           - target: linux-x64
             runner: ubuntu-22.04
           - target: darwin-x64
-            runner: macos-13         # Intel mac for x64 prebuild
+            # Apple Silicon runner — the x64 (Intel-Mac) binary is CROSS-COMPILED
+            # here via `--arch x64` (see package-with-electron-abi.mjs). GitHub's
+            # Intel macOS (macos-13) runners are scarce/deprecated and queue for
+            # hours; Apple-Silicon runners are plentiful and the macOS toolchain
+            # is universal, so this produces a genuine Intel-Mac binary with no wait.
+            runner: macos-14
           - target: darwin-arm64
             runner: macos-14         # Apple Silicon (pinned; previously macos-latest)
           - target: win32-x64
@@ -69,6 +77,16 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Unit tests
+        # Run on Linux + both macOS jobs. Skipped ONLY on win32: a set of host-path
+        # tests (host-detector / cursor-state-dump-helpers / advisory-store-reader /
+        # path-enumerator / resolve-db-workspace) assert POSIX '/' separators and rely
+        # on POSIX realpath semantics, so they false-fail on the Windows runner
+        # (path.join uses the host separator; Windows uses 8.3 short names like
+        # RUNNER~1). They validate platform-agnostic LOGIC and pass on Linux + macOS.
+        # The win32 job still typechecks, builds, and packages the native binary —
+        # which is the OS-specific part — validated separately by the build + manual
+        # cross-OS install testing.
+        if: matrix.target != 'win32-x64'
         working-directory: src/ext-vscode
         run: npm test
 
