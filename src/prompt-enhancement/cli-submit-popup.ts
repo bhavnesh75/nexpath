@@ -638,28 +638,27 @@ export function buildPromptEnhancementCliActionRowsV1(
     },
   ];
 
-  // Directional refinements (Shorter / More thorough / More project-grounded) are HIDDEN from the PE
-  // popup UI (owner decision 2026-08-19): the row-building loop below is COMMENTED OUT (kept verbatim,
-  // NOT deleted) so the rows never render — the user never sees them and the recompose path can never
-  // be triggered. To restore, simply un-comment the loop; the action/engine code is untouched. See the
-  // submodule doc `…mps-1-directional-actions-pe-parity-plan-and-pending-2026-08-19.md`.
-  // for (const entry of model.controls.directional) {
-  //   rows.push({
-  //     rowKey: entry.action.actionType,
-  //     kind: 'directional',
-  //     // Owner request: the directional refinements (Shorter / More thorough / More project-grounded)
-  //     // never show the "(unavailable)" marker. Their `uiAvailabilityState` is always downgraded to
-  //     // `requires_llm_budget` (they are LLM re-wordings), which read as "(unavailable)" even in a
-  //     // working popup and confused users. Availability will be governed separately; here the row is
-  //     // always shown without the marker. Execution stays gated by the RAW action availability in the
-  //     // runner (a genuinely-unavailable action still no-ops silently, never a bad call).
-  //     label: entry.action.label,
-  //     available: true,
-  //     // No focused-row description for the directional actions (owner request):
-  //     // the labels (Shorter / More thorough / More project-grounded) are
-  //     // self-explanatory. Use original prompt keeps its help below.
-  //   });
-  // }
+  // Directional refinements (Shorter / More thorough / More project-grounded) are shown in the PE
+  // popup UI (owner decision 2026-08-20: re-enabled). The action/engine code was untouched while the
+  // rows were hidden, so simply rendering the loop restores them. See the submodule doc
+  // `…mps-1-directional-actions-pe-parity-plan-and-pending-2026-08-19.md`.
+  for (const entry of model.controls.directional) {
+    rows.push({
+      rowKey: entry.action.actionType,
+      kind: 'directional',
+      // Owner request: the directional refinements (Shorter / More thorough / More project-grounded)
+      // never show the "(unavailable)" marker. Their `uiAvailabilityState` is always downgraded to
+      // `requires_llm_budget` (they are LLM re-wordings), which read as "(unavailable)" even in a
+      // working popup and confused users. Availability will be governed separately; here the row is
+      // always shown without the marker. Execution stays gated by the RAW action availability in the
+      // runner (a genuinely-unavailable action still no-ops silently, never a bad call).
+      label: entry.action.label,
+      available: true,
+      // No focused-row description for the directional actions (owner request):
+      // the labels (Shorter / More thorough / More project-grounded) are
+      // self-explanatory. Use original prompt keeps its help below.
+    });
+  }
 
   // Feedback is no longer a row in the action list (§8.3): it opens on cancel
   // (Use original prompt or Esc), wired in UI-3.

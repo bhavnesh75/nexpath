@@ -449,13 +449,13 @@ describe('UI-1 PE frame renderer', () => {
     expect(frame).not.toMatch(/\.done\b/);
     expect(frame).not.toMatch(/Show simpler options|Skip for now|Copy to clipboard/);
 
-    const order = ['Use enhanced prompt', 'Additional details', 'Use original prompt']
+    const order = ['Use enhanced prompt', 'Additional details', 'Shorter', 'More thorough', 'More project-grounded', 'Use original prompt']
       .map((label) => frame.indexOf(label));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect([...order]).toEqual([...order].sort((a, b) => a - b));
-    // Directional refinements (Shorter / More thorough / More project-grounded) are HIDDEN from the PE
-    // popup (owner 2026-08-19) — they never render.
-    for (const gone of ['Shorter', 'More thorough', 'More project-grounded']) expect(frame).not.toContain(gone);
+    // Directional refinements (Shorter / More thorough / More project-grounded) render in the PE
+    // popup (owner 2026-08-20: re-enabled), between Additional details and Use original prompt.
+    for (const shown of ['Shorter', 'More thorough', 'More project-grounded']) expect(frame).toContain(shown);
     expect(frame.split('Use enhanced prompt').length - 1).toBe(1);
     expect(frame).toContain(PROMPT_ENHANCEMENT_CLI_FOOTER_V1);
   });
@@ -483,10 +483,10 @@ describe('UI-1 action-row model', () => {
   it('orders rows per stage-1-2a, drops Feedback entirely (§8.3), and reflects typed availability', () => {
     const rows = buildPromptEnhancementCliActionRowsV1(fakeRenderModel());
     expect(rows.map((row) => row.rowKey)).toEqual([
-      'editor_heading', 'additional_details', 'use_original',
+      'editor_heading', 'additional_details', 'shorter', 'more_thorough', 'more_project_grounded', 'use_original',
     ]);
-    // Directional refinements are HIDDEN from the PE popup (owner 2026-08-19) — no directional rows.
-    expect(rows.some((row) => row.kind === 'directional')).toBe(false);
+    // Directional refinements render in the PE popup (owner 2026-08-20: re-enabled).
+    expect(rows.some((row) => row.kind === 'directional')).toBe(true);
     // Feedback is typed-available but is never a row now.
     expect(rows.some((row) => row.rowKey === 'feedback')).toBe(false);
   });
@@ -502,13 +502,14 @@ describe('UI-1 action-row model', () => {
     expect(refinement.some((row) => row.rowKey === 'use_original')).toBe(false);
   });
 
-  it('hides the directional refinement rows from the PE popup (owner 2026-08-19), keeping the other rows', () => {
+  it('shows the directional refinement rows in the PE popup (owner 2026-08-20: re-enabled), keeping the other rows', () => {
     const view: PromptEnhancementCliPopupViewV1 = { model: fakeRenderModel(), editedBodyText: 'BODY-LINE', additionalDetailsText: '' };
     const frame = renderPromptEnhancementPopupFrameV1(view, { focusIndex: 0, helpExpanded: false });
-    // Shorter / More thorough / More project-grounded no longer render, and no "(unavailable)" marker.
-    for (const gone of ['Shorter', 'More thorough', 'More project-grounded']) expect(frame).not.toContain(gone);
+    // Shorter / More thorough / More project-grounded render, but never the "(unavailable)" marker
+    // (the row is always shown available per owner request; execution stays gated in the runner).
+    for (const shown of ['Shorter', 'More thorough', 'More project-grounded']) expect(frame).toContain(shown);
     expect(frame).not.toContain('(unavailable)');
-    expect(frame).not.toContain('Make it concise');
+    expect(frame).not.toContain('Make it concise'); // focused-row help not shown for an unfocused directional row
     expect(frame).toContain('BODY-LINE');
     // The remaining rows still render: editor heading, Additional details, Use original.
     expect(frame).toContain('● Use enhanced prompt');
@@ -659,8 +660,8 @@ describe('UI-1 action-row model', () => {
     // Body focused (index 0) → the send hint shows.
     expect(renderPromptEnhancementPopupFrameV1(view, { focusIndex: 0, helpExpanded: false }))
       .toContain('Enter sends this prompt');
-    // Focus on "Use original prompt" (index 2 — directional rows are hidden) → the send hint is GONE, so
-    // it never misleads ("Enter" there selects Use original, not send). The body itself still renders.
+    // Focus on a non-body action row (index 2 = Shorter) → the send hint is GONE, so it never misleads
+    // ("Enter" there runs the directional refine, not a send). The body itself still renders.
     const elsewhere = renderPromptEnhancementPopupFrameV1(view, { focusIndex: 2, helpExpanded: false });
     expect(elsewhere).not.toContain('Enter sends this prompt');
     expect(elsewhere).toContain('BODY');
@@ -746,7 +747,7 @@ describe('UI-2 interaction reducer', () => {
       .toEqual([{ type: 'edit_body', text: 'BODY\n\nAdditional details to incorporate:\nnotes' }]);
     expect(applied.state.editor.buffers.additional_details.text).toBe('');
     expect(rows()[applied.state.focusIndex]!.kind).toBe('editor_heading');
-    // (Directional rows are hidden from the PE popup — no directional Enter case to exercise here.)
+    // (Directional-row Enter is exercised by the 'routes directional actions' test above.)
   });
 
   it('applies details onto the EDITED body (dirty edits kept), and no-ops an empty details draft', () => {
@@ -780,8 +781,8 @@ describe('UI-2 interaction reducer', () => {
   });
 
   it('never Applies on a blank body (bug B)', () => {
-    // (Directional/refine rows are hidden from the PE popup, so the "refine on blank body" path is
-    // unreachable; the Apply-details blank guard still holds.)
+    // (The directional "refine on blank body" path is guarded in the reducer; here we cover the
+    // Apply-details blank guard.)
     // Apply details (focus 1) with a blank body + a note → no-op.
     const d = reducePromptEnhancementCliInteractionV1(state('', 'notes'), rows(), { kind: 'down' }).state;
     expect(reducePromptEnhancementCliInteractionV1(d, rows(), { kind: 'enter' }).commands).toEqual([]);
