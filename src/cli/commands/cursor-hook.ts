@@ -35,6 +35,7 @@ import { runSequenceContinuationStop } from './submit-stop-decider.js';
 import { checkAndRecordCursorInvocation } from '../../cursor-hook/invocation-guard.js';
 import { bringPopupToFront } from '../../windsurf-hook/foreground.js';
 import { log } from '../../logger.js';
+import { killProcessTree } from '../../utils/kill-tree.js';
 import { readFileSync } from 'node:fs';
 
 /**
@@ -426,7 +427,7 @@ export async function runCursorHookAction(
         if (waited.timedOut) {
           // Hold exhausted before auto finished: do NOT decide (the signal never
           // landed) and never leave an orphan (R2 — Cursor won't reap it).
-          try { child?.kill(); } catch { /* already gone */ }
+          killProcessTree(child); // RC62: take the popup terminal too
         }
         logEvent('info', 'cursor_hook_auto', { spawned: child != null, timed_out: waited.timedOut === true });
       } else {
@@ -445,7 +446,7 @@ export async function runCursorHookAction(
         // Hold exhausted while the popup waited: fail open AND reap the stop
         // child — Cursor never reaps timed-out hooks (R2), and stop's popups
         // wait on the user with no bound of their own.
-        try { stopChildRef.current?.kill(); } catch { /* already gone */ }
+        killProcessTree(stopChildRef.current); // RC62: take the popup terminal too
       }
       if (!decided.timedOut && decided.value === 'block') decision = 'block';
       logEvent('info', 'cursor_hook_decision', {

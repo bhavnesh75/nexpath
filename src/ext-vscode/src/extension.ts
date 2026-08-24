@@ -24,7 +24,7 @@ import { createInjectedRecordStore } from './injected-record.js';
 import { injectPeBody, injectPeBodyWithFallback, resolvePeVisibleSurfaceAckState } from './pe-delivery.js';
 import { createPePoller, type PePoller } from './pe-poller.js';
 import { createSubmitHookPoller, type SubmitHookPoller } from './submit-hook-poller.js';
-import { createSubmitClipboardDelivery, submitKeystroke, lastDarwinSubmitError, isDarwinAccessibilityDenial } from './submit-clipboard-delivery.js';
+import { createSubmitClipboardDelivery, submitKeystroke, lastDarwinSubmitError, isDarwinAccessibilityDenial, scheduleWindsurfQueueFlush } from './submit-clipboard-delivery.js';
 import {
   isWindsurfSubmitAdvisoryEnabled,
   isCursorSubmitAdvisoryEnabled,
@@ -848,6 +848,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         ),
         onOutcome: (outcome) => {
           log(`[nexpath] submit delivery outcome: ${outcome}`);
+          // RC61: a busy/reconnecting Devin session parks a delivered submit as
+          // "1 queued message" that only a further Enter sends — tap once.
+          if (outcome === 'delivered' && host === 'windsurf') {
+            scheduleWindsurfQueueFlush(
+              () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']), appName: vscode.env.appName, submitLog: log }),
+              log,
+            );
+          }
           // RC16 (macOS tester, 2026-08-15): on darwin the auto-send keystroke
           // needs the Accessibility permission for the HOST APP. Without it the
           // refined text sits in the composer with zero guidance. One-time,

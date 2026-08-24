@@ -456,3 +456,39 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
     return false;
   }
 }
+
+/**
+ * RC61 (Windows/Devin staging tester, 2026-08-24): when the agent session is
+ * busy or reconnecting at submit time ("Navigating.. Connecting to server"),
+ * Devin ACCEPTS the submitted replacement but parks it as "1 queued message" —
+ * and this build's queue does not auto-flush: the composer's own placeholder
+ * reads "Enter to send queued message (⏎)". The tester had to press that
+ * Enter by hand.
+ *
+ * This schedules exactly ONE follow-up Enter after a DELIVERED submit: if the
+ * message ran normally the composer is empty and the tap is a no-op (Cascade
+ * ignores Enter on an empty input); if it queued, the tap is the flush the UI
+ * asks for. The tap goes through the SAME `submitKeystroke` guards — the RC10
+ * popup-focus refusal, the RC11/RC59 editor-focus whitelist, the RC49/60
+ * win32 foreground script — and the RC43/46 quiet windows guarantee no
+ * Nexpath popup can be open this soon after a block, so the Enter cannot land
+ * anywhere but the editor's composer. Windsurf/Devin only — Cursor has no
+ * queue affordance and has never needed it.
+ */
+export const WINDSURF_QUEUE_FLUSH_DELAY_MS = 2_500;
+
+export function scheduleWindsurfQueueFlush(
+  submitFn: () => boolean,
+  log: (line: string) => void,
+  delayMs: number = WINDSURF_QUEUE_FLUSH_DELAY_MS,
+  setTimeoutFn: (fn: () => void, ms: number) => unknown = setTimeout,
+): void {
+  setTimeoutFn(() => {
+    try {
+      const ok = submitFn();
+      log(`[nexpath] submit-queue-flush: ${ok ? 'tapped' : 'skipped (guards refused)'} — no-op if nothing was queued`);
+    } catch {
+      log('[nexpath] submit-queue-flush: threw (ignored)');
+    }
+  }, delayMs);
+}

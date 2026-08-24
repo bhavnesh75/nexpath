@@ -20,6 +20,7 @@ import {
   isDarwinAccessibilityDenial,
   buildWin32KeystrokeScript,
   WIN32_KEYSTROKE_TIMEOUT_MS,
+  scheduleWindsurfQueueFlush,
 } from './submit-clipboard-delivery.js';
 
 function deliveryHarness(over: Partial<SubmitClipboardDeliveryDeps> = {}) {
@@ -525,5 +526,45 @@ describe('⭐ RC59 — focusedWindowIsEditor brand needles', () => {
     });
     expect(logs.join(' ')).toContain('editor not focused after raise');
     expect(logs.join(' ')).toContain('appName=Devin');
+  });
+});
+
+/**
+ * ⭐ RC61 — the Devin queue-flush tap: a busy/reconnecting session parks a
+ * delivered submit as "1 queued message" that only a further Enter sends
+ * (the composer's own placeholder says so). One guarded tap, no-op when
+ * nothing queued.
+ */
+describe('⭐ RC61 — scheduleWindsurfQueueFlush', () => {
+  it('⭐ fires the submit fn exactly once after the delay, through the caller\'s guards', () => {
+    let fired = 0; const logs: string[] = [];
+    let scheduled: (() => void) | null = null; let delay = 0;
+    scheduleWindsurfQueueFlush(
+      () => { fired += 1; return true; },
+      (l) => logs.push(l),
+      2_500,
+      (fn, ms) => { scheduled = fn as () => void; delay = ms; return 0; },
+    );
+    expect(fired).toBe(0);          // nothing before the delay
+    expect(delay).toBe(2_500);
+    scheduled!();
+    expect(fired).toBe(1);
+    expect(logs.join(' ')).toContain('submit-queue-flush: tapped');
+  });
+
+  it('guards refusing ⇒ logged as skipped, never retried', () => {
+    const logs: string[] = [];
+    let scheduled: (() => void) | null = null;
+    scheduleWindsurfQueueFlush(() => false, (l) => logs.push(l), 1, (fn) => { scheduled = fn as () => void; return 0; });
+    scheduled!();
+    expect(logs.join(' ')).toContain('skipped (guards refused)');
+  });
+
+  it('a throwing submit fn is swallowed (the flush is best-effort)', () => {
+    const logs: string[] = [];
+    let scheduled: (() => void) | null = null;
+    scheduleWindsurfQueueFlush(() => { throw new Error('boom'); }, (l) => logs.push(l), 1, (fn) => { scheduled = fn as () => void; return 0; });
+    expect(() => scheduled!()).not.toThrow();
+    expect(logs.join(' ')).toContain('threw (ignored)');
   });
 });

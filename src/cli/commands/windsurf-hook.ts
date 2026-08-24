@@ -34,6 +34,7 @@ import {
 } from './submit-option-source.js';
 import { openStore, closeStore } from '../../store/db.js';
 import { log } from '../../logger.js';
+import { killProcessTree } from '../../utils/kill-tree.js';
 import { getPendingAdvisory, markAdvisoryShown } from '../../store/pending-advisories.js';
 import { isSubmitAdvisoryEnabledForHost } from './submit-flow-config.js';
 import { writeSubmitDecision, readReplacementEchoes, latestReplacementEchoAt,
@@ -774,7 +775,7 @@ export async function runWindsurfHookAction(
         decideAfterAuto = false;
         // No orphan may survive the hold (plan acceptance). The child is
         // detached from our lifetime explicitly rather than left running.
-        try { result.child?.kill(); } catch { /* already gone */ }
+        killProcessTree(result.child); // RC62: take the popup terminal too
       }
     } else {
       await waitForChild(result.child);
@@ -801,7 +802,7 @@ export async function runWindsurfHookAction(
       if (decided.timedOut) {
         // Hold exhausted while stop's popup waited — reap it so no popup
         // process outlives the hook (mirrors the auto orphan-kill above).
-        try { stopChildRef.current?.kill(); } catch { /* already gone */ }
+        killProcessTree(stopChildRef.current); // RC62: take the popup terminal too
       }
       // `!decided.timedOut` is likewise redundant today (a timed-out run yields
       // no value, so `value === 'block'` is already false) and equally kept as an
