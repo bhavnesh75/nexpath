@@ -110,3 +110,27 @@ describe('⭐ RC49 — pasteKeystroke win32 targeting', () => {
     expect(calls[0]!.join(' ')).not.toContain('GetForegroundWindow');
   });
 });
+
+/** ⭐ RC59 — raiseAppWindow candidate list: rebranded hosts carry their own WM_CLASS. */
+describe('⭐ RC59 — raiseAppWindow candidates', () => {
+  it('tries each candidate until one raises', () => {
+    const tried: string[] = [];
+    const ok = raiseAppWindow(['devin', 'windsurf'], {
+      platform: 'linux', env: { DISPLAY: ':0' },
+      hasCommand: (c) => c === 'wmctrl',
+      run: (_c, args) => { tried.push(args[2]!); return args[2] === 'windsurf'; },
+    });
+    expect(ok).toBe(true);
+    expect(tried).toEqual(['devin', 'windsurf']);
+  });
+
+  it('a single string keeps the old behaviour byte-identical', () => {
+    const tried: string[] = [];
+    raiseAppWindow('windsurf', {
+      platform: 'linux', env: { DISPLAY: ':0' },
+      hasCommand: (c) => c === 'wmctrl',
+      run: (_c, args) => { tried.push(args[2]!); return true; },
+    });
+    expect(tried).toEqual(['windsurf']);
+  });
+});

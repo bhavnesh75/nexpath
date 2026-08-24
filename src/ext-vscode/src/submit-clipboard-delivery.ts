@@ -257,6 +257,9 @@ export function focusedWindowIsEditor(host: 'windsurf' | 'cursor', deps: {
   env?: NodeJS.ProcessEnv;
   hasCommand?: (cmd: string) => boolean;
   runCapture?: (cmd: string, args: string[]) => string | null;
+  /** RC59: the LIVE `vscode.env.appName`, matched first — rebrands ("Devin",
+   *  "Devin - Next", …) title their windows by the live name, not "Windsurf". */
+  appName?: string;
 } = {}): boolean {
   const platform = deps.platform ?? process.platform;
   const env = deps.env ?? process.env;
@@ -269,8 +272,19 @@ export function focusedWindowIsEditor(host: 'windsurf' | 'cursor', deps: {
     const title = runCapture('xdotool', ['getactivewindow', 'getwindowname']);
     if (!title) return false;
     if (NEXPATH_POPUP_TITLE_MARKERS.some((m) => title.includes(m))) return false;
-    const needle = host === 'windsurf' ? 'windsurf' : 'cursor';
-    return title.toLowerCase().includes(needle);
+    // RC59 (Linux/Devin staging tester, 2026-08-24): the single 'windsurf'
+    // needle refused the Enter on every Devin-BRANDED Linux install — the
+    // window title is "… - Devin", no 'windsurf' substring, so this returned
+    // false, the raise (class 'windsurf') also missed, and every submit ended
+    // `submit_failed` in ~60 ms. The exact class RC47 fixed on win32
+    // (AppActivate candidates), never ported to this Linux gate: the one
+    // untested branding cell. Live appName leads; the static brand names
+    // cover machines where it is not threaded.
+    const needles = host === 'windsurf' ? ['windsurf', 'devin'] : ['cursor'];
+    const appNeedle = deps.appName?.trim().toLowerCase();
+    if (appNeedle && !needles.includes(appNeedle)) needles.unshift(appNeedle);
+    const t = title.toLowerCase();
+    return needles.some((n) => t.includes(n));
   } catch {
     return false; // cannot verify ⇒ do not press Enter blind
   }
@@ -315,7 +329,15 @@ export function buildWin32KeystrokeScript(titles: readonly string[], sendKeys: s
     `$w=New-Object -ComObject WScript.Shell;` +
     `$b=New-Object System.Text.StringBuilder 256;[void][W.U]::GetWindowText([W.U]::GetForegroundWindow(),$b,256);$fg=$b.ToString();` +
     `$ok=$false;` +
-    `foreach($t in @(${psTitles})){if($fg -eq $t -or $fg.EndsWith($t)){$ok=$true;break}};` +
+    // RC60 (Windows/Devin staging tester, 2026-08-24): this Devin build titles
+    // windows "<folder> - Devin - <session title>" — the app name sits MID-title,
+    // so suffix-only matching refused a foreground window that WAS the editor
+    // (FOREGROUND=testing - Devin - set up my food delivery app…; status=1).
+    // Delimiter-safe containment (" - Devin - ") accepts every editor shape
+    // (suffix, prefix-with-delimiter, mid-title) while still rejecting the
+    // browser-tab hazard EndsWith was built for ("Cursor docs - Chrome" has no
+    // delimited " - Cursor - " segment).
+    `foreach($t in @(${psTitles})){if($fg -eq $t -or $fg.EndsWith($t) -or $fg.StartsWith($t + ' - ') -or $fg.Contains(' - ' + $t + ' - ')){$ok=$true;break}};` +
     `if(-not $ok){` +
     `foreach($r in 1..2){` +
     `foreach($t in @(${psTitles})){if($w.AppActivate($t)){$ok=$true;break}};` +
@@ -338,9 +360,15 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
   // button and closed the user's chat.
   if (deps.host) {
     const isEditorFocused = deps.isEditorFocused ?? focusedWindowIsEditor;
-    if (!isEditorFocused(deps.host, { platform, env })) {
+    const focusDeps = { platform, env, appName: deps.appName };
+    if (!isEditorFocused(deps.host, focusDeps)) {
       deps.focusEditor?.();
-      if (!isEditorFocused(deps.host, { platform, env })) return false;
+      if (!isEditorFocused(deps.host, focusDeps)) {
+        // RC59: name the refusing gate — the linux submit_failed used to be
+        // indistinguishable from a missing tool (same one-line outcome).
+        deps.submitLog?.(`[nexpath] submit-linux: editor not focused after raise (host=${deps.host}, appName=${deps.appName ?? 'unset'})`);
+        return false;
+      }
     }
   }
   // CORRECTED 2026-08-10 — these previously defaulted to `() => false`, which made
@@ -414,10 +442,15 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
       return false;
     }
     // Linux (X11, or Wayland with a compatible tool)
-    if (!env.DISPLAY && !env.WAYLAND_DISPLAY) return false;
+    if (!env.DISPLAY && !env.WAYLAND_DISPLAY) {
+      deps.submitLog?.('[nexpath] submit-linux: no DISPLAY/WAYLAND_DISPLAY in env');
+      return false;
+    }
     if (has('xdotool')) return run('xdotool', ['key', '--clearmodifiers', 'Return']);
     if (has('wtype')) return run('wtype', ['-k', 'Return']);
     if (has('ydotool')) return run('ydotool', ['key', '28:1', '28:0']); // KEY_ENTER
+    // RC59: the silent false here looked identical to the focus refusal.
+    deps.submitLog?.('[nexpath] submit-linux: no keystroke tool found (xdotool/wtype/ydotool)');
     return false;
   } catch {
     return false;

@@ -208,10 +208,10 @@ function buildSubmitAdvisory(
     writeClipboard: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
     // Reuse the shipped raiser — Linux/X11 only by design; elsewhere it returns
     // false and the paste still proceeds.
-    focus: async () => raiseAppWindow(host),
+    focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host]),
     pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, host === 'cursor' ? 'Cursor' : 'Devin', 'Windsurf'] }),
     // RC11: Enter only when THIS editor is focused (one raise retry inside).
-    submitKeystroke: () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow(host), appName: vscode.env.appName, submitLog: log }),
+    submitKeystroke: () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host]), appName: vscode.env.appName, submitLog: log }),
     log,
   });
   return createSubmitAdvisoryForHost({
@@ -771,11 +771,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         writeClipboard: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
         // Reuse the shipped raiser — Linux/X11 only by design; on other OSes it
         // returns false and the paste still proceeds (see the module's notes).
-        focus: async () => raiseAppWindow('windsurf'),
+        focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']),
         pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'] }),
         // RC11: Enter only when Windsurf itself is focused — a blind Enter
         // pressed the Welcome view's "Start session" and closed the chat.
-        submitKeystroke: () => submitKeystroke({ host: 'windsurf', focusEditor: () => void raiseAppWindow('windsurf'), appName: vscode.env.appName, submitLog: log }),
+        submitKeystroke: () => submitKeystroke({ host: 'windsurf', focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']), appName: vscode.env.appName, submitLog: log }),
         log: (m) => log(m),
       });
 

@@ -452,10 +452,17 @@ describe('⭐ RC49 — buildWin32KeystrokeScript', () => {
     expect(ps.indexOf('GetForegroundWindow')).toBeLessThan(ps.indexOf('AppActivate'));
     expect(ps).toContain('$fg.EndsWith($t)');
   });
-  it('suffix matching, not substring — a browser tab titled "… - Chrome" cannot match', () => {
-    const ps = buildWin32KeystrokeScript(['Cursor'], '{ENTER}');
-    expect(ps).not.toContain('Contains');
-    expect(ps).toContain('EndsWith');
+  it('delimiter-safe matching (RC60 flip): mid-title app names match, bare substrings do not', () => {
+    // FLIPPED 2026-08-24 (RC60): the original pin asserted suffix-ONLY ("not
+    // substring") — which refused a real Devin foreground window titled
+    // "<folder> - Devin - <session>". The browser-tab hazard is still guarded:
+    // matching requires the delimited segment " - <name> - ", a start
+    // "<name> - ", an exact match, or the original suffix — never a bare
+    // substring anywhere in the title.
+    const ps = buildWin32KeystrokeScript(['Devin'], '{ENTER}');
+    expect(ps).toContain("$fg.EndsWith($t)");
+    expect(ps).toContain("$fg.StartsWith($t + ' - ')");
+    expect(ps).toContain("$fg.Contains(' - ' + $t + ' - ')");
   });
   it('keeps the retry rounds and the FOREGROUND diagnostic', () => {
     const ps = buildWin32KeystrokeScript(['Devin'], '{ENTER}');
@@ -471,5 +478,52 @@ describe('⭐ RC49 — buildWin32KeystrokeScript', () => {
 describe('⭐ RC52 — win32 keystroke timeout', () => {
   it('the shared ceiling covers a cold Add-Type compile (>8 s measured)', () => {
     expect(WIN32_KEYSTROKE_TIMEOUT_MS).toBeGreaterThanOrEqual(20_000);
+  });
+});
+
+/**
+ * ⭐ RC59 — the Linux Devin-branding gate (staging tester 2026-08-24): the
+ * single 'windsurf' needle refused Enter on every Devin-branded Linux install
+ * (title "… - Devin"). The RC47 class, ported to the Linux gate at last:
+ * live appName leads, static brand names cover unthreaded callers.
+ */
+describe('⭐ RC59 — focusedWindowIsEditor brand needles', () => {
+  const deps = (title: string, appName?: string) => ({
+    platform: 'linux' as const, env: { DISPLAY: ':0' },
+    hasCommand: () => true, runCapture: () => title, appName,
+  });
+
+  it('⭐ the tester\'s exact failing title now passes for host windsurf', () => {
+    expect(focusedWindowIsEditor('windsurf', deps('nexpath testing - Devin'))).toBe(true);
+  });
+
+  it('Windsurf-branded titles keep passing (owner-machine regression pin)', () => {
+    expect(focusedWindowIsEditor('windsurf', deps('nexpath - Windsurf'))).toBe(true);
+  });
+
+  it('live appName leads — a future rebrand matches without a code change', () => {
+    expect(focusedWindowIsEditor('windsurf', deps('proj - Cascade IDE', 'Cascade IDE'))).toBe(true);
+  });
+
+  it('unrelated windows still refuse (the RC11 hazard stays guarded)', () => {
+    expect(focusedWindowIsEditor('windsurf', deps('bank statement - Chrome'))).toBe(false);
+  });
+
+  it('cursor host is unaffected by the windsurf needles', () => {
+    expect(focusedWindowIsEditor('cursor', deps('proj - Devin'))).toBe(false);
+    expect(focusedWindowIsEditor('cursor', deps('proj - Cursor'))).toBe(true);
+  });
+
+  it('⭐ the linux submit failure now NAMES its gate via submitLog', () => {
+    const logs: string[] = [];
+    submitKeystroke({
+      platform: 'linux', host: 'windsurf', appName: 'Devin',
+      env: { DISPLAY: ':0' },
+      isPopupFocused: () => false,
+      isEditorFocused: () => false, focusEditor: () => {},
+      submitLog: (m) => logs.push(m),
+    });
+    expect(logs.join(' ')).toContain('editor not focused after raise');
+    expect(logs.join(' ')).toContain('appName=Devin');
   });
 });
