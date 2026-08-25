@@ -667,6 +667,19 @@ export function createSurfaceController(
       if (destroyed) return;
       const next = glyph === null ? undefined : { glyph };
       if (next?.glyph === busy?.glyph) return;      // the same frame twice
+      // A skeleton needs a field to stand in for. If the surface marks none,
+      // this call would do NOTHING and the caller would watch a spinner that
+      // never appears with no way to tell why. Say so: a silent no-op is the
+      // failure mode that costs the most to diagnose, and the fix is one
+      // property on the row whose text the engine produces.
+      if (next && !model.rows.some((r) => r.kind === 'field' && r.prepared)) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[nexpath] setBusy on "${model.id}" has no effect: no row is marked `
+          + '`prepared: true`, so there is no engine-produced field for the '
+          + 'skeleton to replace.',
+        );
+      }
       // Harvest FIRST. Busy arrives while the user may be mid-edit, and a
       // re-render without this replaces the textarea with one carrying the
       // model's text — their typing is gone, and it comes back the moment the

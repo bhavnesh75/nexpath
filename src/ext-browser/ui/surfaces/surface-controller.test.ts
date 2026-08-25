@@ -757,6 +757,28 @@ describe('the busy skeleton (E3)', () => {
     expect(bodyField().readOnly).toBe(false);
   });
 
+  it('says so when the surface marks no field for it', () => {
+    // The live adapter builds its own models, so a body row without
+    // `prepared` makes setBusy a no-op — a spinner that never appears and no
+    // way to tell why. Silence is the expensive failure mode; this one names
+    // its own cause.
+    const warned: string[] = [];
+    const original = console.warn;
+    console.warn = (...args: unknown[]) => { warned.push(String(args[0])); };
+
+    const bare: SurfaceModel = {
+      ...PE_FIXTURE,
+      rows: PE_FIXTURE.rows.map((r) => (r.kind === 'field' ? { ...r, prepared: undefined } : r)),
+    };
+    controller = createSurfaceController(host, {
+      registry: { ...REGISTRY, prompt_enhancement: bare }, initial: 'prompt_enhancement',
+    });
+    controller.setBusy('⠋');
+
+    console.warn = original;
+    expect(warned.join(' ')).toContain('prepared');
+  });
+
   it('does not travel to another surface', () => {
     // Busy describes THIS surface's wording being prepared. Carried over, the
     // next surface opens with a skeleton for something nobody is preparing —
