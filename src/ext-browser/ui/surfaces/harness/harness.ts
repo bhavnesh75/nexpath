@@ -770,11 +770,12 @@ function e2eScenarios(): Scenario[] {
         // And there is a FOURTH condition, which is a property of the platform
         // rather than of this scenario, and which two earlier explanations in
         // this file got wrong before it was measured: whether the field's own
-        // scrollbar is wider than the band's. See (a2). Where it is - Windows
-        // and Linux Chrome - `autoGrow` already measures at a narrower width
-        // than the text finally wraps at, so it always writes a generous height
-        // and the converge step cannot be provoked no matter how the geometry
-        // is arranged. This scenario reports that as a SKIP, never as a pass.
+        // scrollbar is wider than the band's. See (a2). Where it is - Chrome on
+        // Windows, the one place that has actually been measured - `autoGrow`
+        // already measures at a narrower width than the text finally wraps at,
+        // so it always writes a generous height and the converge step cannot be
+        // provoked no matter how the geometry is arranged. This scenario
+        // reports that as a SKIP, never as a pass.
         const box = document.createElement('div');
         box.style.cssText = 'width:360px;height:900px;overflow:hidden;';
         document.getElementById('sweep-stage')!.appendChild(box);
@@ -820,12 +821,19 @@ function e2eScenarios(): Scenario[] {
         //      the field's own scrollbar in place. If that scrollbar is wider
         //      than the band's, the measured width is already narrower than the
         //      width the text finally wraps at, the height written is generous,
-        //      and nothing can clip. Windows and Linux Chrome are that case:
-        //      measured 15px field against 10px band. macOS is the other one -
-        //      an unstyled textarea keeps the platform's OVERLAY scrollbar at
-        //      0px while `.np-scroll`'s `::-webkit-scrollbar` rule forces a
-        //      classic one, so the measurement happens at full width and the
-        //      converge step is the only thing holding the typed line on screen.
+        //      and nothing can clip. Chrome on Windows is that case: measured
+        //      15px field against 10px band.
+        //
+        //      The other case is an OVERLAY scrollbar on the field while the
+        //      band's rule forces a classic one - the measurement then happens
+        //      at full width and the converge step is the only thing holding
+        //      the typed line on screen. Firefox here is exactly that, measured
+        //      0px field against 8px band (its `scrollbar-width: thin`), and it
+        //      is where this scenario catches the regression: removing the
+        //      converge step fails it with 15px hidden. macOS Chrome is the
+        //      same shape, an unstyled textarea keeping the platform overlay
+        //      while `.np-scroll`'s `::-webkit-scrollbar` rule forces a classic
+        //      one, which is the likeliest origin of the original report.
         const fieldGauge = field.cloneNode(false) as HTMLTextAreaElement;
         fieldGauge.style.cssText = 'position:absolute;top:-9999px;left:0;width:200px;height:30px;max-height:none;';
         field.parentElement!.appendChild(fieldGauge);
@@ -945,12 +953,17 @@ function e2eScenarios(): Scenario[] {
         // version of this scenario passed while testing nothing.
         //
         // They report SKIP, not FAIL, and the distinction is deliberate: they
-        // describe the environment failing to stage the fault, not the product
-        // failing. Firefox lands here - its band does not take the scrollbar on
-        // this keystroke - and that is not a defect to fix in the layer. What
-        // they must never do is let the run go GREEN, because a green line
-        // would claim the converge step is covered. Band scrolling itself is
-        // not left untested by this: the C-2 sweep asserts it across 164 cells.
+        // describe an environment failing to stage the fault, not the product
+        // failing. What they must never do is let the run go GREEN, because a
+        // green line would claim the converge step is covered. Band scrolling
+        // itself is not left untested by this: the C-2 sweep asserts it across
+        // 164 cells.
+        //
+        // Firefox reached the first of these while the box height still sat at
+        // the EDGE of its valid window, where the band cleared its threshold by
+        // one pixel and Firefox declined to draw a scrollbar for that; walking
+        // to the middle of the window fixed it, and Firefox now runs the whole
+        // scenario. Kept because the next browser may not.
         if (scrollbarNow() !== scrollbar) {
           return done(`skip: the keystroke did not bring the band scrollbar in (${scrollbarNow()}px of an expected ${scrollbar}px), so nothing narrowed [box=${chosen} lines=${lines} fieldH=${field.clientHeight} bandSc=${band.scrollHeight} bandCl=${band.clientHeight}]`);
         }
