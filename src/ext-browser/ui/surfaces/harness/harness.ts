@@ -737,66 +737,240 @@ function e2eScenarios(): Scenario[] {
     },
     {
       name: 'typing never clips the line being written',
-      run() {
+      async run() {
         // The converge step exists because growing a field can invalidate the
-        // measurement that grew it: a scrollbar appears, the field narrows, and
-        // the text rewraps taller than the height just set. `growFields` ran
-        // that step; the input listener did not, so the clipping happened
-        // exactly where a reader is looking — on the line they are typing.
+        // measurement that grew it: the band gains a scrollbar, the field
+        // narrows by its width, and the text rewraps TALLER than the height
+        // just set. `growFields` runs that step; the input listener did not, so
+        // the clipping landed on the line being typed - exactly where the
+        // reader is looking.
         //
-        // HONEST LIMIT, measured rather than assumed. This scenario does NOT
-        // fail when the converge step is removed — the numbers come out
-        // byte-for-byte identical. Provoking the fault needs three things at
-        // once, and only two of them are reachable here:
+        // EVERY NUMBER BELOW IS MEASURED. The first version of this scenario
+        // typed filler into a fixed-height box and asserted no clipping, and it
+        // could not fail: provoking the fault needs three things to coincide,
+        // and fixed numbers only ever bought two of them.
         //
-        //   1. the band's scrollbar must appear DURING typing, not before it —
-        //      the height below is tuned so it appears on the second keystroke
-        //      (swept 520..680px: it lands before step 1 below 580 and after
-        //      the field's cap above 600);
-        //   2. the field must still be under its 210px cap when that happens —
-        //      at this height it is 180px, so this holds;
-        //   3. the 10px the scrollbar takes must actually change the WRAP COUNT.
-        //      It does not, for any filler text tried: the same words wrap the
-        //      same way at 320px and at 310px, so nothing rewraps taller and
-        //      there is nothing to clip.
+        //   1. the scrollbar must arrive ON the keystroke under test, not
+        //      before it - at a fixed height it was already there;
+        //   2. the field must still be under its 210px cap when it does, since
+        //      a capped field scrolls on purpose and clipping there is correct;
+        //   3. the width the scrollbar takes must actually change the WRAP
+        //      COUNT, which depends entirely on the text and the font - filler
+        //      that wraps identically at both widths can never clip.
         //
-        // Tuning the filler until a word happens to straddle the 310px boundary
-        // would make it fail — and would be theatre: the pass would then hinge
-        // on font metrics, and any shift would turn it green forever without
-        // anyone noticing. So this stays an invariant check that is genuinely
-        // exercised (the band does scroll, the scrollbar does take its 10px)
-        // but currently unprovoked. The test that BITES is the source-level
-        // symmetry check in surface-view.test.ts, which asserts the input
-        // listener runs the same three steps growFields does.
+        // So all three are derived here instead of guessed: the scrollbar width
+        // from a probe carrying the real `.np-scroll` class, the line height
+        // from the field itself, a body length that provably needs another line
+        // at the narrower width (searched with a hidden clone of the real
+        // field), and the box height that makes the band cross its threshold on
+        // exactly that keystroke (binary-searched). Nothing is tuned to this
+        // machine's font, and every step that could quietly not happen is
+        // asserted, so a pass cannot mean "the setup fell through".
+        //
+        // And there is a FOURTH condition, which is a property of the platform
+        // rather than of this scenario, and which two earlier explanations in
+        // this file got wrong before it was measured: whether the field's own
+        // scrollbar is wider than the band's. See (a2). Where it is - Windows
+        // and Linux Chrome - `autoGrow` already measures at a narrower width
+        // than the text finally wraps at, so it always writes a generous height
+        // and the converge step cannot be provoked no matter how the geometry
+        // is arranged. This scenario reports that as a SKIP, never as a pass.
         const box = document.createElement('div');
-        box.style.cssText = 'width:360px;height:580px;overflow:hidden;';
+        box.style.cssText = 'width:360px;height:900px;overflow:hidden;';
         document.getElementById('sweep-stage')!.appendChild(box);
 
         const host = document.createElement('div');
         // The real dock hands the controller a height-constrained host. Without
         // this the frame's `height: 100%` resolves against an auto-height
-        // parent, the band grows to fit instead of scrolling, and the scenario
-        // silently exercises no scrollbar at all — measured `sbW=0` throughout.
+        // parent, the band grows to fit instead of scrolling, and no scrollbar
+        // exists at all - the scenario would exercise nothing it is named for.
         host.style.cssText = 'height:100%;';
         box.appendChild(host);
         const controller = createSurfaceController(host, {
           registry: FIXTURES, initial: 'prompt_enhancement',
         });
         const field = host.querySelector('textarea')!;
+        const band = host.querySelector('.np-scroll') as HTMLElement;
+        const done = (why: string | null): string | null => {
+          controller.destroy();
+          box.remove();
+          return why;
+        };
+        const scrollbarNow = (): number => band.offsetWidth - band.clientWidth;
 
-        const worst: string[] = [];
-        for (let i = 1; i <= 12; i++) {
-          field.value += ' ' + 'wrapping words here '.repeat(i);
-          field.dispatchEvent(new Event('input', { bubbles: true }));
-          const clipped = field.scrollHeight - field.clientHeight;
-          // A capped field scrolls on purpose; only an UNCAPPED one that is
-          // shorter than its content is clipping.
-          const capped = field.clientHeight >= 209;
-          if (!capped && clipped > 1) worst.push(`step ${i}: ${clipped}px hidden`);
+        // (a) WHAT THE SCROLLBAR COSTS, read off the real stylesheet rather
+        //     than from the 8px the CSS asks for - Chrome renders 10.
+        const gauge = document.createElement('div');
+        gauge.className = band.className;
+        gauge.style.cssText = 'position:absolute;top:-9999px;width:200px;height:40px;overflow-y:auto;';
+        const filler = document.createElement('div');
+        filler.style.height = '400px';
+        gauge.appendChild(filler);
+        box.appendChild(gauge);
+        const scrollbar = gauge.offsetWidth - gauge.clientWidth;
+        gauge.remove();
+        if (scrollbar <= 0) {
+          return done(`skip: this browser's band scrollbar takes no layout width (${scrollbar}px), so the narrowing under test cannot occur`);
         }
-        controller.destroy();
-        box.remove();
-        return worst.length ? worst.slice(0, 3).join('; ') : null;
+
+        // (a2) WHAT THE FIELD'S OWN SCROLLBAR COSTS - which decides whether the
+        //      fault can exist on this machine at all. `autoGrow` measures with
+        //      `height: auto`, and that makes the content overflow the
+        //      textarea's two-row default box, so the measurement happens WITH
+        //      the field's own scrollbar in place. If that scrollbar is wider
+        //      than the band's, the measured width is already narrower than the
+        //      width the text finally wraps at, the height written is generous,
+        //      and nothing can clip. Windows and Linux Chrome are that case:
+        //      measured 15px field against 10px band. macOS is the other one -
+        //      an unstyled textarea keeps the platform's OVERLAY scrollbar at
+        //      0px while `.np-scroll`'s `::-webkit-scrollbar` rule forces a
+        //      classic one, so the measurement happens at full width and the
+        //      converge step is the only thing holding the typed line on screen.
+        const fieldGauge = field.cloneNode(false) as HTMLTextAreaElement;
+        fieldGauge.style.cssText = 'position:absolute;top:-9999px;left:0;width:200px;height:30px;max-height:none;';
+        field.parentElement!.appendChild(fieldGauge);
+        fieldGauge.value = `${'x\n'.repeat(40)}x`;
+        const fieldScrollbar = fieldGauge.offsetWidth - fieldGauge.clientWidth;
+        fieldGauge.remove();
+
+        // (b) A BODY THAT PROVABLY REWRAPS TALLER when the field narrows.
+        const wide = field.clientWidth;
+        const narrow = wide - scrollbar;
+        const clone = field.cloneNode(false) as HTMLTextAreaElement;
+        // `overflow-y: hidden` is not cosmetic here. The real rule is `auto`,
+        // and a clone left at `auto` with `height: auto` overflows its own
+        // two-row default box, grows its OWN scrollbar, and then measures the
+        // text at ~15px narrower than the width it was asked about - which
+        // reports a rewrap that the real field never performs. Measured: the
+        // search claimed 5 lines at 310px where the field renders 4.
+        clone.style.cssText = 'position:absolute;top:-9999px;left:0;max-height:none;overflow-y:hidden;';
+        field.parentElement!.appendChild(clone);
+        clone.value = 'x';
+        clone.style.height = 'auto';
+        const lineHeight = clone.scrollHeight;
+        const linesAt = (width: number, text: string): number => {
+          clone.style.width = `${width}px`;
+          clone.value = text;
+          clone.style.height = 'auto';
+          return Math.round(clone.scrollHeight / lineHeight);
+        };
+        let body = '';
+        let lines = 0;
+        // Word length matters as much as word count. A line holds
+        // `floor((width + space) / wordWidth)` words, so the scrollbar only
+        // changes the count when its width straddles a word boundary - with
+        // three-character words that boundary is ~24px apart and a 10px
+        // scrollbar can miss it entirely, which is exactly why the search below
+        // tries several word lengths rather than one.
+        search:
+        for (const word of ['x', 'xx', 'xxx', 'xxxx']) {
+          for (let words = 8; words <= 600; words += 1) {
+            const text = Array.from({ length: words }, () => word).join(' ');
+            const atWide = linesAt(wide, text);
+            // Keep clear of the 14-line cap in BOTH states: the fault only
+            // counts while the field is still growing freely.
+            if (atWide + 1 > 12) break;
+            // And keep clear of the OTHER end. A body that is one line wide is
+            // useless here even if it rewraps: the field starts at one line, so
+            // typing it grows the band by nothing and no threshold is crossed.
+            if (atWide < 4) continue;
+            if (linesAt(narrow, text) > atWide) { body = text; lines = atWide; break search; }
+          }
+        }
+        clone.remove();
+        if (!body || lineHeight <= 0) {
+          return done('skip: no body below the field cap rewraps taller when the field loses the scrollbar');
+        }
+
+        // (c) THE BOX HEIGHT that makes the band cross on that keystroke. Found
+        //     by asking the real layout, with the field pinned short and then
+        //     pinned tall, so nothing depends on guessing the chrome's height.
+        const crosses = (height: number): boolean => {
+          box.style.height = `${height}px`;
+          field.style.height = `${lineHeight}px`;
+          const roomWhileShort = band.scrollHeight <= band.clientHeight;
+          field.style.height = `${lines * lineHeight}px`;
+          const tightWhenGrown = band.scrollHeight > band.clientHeight;
+          return roomWhileShort && tightWhenGrown;
+        };
+        let chosen = 0;
+        let lo = 120;
+        let hi = 900;
+        while (lo <= hi) {
+          const mid = Math.floor((lo + hi) / 2);
+          box.style.height = `${mid}px`;
+          field.style.height = `${lines * lineHeight}px`;
+          if (band.scrollHeight > band.clientHeight) { chosen = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        // The search above lands on the EDGE of the valid window - the tallest
+        // box that still overflows - which leaves the band over its threshold
+        // by a single pixel. Firefox declined to render a scrollbar for a 1px
+        // overflow at that edge (measured: bandSc=270 bandCl=269, scrollbar
+        // 0px), so walk back to the middle of the window, where the overflow is
+        // a comfortable margin rather than a rounding error.
+        if (chosen) {
+          let lowest = chosen;
+          for (let step = 1; step <= 60 && crosses(chosen - step); step += 1) lowest = chosen - step;
+          chosen = Math.floor((lowest + chosen) / 2);
+        }
+        if (!chosen || !crosses(chosen)) {
+          box.style.height = `${chosen || 900}px`;
+          field.style.height = `${lineHeight}px`;
+          const shortS = band.scrollHeight; const shortC = band.clientHeight;
+          field.style.height = `${lines * lineHeight}px`;
+          const tallS = band.scrollHeight; const tallC = band.clientHeight;
+          return done(`skip: no box height crosses [chosen=${chosen} lh=${lineHeight} lines=${lines} short=${shortS}/${shortC} tall=${tallS}/${tallC}]`);
+        }
+        box.style.height = `${chosen}px`;
+
+        // Back to a one-line field, through the real input path, and let the
+        // controller's ResizeObserver work settle - it defers out of the
+        // observation cycle, and the keystroke below must be the only thing
+        // this scenario measures.
+        field.style.height = '';
+        field.value = 'x';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        await new Promise((resolve) => { setTimeout(resolve, 0); });
+        await new Promise((resolve) => { setTimeout(resolve, 0); });
+        if (scrollbarNow() !== 0) {
+          return done('skip: the band already carried a scrollbar before the keystroke under test');
+        }
+
+        // (d) THE KEYSTROKE this scenario is about.
+        field.value = body;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+
+        // The provocation has to have HAPPENED. Without these two checks a
+        // green result would mean "nothing narrowed", which is how the first
+        // version of this scenario passed while testing nothing.
+        //
+        // They report SKIP, not FAIL, and the distinction is deliberate: they
+        // describe the environment failing to stage the fault, not the product
+        // failing. Firefox lands here - its band does not take the scrollbar on
+        // this keystroke - and that is not a defect to fix in the layer. What
+        // they must never do is let the run go GREEN, because a green line
+        // would claim the converge step is covered. Band scrolling itself is
+        // not left untested by this: the C-2 sweep asserts it across 164 cells.
+        if (scrollbarNow() !== scrollbar) {
+          return done(`skip: the keystroke did not bring the band scrollbar in (${scrollbarNow()}px of an expected ${scrollbar}px), so nothing narrowed [box=${chosen} lines=${lines} fieldH=${field.clientHeight} bandSc=${band.scrollHeight} bandCl=${band.clientHeight}]`);
+        }
+        if (field.clientWidth !== narrow) {
+          return done(`skip: the field is ${field.clientWidth}px, expected it to narrow to ${narrow}px`);
+        }
+        const clipped = field.scrollHeight - field.clientHeight;
+
+        // Everything above is now VERIFIED on this machine: the band crossed on
+        // this keystroke, the field narrowed, and the body genuinely needs one
+        // more line at that width. Only the fault itself can be out of reach -
+        // see (a2). Reporting that as a skip rather than a pass is the whole
+        // point: a green line here would otherwise mean "the converge step is
+        // covered", and on this platform it is not.
+        if (fieldScrollbar >= scrollbar) {
+          return done(`skip: setup verified (${lines}->${lines + 1} lines at ${narrow}px), but autoGrow measures with the field's own ${fieldScrollbar}px scrollbar — wider than the band's ${scrollbar}px — so the height it writes is already generous and no clip is reachable. This bites where the field's scrollbar is an overlay and the band's is not: the macOS default.`);
+        }
+        return done(clipped > 1
+          ? `${clipped}px of the line being typed is hidden — the field was sized for ${lines} lines at ${wide}px and then rewrapped at ${narrow}px`
+          : null);
       },
     },
     {
