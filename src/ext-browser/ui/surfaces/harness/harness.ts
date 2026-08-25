@@ -744,18 +744,40 @@ function e2eScenarios(): Scenario[] {
         // that step; the input listener did not, so the clipping happened
         // exactly where a reader is looking — on the line they are typing.
         //
-        // HONEST LIMIT: this cannot fail under headless Chrome, which uses
-        // OVERLAY scrollbars — measured `scrollbarTookWidth=false`, so the
-        // narrowing that causes the rewrap never happens and the clip is 0
-        // whether or not the converge step runs. It is kept because it CAN fail
-        // on a machine with classic scrollbars, where the user's report came
-        // from. The test that actually bites today is the source-level symmetry
-        // check in surface-view.test.ts.
+        // HONEST LIMIT, measured rather than assumed. This scenario does NOT
+        // fail when the converge step is removed — the numbers come out
+        // byte-for-byte identical. Provoking the fault needs three things at
+        // once, and only two of them are reachable here:
+        //
+        //   1. the band's scrollbar must appear DURING typing, not before it —
+        //      the height below is tuned so it appears on the second keystroke
+        //      (swept 520..680px: it lands before step 1 below 580 and after
+        //      the field's cap above 600);
+        //   2. the field must still be under its 210px cap when that happens —
+        //      at this height it is 180px, so this holds;
+        //   3. the 10px the scrollbar takes must actually change the WRAP COUNT.
+        //      It does not, for any filler text tried: the same words wrap the
+        //      same way at 320px and at 310px, so nothing rewraps taller and
+        //      there is nothing to clip.
+        //
+        // Tuning the filler until a word happens to straddle the 310px boundary
+        // would make it fail — and would be theatre: the pass would then hinge
+        // on font metrics, and any shift would turn it green forever without
+        // anyone noticing. So this stays an invariant check that is genuinely
+        // exercised (the band does scroll, the scrollbar does take its 10px)
+        // but currently unprovoked. The test that BITES is the source-level
+        // symmetry check in surface-view.test.ts, which asserts the input
+        // listener runs the same three steps growFields does.
         const box = document.createElement('div');
-        box.style.cssText = 'width:360px;height:400px;overflow:hidden;';
+        box.style.cssText = 'width:360px;height:580px;overflow:hidden;';
         document.getElementById('sweep-stage')!.appendChild(box);
 
         const host = document.createElement('div');
+        // The real dock hands the controller a height-constrained host. Without
+        // this the frame's `height: 100%` resolves against an auto-height
+        // parent, the band grows to fit instead of scrolling, and the scenario
+        // silently exercises no scrollbar at all — measured `sbW=0` throughout.
+        host.style.cssText = 'height:100%;';
         box.appendChild(host);
         const controller = createSurfaceController(host, {
           registry: FIXTURES, initial: 'prompt_enhancement',
