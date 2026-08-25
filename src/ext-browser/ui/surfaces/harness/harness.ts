@@ -37,6 +37,28 @@ const FIXTURES: Record<SurfaceId, SurfaceModel> = {
   prompt_enhancement_feedback: PEF_FIXTURE,
 };
 
+/**
+ * What the harness says about each outcome.
+ *
+ * These lines used to live in the controller, ending in "static build", from
+ * when nothing was wired. They belong to whoever is driving the surface: the
+ * live bridge says what its agent did, and the harness says that it is a
+ * harness. A caller with nothing to add returns undefined and the frame stays
+ * silent.
+ */
+const HARNESS_NOTICE = (e: SurfaceEvent): string | undefined => {
+  switch (e.type) {
+    case 'send': return 'Sent — harness; no agent is wired.';
+    case 'feedback': return 'Feedback recorded — harness.';
+    case 'feedback-skipped': return 'Feedback skipped.';
+    case 'cancel-sequence': return 'Sequence cancelled — harness.';
+    case 'interruption': return 'Interruption noted — the sequence prompt would return after the response.';
+    case 'declined': return 'Declined — harness.';
+    case 'activate': return `No action wired for "${e.label}" (harness).`;
+    default: return undefined;
+  }
+};
+
 /** The pre-authored recompose, per surface — the static stand-in for Option B. */
 const REFINED_TEXTS = {
   prompt_enhancement: PE_REFINED_TEXT,
@@ -84,6 +106,7 @@ function mountInteractive(): void {
     // controller without this hook would render them as dead options — the
     // exact thing the CLI revert to 48aac87 was about.
     resolveActivation: createRefinementTransitions(REFINED_TEXTS),
+    notice: HARNESS_NOTICE,
     onEvent: logEvent,
   });
   dock.show();

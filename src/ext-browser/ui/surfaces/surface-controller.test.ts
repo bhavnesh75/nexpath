@@ -158,7 +158,6 @@ describe('Enter on the body — send', () => {
     key(bodyField(), 'Enter');
 
     expect(events).toEqual([{ type: 'send', surface: 'prompt_enhancement', text: 'the edited prompt' }]);
-    expect(host.textContent).toContain('Sent — static build');
   });
 
   it('refuses a blank body, silently — BF-1', () => {
@@ -269,7 +268,6 @@ describe('Escape is per-surface — never one handler', () => {
     key(c.element, 'Escape');                // second Esc: decline
 
     expect(events).toEqual([{ type: 'declined', surface: 'mps_first' }]);
-    expect(host.textContent).toContain('Declined — static build.');
   });
 
   it('MPS-2: Esc cancels the whole remaining sequence — the footer says so', () => {
@@ -278,7 +276,6 @@ describe('Escape is per-surface — never one handler', () => {
     key(c.element, 'Escape');
 
     expect(events).toEqual([{ type: 'cancel-sequence', surface: 'mps_continuation' }]);
-    expect(host.textContent).toContain('Sequence cancelled — static build.');
   });
 
   it('PEF: Esc skips', () => {
@@ -328,7 +325,6 @@ describe('MPS action rows', () => {
     key(c.element, 'Enter');
 
     expect(events).toEqual([{ type: 'cancel-sequence', surface: 'mps_first' }]);
-    expect(host.textContent).toContain('Sequence cancelled');
   });
 
   it('the interruption row emits and echoes', () => {
@@ -338,7 +334,6 @@ describe('MPS action rows', () => {
     key(c.element, 'Enter');
 
     expect(events).toEqual([{ type: 'interruption', surface: 'mps_continuation' }]);
-    expect(host.textContent).toContain('Interruption noted');
   });
 });
 
@@ -604,31 +599,111 @@ describe('resolveActivation', () => {
     key(controller.element, 'Enter');
 
     expect(events).toEqual([{ type: 'activate', surface: 'mps_first', label: 'Mystery row' }]);
-    expect(host.textContent).toContain('No action wired for "Mystery row"');
   });
 });
 
 // ── notices ──────────────────────────────────────────────────────────────────
 
-describe('the notice slot', () => {
-  it('renders in the CLI\'s publicNotice position: blank, notice, blank, footer', () => {
-    mount('mps_continuation');
-    key(controller!.element, 'Escape');
+describe('the notice slot belongs to the caller', () => {
+  // The controller used to carry nine lines ending in "static build", written
+  // when nothing was wired. What it owns now is the SLOT and when it clears;
+  // the words are supplied per event, or not at all.
+
+  it('says nothing when the caller supplies nothing', () => {
+    const c = mount('mps_continuation');
+
+    key(c.element, 'Escape');
+
+    expect(events[0]!.type).toBe('cancel-sequence');
+    expect(host.querySelectorAll('.np-footer .np-row')).toHaveLength(2);   // blank + footer
+  });
+
+  it('renders what the caller says, in the CLI\'s publicNotice position', () => {
+    const c = mount('mps_continuation', {
+      notice: (e: SurfaceEvent) => (e.type === 'cancel-sequence' ? 'Sequence cancelled.' : undefined),
+    });
+
+    key(c.element, 'Escape');
 
     const footerRows = [...host.querySelectorAll('.np-footer .np-row')]
-      .map((r) => [...r.children].map((c2) => c2.textContent ?? '').join(' ').trim());
+      .map((r) => [...r.children].map((cell) => cell.textContent ?? '').join(' ').trim());
 
-    expect(footerRows).toEqual(['', 'Sequence cancelled — static build.', '', 'Enter send · Esc cancels sequence']);
+    expect(footerRows).toEqual(['', 'Sequence cancelled.', '', 'Enter send · Esc cancels sequence']);
+  });
+
+  it('is asked about every outcome, including ones that never had a line', () => {
+    // apply-details never carried a notice of its own — a caller that wants to
+    // acknowledge it no longer needs the controller to have had an opinion.
+    const c = mount('prompt_enhancement', {
+      notice: (e: SurfaceEvent) => (e.type === 'apply-details' ? 'Details applied.' : undefined),
+    });
+    focusOn(c, 'Additional details');
+
+    key(host.querySelectorAll('textarea')[1]!, 'Enter');
+
+    expect(host.textContent).toContain('Details applied.');
   });
 
   it('clears on the next focus move, like the CLI clears publicNotice each loop', () => {
-    const c = mount('mps_continuation');
+    const c = mount('mps_continuation', { notice: () => 'something happened' });
     key(c.element, 'Escape');
-    expect(host.textContent).toContain('Sequence cancelled');
+    expect(host.textContent).toContain('something happened');
 
     key(c.element, 'ArrowDown');
 
-    expect(host.textContent).not.toContain('Sequence cancelled');
+    expect(host.textContent).not.toContain('something happened');
+  });
+
+  it('a later outcome supersedes an earlier line rather than leaving it up', () => {
+    // Without this the frame would keep describing something that is no longer
+    // what just happened.
+    // Escape, not a focus move: navigation clears the notice by itself, so a
+    // test that navigates proves nothing about supersede — it passed with the
+    // supersede logic removed, and mutation testing said so.
+    const c = mount('prompt_enhancement', {
+      notice: (e: SurfaceEvent) => (e.type === 'send' ? 'Sent.' : undefined),
+    });
+    bodyField().value = 'text';
+    key(bodyField(), 'Enter');
+    expect(host.textContent).toContain('Sent.');
+
+    key(c.element, 'Escape');                   // 'cancelled': the caller says nothing
+
+    expect(host.textContent).not.toContain('Sent.');
+  });
+});
+
+describe('Escape has the same seam as a row activation', () => {
+  // It had none, and a caller could suppress everything a row did and nothing
+  // Escape did — which is why the MPS decline path kept announcing itself in a
+  // build that had intercepted every other notice.
+
+  it("'handled' stops the controller doing anything further", () => {
+    const c = mount('mps_continuation', { resolveEscape: () => 'handled' as const });
+
+    key(c.element, 'Escape');
+
+    expect(events).toEqual([]);
+    expect(c.getModel().id).toBe('mps_continuation');
+  });
+
+  it('a returned transition switches the surface', () => {
+    const c = mount('prompt_enhancement', {
+      resolveEscape: () => ({ model: PEF_FIXTURE }),
+    });
+
+    key(c.element, 'Escape');
+
+    expect(c.getModel().id).toBe('prompt_enhancement_feedback');
+    expect(events).toEqual([]);                 // the hook consumed it
+  });
+
+  it('null falls through to the per-surface default', () => {
+    const c = mount('mps_continuation', { resolveEscape: () => null });
+
+    key(c.element, 'Escape');
+
+    expect(events).toEqual([{ type: 'cancel-sequence', surface: 'mps_continuation' }]);
   });
 });
 

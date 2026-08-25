@@ -69,8 +69,11 @@ export type SurfaceEvent =
   | { type: 'feedback-skipped'; surface: SurfaceId }
   | { type: 'activate'; surface: SurfaceId; label: string };
 
+/** Switching the surface to a different model, optionally at a given row. */
+export type SurfaceTransition = { model: SurfaceModel; focusIndex?: number };
+
 /**
- * The pluggable activation hook (held D5 wiring plugs in here).
+ * The pluggable activation hook (the refinement wiring plugs in here).
  * Return a transition to switch models, `'refuse'` for a CLI-style silent
  * guard, or null to fall through to the controller's own routing.
  */
@@ -78,7 +81,36 @@ export type ResolveActivation = (
   model: SurfaceModel,
   row: SurfaceRow,
   bodyText: string,
-) => { model: SurfaceModel; focusIndex?: number } | 'refuse' | null;
+) => SurfaceTransition | 'refuse' | null;
+
+/**
+ * The same seam for Escape.
+ *
+ * Escape had none, and that was a design gap rather than an oversight in the
+ * copy: `resolveActivation` is reached only from `activate()`, so a caller
+ * could suppress everything a ROW does and nothing Escape does — which is why
+ * the MPS decline path kept announcing itself in a live build that had
+ * intercepted every other notice.
+ *
+ * `'handled'` means the caller dealt with it and the controller should do
+ * nothing further; null falls through to the per-surface default.
+ */
+export type ResolveEscape = (model: SurfaceModel) => SurfaceTransition | 'handled' | null;
+
+/**
+ * What, if anything, the frame should say about something that just happened.
+ *
+ * The controller used to carry nine hard-coded lines ending in "static build",
+ * written when nothing was wired. They are the CALLER's to write: a live bridge
+ * knows the agent's name, the harness knows it is a harness, and a caller with
+ * nothing to add returns undefined and the frame stays silent — which is what
+ * the CLI does for most outcomes anyway.
+ *
+ * Keyed on the event rather than on an invented vocabulary of notice kinds:
+ * every one of those nine lines already sat immediately after an `emit` of the
+ * event it was describing.
+ */
+export type ResolveNotice = (event: SurfaceEvent) => string | undefined;
 
 export interface SurfaceControllerOptions {
   registry: Partial<Record<SurfaceId, SurfaceModel>>;
@@ -86,6 +118,9 @@ export interface SurfaceControllerOptions {
   doc?: Document;
   onEvent?: (event: SurfaceEvent) => void;
   resolveActivation?: ResolveActivation;
+  resolveEscape?: ResolveEscape;
+  /** Omit it and the frame says nothing. */
+  notice?: ResolveNotice;
 }
 
 export interface SurfaceController {
@@ -308,7 +343,21 @@ export function createSurfaceController(
     render();
   }
 
-  function say(text: string): void {
+  /**
+   * Report what happened, and show whatever the caller wants said about it.
+   *
+   * Every outcome goes through here, including the ones that never had a line
+   * of their own — a caller that wants to acknowledge an applied details merge
+   * can, without the controller having had an opinion about it first.
+   *
+   * A new outcome supersedes an older message: if the caller says nothing this
+   * time, a notice still on screen from last time is cleared rather than left
+   * to describe something that is no longer what just happened.
+   */
+  function announce(event: SurfaceEvent): void {
+    emit?.(event);
+    const text = options.notice?.(event);
+    if (text === notice) return;
     notice = text;
     render();
   }
@@ -339,8 +388,7 @@ export function createSurfaceController(
         // the CLI's reducer returns `pending` (`cli-submit-popup.ts:1166`).
         const text = (fieldValues[ordinal] ?? '').trim();
         if (text.length === 0) return;
-        emit?.({ type: 'feedback', surface, text });
-        say('Feedback recorded — static build.');
+        announce({ type: 'feedback', surface, text });
         return;
       }
 
@@ -348,8 +396,7 @@ export function createSurfaceController(
         // The body. BF-1: never send an empty or whitespace body — stay.
         const text = fieldValues[0] ?? '';
         if (text.trim().length === 0) return;
-        emit?.({ type: 'send', surface, text });
-        say('Sent — static build; no agent is wired.');
+        announce({ type: 'send', surface, text });
         return;
       }
 
@@ -364,7 +411,7 @@ export function createSurfaceController(
       fieldValues[0] = merged;
       fieldValues[ordinal] = '';
       focusIndex = interactiveRows(model).findIndex((r) => r.kind === 'field');
-      emit?.({ type: 'apply-details', surface, mergedBody: merged });
+      announce({ type: 'apply-details', surface, mergedBody: merged });
       render();
       return;
     }
@@ -372,28 +419,24 @@ export function createSurfaceController(
     // Action rows.
     if (pef) {
       // A fixed reason submits directly.
-      emit?.({ type: 'feedback', surface, category: row.label });
-      say('Feedback recorded — static build.');
+      announce({ type: 'feedback', surface, category: row.label });
       return;
     }
     switch (row.act) {
       case 'use-original':
         // Cancel is where feedback opens (§8.3): Use original or Esc, never send.
-        emit?.({ type: 'use-original', surface });
+        announce({ type: 'use-original', surface });
         switchTo('prompt_enhancement_feedback');
         return;
       case 'cancel-sequence':
-        emit?.({ type: 'cancel-sequence', surface });
-        say('Sequence cancelled — static build.');
+        announce({ type: 'cancel-sequence', surface });
         return;
       case 'interruption':
-        emit?.({ type: 'interruption', surface });
-        say('Interruption noted — static build; the sequence prompt would return after the response.');
+        announce({ type: 'interruption', surface });
         return;
       default:
         // Unknown rows are never a silent no-op (A4.3).
-        emit?.({ type: 'activate', surface, label: row.label });
-        say(`No action wired for "${row.label}" (static build).`);
+        announce({ type: 'activate', surface, label: row.label });
     }
   }
 
@@ -406,11 +449,19 @@ export function createSurfaceController(
   // ── escape, per surface ───────────────────────────────────────────────────
 
   function onEscape(): void {
+    // The caller gets first refusal, exactly as it does for a row activation.
+    // Without this seam a caller could intercept everything a ROW does and
+    // nothing Escape does, which is why a live build that had suppressed every
+    // other notice still saw the MPS decline announce itself.
+    const resolved = options.resolveEscape?.(model);
+    if (resolved === 'handled') return;
+    if (resolved) { harvest(); show(resolved.model, resolved.focusIndex ?? 0); return; }
+
     const surface = model.id;
     switch (surface) {
       case 'prompt_enhancement':
         // The CLI's `close` → closed_no_send, and feedback is wired to cancel.
-        emit?.({ type: 'cancelled', surface });
+        announce({ type: 'cancelled', surface });
         switchTo('prompt_enhancement_feedback');
         return;
       case 'mps_first': {
@@ -423,18 +474,15 @@ export function createSurfaceController(
           wrapper.focus({ preventScroll: true });
           return;
         }
-        emit?.({ type: 'declined', surface });
-        say('Declined — static build.');
+        announce({ type: 'declined', surface });
         return;
       }
       case 'mps_continuation':
         // The footer says so: Esc cancels the whole remaining sequence.
-        emit?.({ type: 'cancel-sequence', surface });
-        say('Sequence cancelled — static build.');
+        announce({ type: 'cancel-sequence', surface });
         return;
       case 'prompt_enhancement_feedback':
-        emit?.({ type: 'feedback-skipped', surface });
-        say('Feedback skipped.');
+        announce({ type: 'feedback-skipped', surface });
         return;
     }
   }
