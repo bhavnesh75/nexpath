@@ -295,10 +295,15 @@ describe('auto-grow measures only what it can measure', () => {
     expect(field.style.height, 'a detached field must be left alone').toBe('99px');
   });
 
-  it('sizes a field once it is in the document', () => {
+  it('sizes a field once it is rendered', () => {
+    // BOTH signals are mocked, and that is the point: jsdom computes no layout,
+    // so it reports every element as unrendered and every scrollHeight as 0.
+    // The guard asks whether the engine is laying the field out; here that
+    // answer has to be supplied, exactly as the height already was.
     const field = document.createElement('textarea');
     document.body.appendChild(field);
     Object.defineProperty(field, 'scrollHeight', { value: 120, configurable: true });
+    field.getClientRects = (() => [new DOMRect(0, 0, 300, 15)]) as never;
 
     autoGrow(field);
 
@@ -311,6 +316,7 @@ describe('auto-grow measures only what it can measure', () => {
     document.body.appendChild(root);
     for (const f of root.querySelectorAll('textarea')) {
       Object.defineProperty(f, 'scrollHeight', { value: 77, configurable: true });
+      f.getClientRects = (() => [new DOMRect(0, 0, 300, 15)]) as never;
     }
 
     growFields(root);

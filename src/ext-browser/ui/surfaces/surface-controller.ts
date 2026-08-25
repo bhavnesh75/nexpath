@@ -156,6 +156,31 @@ export function createSurfaceController(
   let fieldValues: string[] = [];
   let destroyed = false;
 
+  /**
+   * Re-size the fields whenever the surface actually becomes measurable.
+   *
+   * The dock renders its host at `display: none` and shows it afterwards, so
+   * the first render measures nothing and the fields stay collapsed until the
+   * user happens to type. Rather than have the dock announce itself — its event
+   * union is `dismiss` only, and one more API is one more thing a caller can
+   * forget — the controller watches its own box: it gains a size the moment it
+   * is shown, whatever caused it.
+   *
+   * The same observer covers a case nobody reported: narrowing the window
+   * rewraps a field's text TALLER than the height measured at the old width,
+   * and nothing was re-measuring it.
+   *
+   * No feedback loop: `.np-surface-root` is `height: 100%`, so growing a field
+   * changes nothing about the wrapper's own size. The re-entrancy flag is there
+   * for the day that stops being true.
+   */
+  let resizing = false;
+  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+    if (destroyed || resizing) return;
+    resizing = true;
+    try { growFields(wrapper); } finally { resizing = false; }
+  });
+
   const wrapper = doc.createElement('div');
   wrapper.className = 'np-surface-root';
   wrapper.tabIndex = -1;
@@ -517,6 +542,7 @@ export function createSurfaceController(
     }, 0);
   }
 
+  observer?.observe(wrapper);
   wrapper.addEventListener('keydown', onKeyDown);
   wrapper.addEventListener('pointerdown', onPointerDown);
   wrapper.addEventListener('focusout', onFocusOut);
@@ -534,6 +560,7 @@ export function createSurfaceController(
     destroy(): void {
       if (destroyed) return;
       destroyed = true;
+      observer?.disconnect();
       wrapper.removeEventListener('keydown', onKeyDown);
       wrapper.removeEventListener('pointerdown', onPointerDown);
       wrapper.removeEventListener('focusout', onFocusOut);

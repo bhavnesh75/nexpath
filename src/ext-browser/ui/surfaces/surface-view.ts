@@ -40,12 +40,20 @@ import type { SurfaceModel, SurfaceState } from './surface-model.js';
  * the live proof is D7's content sweep.
  */
 export function autoGrow(field: HTMLTextAreaElement): void {
-  // A DETACHED element cannot be measured: `scrollHeight` is 0 for anything not
-  // in the document. Writing that back as a height is how the field ended up
-  // 0px tall and the prompt invisible until the first keystroke — the renderer
-  // builds the frame detached, so the constructor's own call always measured
-  // nothing. Never write a height that was not actually measured.
-  if (!field.isConnected) return;
+  // NEVER WRITE A HEIGHT THAT WAS NOT ACTUALLY MEASURED. `scrollHeight` reads 0
+  // for anything the engine is not laying out, and writing that back is what
+  // made the prompt a 0px strip.
+  //
+  // The test is "is it rendered", not "is it in the document". `isConnected` was
+  // the first guard and it closed only the DETACHED case; the dock keeps its
+  // host at `display: none` until show(), and an element inside a hidden subtree
+  // is CONNECTED, unrendered, and measures 0 — the same bug through a second
+  // door, reported from the live build.
+  //
+  // `getClientRects()` separates the three states exactly: empty for detached
+  // and for display:none, one rect for a rendered field even when its height is
+  // currently zero.
+  if (field.getClientRects().length === 0) return;
   field.style.height = 'auto';
   field.style.height = `${field.scrollHeight}px`;
 }
@@ -105,7 +113,12 @@ export function growFields(root: ParentNode): void {
   // convergence, which is why running autoGrow twice changed nothing. This pass
   // only ever grows, from the settled width, so it terminates.
   for (const field of fields) {
-    if (!field.isConnected) continue;
+    // The same guard as autoGrow, and for the same reason: this pass also
+    // WRITES a height, so it also has to refuse when there is nothing to
+    // measure. It was still checking `isConnected` — the weaker test that
+    // E1.1 replaced — which made the two passes disagree about what counts as
+    // measurable.
+    if (field.getClientRects().length === 0) continue;
     if (field.scrollHeight > field.clientHeight) field.style.height = `${field.scrollHeight}px`;
   }
 

@@ -291,7 +291,7 @@ function renderSweepReport(): void {
 // dispatch are the browser's own. Each writes a line into the page so a headless
 // `--dump-dom` can read the verdict without a driver library.
 
-interface Scenario { name: string; run: () => string | null }
+interface Scenario { name: string; run: () => string | null | Promise<string | null> }
 
 function e2eScenarios(): Scenario[] {
   const mount = (initial: SurfaceId) => {
@@ -609,6 +609,50 @@ function e2eScenarios(): Scenario[] {
       },
     },
     {
+      name: 'a field first rendered in a HIDDEN host sizes itself when shown',
+      run() {
+        // The live report, reproduced: the dock renders its host at
+        // display:none and shows it afterwards, so the first render measures
+        // nothing. Before the fix this reported 0px both before AND after the
+        // show — a thin strip until the user happened to click into it.
+        const host = document.createElement('div');
+        host.style.cssText = 'display:none;width:900px;';
+        document.getElementById('sweep-stage')!.appendChild(host);
+
+        const controller = createSurfaceController(host, {
+          registry: FIXTURES, initial: 'prompt_enhancement',
+        });
+        const field = host.querySelector('textarea')!;
+        // While hidden, NOTHING may be written. The observer alone would still
+        // end up right — it re-sizes on show — but only after a frame in which
+        // the field is 0px, which is a visible flash. Asserting the interim
+        // state is what makes the guard and the observer two separate fixes
+        // rather than one; without this, reverting the guard passes.
+        const whileHidden = field.style.height;
+        if (whileHidden === '0px') {
+          controller.destroy();
+          host.remove();
+          return 'a height was written while the field was unrendered: 0px';
+        }
+
+        host.style.display = 'block';                       // the dock's show()
+        // ResizeObserver delivers on the next frame, so the assertion has to
+        // wait for one — a synchronous read here would read the old height and
+        // pass for the wrong reason.
+        return new Promise<string | null>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            const shown = Math.round(field.getBoundingClientRect().height);
+            const wanted = field.scrollHeight;
+            controller.destroy();
+            host.remove();
+            resolve(shown >= wanted - 1 && shown >= 14
+              ? null
+              : `hidden=${whileHidden || '(unset)'} afterShow=${shown}px content=${wanted}px`);
+          }));
+        });
+      },
+    },
+    {
       name: 'a short field neither windows nor shows a marker',
       run() {
         const { host, controller } = mount('prompt_enhancement');
@@ -711,13 +755,17 @@ function e2eScenarios(): Scenario[] {
   ];
 }
 
-function renderE2eReport(): void {
+async function renderE2eReport(): Promise<void> {
   installChromeStyles(document.head);
-  const results = e2eScenarios().map((s) => {
+  // Awaited one at a time: a scenario that waits for a ResizeObserver frame can
+  // only answer with a promise, and running them concurrently would let one
+  // scenario's DOM churn land inside another's measurement.
+  const results: Array<{ name: string; failure: string | null }> = [];
+  for (const s of e2eScenarios()) {
     let failure: string | null;
-    try { failure = s.run(); } catch (e) { failure = 'threw: ' + String(e); }
-    return { name: s.name, failure };
-  });
+    try { failure = await s.run(); } catch (e) { failure = 'threw: ' + String(e); }
+    results.push({ name: s.name, failure });
+  }
   const skipped = results.filter((r) => r.failure?.startsWith('skip: '));
   const failed = results.filter((r) => r.failure && !r.failure.startsWith('skip: '));
   const banner = document.getElementById('banner')!;
@@ -759,6 +807,6 @@ function report(kind: string, pass: number, fail: number, failures: string[] = [
 if (document.getElementById('bar') && document.getElementById('sweep-stage')) {
   const mode = new URLSearchParams(location.search);
   if (mode.get('sweep') === '1') renderSweepReport();
-  else if (mode.get('e2e') === '1') renderE2eReport();
+  else if (mode.get('e2e') === '1') void renderE2eReport();
   else mountInteractive();
 }
