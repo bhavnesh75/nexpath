@@ -128,6 +128,11 @@ export interface SurfaceController {
   getModel(): SurfaceModel;
   getFocusIndex(): number;
   setSurface(id: SurfaceId): void;
+  /**
+   * Show or clear the busy skeleton. Pass a glyph per frame to animate it; the
+   * controller runs no timer of its own.
+   */
+  setBusy(glyph: string | null): void;
   destroy(): void;
 }
 
@@ -187,6 +192,7 @@ export function createSurfaceController(
   let model: SurfaceModel = initialModel;
   let focusIndex = 0;
   let notice: string | undefined;
+  let busy: { glyph: string } | undefined;
   /** The user's live edits, by field ordinal. The DOM owns them between renders. */
   let fieldValues: string[] = [];
   let destroyed = false;
@@ -247,7 +253,7 @@ export function createSurfaceController(
   }
 
   function harvest(): void {
-    fieldValues = fields().map((f) => f.value);
+    fieldValues = fields().map((f, i) => (f.readOnly ? (fieldValues[i] ?? '') : f.value));
   }
 
   /** Field ordinal of an interactive row index, or -1 when it is not a field. */
@@ -267,11 +273,16 @@ export function createSurfaceController(
 
   function render(): void {
     lastRenderAt = Date.now(); // re-arms the focus-steal guard's window
-    wrapper.replaceChildren(renderSurface(doc, model, { focusIndex, notice }));
+    wrapper.replaceChildren(renderSurface(doc, model, { focusIndex, notice, busy }));
 
     // Re-apply the user's edits — the freshly built textareas carry model text.
     const rendered = fields();
-    fieldValues.forEach((value, i) => { if (rendered[i]) rendered[i]!.value = value; });
+    // A read-only field is not the user's text — it is the busy skeleton — so
+    // it is neither overwritten by their edits nor harvested as one.
+    fieldValues.forEach((value, i) => {
+      const field = rendered[i];
+      if (field && !field.readOnly) field.value = value;
+    });
 
     // Only now can a textarea be measured: the frame is in the document and the
     // real text is in place. Growing any earlier measures either a detached
@@ -549,6 +560,16 @@ export function createSurfaceController(
       return;
     }
 
+    // WHILE BUSY, the surface accepts nothing but Escape. Enter would act on a
+    // body that is not ready, and moving focus would offer rows whose meaning
+    // depends on it. Escape keeps working on purpose: waiting must never be a
+    // trap, and it is the one key whose meaning does not depend on the wording.
+    if (busy && e.key !== 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
     if (plain && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       const last = interactiveRows(model).length - 1;
       const next = e.key === 'ArrowUp'
@@ -637,6 +658,18 @@ export function createSurfaceController(
     element: wrapper,
     getModel: () => model,
     getFocusIndex: () => focusIndex,
+    setBusy(glyph: string | null): void {
+      if (destroyed) return;
+      const next = glyph === null ? undefined : { glyph };
+      if (next?.glyph === busy?.glyph) return;      // the same frame twice
+      // Harvest FIRST. Busy arrives while the user may be mid-edit, and a
+      // re-render without this replaces the textarea with one carrying the
+      // model's text — their typing is gone, and it comes back the moment the
+      // skeleton clears as if it had never been written.
+      harvest();
+      busy = next;
+      render();
+    },
     setSurface(id: SurfaceId): void {
       if (destroyed) return;
       const next = options.registry[id];

@@ -117,6 +117,28 @@ function mountInteractive(): void {
     button.addEventListener('click', () => controller.setSurface(id));
     document.getElementById('picker')!.appendChild(button);
   }
+
+  // E3.4 — the CALLER animates. The controller runs no timer: teardown,
+  // tab-visibility and prefers-reduced-motion are the caller's problems, and it
+  // is the caller that knows when the round-trip actually ends.
+  const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let spin: number | undefined;
+  const busyButton = document.createElement('button');
+  busyButton.textContent = 'busy 3s';
+  busyButton.addEventListener('click', () => {
+    if (spin !== undefined) return;
+    let i = 0;
+    // Honouring the OS setting is exactly the kind of thing that would have had
+    // to live in the controller if the glyph were animated there.
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    controller.setBusy(FRAMES[0]!);
+    if (!still) spin = window.setInterval(() => controller.setBusy(FRAMES[++i % FRAMES.length]!), 80);
+    window.setTimeout(() => {
+      if (spin !== undefined) { window.clearInterval(spin); spin = undefined; }
+      controller.setBusy(null);
+    }, 3000);
+  });
+  document.getElementById('picker')!.appendChild(busyButton);
 }
 
 // ── the sweep (D7.2 + D7.3) ──────────────────────────────────────────────────
@@ -674,6 +696,43 @@ function e2eScenarios(): Scenario[] {
             resolve(problems.length ? problems.join('; ') : null);
           }, 300);
         });
+      },
+    },
+    {
+      name: 'the busy skeleton renders and keeps the frame usable',
+      run() {
+        const { host, controller } = mount('prompt_enhancement');
+        const field = host.querySelector('textarea')!;
+        field.value = 'mid-edit when it arrived';
+
+        const hintsBefore = host.querySelectorAll('.np-hint').length;
+        controller.setBusy('⠋');
+        // Re-queried, not reused: a render replaces the children, so the
+        // reference captured above is a detached element still holding the old
+        // value — the first version of this read it and reported the code
+        // broken when the code was right.
+        const skeleton = host.querySelector('textarea')!.value;
+        const hintsWhileBusy = host.querySelectorAll('.np-hint').length;
+        const rowsWhileBusy = host.querySelectorAll('.np-label').length;
+        const editable = !host.querySelector('textarea')!.readOnly;
+
+        controller.setBusy(null);
+        const restored = host.querySelector('textarea')!.value;
+        controller.destroy();
+
+        const problems = [
+          skeleton === '⠋ preparing…' ? null : `body was "${skeleton}"`,
+          // The CLI hides the BODY's edit-keys hint and nothing else — the
+          // details row's "Enter applies these details" is about a field that
+          // still works while the wording is being prepared. Asserting zero
+          // hints would have enforced hiding that too.
+          hintsWhileBusy < hintsBefore ? null : `hints unchanged at ${hintsWhileBusy}`,
+          hintsWhileBusy > 0 ? null : 'every hint went, including the details row hint',
+          rowsWhileBusy >= 6 ? null : `only ${rowsWhileBusy} rows — the rest should render as normal`,
+          editable ? 'the skeleton was editable' : null,
+          restored === 'mid-edit when it arrived' ? null : `the edit came back as "${restored}"`,
+        ].filter(Boolean);
+        return problems.length ? problems.join('; ') : null;
       },
     },
     {

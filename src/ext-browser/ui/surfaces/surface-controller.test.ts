@@ -12,7 +12,7 @@ import {
   type SurfaceEvent,
 } from './surface-controller.js';
 import { EDIT_KEYS_HINT } from './fixtures/pe.js';
-import { PE_FIXTURE } from './fixtures/pe.js';
+import { PE_FIXTURE, PE_FOOTER } from './fixtures/pe.js';
 import { MPS_FIRST_FIXTURE, MPS_CONTINUATION_FIXTURE, MPS_CANCEL_LABEL } from './fixtures/mps.js';
 import { PEF_FIXTURE } from './fixtures/pef.js';
 import type { SurfaceModel } from './surface-model.js';
@@ -670,6 +670,99 @@ describe('the notice slot belongs to the caller', () => {
     key(c.element, 'Escape');                   // 'cancelled': the caller says nothing
 
     expect(host.textContent).not.toContain('Sent.');
+  });
+});
+
+describe('the busy skeleton (E3)', () => {
+  // The CLI's own shape (`cli-mps-popup.ts:357-364`): while the wording is not
+  // ready the body is a spinner skeleton and its edit-keys hint is hidden;
+  // everything else renders as normal.
+
+  it('replaces the body with the glyph and hides its hints', () => {
+    const c = mount();
+    const hintsBefore = host.querySelectorAll('.np-hint').length;
+
+    c.setBusy('⠋');
+
+    expect(bodyField().value).toBe('⠋ preparing…');
+    expect(host.querySelectorAll('.np-hint').length).toBeLessThan(hintsBefore);
+  });
+
+  it('leaves everything else alone — the rows, the details field, the footer', () => {
+    const c = mount();
+
+    c.setBusy('⠋');
+
+    const labels = [...host.querySelectorAll('.np-label')].map((el) => el.textContent);
+    expect(labels).toContain('Use original prompt');
+    expect(labels).toContain('Additional details');
+    expect(host.querySelectorAll('textarea')[1]!.value)
+      .toBe('Keep the existing retry helper — do not rewrite it.');
+    expect(host.querySelector('.np-footer')!.textContent).toContain(PE_FOOTER);
+  });
+
+  it('keeps the body a textarea, so no field ordinal shifts', () => {
+    // Removing it would be the obvious way to make it uneditable, and it would
+    // move every field ordinal down by one — the controller would then write
+    // the BODY's text into the details field on the next render.
+    const c = mount();
+    const before = host.querySelectorAll('textarea').length;
+
+    c.setBusy('⠋');
+
+    expect(host.querySelectorAll('textarea')).toHaveLength(before);
+    expect(bodyField().readOnly).toBe(true);
+  });
+
+  it('does not eat an edit that was in progress when it arrived', () => {
+    // Busy can arrive mid-edit. A re-render that does not harvest first
+    // replaces the textarea with one carrying the MODEL's text, and the user's
+    // typing is gone — it reappears as if never written once the skeleton
+    // clears. The first version of this test used Escape to trigger a harvest
+    // and proved nothing, because Escape on PE navigates to feedback and the
+    // field being read afterwards was a different field entirely.
+    const c = mount();
+    bodyField().value = 'what the user wrote';
+
+    c.setBusy('⠋');
+    expect(bodyField().value).toBe('⠋ preparing…');
+    c.setBusy(null);
+
+    expect(bodyField().value).toBe('what the user wrote');
+  });
+
+  it('accepts nothing but Escape while it waits', () => {
+    const c = mount();
+    bodyField().value = 'text';
+    c.setBusy('⠋');
+
+    key(c.element, 'ArrowDown');
+    key(c.element, 'Enter');
+
+    expect(c.getFocusIndex(), 'focus must not move').toBe(0);
+    expect(events, 'nothing may be sent from a body that is not ready').toEqual([]);
+
+    key(c.element, 'Escape');
+    expect(events[0]!.type, 'but waiting must never be a trap').toBe('cancelled');
+  });
+
+  it('clears back to the real body', () => {
+    const c = mount();
+    c.setBusy('⠋');
+    expect(bodyField().value).toBe('⠋ preparing…');
+
+    c.setBusy(null);
+
+    expect(bodyField().value).toContain('Add a Stripe webhook handler');
+    expect(bodyField().readOnly).toBe(false);
+  });
+
+  it('re-renders per glyph, so the caller can animate it', () => {
+    const c = mount();
+    c.setBusy('⠋');
+    c.setBusy('⠙');
+
+    expect(bodyField().value).toBe('⠙ preparing…');
   });
 });
 

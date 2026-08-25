@@ -69,6 +69,63 @@ describe('PE surface — structure', () => {
   });
 });
 
+describe('the busy skeleton, as the CLI renders it', () => {
+  // `cli-mps-popup.ts:357-364`: "while wording is not ready, the body is a
+  // spinner skeleton and the edit-keys hint is hidden; everything else renders
+  // as normal". Tested on the renderer, not through the controller — this is
+  // the renderer's own job, and the controller's suite is a different runner.
+
+  it('replaces the BODY text with the glyph', () => {
+    const frame = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+
+    expect(frame.querySelector('textarea')!.value).toBe('⠋ preparing…');
+  });
+
+  it('leaves the details field alone — it is the user\'s own text', () => {
+    // Only the FIRST field is the body. The details field keeps working while
+    // the wording is being prepared.
+    const frame = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+
+    expect(frame.querySelectorAll('textarea')[1]!.value)
+      .toBe('Keep the existing retry helper — do not rewrite it.');
+  });
+
+  it('makes the skeleton read-only without removing it', () => {
+    // Removing the textarea is the obvious way to make it uneditable and it
+    // would shift every field ordinal by one — the controller would then write
+    // the body's text into the details field.
+    const plain = renderSurface(document, PE_FIXTURE, { focusIndex: 0 });
+    const busy = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+
+    expect(busy.querySelectorAll('textarea')).toHaveLength(plain.querySelectorAll('textarea').length);
+    expect(busy.querySelector('textarea')!.readOnly).toBe(true);
+    expect(plain.querySelector('textarea')!.readOnly).toBe(false);
+  });
+
+  it('hides the body\'s hints and no others', () => {
+    const plain = renderSurface(document, PE_FIXTURE, { focusIndex: 0 });
+    const busy = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+    const hints = (f: HTMLElement): string[] =>
+      [...f.querySelectorAll('.np-hint')].map((el) => el.textContent ?? '');
+
+    expect(hints(busy).length).toBeLessThan(hints(plain).length);
+    // The details row's line survives: it describes a field that still works.
+    expect(hints(busy)).toContain(DETAILS_HINT);
+    expect(hints(busy).some((h) => h.includes(EDIT_KEYS_HINT))).toBe(false);
+  });
+
+  it('renders everything else as normal', () => {
+    const busy = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+    const labels = [...busy.querySelectorAll('.np-label')].map((el) => el.textContent);
+
+    expect(labels).toEqual([
+      'Use enhanced prompt', 'Additional details',
+      'Shorter', 'More thorough', 'More project-grounded', 'Use original prompt',
+    ]);
+    expect(busy.querySelector('.np-footer')!.textContent).toContain(PE_FOOTER);
+  });
+});
+
 describe('a field, its label and its hints share one group', () => {
   // `:focus-within` is what decides whether a block reads as being edited, and
   // it needs a common ancestor. The label and the textarea are separate rows,

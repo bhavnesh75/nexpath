@@ -126,4 +126,13 @@ export interface SurfaceState {
    * model: it describes what just happened, not what the surface is.
    */
   notice?: string;
+  /**
+   * Set while the wording is being prepared and the body is not ready yet.
+   *
+   * The glyph is supplied per frame by whoever is driving the surface, not
+   * animated here: a timer inside the controller would drag in teardown,
+   * tab-visibility and `prefers-reduced-motion` handling that belongs to the
+   * caller (owner decision, 2026-08-25).
+   */
+  busy?: { glyph: string };
 }

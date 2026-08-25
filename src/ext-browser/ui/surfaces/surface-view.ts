@@ -127,7 +127,13 @@ export function growFields(root: ParentNode): void {
 }
 
 /** The editable field beneath a `field` row's label. */
-function buildField(doc: Document, text: string, indent: 4 | 6, placeholder?: string): HTMLElement {
+function buildField(
+  doc: Document,
+  text: string,
+  indent: 4 | 6,
+  placeholder?: string,
+  readOnly = false,
+): HTMLElement {
   const row = doc.createElement('div');
   row.className = 'np-row';
 
@@ -138,6 +144,11 @@ function buildField(doc: Document, text: string, indent: 4 | 6, placeholder?: st
   // than pre-filled text: the CLI prints it only while there is nothing there,
   // and text the user did not write must never be sent as if they had.
   if (placeholder) field.placeholder = placeholder;
+  // A busy body is a skeleton, not something to type into. Read-only rather
+  // than removed, because removing the textarea would shift every field
+  // ordinal by one and the controller would write the body's text into the
+  // details field.
+  if (readOnly) field.readOnly = true;
   // One row is the floor, not the size: `growFields` raises it to the content as
   // soon as the frame is attached. Without an inline height the field can never
   // collapse to nothing, which is the failure this replaced.
@@ -206,6 +217,7 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
   const hintIndent = model.hintIndent ?? 4;
 
   let interactiveIndex = 0;
+  let fieldOrdinal = 0;
   model.rows.forEach((row) => {
     if (row.blankBefore) scroll.appendChild(buildBlankRow(doc));
 
@@ -238,12 +250,29 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
     const group = doc.createElement('div');
     group.className = 'np-field-group';
     group.appendChild(scroll.removeChild(scroll.lastElementChild!));   // the label row
+    // THE BUSY BODY, exactly as the CLI renders it (`cli-mps-popup.ts:357-364`):
+    // "while wording is not ready, the body is a spinner skeleton and the
+    // edit-keys hint is hidden; everything else renders as normal". Only the
+    // FIRST field is the body — the details field is the user's own text and
+    // keeps working while the wording is being prepared.
+    const isBody = fieldOrdinal === 0;
+    const busy = isBody ? state.busy : undefined;
+    fieldOrdinal += 1;
+
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↑ above
-    group.appendChild(buildField(doc, row.text, fieldIndent, row.placeholder));
+    group.appendChild(buildField(
+      doc,
+      busy ? `${busy.glyph} preparing…` : row.text,
+      fieldIndent,
+      row.placeholder,
+      Boolean(busy),
+    ));
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↓ below
-    for (const hint of row.hints?.always ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
-    if (focused) {
-      for (const hint of row.hints?.whenFocused ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
+    if (!busy) {
+      for (const hint of row.hints?.always ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
+      if (focused) {
+        for (const hint of row.hints?.whenFocused ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
+      }
     }
     scroll.appendChild(group);
   });
