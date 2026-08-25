@@ -609,46 +609,47 @@ function e2eScenarios(): Scenario[] {
       },
     },
     {
-      name: 'a field first rendered in a HIDDEN host sizes itself when shown',
+      name: 'the dock mounts hidden and the field sizes itself on show',
       run() {
-        // The live report, reproduced: the dock renders its host at
-        // display:none and shows it afterwards, so the first render measures
-        // nothing. Before the fix this reported 0px both before AND after the
-        // show — a thin strip until the user happened to click into it.
-        const host = document.createElement('div');
-        host.style.cssText = 'display:none;width:900px;';
-        document.getElementById('sweep-stage')!.appendChild(host);
-
-        const controller = createSurfaceController(host, {
+        // THE PRODUCTION PATH, not an approximation of it. The dock renders its
+        // host at display:none behind a CLOSED shadow root and shows it
+        // afterwards; the first version of this scenario used a plain div,
+        // which left the question of whether a ResizeObserver reaches across
+        // the shadow boundary unanswered. It does.
+        const dock = mountNexpathDock();
+        const root = dock.mountEl.getRootNode();
+        if (!(root instanceof ShadowRoot)) { dock.destroy(); return 'the dock is not in a shadow root'; }
+        installChromeStyles(root);
+        const controller = createSurfaceController(dock.mountEl, {
           registry: FIXTURES, initial: 'prompt_enhancement',
         });
-        const field = host.querySelector('textarea')!;
-        // While hidden, NOTHING may be written. The observer alone would still
-        // end up right — it re-sizes on show — but only after a frame in which
-        // the field is 0px, which is a visible flash. Asserting the interim
-        // state is what makes the guard and the observer two separate fixes
-        // rather than one; without this, reverting the guard passes.
-        const whileHidden = field.style.height;
-        if (whileHidden === '0px') {
-          controller.destroy();
-          host.remove();
-          return 'a height was written while the field was unrendered: 0px';
-        }
+        const field = dock.mountEl.querySelector('textarea');
+        if (!field) { controller.destroy(); dock.destroy(); return 'no textarea in the dock'; }
 
-        host.style.display = 'block';                       // the dock's show()
-        // ResizeObserver delivers on the next frame, so the assertion has to
-        // wait for one — a synchronous read here would read the old height and
-        // pass for the wrong reason.
+        // Nothing may be written while the host is hidden: the observer alone
+        // would still end up right, but only after a frame at 0px — a visible
+        // flash. Asserting this is what keeps the guard and the observer two
+        // separately verifiable fixes.
+        const whileHidden = field.style.height;
+        dock.show();
+
+        // setTimeout rather than rAF: rAF does not fire for this path under
+        // headless virtual time — a property of the harness, not of the code.
         return new Promise<string | null>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => {
+          setTimeout(() => {
             const shown = Math.round(field.getBoundingClientRect().height);
             const wanted = field.scrollHeight;
+            const roErrors = (window as unknown as Record<string, number>)['__roErrors'] ?? 0;
             controller.destroy();
-            host.remove();
-            resolve(shown >= wanted - 1 && shown >= 14
-              ? null
-              : `hidden=${whileHidden || '(unset)'} afterShow=${shown}px content=${wanted}px`);
-          }));
+            dock.destroy();
+            const problems = [
+              whileHidden === '0px' ? 'a height was written while hidden' : null,
+              shown < wanted - 1 ? `after show ${shown}px for ${wanted}px of content` : null,
+              shown < 14 ? `still collapsed at ${shown}px` : null,
+              roErrors > 0 ? `${roErrors} ResizeObserver loop errors` : null,
+            ].filter(Boolean);
+            resolve(problems.length ? problems.join('; ') : null);
+          }, 300);
         });
       },
     },
@@ -756,6 +757,13 @@ function e2eScenarios(): Scenario[] {
 }
 
 async function renderE2eReport(): Promise<void> {
+  (window as unknown as Record<string, unknown>)['__roErrors'] = 0;
+  window.addEventListener('error', (e) => {
+    if (String(e.message).includes('ResizeObserver')) {
+      const w = window as unknown as Record<string, number>;
+      w['__roErrors'] = (w['__roErrors'] ?? 0) + 1;
+    }
+  });
   installChromeStyles(document.head);
   // Awaited one at a time: a scenario that waits for a ResizeObserver frame can
   // only answer with a promise, and running them concurrently would let one
@@ -763,7 +771,19 @@ async function renderE2eReport(): Promise<void> {
   const results: Array<{ name: string; failure: string | null }> = [];
   for (const s of e2eScenarios()) {
     let failure: string | null;
-    try { failure = await s.run(); } catch (e) { failure = 'threw: ' + String(e); }
+    try {
+      // A scenario that never settles must not take the suite with it. A throw
+      // inside a requestAnimationFrame callback does NOT reject the promise it
+      // was created for, so the await simply waits forever and the page renders
+      // no banner at all — silence that reads exactly like a page that failed
+      // to load. Losing one scenario to a timeout is recoverable; losing the
+      // whole run with no output is not.
+      failure = await Promise.race([
+        Promise.resolve(s.run()),
+        new Promise<string>((resolve) => setTimeout(
+          () => resolve('timed out after 5s — did an async callback throw?'), 5000)),
+      ]);
+    } catch (e) { failure = 'threw: ' + String(e); }
     results.push({ name: s.name, failure });
   }
   const skipped = results.filter((r) => r.failure?.startsWith('skip: '));

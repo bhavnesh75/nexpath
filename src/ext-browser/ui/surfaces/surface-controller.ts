@@ -174,11 +174,30 @@ export function createSurfaceController(
    * changes nothing about the wrapper's own size. The re-entrancy flag is there
    * for the day that stops being true.
    */
-  let resizing = false;
-  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
-    if (destroyed || resizing) return;
-    resizing = true;
-    try { growFields(wrapper); } finally { resizing = false; }
+  let lastWidth = -1;
+  const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver((entries) => {
+    if (destroyed) return;
+    // WIDTH ONLY, and that is what makes a feedback loop impossible rather than
+    // merely unlikely. Sizing a field changes its HEIGHT, which changes the
+    // wrapper's height, which fires this observer again — Chrome reports that
+    // as "ResizeObserver loop completed with undelivered notifications", and
+    // the harness caught exactly one. Width is the input that actually matters
+    // (it decides where the text wraps) and it is the one dimension this
+    // callback can never change.
+    const width = Math.round(entries[0]?.contentRect.width ?? wrapper.clientWidth);
+    if (width === lastWidth) return;
+    lastWidth = width;
+    // Deferred OUT of the observation cycle. Sizing a field changes the
+    // wrapper's height — `height: 100%` against a parent with no height of its
+    // own resolves to content — which queues another observation, and the
+    // browser reports "ResizeObserver loop completed with undelivered
+    // notifications" for that whether or not this callback then bails. The
+    // width guard alone did not silence it; the harness kept counting one.
+    //
+    // A macrotask, not requestAnimationFrame: rAF does not fire for the dock's
+    // path under headless virtual time, which would leave the fields unsized in
+    // exactly the test that is meant to prove they are sized.
+    setTimeout(() => { if (!destroyed) growFields(wrapper); }, 0);
   });
 
   const wrapper = doc.createElement('div');
