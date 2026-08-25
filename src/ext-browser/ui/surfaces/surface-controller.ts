@@ -363,6 +363,11 @@ export function createSurfaceController(
   }
 
   function show(next: SurfaceModel, nextFocus = 0): void {
+    // Busy describes THIS surface's wording being prepared, so it cannot travel
+    // to another one — unlike a notice, which can be about the transition
+    // itself and is cleared only for caller-driven switches. Without this,
+    // switching while busy left the next surface's body as a skeleton.
+    busy = undefined;
     model = next;
     focusIndex = nextFocus;
     fieldValues = interactiveRows(next)

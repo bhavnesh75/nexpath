@@ -217,7 +217,6 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
   const hintIndent = model.hintIndent ?? 4;
 
   let interactiveIndex = 0;
-  let fieldOrdinal = 0;
   model.rows.forEach((row) => {
     if (row.blankBefore) scroll.appendChild(buildBlankRow(doc));
 
@@ -250,14 +249,15 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
     const group = doc.createElement('div');
     group.className = 'np-field-group';
     group.appendChild(scroll.removeChild(scroll.lastElementChild!));   // the label row
-    // THE BUSY BODY, exactly as the CLI renders it (`cli-mps-popup.ts:357-364`):
-    // "while wording is not ready, the body is a spinner skeleton and the
-    // edit-keys hint is hidden; everything else renders as normal". Only the
-    // FIRST field is the body — the details field is the user's own text and
-    // keeps working while the wording is being prepared.
-    const isBody = fieldOrdinal === 0;
-    const busy = isBody ? state.busy : undefined;
-    fieldOrdinal += 1;
+    // THE BUSY SKELETON, exactly as the CLI renders it
+    // (`cli-mps-popup.ts:357-364`): "while wording is not ready, the body is a
+    // spinner skeleton and the edit-keys hint is hidden; everything else
+    // renders as normal".
+    //
+    // Applied to the field the MODEL marks as engine-produced, not to the first
+    // one. PEF's only field is the user's own feedback, and a `preparing…`
+    // skeleton there would say the engine is writing their opinion for them.
+    const busy = row.prepared ? state.busy : undefined;
 
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↑ above
     group.appendChild(buildField(

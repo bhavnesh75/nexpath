@@ -82,8 +82,8 @@ describe('the busy skeleton, as the CLI renders it', () => {
   });
 
   it('leaves the details field alone — it is the user\'s own text', () => {
-    // Only the FIRST field is the body. The details field keeps working while
-    // the wording is being prepared.
+    // The details field is the user's own text — not engine-produced — so it
+    // keeps working while the body is pending.
     const frame = renderSurface(document, PE_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
 
     expect(frame.querySelectorAll('textarea')[1]!.value)
@@ -112,6 +112,18 @@ describe('the busy skeleton, as the CLI renders it', () => {
     // The details row's line survives: it describes a field that still works.
     expect(hints(busy)).toContain(DETAILS_HINT);
     expect(hints(busy).some((h) => h.includes(EDIT_KEYS_HINT))).toBe(false);
+  });
+
+  it('never puts a skeleton in a field the user types', () => {
+    // PEF's only field is the user's own feedback, and the details fields are
+    // theirs too. "The first field" was the obvious rule for finding the body
+    // and it is wrong for PEF — a `preparing…` skeleton there says the engine
+    // is writing their opinion for them. The MODEL marks the engine-produced
+    // field instead.
+    const pef = renderSurface(document, PEF_FIXTURE, { focusIndex: 0, busy: { glyph: '⠋' } });
+
+    expect(pef.querySelector('textarea')!.value).not.toContain('preparing');
+    expect(pef.querySelector('textarea')!.readOnly).toBe(false);
   });
 
   it('renders everything else as normal', () => {

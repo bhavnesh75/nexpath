@@ -45,6 +45,8 @@ export const PE_FIXTURE: SurfaceModel = {
     {
       kind: 'field',
       label: 'Use enhanced prompt',
+      // The engine writes this one, so it is the one a busy skeleton replaces.
+      prepared: true,
       text: [
         'Add a Stripe webhook handler for payment_intent.succeeded.',
         '',

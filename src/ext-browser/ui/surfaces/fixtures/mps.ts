@@ -55,6 +55,7 @@ export const MPS_FIRST_FIXTURE: SurfaceModel = {
     {
       kind: 'field',
       label: 'Use enhanced sequence prompt',
+      prepared: true,
       text: [
         'Step 1 — write the failing test for the payment webhook.',
         '',
@@ -102,6 +103,7 @@ export const MPS_CONTINUATION_FIXTURE: SurfaceModel = {
     {
       kind: 'field',
       label: 'Use enhanced sequence prompt',
+      prepared: true,
       text: [
         'Step 2 — implement the handler so the failing test passes.',
         '',

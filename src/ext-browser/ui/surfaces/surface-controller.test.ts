@@ -757,6 +757,20 @@ describe('the busy skeleton (E3)', () => {
     expect(bodyField().readOnly).toBe(false);
   });
 
+  it('does not travel to another surface', () => {
+    // Busy describes THIS surface's wording being prepared. Carried over, the
+    // next surface opens with a skeleton for something nobody is preparing —
+    // and unlike a notice, it can never be about the transition itself.
+    const c = mount();
+    c.setBusy('⠋');
+    expect(bodyField().value).toBe('⠋ preparing…');
+
+    c.setSurface('mps_first');
+
+    expect(bodyField().value).toContain('Step 1');
+    expect(bodyField().readOnly).toBe(false);
+  });
+
   it('re-renders per glyph, so the caller can animate it', () => {
     const c = mount();
     c.setBusy('⠋');

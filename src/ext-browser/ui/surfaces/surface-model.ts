@@ -51,6 +51,18 @@ export type SurfaceRow =
       text: string;
       /** Shown in place of empty text — PEF's `(type your feedback)`. */
       placeholder?: string;
+      /**
+       * True for the one field whose text the ENGINE produces — PE's and MPS's
+       * enhanced body. That is the field a busy skeleton replaces while the
+       * wording is being prepared.
+       *
+       * Declared rather than inferred. "The first field" was the obvious rule
+       * and it is wrong for PEF, whose only field is the user's own feedback:
+       * a `preparing…` skeleton in the feedback box says the engine is writing
+       * the user's opinion for them. The details fields are user-typed too, and
+       * keep working while the body is pending.
+       */
+      prepared?: boolean;
       hints?: FieldHints;
       /** The CLI opens some blocks with a blank line; the model says which. */
       blankBefore?: boolean;
