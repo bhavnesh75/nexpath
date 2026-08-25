@@ -673,6 +673,37 @@ describe('the notice slot belongs to the caller', () => {
   });
 });
 
+describe('a notice does not outlive its surface', () => {
+  it('a caller-driven switch starts clean', () => {
+    // It described what happened on the surface that raised it; carried over,
+    // it explains something the reader is no longer looking at. `setSurface`
+    // after a send showed "Sent." under the MPS header.
+    const c = mount('prompt_enhancement', {
+      notice: (e: SurfaceEvent) => (e.type === 'send' ? 'Sent.' : undefined),
+    });
+    bodyField().value = 'x';
+    key(bodyField(), 'Enter');
+    expect(host.textContent).toContain('Sent.');
+
+    c.setSurface('mps_first');
+
+    expect(host.textContent).not.toContain('Sent.');
+  });
+
+  it('but a line about the transition itself lands with it', () => {
+    // Escape on PE opens feedback, and a caller explaining WHY should be read
+    // on the surface it opened.
+    const c = mount('prompt_enhancement', {
+      notice: (e: SurfaceEvent) => (e.type === 'cancelled' ? 'Cancelled — tell us why?' : undefined),
+    });
+
+    key(c.element, 'Escape');
+
+    expect(c.getModel().id).toBe('prompt_enhancement_feedback');
+    expect(host.textContent).toContain('Cancelled — tell us why?');
+  });
+});
+
 describe('Escape has the same seam as a row activation', () => {
   // It had none, and a caller could suppress everything a row did and nothing
   // Escape did — which is why the MPS decline path kept announcing itself in a

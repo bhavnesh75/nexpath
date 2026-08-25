@@ -334,6 +334,23 @@ export function createSurfaceController(
     });
   }
 
+  /**
+   * A surface change the CALLER asked for starts with an empty notice.
+   *
+   * A notice describes what just happened on the surface that raised it, so
+   * carrying it onto the next one leaves the frame explaining something the
+   * reader is no longer looking at — `setSurface` after a send showed "Sent."
+   * under the MPS header.
+   *
+   * Not applied to every `show`: when an announce is what CAUSED the switch —
+   * Escape on PE opening feedback — the line is about the transition itself and
+   * belongs on the surface it lands on.
+   */
+  function showFresh(next: SurfaceModel, nextFocus = 0): void {
+    notice = undefined;
+    show(next, nextFocus);
+  }
+
   function show(next: SurfaceModel, nextFocus = 0): void {
     model = next;
     focusIndex = nextFocus;
@@ -372,7 +389,7 @@ export function createSurfaceController(
     if (resolved === 'refuse') return;                         // a CLI-style silent guard
     if (resolved) {
       harvest();
-      show(resolved.model, resolved.focusIndex ?? 0);
+      showFresh(resolved.model, resolved.focusIndex ?? 0);
       return;
     }
 
@@ -455,7 +472,7 @@ export function createSurfaceController(
     // other notice still saw the MPS decline announce itself.
     const resolved = options.resolveEscape?.(model);
     if (resolved === 'handled') return;
-    if (resolved) { harvest(); show(resolved.model, resolved.focusIndex ?? 0); return; }
+    if (resolved) { harvest(); showFresh(resolved.model, resolved.focusIndex ?? 0); return; }
 
     const surface = model.id;
     switch (surface) {
@@ -622,7 +639,8 @@ export function createSurfaceController(
     getFocusIndex: () => focusIndex,
     setSurface(id: SurfaceId): void {
       if (destroyed) return;
-      switchTo(id);
+      const next = options.registry[id];
+      if (next) showFresh(next);
     },
     destroy(): void {
       if (destroyed) return;
