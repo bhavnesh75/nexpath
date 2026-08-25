@@ -736,6 +736,48 @@ function e2eScenarios(): Scenario[] {
       },
     },
     {
+      name: 'typing never clips the line being written',
+      run() {
+        // The converge step exists because growing a field can invalidate the
+        // measurement that grew it: a scrollbar appears, the field narrows, and
+        // the text rewraps taller than the height just set. `growFields` ran
+        // that step; the input listener did not, so the clipping happened
+        // exactly where a reader is looking — on the line they are typing.
+        //
+        // HONEST LIMIT: this cannot fail under headless Chrome, which uses
+        // OVERLAY scrollbars — measured `scrollbarTookWidth=false`, so the
+        // narrowing that causes the rewrap never happens and the clip is 0
+        // whether or not the converge step runs. It is kept because it CAN fail
+        // on a machine with classic scrollbars, where the user's report came
+        // from. The test that actually bites today is the source-level symmetry
+        // check in surface-view.test.ts.
+        const box = document.createElement('div');
+        box.style.cssText = 'width:360px;height:400px;overflow:hidden;';
+        document.getElementById('sweep-stage')!.appendChild(box);
+
+        const host = document.createElement('div');
+        box.appendChild(host);
+        const controller = createSurfaceController(host, {
+          registry: FIXTURES, initial: 'prompt_enhancement',
+        });
+        const field = host.querySelector('textarea')!;
+
+        const worst: string[] = [];
+        for (let i = 1; i <= 12; i++) {
+          field.value += ' ' + 'wrapping words here '.repeat(i);
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          const clipped = field.scrollHeight - field.clientHeight;
+          // A capped field scrolls on purpose; only an UNCAPPED one that is
+          // shorter than its content is clipping.
+          const capped = field.clientHeight >= 209;
+          if (!capped && clipped > 1) worst.push(`step ${i}: ${clipped}px hidden`);
+        }
+        controller.destroy();
+        box.remove();
+        return worst.length ? worst.slice(0, 3).join('; ') : null;
+      },
+    },
+    {
       name: 'a short field neither windows nor shows a marker',
       run() {
         const { host, controller } = mount('prompt_enhancement');

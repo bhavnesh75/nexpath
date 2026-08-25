@@ -111,6 +111,36 @@ describe('C-3 — the Firefox 112 floor, over the whole layer', () => {
   });
 });
 
+describe('the static recompose stays out of the live path', () => {
+  it('nothing outside the harness and its tests imports refinement-transitions', () => {
+    // `createRefinementTransitions` performs an INSTANT, pre-authored recompose.
+    // That is right for a harness and wrong for production: a live directional
+    // is an engine round-trip (LLM refine) routed through the adapter.
+    //
+    // The hook's shape already refuses it — `ResolveActivation` returns
+    // synchronously and cannot express a round-trip — so the live route is the
+    // other one: return null, let the controller emit `activate` with the row's
+    // label, and drive setBusy + the model swap from there. This test is what
+    // keeps that true, because a comment saying so can drift and a test cannot.
+    const roots = ['adapters', 'content', 'ui'];
+    const offenders: string[] = [];
+    const walk = (dir: string, rel: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name === 'harness') continue;
+        const path = resolve(dir, entry.name);
+        if (entry.isDirectory()) { walk(path, `${rel}${entry.name}/`); continue; }
+        if (!entry.name.endsWith('.ts') || entry.name.endsWith('.test.ts')) continue;
+        if (/refinement-transitions/.test(readFileSync(path, 'utf8'))) offenders.push(rel + entry.name);
+      }
+    };
+    for (const root of roots) {
+      try { walk(resolve(process.cwd(), 'src/ext-browser', root), `${root}/`); } catch { /* absent */ }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('C-5 successor — the layer is wired through exactly ONE seam', () => {
   it('pe-dock-adapter.ts is the only module outside the layer that imports from it', () => {
     // C-5 originally kept the layer OUT of the shipped bundle ("nothing is

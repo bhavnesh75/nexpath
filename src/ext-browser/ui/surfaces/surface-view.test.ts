@@ -394,17 +394,38 @@ describe('auto-grow measures only what it can measure', () => {
     root.remove();
   });
 
-  it('the second pass only grows — resetting to auto would oscillate', () => {
+  it('typing runs the same steps as growFields, in the same order', () => {
+    // The bug: the input listener ran `autoGrow` and the markers but NOT the
+    // converge step, so the rewrap-taller edge clipped the last line as it was
+    // being written — where a reader is looking.
+    //
+    // Asserted at SOURCE, because the pixel outcome cannot be reproduced under
+    // headless Chrome's overlay scrollbars: they take no layout width, so the
+    // narrowing that causes the rewrap never happens there. What can be checked
+    // anywhere is that the two paths agree, which is the invariant that broke.
+    const src = readFileSync(resolve(process.cwd(), 'src/ext-browser/ui/surfaces/surface-view.ts'), 'utf8');
+    const listener = src.slice(src.indexOf("addEventListener('input'"));
+    const body = listener.slice(0, listener.indexOf('});'));
+
+    for (const step of ['autoGrow(field)', 'convergeField(field)', 'updateFieldMarkers(field)']) {
+      expect(body, `typing must run ${step}`).toContain(step);
+    }
+    expect(body.indexOf('autoGrow')).toBeLessThan(body.indexOf('convergeField'));
+    expect(body.indexOf('convergeField')).toBeLessThan(body.indexOf('updateFieldMarkers'));
+  });
+
+  it('convergeField only grows — resetting to auto would oscillate', () => {
     // Growing a field can make a scrollbar appear, which narrows it and rewraps
     // the text taller. A second `auto` reset would undo the overflow, remove the
     // scrollbar, and measure the old height again, forever. Asserted at source:
     // jsdom has no scrollbars to reproduce it with.
     const src = readFileSync(resolve(process.cwd(), 'src/ext-browser/ui/surfaces/surface-view.ts'), 'utf8');
-    const body = src.slice(src.indexOf('export function growFields'));
-    const secondPass = body.slice(body.indexOf('for (const field of fields) {'));
+    const whole = src.slice(src.indexOf('export function convergeField'));
+    const body = whole.slice(0, whole.indexOf('\n}'))
+      .split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 
-    expect(secondPass).toContain('scrollHeight > field.clientHeight');
-    expect(secondPass).not.toContain("'auto'");
+    expect(body).toContain('scrollHeight > field.clientHeight');
+    expect(body).not.toContain("'auto'");
   });
 });
 

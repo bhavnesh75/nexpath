@@ -95,6 +95,32 @@ export function updateFieldMarkers(field: HTMLTextAreaElement): void {
   set(below, `↓ ${hiddenBelow} more lines below${BELOW_SUFFIX}`, hiddenBelow > 0);
 }
 
+/**
+ * The second half of sizing a field: grow it to whatever it needs at the width
+ * it ENDED UP with.
+ *
+ * `autoGrow` measures, then writes — and the write can invalidate the
+ * measurement. Growing a field pushes the scroll band into overflow, a
+ * scrollbar appears, the field narrows, and the text rewraps taller than the
+ * height just set, clipping the last line.
+ *
+ * It only ever grows, and never resets to `auto` first. A reset would collapse
+ * the field, remove the overflow, take the scrollbar away, widen the field and
+ * measure the old height again — an oscillation, which is why running
+ * `autoGrow` twice fixed nothing.
+ *
+ * Its own function because BOTH callers need it. `growFields` runs it as a
+ * second pass, and the input listener runs it per keystroke: without that, the
+ * same clipped last line appears while typing, which is exactly where a reader
+ * is looking.
+ */
+export function convergeField(field: HTMLTextAreaElement): void {
+  // The same guard as autoGrow, and for the same reason: this also WRITES a
+  // height, so it also has to refuse when there is nothing to measure.
+  if (field.getClientRects().length === 0) return;
+  if (field.scrollHeight > field.clientHeight) field.style.height = `${field.scrollHeight}px`;
+}
+
 export function growFields(root: ParentNode): void {
   const fields = [...root.querySelectorAll('textarea')];
 
@@ -112,15 +138,7 @@ export function growFields(root: ParentNode): void {
   // the field and measures 825 all over again — an oscillation, not a
   // convergence, which is why running autoGrow twice changed nothing. This pass
   // only ever grows, from the settled width, so it terminates.
-  for (const field of fields) {
-    // The same guard as autoGrow, and for the same reason: this pass also
-    // WRITES a height, so it also has to refuse when there is nothing to
-    // measure. It was still checking `isConnected` — the weaker test that
-    // E1.1 replaced — which made the two passes disagree about what counts as
-    // measurable.
-    if (field.getClientRects().length === 0) continue;
-    if (field.scrollHeight > field.clientHeight) field.style.height = `${field.scrollHeight}px`;
-  }
+  for (const field of fields) convergeField(field);
 
   // Sizing settles the window, so the markers can only be right after it.
   for (const field of fields) updateFieldMarkers(field);
@@ -154,7 +172,14 @@ function buildField(
   // collapse to nothing, which is the failure this replaced.
   field.rows = 1;
   // The listener dies with the element, which is discarded whole on re-render.
-  field.addEventListener('input', () => { autoGrow(field); updateFieldMarkers(field); });
+  // The same three steps `growFields` runs, in the same order. Typing had only
+  // the first and the last, so the rewrap-taller edge — a scrollbar appearing
+  // and narrowing the field — clipped the last line as it was being written.
+  field.addEventListener('input', () => {
+    autoGrow(field);
+    convergeField(field);
+    updateFieldMarkers(field);
+  });
   // Scrolling changes what is hidden without changing the text, so the markers
   // have to follow the scroll and not only the content.
   field.addEventListener('scroll', () => updateFieldMarkers(field));
