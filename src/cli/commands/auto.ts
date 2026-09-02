@@ -1286,7 +1286,7 @@ export async function runAuto(
   logger.debug('dedup', { firedKey: preCheckFiredKey, alreadyFired });
   if (alreadyFired) {
     // F4: this key already fired in the session
-    await preparePeFallback('blocked_by_dedup');
+    await preparePeFallback('blocked_by_dedup', true);
     writeTelemetry(input.projectRoot, 'advisory_dedup_blocked', { firedKey: preCheckFiredKey }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'already_fired', firedKey: preCheckFiredKey });
     return { outcome: 'no_action' };
@@ -1295,14 +1295,14 @@ export async function runAuto(
   // ── 6.5. Advisory frequency gate ────────────────────────────────────────────
   if (freq === 'major_only' && triggerResult.kind !== 'stage_transition') {
     // F4: major_only policy declined a non-transition
-    await preparePeFallback('blocked_by_frequency');
+    await preparePeFallback('blocked_by_frequency', true);
     writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType: triggerResult.kind }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_major_only', flagType: triggerResult.kind });
     return { outcome: 'no_action' };
   }
   if (freq === 'once_per_session' && mgr.current.firedDecisionSessions.length > 0) {
     // F4: once_per_session policy already spent
-    await preparePeFallback('blocked_by_frequency');
+    await preparePeFallback('blocked_by_frequency', true);
     writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType: triggerResult.kind }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_once_per_session' });
     return { outcome: 'no_action' };
@@ -1312,7 +1312,7 @@ export async function runAuto(
   const lastAdvisory = mgr.current.lastAdvisoryPromptIndex ?? -1;
   if (lastAdvisory >= 0 && mgr.current.promptCount - lastAdvisory < freqConfig.postAdvisoryCooldown) {
     // F4: inside the post-advisory cooldown window
-    await preparePeFallback('blocked_by_post_advisory_cooldown');
+    await preparePeFallback('blocked_by_post_advisory_cooldown', true);
     writeTelemetry(input.projectRoot, 'advisory_cooldown_blocked', {
       promptCount:       mgr.current.promptCount,
       lastAdvisoryAt:    lastAdvisory,

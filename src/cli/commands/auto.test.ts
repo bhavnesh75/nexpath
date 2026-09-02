@@ -1333,6 +1333,42 @@ describe('runAuto — session advisory cap', () => {
     expect(cappedElapsed).toBe(true);        // DS advisory STILL records session_cap_reached (unchanged)
   });
 
+  // ── Phase 3: decoupling also covers the transient rate-limit exits (here: post-advisory cooldown) ──
+  it('DECOUPLE: ordinary PE prepares on the post-advisory-cooldown exit (not just the session cap)', async () => {
+    const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
+    const { logger } = await import('../../logger.js');
+    const ORDINARY = 'add a submit button to the login form';
+
+    const events: string[] = [];
+    const dbg = vi.spyOn(logger, 'debug').mockImplementation((e: string) => { events.push(e); });
+    const inf = vi.spyOn(logger, 'info').mockImplementation((e: string, d?: Record<string, unknown>) => {
+      events.push(typeof d?.reason === 'string' ? `${e}:${d.reason}` : e);
+    });
+
+    for (let i = 0; i < 4; i++) await runAuto(makeInput({ projectRoot: '/test/decouple-cooldown', promptText: ORDINARY }), store);
+    const mgr = SessionStateManager.load(store, '/test/decouple-cooldown');
+    (mgr as unknown as { state: { profile: unknown } }).state.profile = {
+      nature: 'beginner', precisionScore: 1, playfulnessScore: 1, mood: 'casual', depth: 'low', depthScore: 1,
+      computedAt: mgr.current.promptCount,
+    };
+    (mgr as unknown as { state: { advisoryCount: number } }).state.advisoryCount = 0; // NOT capped → must hit the cooldown gate, not the cap
+    (mgr as unknown as { state: { stageConfidence: number } }).state.stageConfidence = 0.3;
+    (mgr as unknown as { state: { lastAdvisoryPromptIndex: number } }).state.lastAdvisoryPromptIndex = mgr.current.promptCount; // recent → post-advisory cooldown active
+    (mgr as unknown as { state: { lastPromptEnhancementPromptIndex: number } }).state.lastPromptEnhancementPromptIndex = -1; // PE cooldown elapsed
+    mgr.addAbsenceFlag(store, { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: 0, cooldownUntil: 100 });
+
+    events.length = 0;
+    await runAuto(makeInput({ projectRoot: '/test/decouple-cooldown', promptText: ORDINARY }), store, makeMockOpenAI(FIRE_YES_RESPONSE, 'Hold up.'));
+
+    dbg.mockRestore(); inf.mockRestore();
+    const hitCooldownExit = events.some((e) => e.includes('post_advisory_cooldown'));
+    const preparedPE = events.includes('prompt_enhancement_prepare_boundary');
+    // eslint-disable-next-line no-console
+    console.log(`\n>>> DECOUPLE-COOLDOWN  hit cooldown exit: ${hitCooldownExit}  |  PE prepared: ${preparedPE}\n`);
+    expect(hitCooldownExit).toBe(true); // confirm we reached the post-advisory-cooldown exit (not the cap)
+    expect(preparedPE).toBe(true);      // ordinary PE prepared there too (decoupled from the rate-limit)
+  });
+
   it('caps when hardcore_pro profile advisoryCount reaches cap=5', async () => {
     const { SessionStateManager } = await import('../../classifier/SessionStateManager.js');
     const { getSkippedSessions } = await import('../../store/skipped-sessions.js');
