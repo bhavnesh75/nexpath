@@ -39,6 +39,7 @@ import {
 import { emitPromptEnhancementCostObservabilityV1 } from '../../prompt-enhancement/cost-measurement.js';
 import { evaluatePromptEnhancementMpsIntakeDecisionV1 } from '../../prompt-enhancement/intake-decision.js';
 import { buildPromptEnhancementCliMpsIntakeEvidenceV1 } from '../../prompt-enhancement/cli-mps-intake-evidence.js';
+import { resolvePromptEnhancementPopupCooldownV1, isPromptEnhancementPopupCooldownActiveV1 } from '../../prompt-enhancement/popup-cooldown.js';
 import { runPromptEnhancementCliMpsFirstPopupV1, buildPromptEnhancementMpsCancelFeedbackEventV1, promptEnhancementMpsActionSignalKindV1 } from '../../prompt-enhancement/cli-mps-run.js';
 import { assemblePromptEnhancementSequenceBodyProducerInputV1, startSequenceWordingBatchV1 } from '../../prompt-enhancement/sequence-body-producer-stop-input.js';
 import { runPromptEnhancementSequenceBodyProducerV1 } from '../../prompt-enhancement/sequence-body-producer-runtime.js';
@@ -458,18 +459,6 @@ async function maybeResumeInterruptedSequenceV1(
 }
 
 /**
- * Resolve the PE / MPS-1 popup cooldown (in prompts) — how many prompts to suppress NEW popups after
- * one is shown. Config `prompt_enhancement.popup_cooldown` (project-scoped first, then global),
- * default 7. 0 disables the cooldown (every eligible prompt may pop). Non-numeric / negative → default.
- */
-function resolvePromptEnhancementPopupCooldownV1(store: Store, projectRoot: string): number {
-  const raw = getConfig(store.db, `prompt_enhancement.popup_cooldown:${projectRoot}`)
-    ?? getConfig(store.db, 'prompt_enhancement.popup_cooldown');
-  const n = raw === undefined ? 7 : Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n >= 0 ? n : 7;
-}
-
-/**
  * Run the Stop hook pipeline.
  *
  * @param payload   Parsed Stop hook JSON payload from Claude Code stdin
@@ -551,7 +540,7 @@ export async function runStop(
       // show nothing this turn. Continuation items (MPS-2) take a different Stop path and are NOT gated.
       const popupCooldown = resolvePromptEnhancementPopupCooldownV1(store, payload.cwd);
       const lastPopupIndex = mgr.current.lastPromptEnhancementPromptIndex ?? -1;
-      if (lastPopupIndex >= 0 && mgr.current.promptCount - lastPopupIndex < popupCooldown) {
+      if (isPromptEnhancementPopupCooldownActiveV1(lastPopupIndex, mgr.current.promptCount, popupCooldown)) {
         markPromptEnhancementShown(store, pendingPe.id);
         logger.debug('stop_pe_popup_cooldown', {
           cwd:              payload.cwd,
