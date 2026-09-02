@@ -69,6 +69,7 @@ import type { PromptEnhancementPopupEventV1 } from '../../prompt-enhancement/pop
 import { buildPromptEnhancementCostVisibilityMetadataV1 } from '../../prompt-enhancement/cost-observability.js';
 import { emitPromptEnhancementCostObservabilityV1 } from '../../prompt-enhancement/cost-measurement.js';
 import { isPromptEnhancementSequenceShapedTextV1 } from '../../prompt-enhancement/routing-taxonomy.js';
+import { resolvePromptEnhancementPopupCooldownV1, isPromptEnhancementPopupCooldownActiveV1 } from '../../prompt-enhancement/popup-cooldown.js';
 import { getSourceRealityAdaptersSnapshot } from '../../prompt-enhancement/source-reality.js';
 import { loadRightGoodProfile } from '../../classifier/right-good-aggregator.js';
 import type { RightGoodProfile } from '../../classifier/right-good-aggregator.js';
@@ -1147,12 +1148,25 @@ export async function runAuto(
   };
   // F4: every blocked branch names the eligibility it is blocking WITH, so the fact built on that
   // path inherits the pipeline's own decision instead of arriving unlabelled.
-  const prepareSequenceShapedPeFallback = async (
+  const preparePeFallback = async (
     triggerEligibility: PromptEnhancementSourceEligibilityStateV1,
+    allowOrdinary = false,
   ): Promise<void> => {
     // Injected boundary-test integrations keep their own single explicit path.
     if (sequencePeFallbackDone || promptEnhancement !== undefined) return;
-    if (!isPromptEnhancementSequenceShapedTextV1(input.promptText)) return;
+    // Sequence-shaped (MPS) prompts keep the existing always-prepare behaviour. Ordinary prompts are
+    // prepared only on exits explicitly marked `allowOrdinary` (which decouples the PE popup from that
+    // DS gate), and only when the PE popup cooldown has elapsed — so PE stays throttled by its own
+    // cadence rather than by the DS advisory's cap/frequency.
+    if (!isPromptEnhancementSequenceShapedTextV1(input.promptText)) {
+      if (!allowOrdinary) return;
+      const peCooldown = resolvePromptEnhancementPopupCooldownV1(store, input.projectRoot);
+      if (isPromptEnhancementPopupCooldownActiveV1(
+        mgr.current.lastPromptEnhancementPromptIndex ?? -1,
+        mgr.current.promptCount,
+        peCooldown,
+      )) return;
+    }
     sequencePeFallbackDone = true;
     await ensurePromptFactsFresh();
     const request = buildPromptEnhancementRequestForAuto({
@@ -1240,7 +1254,7 @@ export async function runAuto(
   }
   if (mgr.current.promptCount < freqConfig.minPromptsBeforeAdvisory) {
     // F4: min-prompts guard: the signal exists but cannot trigger yet
-    await prepareSequenceShapedPeFallback('support_only_not_triggering');
+    await preparePeFallback('support_only_not_triggering');
     writeTelemetry(input.projectRoot, 'advisory_min_prompts_blocked', { promptCount: mgr.current.promptCount, minRequired: freqConfig.minPromptsBeforeAdvisory }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'min_prompts_not_reached' });
     return { outcome: 'no_action' };
@@ -1257,7 +1271,7 @@ export async function runAuto(
 
   if (!triggerResult) {
     // F4: no trigger produced this turn
-    await prepareSequenceShapedPeFallback('support_only_not_triggering');
+    await preparePeFallback('support_only_not_triggering');
     writeTelemetry(input.projectRoot, 'pipeline_no_action', { reason: 'no_flag' }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'no_flag' });
     return { outcome: 'no_action' };
@@ -1272,7 +1286,7 @@ export async function runAuto(
   logger.debug('dedup', { firedKey: preCheckFiredKey, alreadyFired });
   if (alreadyFired) {
     // F4: this key already fired in the session
-    await prepareSequenceShapedPeFallback('blocked_by_dedup');
+    await preparePeFallback('blocked_by_dedup');
     writeTelemetry(input.projectRoot, 'advisory_dedup_blocked', { firedKey: preCheckFiredKey }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'already_fired', firedKey: preCheckFiredKey });
     return { outcome: 'no_action' };
@@ -1281,14 +1295,14 @@ export async function runAuto(
   // ── 6.5. Advisory frequency gate ────────────────────────────────────────────
   if (freq === 'major_only' && triggerResult.kind !== 'stage_transition') {
     // F4: major_only policy declined a non-transition
-    await prepareSequenceShapedPeFallback('blocked_by_frequency');
+    await preparePeFallback('blocked_by_frequency');
     writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType: triggerResult.kind }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_major_only', flagType: triggerResult.kind });
     return { outcome: 'no_action' };
   }
   if (freq === 'once_per_session' && mgr.current.firedDecisionSessions.length > 0) {
     // F4: once_per_session policy already spent
-    await prepareSequenceShapedPeFallback('blocked_by_frequency');
+    await preparePeFallback('blocked_by_frequency');
     writeTelemetry(input.projectRoot, 'advisory_freq_blocked', { freq, flagType: triggerResult.kind }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'freq_once_per_session' });
     return { outcome: 'no_action' };
@@ -1298,7 +1312,7 @@ export async function runAuto(
   const lastAdvisory = mgr.current.lastAdvisoryPromptIndex ?? -1;
   if (lastAdvisory >= 0 && mgr.current.promptCount - lastAdvisory < freqConfig.postAdvisoryCooldown) {
     // F4: inside the post-advisory cooldown window
-    await prepareSequenceShapedPeFallback('blocked_by_post_advisory_cooldown');
+    await preparePeFallback('blocked_by_post_advisory_cooldown');
     writeTelemetry(input.projectRoot, 'advisory_cooldown_blocked', {
       promptCount:       mgr.current.promptCount,
       lastAdvisoryAt:    lastAdvisory,
@@ -1318,7 +1332,7 @@ export async function runAuto(
   const advisoryCount = mgr.current.advisoryCount ?? 0;
   if (advisoryCount >= advisoryCap) {
     // F4: the session advisory cap is reached
-    await prepareSequenceShapedPeFallback('blocked_by_session_cap');
+    await preparePeFallback('blocked_by_session_cap', true);
     insertSkippedSession(store, {
       projectRoot:          input.projectRoot,
       sessionId:            mgr.current.sessionId,
@@ -1353,7 +1367,7 @@ export async function runAuto(
   writeTelemetry(input.projectRoot, 'classifier_fire_evaluated', { flagType: triggerResult.kind, confirmed: stageResult.fireRecommendation }, store);
   if (!stageResult.fireRecommendation) {
     // F4: the classifier declined to recommend firing
-    await prepareSequenceShapedPeFallback('too_weak_no_popup');
+    await preparePeFallback('too_weak_no_popup');
     writeTelemetry(input.projectRoot, 'pipeline_no_action', { reason: 'classifier_declined' }, store);
     logger.info('pipeline_outcome', { outcome: 'no_action', reason: 'classifier_declined', confidence: stageResult.classification.confidence, degraded: stageResult.degraded });
     return { outcome: 'no_action' };
