@@ -76,14 +76,14 @@ The core interaction keeps your request and the added workflow guidance together
 
 Nexpath CLI is built for prompt capture across AI coding agents.
 
-| Agent | Status in v0.1.4 |
+| Agent | Status in v0.1.5 |
 |-------|-----------------|
 | **Claude Code** | Fully supported — end-to-end tested |
-| **Cursor** | Not yet supported — end-to-end testing planned for v0.1.5 |
-| **Windsurf** | Not yet supported — end-to-end testing planned for v0.1.5 |
-| **Replit** | Not yet supported — end-to-end testing planned for v0.1.5 |
-| **Lovable** | Not yet supported — end-to-end testing planned for v0.1.5 |
-| **Bolt.new** | Not yet supported — end-to-end testing planned for v0.1.5 |
+| **Cursor** | Fully supported — end-to-end tested |
+| **Windsurf** | Fully supported — end-to-end tested |
+| **Replit** | Fully supported — end-to-end tested |
+| **Lovable** | Fully supported — end-to-end tested |
+| **Bolt.new** | Fully supported — end-to-end tested |
 
 ---
 
