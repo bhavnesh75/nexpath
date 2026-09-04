@@ -11,6 +11,8 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { openStore, closeStore } from '../../store/db.js';
 import { CLAUDE_HOOK_TIMEOUT_SECONDS } from '../../agents/adapters/claude-code.js';
+import { cursorConfigDir } from '../../agents/adapters/cursor.js';
+import { windsurfConfigDir } from '../../agents/adapters/windsurf.js';
 import { setConfig, isConfigSet, getConfig } from '../../store/config.js';
 
 import {
@@ -52,6 +54,29 @@ function tmpDir(): { dir: string; cleanup: () => void } {
   mkdirSync(dir, { recursive: true });
   return { dir, cleanup: () => { try { rmSync(dir, { recursive: true }); } catch { /* ignore */ } } };
 }
+
+/**
+ * Make the named agents detectable, on the RUNNING platform, inside `dir` only.
+ *
+ * These tests used to write `<dir>/.config/<Agent>` — the LINUX layout — and stub
+ * only HOME. On Windows the adapters look in `%APPDATA%\<Agent>` instead, so the
+ * fixture was invisible and detection fell through to the developer's REAL
+ * installs. That made the Cursor cases pass for the wrong reason (Cursor is
+ * installed on the machine, so they passed without creating anything) and the
+ * Windsurf ones fail for the right one (it is not).
+ *
+ * Stubbing APPDATA as well seals the sandbox, and building the path with the
+ * adapters' OWN helpers means the fixture lands wherever detection actually
+ * looks — on every platform, without the test knowing which one it is on.
+ */
+function detectableAgents(dir: string, ...agents: ReadonlyArray<'cursor' | 'windsurf'>): void {
+  vi.stubEnv('HOME', dir);
+  vi.stubEnv('APPDATA', join(dir, 'AppData', 'Roaming'));
+  for (const agent of agents) {
+    mkdirSync(agent === 'cursor' ? cursorConfigDir(dir) : windsurfConfigDir(dir), { recursive: true });
+  }
+}
+
 
 /**
  * Mark Claude Code as "installed" inside a tmpDir sandbox by creating the
@@ -950,8 +975,7 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor');
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true }, {  // platform defaults to cli
         paths,
@@ -972,8 +996,7 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'windsurf');
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true }, {
         paths,
@@ -994,9 +1017,7 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor', 'windsurf');
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true }, {
         paths,
@@ -1020,8 +1041,7 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor');
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true, platform: 'browser' }, {
         paths,
@@ -1074,9 +1094,7 @@ describe('installAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor', 'windsurf');
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true }, {  // platform defaults to cli
         paths,
@@ -1412,8 +1430,7 @@ describe('uninstallAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor');
       const paths = resolveAgentPaths(dir, dir, dir);
       await uninstallAction({ paths, execFn: () => {}, apiKeyConfirmFn: async () => false, storeDeleteConfirmFn: async () => false, dbPath: ':memory:' });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
@@ -1429,8 +1446,7 @@ describe('uninstallAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'windsurf');
       const paths = resolveAgentPaths(dir, dir, dir);
       await uninstallAction({ paths, execFn: () => {}, apiKeyConfirmFn: async () => false, storeDeleteConfirmFn: async () => false, dbPath: ':memory:' });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');
@@ -1450,9 +1466,7 @@ describe('uninstallAction', () => {
     const { dir, cleanup } = tmpDir();
     const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
-      mkdirSync(join(dir, '.config', 'Cursor'), { recursive: true });
-      mkdirSync(join(dir, '.config', 'Windsurf'), { recursive: true });
-      vi.stubEnv('HOME', dir);
+      detectableAgents(dir, 'cursor', 'windsurf');
       const paths = resolveAgentPaths(dir, dir, dir);
       await uninstallAction({ paths, execFn: () => {}, apiKeyConfirmFn: async () => false, storeDeleteConfirmFn: async () => false, dbPath: ':memory:' });
       const output = spy.mock.calls.map((c) => c[0] as string).join('\n');

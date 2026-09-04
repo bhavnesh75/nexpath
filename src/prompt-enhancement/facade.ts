@@ -18,6 +18,8 @@ import {
 } from './contracts.js';
 import {
   composePromptEnhancementBody,
+  promptEnhancementValidatedDraftSectionIdsV1,
+  promptEnhancementComposerOutputForSurvivingSectionsV1,
   type PromptEnhancementComposeResult,
   type PromptEnhancementComposerRuntimeState,
   type PromptEnhancementStructuredComposerOutputV1,
@@ -27,8 +29,9 @@ import { decidePromptEnhancementRouteViaLlmV1, type PromptEnhancementLlmRouteDec
 import { isValidApiKey } from '../config/ApiKeyResolver.js';
 import { resolvePromptEnhancementSequenceConfig } from '../config/PromptEnhancementConfig.js';
 import { planPromptEnhancementSections } from './templates/section-plan.js';
+import { prunePromptEnhancementSectionsV1 } from './section-pruner.js';
 import { routePromptEnhancement, isKnownPrimaryIntent, isKnownCapabilityId, isKnownDebugEvidenceForm, describePromptEnhancementSequencePlanV1, type PromptEnhancementCapabilityId, type PromptEnhancementRouteInput } from './routing-taxonomy.js';
-import { buildPromptEnhancementGuidanceFactsV1 } from './guidance-facts.js';
+import { buildPromptEnhancementGuidanceFactsV1, isSensitiveSignalRefV1 } from './guidance-facts.js';
 import { resolvePromptEnhancementSourceConflictsV1 } from './conflict-resolution.js';
 import { applyPromptEnhancementSourceMixV1 } from './source-mix.js';
 import { summarisePromptEnhancementRuntimeSeamsV1 } from './cost-measurement.js';
@@ -37,8 +40,11 @@ import { buildPromptEnhancementPinchLabelV1, buildPromptEnhancementWhyHelpV1 } f
 import { buildPromptEnhancementHandoffMetadataV1, validatePromptEnhancementHandoffMetadataV1 } from './handoff-metadata.js';
 import {
   validatePromptEnhancementSafety,
+  requiresPromptEnhancementExecutionConfirmationForPrompt,
   type PromptEnhancementSafetyValidationResult,
 } from './safety-sendability.js';
+import { isPromptEnhancementTypedSensitiveActionVerdictV1 } from './sensitive-action-clearance.js';
+import { promptHistorySensitiveActionFactPresentV1 } from './prompt-history-signals.js';
 import {
   runPromptEnhancementSequencePlannerV1,
   type PromptEnhancementSequencePlannerClientV1,
@@ -255,11 +261,35 @@ async function prepare(
   // recompose below still runs the FULL safety validation on the recomposed body — this bypass
   // only stops an action from cancelling a popup that is already on screen.
   const noPopup = actionRequest !== undefined ? false : (route.noPopup || !guidanceGate.show);
+  // The typed secret-in-prompt verdict: derived from the gate DECISION (.show — already the
+  // only gate field this facade reads) plus the required survivor's sensitivity, via the ONE
+  // sensitive-source predicate — never widened, and never via bodyShape, which stays
+  // unconsumed. This is the precise typed detector's output finally reaching the
+  // confirmation layer; it ACCUSES only and is OR-ed after the clearance gate downstream.
+  const typedSensitiveActionVerdict = guidanceGate.show
+    && sourceMix.requiredSurvivor !== null
+    && sourceMix.requiredSurvivor.sourceIds.some((sourceId) => isSensitiveSignalRefV1(sourceId))
+    ? { actionLabel: 'credential exposure' }
+    : undefined;
 
-  const planning = planPromptEnhancementSections({
+  // 🔒 Owner-ruled (2026-08-26): the confirmation gets its OWN section rather than borrowing the
+  // last one planned. Resolved here because this is where both halves of the decision already sit,
+  // and the same two predicates the composer uses to pick a host decide it, so the two cannot
+  // disagree about whether a body needs the clause.
+  const requiresExecutionConfirmation =
+    requiresPromptEnhancementExecutionConfirmationForPrompt(
+      request.sourcePrompt.text,
+      request.reviewMomentContext.triggerProvenance.classifierSensitiveActionClearance,
+    )
+    || isPromptEnhancementTypedSensitiveActionVerdictV1(typedSensitiveActionVerdict)
+    // The history lane needs a section to land in for the same reason the other two do.
+    || promptHistorySensitiveActionFactPresentV1(sourceMix.renderedFacts);
+
+  const plannedSections = planPromptEnhancementSections({
     routeResult: route,
     sourceRefs: request.sourceSignals.sourceRefs,
     guidanceFacts: sourceMix.renderedFacts,
+    requiresExecutionConfirmation,
   });
 
   // E4: bounded LLM composer wording for a shown popup on the baseline compose (no
@@ -299,7 +329,9 @@ async function prepare(
     const composerCall = await composeStructuredComposerOutputV1({
       enhancementId,
       originalPromptText: request.sourcePrompt.text,
-      planning,
+      // 🔒 The FULL plan, not the pruned one — the pruner now runs after this call and needs to know
+      // which sections the model actually wrote (owner ruling, 2026-08-20).
+      planning: plannedSections,
       // Carried straight through from the caller, which is what knows which hook this is running
       // on. Absent here means absent there, so a caller that supplies nothing keeps today's
       // behaviour exactly.
@@ -332,6 +364,49 @@ async function prepare(
     // 'no_key' -> undefined: the call was genuinely not made, and that is a supported state.
   }
 
+  // ── I2: the deterministic pruner, under the LOCKED drop-criteria (§15.3) ────────────────────
+  //
+  // 🔴 **Moved here — AFTER the composer — on the owner's ruling of 2026-08-20.** It used to sit
+  // between planning and composition, so that pruning never paid for wording it would throw away.
+  // Measured on the sim, that saving cost three good sections: Approach, Acceptance and Verification
+  // were deleted before the model could write them, because stage (a) judged them on FACTS and only
+  // two section kinds have fact producers at all. The composer now sees the whole plan and the
+  // pruner judges what it wrote.
+  //
+  // ⚠️ The cost of that is real and is the point: wording is produced for sections that may still be
+  // dropped by the cap. It restores exactly the composer load carried before the pruner landed.
+  //
+  // ⛔ The registry still decides. I1's ordering is an input to stage (b) and to nothing else — it
+  // cannot rescue an empty section from stage (a), and it cannot touch the floor (prohibition 18).
+  const pruned = prunePromptEnhancementSectionsV1({
+    sectionPlans: plannedSections.sectionPlans,
+    facts: plannedSections.renderedFacts ?? [],
+    relevanceOrder: request.reviewMomentContext.triggerProvenance.classifierSectionRelevanceOrder,
+    // The renderer's OWN validation, not the raw reply: a draft it will refuse must not rescue a
+    // section that then renders empty. No composer output = empty set = facts-only, as before.
+    draftedSectionIds: promptEnhancementValidatedDraftSectionIdsV1(
+      structuredComposerOutput,
+      plannedSections.sectionPlans,
+      plannedSections.renderedFacts ?? [],
+    ),
+  });
+  const planning = {
+    ...plannedSections,
+    sectionPlans: pruned.sectionPlans,
+    renderedFacts: pruned.facts,
+    // Criterion (c): the dropped sections' visible slots went with them; these did not.
+    inheritedSlotObligations: pruned.inheritedSlotObligations,
+    prunedSectionIds: pruned.droppedSectionIds,
+    floorSectionCount: pruned.floorSectionCount,
+  };
+  // A drafted section that the cap still dropped must take its CLAIM with it — the claims union is
+  // validated output-wide, so leaving it behind would reject every surviving draft too.
+  structuredComposerOutput = promptEnhancementComposerOutputForSurvivingSectionsV1(
+    structuredComposerOutput,
+    pruned.sectionPlans,
+    plannedSections.sectionPlans.filter((section) => pruned.droppedSectionIds.includes(section.sectionId)),
+  );
+
   const composeInput = {
     enhancementId,
     originalPromptText: request.sourcePrompt.text,
@@ -345,6 +420,11 @@ async function prepare(
     priorBodyId: actionRequest?.currentBodyBinding.currentBodyId,
     priorBodyRevision: actionRequest?.currentBodyBinding.bodyRevision,
     timestampMs: request.sourcePrompt.capturedAt,
+    // The sensitive-action clearance enters compose ONCE, here, and rides the same
+    // object into the action recompose below. The user-edit and use-original entry
+    // points above never receive it — absent => emit, the same fail-closed rule.
+    sensitiveActionClearance: request.reviewMomentContext.triggerProvenance.classifierSensitiveActionClearance,
+    typedSensitiveActionVerdict,
   };
   let composed = composePromptEnhancementBody({
     ...composeInput,
@@ -355,12 +435,21 @@ async function prepare(
     currentBody: candidate.currentBody,
     actionType: noPopup ? 'use_original' : undefined,
     callVisibilityMode: candidate.callVisibilityMode,
+    sensitiveActionClearance: request.reviewMomentContext.triggerProvenance.classifierSensitiveActionClearance,
+    typedSensitiveActionVerdict,
     // ONE source of truth (TI-2, 2026-08-07): the validation graph must carry the SAME
     // optionalCallAvailabilityState the composed boundary metadata carries — the result validator
     // enforces graph === metadata === boundary ('mismatched_call_visibility_state'). The composed
     // metadata already derived it correctly for every mode, including the provider-failure states
     // ('unavailable_by_provider_api'), so read it from there instead of re-deriving here.
     optionalCallAvailabilityState: candidate.composerBoundary.inputContract.callVisibilityState.optionalCallAvailabilityState,
+    // Layer 2's declaration, on the same condition as the authority self-report below: it
+    // describes the wording the model wrote, so it travels only while that wording is still the
+    // body. This is the validation the POPUP decision reads, so without it the layer would be
+    // inert on the live path however well it judges in isolation.
+    ...(candidate.callVisibilityMode === 'llm_wording'
+      ? { nounPurposes: structuredComposerOutput?.nounPurposes }
+      : {}),
     // Only meaningful while the candidate still carries the composer's wording. Once the drafts are
     // dropped below, the body is the deterministic renderer's and the composer's verdict no longer
     // describes it — passing it on would block a body the model never wrote.
@@ -709,6 +798,13 @@ function buildResult(
     ...(compositionFallbackReasonCodes.length > 0 ? { compositionFallbackReasonCodes } : {}),
     // TI-3 audit follow-up (2026-08-09) — reporting-only; emitted ONLY when the input was truncated.
     ...(additionalDetailsTruncated ? { additionalDetailsTruncated: true } : {}),
+    // I2 observability — reporting-only; emitted ONLY when the pruner actually dropped something,
+    // so absent and zero stay distinguishable. Phase 37's after-number reads this.
+    ...((planning.prunedSectionIds ?? []).length > 0 ? { prunedSectionCount: planning.prunedSectionIds!.length } : {}),
+    // Emitted WHENEVER a body exists, not only when something was pruned: phase 37 step 4 needs the
+    // floor/extras split on every body, and a body that pruned nothing is exactly the case where
+    // "was it over the cap?" is worth asking.
+    ...(planning.floorSectionCount === undefined ? {} : { floorSectionCount: planning.floorSectionCount }),
   };
 }
 

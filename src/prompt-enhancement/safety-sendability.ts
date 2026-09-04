@@ -1,4 +1,12 @@
+import { findPromptEnhancementNounPurposeFindingsV1 } from './noun-purpose-transposition.js';
+import { findPromptEnhancementInternalVocabularyLeaksV1 } from './internal-vocabulary-leak.js';
 import { findPromptEnhancementInventionViolationsV1 } from './preservation-floors.js';
+import {
+  promptEnhancementSensitiveActionClearedForTextV1,
+  isPromptEnhancementTypedSensitiveActionVerdictV1,
+  type PromptEnhancementSensitiveActionClearanceV1,
+  type PromptEnhancementTypedSensitiveActionVerdictV1,
+} from './sensitive-action-clearance.js';
 import {
   PROMPT_ENHANCEMENT_CONTRACT_VERSION,
   type PromptEnhancementActionType,
@@ -16,7 +24,7 @@ import {
 } from './contracts.js';
 
 export const PROMPT_ENHANCEMENT_CANONICAL_CONFIRMATION =
-  'Still, before you do this <specific sensitive action> you must ask me for go-ahead confirmation.';
+  'Still, before you do this <specific sensitive action> you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.';
 export const PROMPT_ENHANCEMENT_MAX_SENDABLE_BODY_CHARS = 128_000;
 
 // Declared as values so membership can be checked at runtime by consumers that read a stored
@@ -59,6 +67,21 @@ export interface PromptEnhancementSafetyValidationInput {
   currentBody: PromptEnhancementCurrentBodyV1;
   editedBodyText?: string;
   actionType?: PromptEnhancementActionType;
+  /**
+   * The classifier's sensitive-action clearance for the PROMPT this body answers (see
+   * sensitive-action-clearance.ts for the full contract). Optional and fail-closed:
+   * absent means every keyword candidate emits the confirmation exactly as today.
+   * The user-edit and use-original entry points never pass it — absence there is the
+   * same fail-closed rule, with no special case.
+   */
+  sensitiveActionClearance?: PromptEnhancementSensitiveActionClearanceV1;
+  /**
+   * The typed secret-in-prompt verdict (see sensitive-action-clearance.ts). ACCUSES only:
+   * OR-ed into confirmationRequired after the clearance gate, so a clearance can never
+   * reach it. Absent or malformed means today's behaviour exactly. The same two entry
+   * points that never receive the clearance never receive this either.
+   */
+  typedSensitiveActionVerdict?: PromptEnhancementTypedSensitiveActionVerdictV1;
   callVisibilityMode?: PromptEnhancementCallVisibilityMode;
   optionalCallAvailabilityState?: PromptEnhancementValidationGraphV1['optionalCallAvailabilityState'];
   /**
@@ -74,6 +97,12 @@ export interface PromptEnhancementSafetyValidationInput {
    * exempts a body from the deterministic rule, and omitting the field entirely leaves behaviour
    * exactly as it was. The model is trusted to accuse, never to acquit.
    */
+  /**
+   * Layer 2's declaration, as the composer stated it. Judged deterministically here: the model is
+   * never asked for a verdict on its own output. Absent means today's behaviour exactly, and a
+   * malformed entry is absent — this can add a finding, never remove one.
+   */
+  nounPurposes?: unknown;
   composerAuthoritySelfReport?: {
     generatedMode?: PromptEnhancementAuthorityMode;
     requestMode?: PromptEnhancementAuthorityMode;
@@ -204,7 +233,21 @@ const RISK_PATTERNS: readonly [PromptEnhancementSensitiveActionRiskKind, RegExp]
 
 const EXECUTION_VERB = /\b(?:run|execute|deploy|delete|remove|migrate|install|force[-\s]?push|publish|post|notify|write|modify|apply|rotate|increase|truncate|drop|karo|kar\s+do|chalao|hatao|mitao|lagao)\b|(?:करो|कर\s*दो|चलाओ|हटाओ|मिटाओ|लिखो|बदलो|કરો|કરી\s*દો|ચલાવો|કાઢી\s*નાખો|મિટાવો|લખો|બદલો)/i;
 const PLANNING_VERB = /\b(?:plan|review|compare|check|prepare|assess|evaluate|draft|discuss|list|yojana|suchi|jaanch|janch)\b|(?:योजना|समीक्षा|तुलना|जांच|जाँच|तैयार|सूची|યોજના|સમીક્ષા|તુલના|તપાસ|તૈયાર|યાદી)/i;
-const REVIEW_QUESTION_PATTERN = /\b(?:whether|safe\s+to|should\s+i|should\s+we|can\s+i|can\s+we|could\s+i|could\s+we)\b/i;
+/**
+ * The frames a developer uses to ASK ABOUT an action rather than order it.
+ *
+ * 🔴 Widened 2026-08-26, from measurement. The list covered `whether / safe to / should i|we /
+ * can i|we / could i|we`, and of seven risky questions put through it only ONE reached the planning
+ * posture. "is it a bad idea to force push over main?", "would it be risky to truncate the events
+ * table?", "what happens if i drop the sessions table?" and "do you think i should deploy this
+ * tonight?" all fell through to the execution-verb branch and were read as instructions to do the
+ * thing being asked about.
+ *
+ * ⚠️ Deliberately frames, never topics. Every entry is a way of putting a question about an action;
+ * none names an action. That is what keeps this from drifting into a keyword list for risk, which
+ * `classifyTextRiskKinds` already owns and answers correctly.
+ */
+const REVIEW_QUESTION_PATTERN = /\b(?:whether|safe\s+to|risky\s+to|dangerous\s+to|ok\s+to|okay\s+to|wise\s+to|worth\s+(?:it\s+)?to|(?:bad|good)\s+idea\s+to|should\s+i|should\s+we|i\s+should|we\s+should|can\s+i|can\s+we|could\s+i|could\s+we|what\s+happens\s+if|do\s+i\s+need\s+to|is\s+it\s+possible\s+to)\b/i;
 const UNRESOLVED_PLACEHOLDER_PATTERN = /\{\{[^}]{1,80}\}\}|\[[A-Z][A-Z0-9 _-]{2,80}\]|<[^>\n]{2,80}>/;
 
 /**
@@ -246,10 +289,21 @@ export function validatePromptEnhancementSafety(
   const generatedSourceRefIds = generatedSourceRefs(input.currentBody);
   const affectedActionIds = input.actionType ? [`${input.currentBody.currentBodyId}:action:${input.actionType}`] : [];
 
-  const sensitiveActionFindings = classifySensitiveActions(input.currentBody, generatedBodyText, affectedActionIds);
+  // Built ONCE, with the naming resolved from the same typed verdict the composer resolved it
+  // from, then CARRIED to every site that must remove or match this exact sentence — the two
+  // escalation strippers and the parity check below. A per-site rebuild would mismatch the
+  // moment a resolved name differs from the keyword derivation, silently, per call.
+  const expectedConfirmation = buildPromptEnhancementCanonicalConfirmation(
+    input.currentBody.originalPromptText,
+    resolvePromptEnhancementSensitiveActionNamingV1(input.currentBody.originalPromptText, input.typedSensitiveActionVerdict),
+  );
+  const sensitiveActionFindings = classifySensitiveActions(input.currentBody, generatedBodyText, affectedActionIds, input.sensitiveActionClearance, expectedConfirmation);
   const generatedVoicePolicyText = sourceLiteralAwareVoicePolicyText(generatedBodyText);
-  const confirmationRequired = sensitiveActionFindings.some((finding) => finding.requiresConfirmation);
-  const expectedConfirmation = buildPromptEnhancementCanonicalConfirmation(input.currentBody.originalPromptText);
+  // The combined emit rule, both recall sources: emit = (keywordCandidate && !cleared) || typed.
+  // The typed verdict is OR-ed AFTER the clearance gate (which lives inside the findings) —
+  // it comes from the one precise typed detector and no clearance may reach it.
+  const confirmationRequired = sensitiveActionFindings.some((finding) => finding.requiresConfirmation)
+    || isPromptEnhancementTypedSensitiveActionVerdictV1(input.typedSensitiveActionVerdict);
   const confirmationPresent = hasCanonicalConfirmation(bodyText, expectedConfirmation);
   const confirmationContradicted = confirmationPresent &&
     confirmationBypassPresent(generatedBodyText, expectedConfirmation);
@@ -272,7 +326,7 @@ export function validatePromptEnhancementSafety(
 
   if (
     !suppressEditContentJudgements
-    && (generatedEscalatesAuthority(input.currentBody.originalPromptText, generatedBodyText)
+    && (generatedEscalatesAuthority(input.currentBody.originalPromptText, generatedBodyText, expectedConfirmation)
       || composerReportsEscalation(input.currentBody.originalPromptText, input.composerAuthoritySelfReport))
   ) {
     failures.push(failure({
@@ -315,7 +369,11 @@ export function validatePromptEnhancementSafety(
     for (const section of input.currentBody.sections) {
       if (!section.slotObligations.includes('no_invention_state')) continue;
       const inventions = findPromptEnhancementInventionViolationsV1({
-        sectionText: section.bodyText,
+        // The canonical confirmation is CODE-inserted, never model text — and its naming half
+        // ("git history or branch change") reads as a command shape to the extractors. The same
+        // carried-string rule as the escalation strippers applies: remove exactly the sentence
+        // that was inserted before scanning what the model actually wrote.
+        sectionText: section.bodyText.replace(expectedConfirmation, ''),
         // GR-1: a value the BOUNDARY resolved was supplied — by a local probe or
         // the store rather than by the prompt — so it is grounding, not invention.
         allowedTexts: [
@@ -362,6 +420,63 @@ export function validatePromptEnhancementSafety(
       affectedSourceRefIds: generatedSourceRefIds,
       affectedActionIds,
     }));
+  }
+
+  // The internal-vocabulary leak: a sibling of the metadata-id check above, never a replacement
+  // for it — that one blocks rendered ids (sourceRefs, sectionIds, factIds, spanRefs); this one
+  // blocks the UNION vocabulary (obligations, section kinds, fact-line enum values), which is
+  // what every measured specimen leaked. Raw identifiers only, and an identifier the developer
+  // wrote themselves is allowed: the section's own allowed texts are the prompt and its source
+  // facts, exactly as the invention gate defines them.
+  if (!suppressEditContentJudgements) {
+    for (const section of input.currentBody.sections) {
+      if (section.sectionKind === 'original_request_or_goal') continue;
+      const leaks = findPromptEnhancementInternalVocabularyLeaksV1({
+        text: section.bodyText,
+        allowedTexts: [
+          input.currentBody.originalPromptText,
+          ...section.sourceFactIds,
+          ...section.sourceIds,
+          ...(section.groundedFactValues ?? []),
+        ],
+      });
+      for (const leak of leaks) {
+        failures.push(failure({
+          failureCode: `source_honesty:internal_vocabulary_rendered:${leak}`,
+          stage: edited ? 'user_edit' : 'final_body',
+          affectedSectionIds: [section.sectionId],
+          affectedBodySpanRefs: generatedSpanRefIds,
+          affectedSourceRefIds: generatedSourceRefIds,
+          affectedActionIds,
+          publicSafeReasonCategory: 'validation_failed',
+        }));
+      }
+    }
+  }
+
+  // Layer 2: the purpose-transposition judge. The composer declared what each noun was for in the
+  // developer's request and in its own text; the rule decides. Additive by construction.
+  if (!suppressEditContentJudgements) {
+    for (const finding of findPromptEnhancementNounPurposeFindingsV1({
+      nounPurposes: input.nounPurposes,
+      originalPromptText: input.currentBody.originalPromptText,
+      // The same allowance inputs every other layer uses: what the body was allowed to ground in.
+      groundedTexts: input.currentBody.sections.flatMap((section) => [
+        ...section.sourceFactIds,
+        ...section.sourceIds,
+        ...(section.groundedFactValues ?? []),
+      ]),
+    })) {
+      failures.push(failure({
+        failureCode: `noun_purpose_transposition:${finding.kind}:${finding.noun}`,
+        stage: edited ? 'user_edit' : 'composer_output',
+        affectedSectionIds: generatedSectionIds(input.currentBody),
+        affectedBodySpanRefs: generatedSpanRefIds,
+        affectedSourceRefIds: generatedSourceRefIds,
+        affectedActionIds,
+        publicSafeReasonCategory: 'validation_failed',
+      }));
+    }
   }
 
   if (!suppressEditContentJudgements && UNRESOLVED_PLACEHOLDER_PATTERN.test(generatedBodyText)) {
@@ -530,8 +645,17 @@ export function requiresPromptEnhancementConfirmation(
   return classifySensitiveActions(currentBody, '').some((finding) => finding.requiresConfirmation);
 }
 
-export function requiresPromptEnhancementExecutionConfirmationForPrompt(originalPromptText: string): boolean {
-  return classifyTextRiskKinds(originalPromptText).length > 0 && authorityModeFor(originalPromptText) === 'execute_requested';
+export function requiresPromptEnhancementExecutionConfirmationForPrompt(
+  originalPromptText: string,
+  sensitiveActionClearance?: PromptEnhancementSensitiveActionClearanceV1,
+): boolean {
+  const keywordCandidate = classifyTextRiskKinds(originalPromptText).length > 0
+    && authorityModeFor(originalPromptText) === 'execute_requested';
+  // The shared clearance gate: this function judges the PROMPT alone, which is exactly
+  // the text the classifier's verdict was computed on. Absent/invalid clearance => the
+  // candidate emits, unchanged from today.
+  return keywordCandidate
+    && !promptEnhancementSensitiveActionClearedForTextV1(originalPromptText, sensitiveActionClearance);
 }
 
 /**
@@ -559,9 +683,12 @@ export function promptEnhancementAuthorityModeForTextV1(text: string): PromptEnh
 export function promptEnhancementGeneratedBodyRequiresConfirmationV1(
   currentBody: Pick<PromptEnhancementCurrentBodyV1, 'sections' | 'originalPromptText'>,
   bodyText: string,
+  sensitiveActionClearance?: PromptEnhancementSensitiveActionClearanceV1,
+  expectedConfirmation?: string,
 ): boolean {
   const generatedBodyText = generatedOnlyText(bodyText, currentBody.originalPromptText);
-  return classifySensitiveActions(currentBody, generatedBodyText).some((finding) => finding.requiresConfirmation);
+  return classifySensitiveActions(currentBody, generatedBodyText, [], sensitiveActionClearance, expectedConfirmation)
+    .some((finding) => finding.requiresConfirmation);
 }
 
 /**
@@ -599,24 +726,59 @@ export function promptEnhancementRiskKindsForTextV1(
   return classifyTextRiskKinds(text);
 }
 
-export function buildPromptEnhancementCanonicalConfirmation(originalPromptText: string): string {
-  return `Still, before you do this ${specificSensitiveActionTextForPrompt(originalPromptText)} you must ask me for go-ahead confirmation.`;
+/**
+ * The naming half of the confirmation sentence, resolved ONCE per pipeline pass and carried.
+ *
+ * The ladder is deterministic and fail-closed at every rung: the typed verdict's label wins
+ * when the precise detector spoke (it accuses, so its name is trusted over a keyword guess);
+ * otherwise the keyword phrase derivation, whose own empty case is the generic fallback.
+ * Resolving here and passing the RESULT down is load-bearing, not style: the sentence is
+ * stripped back out of the body by exact substring before the escalation scanners run, so a
+ * site that re-derived the naming with different inputs would build a different sentence,
+ * miss the strip, and scan the safety line itself as model-written text.
+ */
+export function resolvePromptEnhancementSensitiveActionNamingV1(
+  originalPromptText: string,
+  typedSensitiveActionVerdict?: PromptEnhancementTypedSensitiveActionVerdictV1,
+): string {
+  return isPromptEnhancementTypedSensitiveActionVerdictV1(typedSensitiveActionVerdict)
+    ? typedSensitiveActionVerdict.actionLabel
+    : specificSensitiveActionTextForPrompt(originalPromptText);
+}
+
+export function buildPromptEnhancementCanonicalConfirmation(originalPromptText: string, namedAction?: string): string {
+  const action = namedAction !== undefined && namedAction.trim().length > 0
+    ? namedAction
+    : specificSensitiveActionTextForPrompt(originalPromptText);
+  return `Still, before you do this ${action} you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.`;
 }
 
 function classifySensitiveActions(
   currentBody: Pick<PromptEnhancementCurrentBodyV1, 'sections' | 'originalPromptText'>,
   generatedBodyText: string,
   affectedActionIds: readonly string[] = [],
+  sensitiveActionClearance?: PromptEnhancementSensitiveActionClearanceV1,
+  // The CARRIED sentence (§ the naming resolver's doc): callers that composed with a resolved
+  // naming pass the exact string, so the strip below removes what was actually inserted.
+  // Absent => the prompt-only rebuild, which is byte-identical whenever no name was resolved.
+  expectedConfirmation?: string,
 ): readonly PromptEnhancementSensitiveActionFinding[] {
   const findings = new Map<PromptEnhancementSensitiveActionRiskKind, PromptEnhancementSensitiveActionFinding>();
   const originalAuthority = authorityModeFor(currentBody.originalPromptText);
   const sections = currentBody.sections.filter((section) => section.sectionKind !== 'original_request_or_goal');
-  const generatedRiskText = generatedBodyText.replace(buildPromptEnhancementCanonicalConfirmation(currentBody.originalPromptText), '');
+  const generatedRiskText = generatedBodyText.replace(expectedConfirmation ?? buildPromptEnhancementCanonicalConfirmation(currentBody.originalPromptText), '');
   const generatedAuthority = authorityModeFor(generatedRiskText);
-  const textByRisk = `${stripLiteralBlocks(currentBody.originalPromptText)}\n${stripLiteralBlocks(generatedRiskText)}`;
+  const promptRiskText = stripLiteralBlocks(currentBody.originalPromptText);
+  const textByRisk = `${promptRiskText}\n${stripLiteralBlocks(generatedRiskText)}`;
 
   for (const [riskKind, pattern] of RISK_PATTERNS) {
     if (!pattern.test(textByRisk)) continue;
+    // Semantic scope of the clearance: the classifier's verdict was computed on the PROMPT,
+    // so it may suppress only a candidate whose risk pattern matches the prompt text alone.
+    // A pattern matching only the generated-body portion was never seen by the classifier —
+    // its verdict says nothing about it, and that confirmation STAYS.
+    const cleared = pattern.test(promptRiskText)
+      && promptEnhancementSensitiveActionClearedForTextV1(promptRiskText, sensitiveActionClearance);
     const authorityMode: PromptEnhancementAuthorityMode = generatedAuthority === 'execute_requested' &&
       (originalAuthority === 'plan_or_review' || /\bdo\s+not\s+run\b/i.test(currentBody.originalPromptText))
       ? 'execute_generated_escalation'
@@ -636,7 +798,8 @@ function classifySensitiveActions(
     findings.set(riskKind, {
       riskKind,
       authorityMode,
-      requiresConfirmation: authorityMode === 'execute_requested' || authorityMode === 'execute_generated_escalation',
+      requiresConfirmation: (authorityMode === 'execute_requested' || authorityMode === 'execute_generated_escalation')
+        && !cleared,
       affectedSectionIds: affectedSections.map((section) => section.sectionId),
       affectedBodySpanRefs: affectedSections.flatMap((section) => section.spanRefs.map((spanRef) => spanRef.spanRefId)),
       affectedActionIds,
@@ -681,7 +844,17 @@ function authorityModeFor(text: string): PromptEnhancementAuthorityMode {
   if (/\b(?:do\s+not|don't|dont|without)\s+(?:run|execute|deploy|delete|remove|migrate|install|force[-\s]?push|publish|post|notify)\b/i.test(normalized)) {
     return PLANNING_VERB.test(normalized) ? 'plan_or_review' : 'observe_or_literal';
   }
-  if (PLANNING_VERB.test(normalized) && REVIEW_QUESTION_PATTERN.test(normalized) && EXECUTION_VERB.test(normalized)) {
+  // A QUESTION about an action is not an order to perform it.
+  //
+  // 🔴 This required a planning verb as well, and that third term is why the branch almost never
+  // fired: "should i delete the old migrations folder?" carries a question frame and an execution
+  // verb but no `plan|review|check|assess|…`, so it fell to the execution branch below and was read
+  // as an instruction to delete. Measured at 1 of 7 risky questions reaching the planning posture.
+  //
+  // The planning verb is now what it always should have been — sufficient on its own (the branch
+  // below still catches it), never required here. The two terms that matter are the question FRAME
+  // and the action being asked about.
+  if (REVIEW_QUESTION_PATTERN.test(normalized) && EXECUTION_VERB.test(normalized)) {
     return 'plan_or_review';
   }
   if (EXECUTION_VERB.test(normalized)) return 'execute_requested';
@@ -772,9 +945,10 @@ function composerReportsEscalation(
   return authorityModeFor(originalPromptText) === 'plan_or_review' || report.requestMode === 'plan_or_review';
 }
 
-function generatedEscalatesAuthority(originalPromptText: string, generatedBodyText: string): boolean {
+function generatedEscalatesAuthority(originalPromptText: string, generatedBodyText: string, expectedConfirmation?: string): boolean {
   const originalAuthority = authorityModeFor(originalPromptText);
-  const generatedRiskText = generatedBodyText.replace(buildPromptEnhancementCanonicalConfirmation(originalPromptText), '');
+  // Same carried-string rule as classifySensitiveActions: strip exactly what was inserted.
+  const generatedRiskText = generatedBodyText.replace(expectedConfirmation ?? buildPromptEnhancementCanonicalConfirmation(originalPromptText), '');
 
   // ── The floor ────────────────────────────────────────────────────────────────────────────────
   // Consulted FIRST, its own match is sufficient, and it asks "did the user ask for the dangerous
@@ -919,7 +1093,7 @@ function specificSensitiveActionTextForPrompt(originalPromptText: string): strin
       case 'production_release_or_external_effect':
         if (hasDataOrSchemaAction && !hasExplicitReleaseVerb) return [];
         if (/\b(?:post|notify|customer|external)\b/.test(normalized)) return ['public or customer-facing communication'];
-        return ['production deploy or release'];
+        return ['production release or rollout'];
       case 'secret_env_or_credential':
         return ['referenced credential or environment change'];
       case 'dependency_or_toolchain_change':

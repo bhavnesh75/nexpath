@@ -15,7 +15,7 @@
  *    terminal command completes the flow; Esc on PEF skips straight to the
  *    terminal. Esc on the PE surface itself closes IMMEDIATELY with no PEF —
  *    the CLI's shipped rule ("Feedback opens ONLY when the user chooses Use
- *    original prompt", cli-submit-popup.ts:1469-1471; its §8.3 comment is
+ *    original prompt", cli-submit-popup.ts:1469-1471; its 'every cancel' comment is
  *    stale). PEF renders the CLI's full three rows — the two categories AND
  *    the free-text "Other" (PE-BR-11 closed 2026-08-25: typed feedback
  *    persists via the browser feedback store, host-side).
@@ -48,6 +48,9 @@ import {
 import { fieldScroller } from './surfaces/surface-view.js';
 import { BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER } from './surfaces/fixtures/pe.js';
 import { PEF_FOOTER } from './surfaces/fixtures/pef.js';
+import {
+  RATING_LABEL, RATING_QUESTION, RATING_FOOTER, ratingRows,
+} from './surfaces/fixtures/rating.js';
 import { MPS_FIRST_FOOTER } from './surfaces/fixtures/mps.js';
 
 const PEF_CATEGORY_BY_LABEL: Record<string, 'not_relevant_enough' | 'too_much_or_too_long'> = {
@@ -222,6 +225,27 @@ export function pefSurfaceModel(): SurfaceModel {
   };
 }
 
+/**
+ * The advisory rating surface — the CLI's `runFeedbackPopup`
+ * (`decision-session/feedback-popup.ts`) as a dock surface: four scores worst →
+ * best, the transparency note above them, and a footer that makes clear
+ * skipping is free.
+ *
+ * Wholly static, unlike its three siblings here — nothing about it varies with
+ * the view — so the content lives in `fixtures/rating.ts` beside the CLI
+ * quotations, and this builds a FRESH model per call rather than handing out
+ * one shared object a caller could mutate.
+ */
+export function ratingSurfaceModel(): SurfaceModel {
+  return {
+    id: 'advisory_rating',
+    label: RATING_LABEL,
+    pinch: RATING_QUESTION,
+    rows: ratingRows(),
+    footer: RATING_FOOTER,
+  };
+}
+
 // ── the adapter ────────────────────────────────────────────────────────────────
 
 export interface PeDockAdapterOptions {
@@ -281,6 +305,21 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
     bodyText: string,
   ): { model: SurfaceModel } | 'refuse' | null => {
     if (row.kind === 'note') return 'refuse';
+
+    if (model.id === 'advisory_rating') {
+      // Same structure as the PEF block below — match on the surface, emit, and
+      // `refuse` so the controller's own branch never also fires. One
+      // difference, and it is deliberate: PEF maps its LABEL to a category
+      // (`PEF_CATEGORY_BY_LABEL`), while the score is read off the ROW. See
+      // `SurfaceRow`'s `rating` — a reworded label must not be able to move it.
+      //
+      // A row without a score is refused rather than guessed at: it would send
+      // a number nobody chose.
+      if (row.kind === 'action' && typeof row.rating === 'number') {
+        emitCommand({ type: 'rating', rating: row.rating });
+      }
+      return 'refuse';
+    }
 
     if (model.id === 'prompt_enhancement_feedback') {
       if (row.kind === 'action') {
@@ -357,7 +396,7 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
         // Esc on the PE surface = the CLI's immediate close: "Feedback opens
         // ONLY when the user chooses Use original prompt … Close / Esc / crash
         // send nothing and show no feedback" (cli-submit-popup.ts:1469-1471 —
-        // the shipped code; the §8.3 'every cancel' comment there is stale).
+        // the shipped code; the 'every cancel' comment there is stale).
         emitCommand({ type: 'close' });
         return;
       case 'declined':
@@ -367,8 +406,18 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       case 'feedback-skipped':
         completePending();
         return;
+      case 'rating-skipped':
+        // Esc on the rating surface. There is no "skipped" command and none is
+        // needed: not answering is the same outcome as closing the window, and
+        // `close` already says that. The worker distinguishes the two by which
+        // command arrives — `rating` or `close`.
+        emitCommand({ type: 'close' });
+        return;
       default:
-        return; // send/use-original/cancel-sequence/feedback are hook-intercepted
+        // send/use-original/cancel-sequence/feedback/rating are hook-intercepted:
+        // `resolveActivation` handles them and returns 'refuse', so the
+        // controller returns before emitting its own event for them.
+        return;
     }
   };
 
@@ -400,7 +449,14 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
           opts.onEvent({
             type: 'command',
             viewSeq: view.viewSeq,
-            command: 'kind' in view ? { type: 'mps_decline' } : { type: 'close' },
+            // Named, not `'kind' in view`: the rating view carries a `kind` too,
+            // and the loose test would have sent `mps_decline` — a sequence
+            // decline — for a rating popup. Both commands typecheck, so nothing
+            // would have caught it. ✕ on a rating means no rating, which is
+            // exactly `close`.
+            command: 'kind' in view && view.kind === 'sequence_offer'
+              ? { type: 'mps_decline' }
+              : { type: 'close' },
           });
         }
         dock?.hide();
@@ -467,13 +523,28 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       // runs in the same task, so no intermediate frame ever paints.
       d.show();
       surfaces?.destroy();
-      const isOffer = 'kind' in v;
-      const registry = isOffer
-        ? { mps_first: mpsSurfaceModel(v), prompt_enhancement_feedback: pefSurfaceModel() }
-        : { prompt_enhancement: peSurfaceModel(v), prompt_enhancement_feedback: pefSurfaceModel() };
+      // Three view shapes now, so the discriminant names the one it means.
+      // The rating registry holds ONE surface: it has nowhere to transition to,
+      // and giving it the PEF entry would let a stray `switchTo` open a feedback
+      // form on top of a rating.
+      // Written as ONE nested ternary on `v` itself rather than via `isOffer` /
+      // `isRating` booleans: TypeScript narrows the union through the inline
+      // checks, and through a stored boolean it does not — `peSurfaceModel(v)`
+      // stops compiling the moment the union gains a third member. Keeping the
+      // narrowing here is what makes the compiler the guard.
+      const registry = !('kind' in v)
+        ? { prompt_enhancement: peSurfaceModel(v), prompt_enhancement_feedback: pefSurfaceModel() }
+        : v.kind === 'rating'
+          // ONE surface, deliberately: a rating has nowhere to transition to,
+          // and giving it the PEF entry would let a stray `switchTo` open a
+          // feedback form on top of it.
+          ? { advisory_rating: ratingSurfaceModel() }
+          : { mps_first: mpsSurfaceModel(v), prompt_enhancement_feedback: pefSurfaceModel() };
       surfaces = createSurfaceController(d.mountEl, {
         registry,
-        initial: isOffer ? 'mps_first' : 'prompt_enhancement',
+        initial: !('kind' in v)
+          ? 'prompt_enhancement'
+          : v.kind === 'rating' ? 'advisory_rating' : 'mps_first',
         doc,
         onEvent: onSurfaceEvent,
         resolveActivation,

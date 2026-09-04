@@ -49,6 +49,7 @@ vi.mock('../adapters/pe-config.js', () => ({ resolvePePopupCooldown: vi.fn(), re
 vi.mock('../adapters/pe-sequence-store.js', () => ({ recordPendingSequence: vi.fn(), getPendingSequence: vi.fn() }));
 vi.mock('./pe-popup-host.js', () => ({
   runBrowserPePopup: vi.fn(),
+  runBrowserRatingPopup: vi.fn(),
   deliverPePanelCommand: vi.fn(),
 }));
 
@@ -74,7 +75,7 @@ const { isPromptEnhancementSequenceShapedTextV1 } = await import('./pe-engine.js
 const { getPendingPe, markPendingPeShown } = await import('../adapters/pe-pending-store.js');
 const { resolvePePopupCooldown, resolvePeSequenceEnabled } = await import('../adapters/pe-config.js');
 const { recordPendingSequence, getPendingSequence } = await import('../adapters/pe-sequence-store.js');
-const { runBrowserPePopup } = await import('./pe-popup-host.js');
+const { runBrowserPePopup, runBrowserRatingPopup } = await import('./pe-popup-host.js');
 
 const idbLoadSessionState = vi.fn();
 const idbGetProjectDetectedLanguage = vi.fn();
@@ -83,7 +84,7 @@ const idbSaveProjectDetectedLanguage = vi.fn().mockResolvedValue(undefined);
 
 const keyStoreGetKey = vi.fn();
 const keyStoreSetKey = vi.fn().mockResolvedValue(undefined);
-// D-2 advisory-surface switch (PB4), answered at the adapter layer so individual
+// Advisory-surface switch (PB4), answered at the adapter layer so individual
 // tests' keyed getKey mockImplementations never have to know about it. null =
 // the production default (PE-first, advisory surface removed); the legacy
 // response-stop describe sets 'enabled' to exercise the preserved flow.
@@ -273,6 +274,44 @@ describe('service-worker.ts', () => {
       });
       expect(tabsReloadMock).toHaveBeenCalledWith(11);
       expect(tabsReloadMock).toHaveBeenCalledWith(22);
+    });
+
+    /**
+     * The install stamp for the rating popup's lifecycle events (Phase 3, §4.2).
+     *
+     * This is a WIRE test, and it exists because the consequence of the call
+     * going missing is not "no stamp" — it is a WRONG one. `getInstalledAt`
+     * backfills at flush time, so with nothing stamped at install the
+     * `nexpath_installed` event reports the moment of the user's FIRST RATING
+     * as their install date, silently and plausibly.
+     */
+    it('⭐ stamps the install time on a fresh install', async () => {
+      const { installedListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+      installedListener({ reason: 'install' });
+
+      await vi.waitFor(() =>
+        expect(keyStoreSetKey.mock.calls.map((c) => c[0])).toContain('installed_at'));
+    });
+
+    it('stamps on UPDATE too — that is what backfills an install predating the field', async () => {
+      const { installedListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+      installedListener({ reason: 'update' });
+
+      await vi.waitFor(() =>
+        expect(keyStoreSetKey.mock.calls.map((c) => c[0])).toContain('installed_at'));
+    });
+
+    it('does not re-stamp when a stamp is already there', async () => {
+      keyStoreGetKey.mockImplementation(async (name: string) =>
+        name === 'installed_at' ? '1700000000000' : null);
+      const { installedListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+      installedListener({ reason: 'update' });
+
+      await vi.waitFor(() => expect(tabsQueryMock).toHaveBeenCalled());   // the listener ran
+      expect(keyStoreSetKey.mock.calls.map((c) => c[0])).not.toContain('installed_at');
     });
 
     it('reloads agent tabs on fresh install too (any onInstalled = new generation)', async () => {
@@ -680,6 +719,21 @@ describe('service-worker.ts', () => {
       expect(logDebugMock).toHaveBeenCalledWith('prompt_submit_deduped', expect.objectContaining({ projectRoot: 'https://bolt.new' }));
     });
 
+    it('dedups a whitespace-variant echo of the same prompt within the window (F1, live 2026-08-29)', async () => {
+      // The "Use enhanced" flow: the prompt-injected marker stores the panel's
+      // text, then the capture channels re-read the SAME submission with drifted
+      // whitespace (composer innerText vs fetch body). Exact `===` let it through
+      // and the turn was billed twice — 1312 vs 1320 input tokens, live on Bolt.
+      mockDedupRecord({ text: 'My original request:\nAdd a hero section\n\ncomponent', at: 900 });
+      const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+      const sendResponse = submit(messageListener, 'My original request:\n\nAdd a hero section component\n');
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ ok: true }));
+      expect(classifyPrompt).not.toHaveBeenCalled();
+      expect(mgrProcessPrompt).not.toHaveBeenCalled();
+      expect(logDebugMock).toHaveBeenCalledWith('prompt_submit_deduped', expect.objectContaining({ projectRoot: 'https://bolt.new' }));
+    });
+
     it('processes normally when the text differs and records the new prompt', async () => {
       mockDedupRecord({ text: 'Add a hero section component', at: 900 });
       const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
@@ -1046,7 +1100,7 @@ describe('service-worker.ts', () => {
     });
   });
 
-  describe('prompt-enhancement prepare wiring (PB3 — mirrors auto.ts fired path + §4.6 sequence fallback)', () => {
+  describe('prompt-enhancement prepare wiring (PB3 — mirrors auto.ts fired path + sequence fallback)', () => {
     const SEQ = 'first build the login page, then add a database, then deploy the whole thing';
     function mockKeyStorePe(apiKey: string | null, freq: string | null, role: string | null): void {
       keyStoreGetKey.mockResolvedValueOnce(apiKey).mockResolvedValueOnce(freq).mockResolvedValueOnce(role);
@@ -1263,7 +1317,7 @@ describe('service-worker.ts', () => {
 
   describe('response-stop shows the queued advisory (CLI popup-on-Stop timing)', () => {
     // These tests pin the LEGACY advisory flow, which PB4 kept byte-identical
-    // behind the D-2 switch — so they run with the switch 'enabled'. The
+    // behind the advisory-surface switch — so they run with the switch 'enabled'. The
     // PE-first default is pinned in its own describe below.
     beforeEach(() => { advisoryLegacySwitch.value = 'enabled'; });
     const P = 'https://replit.com';
@@ -1347,7 +1401,7 @@ describe('service-worker.ts', () => {
       generatedDescBases: { l1: ['rb1'], l2: ['rb2'], l3: ['rb3'] },
     } as unknown as Awaited<ReturnType<typeof generateOptionList>>;
 
-    it('detects the prompt language at STOP (stop.ts §1.5), persists it, and generates options in it', async () => {
+    it('detects the prompt language at STOP (stop.ts parity), persists it, and generates options in it', async () => {
       // CLI parity: tinyld runs over the recent-prompt window once >= LANG_DETECT_INTERVAL
       // prompts exist. Unambiguously-Spanish window → generateOptionList gets 'es', and the
       // detected code is persisted so later submits localise too (auto.ts reads it).
@@ -1582,7 +1636,7 @@ describe('service-worker.ts', () => {
     });
   });
 
-  describe('PE-first response-stop (PB4 — the D-2 default, mirrors the CLI PE branch of stop.ts)', () => {
+  describe('PE-first response-stop (PB4 — the default, mirrors the CLI PE branch of stop.ts)', () => {
     const P = 'https://bolt.new/~/p1';
     const PENDING_KEY = `nexpath_pending_advisory::${P}`;
     const OG_KEY = `nexpath_pending_advisory_og::${P}`;
@@ -1608,6 +1662,96 @@ describe('service-worker.ts', () => {
       vi.mocked(markPendingPeShown).mockResolvedValue(undefined);
       vi.mocked(recordPendingSequence).mockResolvedValue(undefined);
       vi.mocked(getPendingSequence).mockResolvedValue(null);
+      vi.mocked(runBrowserRatingPopup).mockResolvedValue({ state: 'not_shown', reasonCodes: ['x'] });
+    });
+
+    /**
+     * The rating gate (Phase 5, item #14). Cadence is empty in every other test
+     * here, so the gate is skipped and nothing else in this file changes.
+     */
+    describe('rating popup gate', () => {
+      /** Enough banked usage that `isFeedbackEligible` says yes. */
+      const eligible = (extra: Record<string, string> = {}) => {
+        keyStoreGetKey.mockImplementation(async (name: string) => {
+          if (name === 'feedback_active_ms') return String(3 * 60 * 60 * 1000);
+          if (name === 'feedback_last_activity_at') return String(Date.now());
+          return extra[name] ?? null;
+        });
+      };
+
+      it('⭐ eligible: the rating is shown, PE is DEFERRED, and the pending row is left intact', async () => {
+        eligible();
+        idbLoadSessionState.mockResolvedValue({ sessionId: 's1', promptCount: 9 });
+        vi.mocked(getPendingPe).mockResolvedValue(peRecord as never);
+        vi.mocked(runBrowserRatingPopup).mockResolvedValue({ state: 'rated', rating: 3 });
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        stopPe(messageListener, 7);
+
+        await vi.waitFor(() => expect(runBrowserRatingPopup).toHaveBeenCalledTimes(1));
+        expect(runBrowserPePopup).not.toHaveBeenCalled();          // PE deferred one turn
+        expect(vi.mocked(markPendingPeShown)).not.toHaveBeenCalled(); // ...row untouched
+        expect(vi.mocked(getPendingPe)).not.toHaveBeenCalled();     // gate is BEFORE that section
+      });
+
+      it('a dismissal also takes the turn — the dock is mount-once', async () => {
+        eligible();
+        vi.mocked(getPendingPe).mockResolvedValue(peRecord as never);
+        vi.mocked(runBrowserRatingPopup).mockResolvedValue({ state: 'dismissed' });
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        stopPe(messageListener, 7);
+
+        await vi.waitFor(() => expect(runBrowserRatingPopup).toHaveBeenCalledTimes(1));
+        expect(runBrowserPePopup).not.toHaveBeenCalled();
+      });
+
+      it('⭐ not_shown falls THROUGH to the PE popup — nothing is lost', async () => {
+        eligible();
+        idbLoadSessionState.mockResolvedValue({ sessionId: 's1', promptCount: 9 });
+        vi.mocked(getPendingPe).mockResolvedValue(peRecord as never);
+        vi.mocked(runBrowserRatingPopup).mockResolvedValue({ state: 'not_shown', reasonCodes: ['panel_unreachable'] });
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        stopPe(messageListener, 7);
+
+        await vi.waitFor(() => expect(runBrowserPePopup).toHaveBeenCalledTimes(1));
+      });
+
+      it('not eligible: the rating is never opened and PE runs as before', async () => {
+        idbLoadSessionState.mockResolvedValue({ sessionId: 's1', promptCount: 9 });
+        vi.mocked(getPendingPe).mockResolvedValue(peRecord as never);
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        stopPe(messageListener, 7);
+
+        await vi.waitFor(() => expect(runBrowserPePopup).toHaveBeenCalledTimes(1));
+        expect(runBrowserRatingPopup).not.toHaveBeenCalled();
+      });
+
+      it('⭐ the gate runs AFTER the advisory consume — the advisory is not left for another turn', async () => {
+        eligible({ [PENDING_KEY]: '{"advisoryId":"a1"}' });
+        vi.mocked(runBrowserRatingPopup).mockResolvedValue({ state: 'rated', rating: 4 });
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        stopPe(messageListener, 7);
+
+        await vi.waitFor(() => expect(runBrowserRatingPopup).toHaveBeenCalledTimes(1));
+        expect(keyStoreSetKey).toHaveBeenCalledWith(PENDING_KEY, '');
+      });
+
+      
+
+      it('with no tab there is nothing to render into, so the gate is skipped', async () => {
+        eligible();
+        vi.mocked(getPendingPe).mockResolvedValue(null);
+        const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+
+        messageListener({ type: 'nexpath:response-stop', projectRoot: P, agent: 'replit' }, {}, vi.fn());
+
+        await vi.waitFor(() => expect(vi.mocked(getPendingPe)).toHaveBeenCalled());
+        expect(runBrowserRatingPopup).not.toHaveBeenCalled();
+      });
     });
 
     it('consumes a queued advisory SILENTLY (MPS-7: the advisory surface is removed by default)', async () => {
@@ -1781,7 +1925,7 @@ describe('service-worker.ts', () => {
       expect(runBrowserPePopup).not.toHaveBeenCalled();
     });
 
-    it('the D-2 switch read is exact-equality: any other value stays PE-first (A9)', async () => {
+    it('the switch read is exact-equality: any other value stays PE-first (A9)', async () => {
       advisoryLegacySwitch.value = 'true'; // truthy but NOT the exact sentinel
       idbLoadSessionState.mockResolvedValue({ sessionId: 's1', promptCount: 9 });
       vi.mocked(getPendingPe).mockResolvedValue(peRecord as never);
@@ -2694,6 +2838,85 @@ describe('service-worker.ts', () => {
       expect(shouldFireStage2).not.toHaveBeenCalled();
       expect(runStage2).not.toHaveBeenCalled();
       expect(keyStoreSetKey).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * The rating-popup cadence heartbeats (Phase 1, item #18).
+   *
+   * These exist because deleting the call from the worker left the whole suite
+   * green: the adapter is well covered on its own, and nothing observed whether
+   * the worker ever calls it. A cadence that is never fed simply never reaches
+   * its threshold, and the popup silently never appears — the quietest possible
+   * failure. So these assert the WIRE, not the arithmetic.
+   *
+   * Two of the three are NEGATIVE. Where the heartbeat must NOT fire, an extra
+   * call is just as silent as a missing one: the numbers still move, they are
+   * simply wrong, and the popup comes due earlier than the CLI would ask.
+   */
+  describe('rating cadence heartbeats', () => {
+    const cadenceWrites = (): string[] => keyStoreSetKey.mock.calls
+      .map((c) => c[0] as string)
+      .filter((k) => k.startsWith('feedback_'));
+
+    it('a genuine prompt submit records activity', async () => {
+      const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+      const sendResponse = vi.fn();
+
+      messageListener(
+        { type: 'nexpath:prompt-submit', promptText: 'hi', projectRoot: 'https://replit.com', agent: 'replit', tabId: 7 },
+        {},
+        sendResponse,
+      );
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ ok: true }));
+
+      expect(cadenceWrites()).toContain('feedback_active_ms');
+      expect(cadenceWrites()).toContain('feedback_last_activity_at');
+    });
+
+    it('⭐ a response stop does NOT — stop is the READ side, exactly as in the CLI', async () => {
+      // The CLI has ONE production `recordActivity` call site, the submit hook
+      // (auto.ts:938); stop consumes instead (stop.ts:513,530 — isFeedbackEligible
+      // / markFeedbackShown). Feeding on stop as well counts one slow turn twice:
+      // a prompt→stop→prompt spanning 20 minutes in two 10-minute halves banks
+      // both halves, where the CLI sees a single 20-minute gap and discards it as
+      // an idle break past IDLE_CAP_MS.
+      const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+      const sendResponse = vi.fn();
+
+      messageListener(
+        { type: 'nexpath:response-stop', projectRoot: 'https://replit.com', agent: 'replit', tabId: 1 },
+        {},
+        sendResponse,
+      );
+
+      // The stop handler is DETACHED (`void handleResponseStop(...)`) and acks
+      // before it starts, so an immediate assertion would pass on a handler that
+      // has not run yet. Wait for a write this path DOES make, then check that no
+      // cadence write rode along with it.
+      await vi.waitFor(() => expect(keyStoreGetKey).toHaveBeenCalledWith('nexpath_advisory_legacy_surface'));
+      expect(cadenceWrites()).toEqual([]);
+    });
+
+    it('⭐ a DUPLICATE submit does not — the extension must not inflate the usage it measures', async () => {
+      // The dedup guard returns before the heartbeat, which is why the call sits
+      // below it (mirroring auto.ts:936-938 sitting below the injected-prompt guard).
+      // An enhanced prompt we injected ourselves comes back through this path.
+      keyStoreGetKey.mockImplementation(async (name: string) =>
+        name.startsWith('nexpath_last_prompt::')
+          ? JSON.stringify({ text: 'hi', at: Date.now() })
+          : null);
+      const { messageListener } = await importFreshServiceWorker({ hasDocument: hasDocumentMock, createDocument: createDocumentMock });
+      const sendResponse = vi.fn();
+
+      messageListener(
+        { type: 'nexpath:prompt-submit', promptText: 'hi', projectRoot: 'https://replit.com', agent: 'replit', tabId: 7 },
+        {},
+        sendResponse,
+      );
+      await vi.waitFor(() => expect(sendResponse).toHaveBeenCalledWith({ ok: true }));
+
+      expect(cadenceWrites()).toEqual([]);
     });
   });
 

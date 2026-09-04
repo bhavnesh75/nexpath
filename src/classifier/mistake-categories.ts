@@ -105,8 +105,12 @@ export function liveDetectors(categories: readonly MistakeCategory[]): readonly 
 
 // ── Detection helpers (channel a/b — available now) ─────────────────────────────
 
-/** Secret-shaped tokens a user might paste into a prompt (Channel a — over prompt text). */
-const SECRET_IN_TEXT =
+/**
+ * Secret-shaped tokens a user might paste into a prompt (Channel a — over prompt text).
+ * Exported as the ONE definition of "credential-shaped": the enhancement layer's
+ * known-tool gate reuses these shapes rather than keeping a second copy that could drift.
+ */
+export const SECRET_IN_TEXT =
   /\b(sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{12,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AIza[0-9A-Za-z_-]{30,})\b|-----BEGIN [A-Z ]*PRIVATE KEY|\b(api[_-]?key|secret|password|passwd|token)\b\s*[:=]\s*\S{8,}/i;
 
 /** Error / fix framing — used by the doom-loop velocity detector. */

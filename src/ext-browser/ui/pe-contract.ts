@@ -17,7 +17,7 @@
  *
  * The advisory panel's frozen `ui-contract.ts` is deliberately NOT extended —
  * that file is the UI developer's contract for panel.js; this one is
- * engine-side (decision D-5) and owned with the popup host.
+ * engine-side (a settled decision) and owned with the popup host.
  */
 
 export const PE_PANEL_SCHEMA_VERSION = 1 as const;
@@ -97,7 +97,29 @@ export interface PeSequenceOfferViewV1 {
   cancelLabel: string;
 }
 
-export type PePanelAnyViewV1 = PePanelViewV1 | PeSequenceOfferViewV1;
+/**
+ * The advisory rating surface's view.
+ *
+ * Almost empty on purpose: the surface is wholly static (its question, note,
+ * four scores and footer are constants in `ui/surfaces/fixtures/rating.ts`), so
+ * the only thing the worker has to pass is the sequence number a command echoes
+ * back. There is no body, no title and no engine state — which is also why
+ * `pefSurfaceModel`'s producer took no arguments and this one takes none either.
+ */
+export interface PeRatingViewV1 {
+  schemaVersion: typeof PE_PANEL_SCHEMA_VERSION;
+  kind: 'rating';
+  viewSeq: number;
+}
+
+/**
+ * ⚠️ `'kind' in v` is NOT a test for "is this the sequence offer" any more.
+ * Two views now carry a `kind`, so every discriminant must name the one it
+ * means — `v.kind === 'sequence_offer'`. `pe-dock-adapter.ts` used the loose
+ * form in four places; the two that decide behaviour were made explicit when
+ * this type was added (the ✕ button's command, and the surface registry).
+ */
+export type PePanelAnyViewV1 = PePanelViewV1 | PeSequenceOfferViewV1 | PeRatingViewV1;
 
 export type PePanelCommandV1 =
   | { type: 'use_current'; bodyText: string }
@@ -121,7 +143,15 @@ export type PePanelCommandV1 =
   // MPS-1 offer outcomes (valid only while a sequence-offer view is live).
   | { type: 'mps_send'; bodyText: string }
   | { type: 'mps_decline' }
-  | { type: 'mps_cancel' };
+  | { type: 'mps_cancel' }
+  /**
+   * The advisory rating surface's answer: the 1-4 score the user picked
+   * (`decision-session/feedback-popup.ts:38-43`, 1 = Bad … 4 = Excellent).
+   *
+   * There is no matching "skipped" command. Esc and the dock's ✕ both mean no
+   * rating, and both already have one: `close`.
+   */
+  | { type: 'rating'; rating: number };
 
 /** Panel → host events (same driving pattern as the advisory panel's onEvent). */
 export type PePanelEventV1 =
@@ -151,7 +181,12 @@ const COMMAND_TYPES = new Set([
   'more_thorough', 'more_project_grounded', 'go_back', 'close',
   'edit_body', 'feedback_suggested', 'feedback_other',
   'mps_send', 'mps_decline', 'mps_cancel',
+  'rating',
 ]);
+
+/** The CLI's scale is 1..4 and nothing else — `feedback-popup.ts:38-43`. */
+const RATING_MIN = 1;
+const RATING_MAX = 4;
 const TEXT_FREE_COMMANDS = new Set(['use_original', 'go_back', 'close', 'mps_decline', 'mps_cancel']);
 const FEEDBACK_CATEGORIES = new Set(['not_relevant_enough', 'too_much_or_too_long']);
 /** The CLI's Other-feedback bound (`cli-submit-popup.ts:136`, enforced :1165). */
@@ -164,6 +199,13 @@ export function isPePanelCommandV1(value: unknown): value is PePanelCommandV1 {
   if (TEXT_FREE_COMMANDS.has(v['type'])) return true;
   if (v['type'] === 'feedback_suggested') {
     return typeof v['category'] === 'string' && FEEDBACK_CATEGORIES.has(v['category']);
+  }
+  if (v['type'] === 'rating') {
+    // Bounded here, at the trust boundary, because this number is the ONLY
+    // user-influenced value that reaches the analytics envelope. A page that
+    // forged a command must not be able to post rating 0, 99 or 1.5.
+    const r = v['rating'];
+    return typeof r === 'number' && Number.isInteger(r) && r >= RATING_MIN && r <= RATING_MAX;
   }
   if (v['type'] === 'feedback_other') {
     return typeof v['text'] === 'string'

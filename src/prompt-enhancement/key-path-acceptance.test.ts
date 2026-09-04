@@ -130,13 +130,13 @@ describe('GR-2 — the §32.3 acceptance example, corrected by §41.3', () => {
     // §41.3: that line is illegal as prompt-mined and legal from a project-owned
     // read model, so the origin has to travel with it or the model cannot tell.
     const prompt = await capturedModelPrompt([fact()]);
-    expect(prompt).toContain('origin: local_probe');
-    expect(prompt).toContain('claim: may_state_as_project_capability');
+    expect(prompt).toContain('observed in the local project');
+    expect(prompt).toContain('you may state this as something the project has');
   });
 
   it('the claim CEILING binds the model, as it binds the deterministic path', async () => {
     const prompt = await capturedModelPrompt([fact({ claimVerbPolicy: 'must_phrase_as_possibility' })]);
-    expect(prompt).toContain('claim: must_phrase_as_possibility');
+    expect(prompt).toContain('treat this as a possibility, not a fact');
     expect(prompt).toContain('Never state a fact more strongly than its claim allows');
   });
 
@@ -170,7 +170,7 @@ describe('GR-2 — the §32.3 acceptance example, corrected by §41.3', () => {
       // beside it, not by a `kind:` label, which names the fact's PURPOSE and is
       // deliberately identical for all six here.
       expect(prompt).toContain(`f-${sourceType}`);
-      expect(prompt).toContain('kind: project_grounding');
+      expect(prompt).toContain('a fact about this specific project');
     }
   });
 
@@ -183,8 +183,8 @@ describe('GR-2 — the §32.3 acceptance example, corrected by §41.3', () => {
       fact({ factId: 'f-debug', guidanceKind: 'debug_evidence', sourceType: 'absence_signal' }),
       fact({ factId: 'f-safety', guidanceKind: 'safety_or_confirmation' }),
     ]);
-    expect(prompt).toContain('kind: debug_evidence');
-    expect(prompt).toContain('kind: safety_or_confirmation');
+    expect(prompt).toContain('evidence about the problem');
+    expect(prompt).toContain('a safety point that needs confirmation');
   });
 
   it('a fact that never passed the mixer reports the confidence we ACTUALLY have', async () => {
@@ -192,9 +192,9 @@ describe('GR-2 — the §32.3 acceptance example, corrected by §41.3', () => {
     // "unknown" would report an absence of knowledge we do not have. No production
     // path reaches here unmixed; defence in depth for direct callers.
     const strong = await capturedModelPrompt([fact({ confidenceBand: undefined, sourceEvidenceState: 'strong' })]);
-    expect(strong).toContain('confidence: high');
+    expect(strong).toContain('well supported');
     const weak = await capturedModelPrompt([fact({ confidenceBand: undefined, sourceEvidenceState: 'conflicting' })]);
-    expect(weak).toContain('confidence: low');
+    expect(weak).toContain('weakly supported');
   });
 
   it.each([
@@ -462,7 +462,9 @@ describe('GR-2 — the id shown beside the evidence is the id the model may cite
 
   /** The id GR-2's block prints beside the evidence, read out of the real prompt. */
   const shownIdFromPrompt = (prompt: string): string => {
-    const line = prompt.split('\n').find((candidate) => candidate.includes('| kind:')) ?? '';
+    // The fact entry is the line that opens with the citable id; its labels are now words, so
+    // the id is located by its own shape rather than by a label that no longer exists.
+    const line = prompt.split('\n').find((candidate) => candidate.trimStart().startsWith('- guidance_fact:')) ?? '';
     return line.replace('-', '').split('|')[0]!.trim();
   };
 

@@ -1,5 +1,5 @@
 import type { AdvisoryPayload, PanelEvent } from '../../core/ports/ui.port.js';
-import type { PePanelViewV1 } from '../ui/pe-contract.js';
+import type { PePanelViewV1, PeRatingViewV1 } from '../ui/pe-contract.js';
 import { isPePanelCommandV1, type PePanelCommandV1 } from '../ui/pe-contract.js';
 
 /**
@@ -224,7 +224,25 @@ export interface PeInjectMsg {
   text: string;
 }
 
-export type SwToContentMsg = ShowAdvisoryMsg | ShowPeMsg | PeCloseMsg | PeInjectMsg | PePreparingMsg;
+/**
+ * Render the advisory rating surface. A message of its own rather than another
+ * `nexpath:show-pe` payload, because the two have nothing in common downstream:
+ * this one carries no body, cannot be re-rendered by an engine echo, and must
+ * not go through the PE panel's body/caret preservation. Change-map #11
+ * ("recommended for separation") and #12 measured the cost at one branch, one
+ * guard and one union member — which is what this is.
+ *
+ * The command comes BACK on the existing `nexpath:pe-command`: the rating is a
+ * `PePanelCommandV1` variant, and forking the command channel would fork the
+ * popup host's mailbox with it.
+ */
+export interface ShowRatingMsg {
+  type: 'nexpath:show-rating';
+  projectRoot: string;
+  payload: PeRatingViewV1;
+}
+
+export type SwToContentMsg = ShowAdvisoryMsg | ShowPeMsg | ShowRatingMsg | PeCloseMsg | PeInjectMsg | PePreparingMsg;
 
 // ── Content → Service Worker (panel event) ────────────────────────────────────
 
@@ -250,6 +268,7 @@ export type ExtensionMsg =
   | SubmitFlowEventMsg
   | SubmitDecisionRequestMsg
   | ShowPeMsg
+  | ShowRatingMsg
   | PeCloseMsg
   | PeInjectMsg;
 
@@ -346,6 +365,19 @@ export function isShowPeMsg(msg: unknown): msg is ShowPeMsg {
   return m['type'] === 'nexpath:show-pe' &&
     typeof m['projectRoot'] === 'string' &&
     typeof m['payload'] === 'object' && m['payload'] !== null;
+}
+
+export function isShowRatingMsg(msg: unknown): msg is ShowRatingMsg {
+  if (typeof msg !== 'object' || msg === null) return false;
+  const m = msg as Record<string, unknown>;
+  if (m['type'] !== 'nexpath:show-rating' || typeof m['projectRoot'] !== 'string') return false;
+  const p = m['payload'];
+  if (typeof p !== 'object' || p === null) return false;
+  // Stricter than `isShowPeMsg`, which only checks that a payload object
+  // exists: this view has exactly three fields and the content script acts on
+  // two of them, so there is nothing to gain by accepting a looser shape.
+  const v = p as Record<string, unknown>;
+  return v['kind'] === 'rating' && typeof v['viewSeq'] === 'number';
 }
 
 export function isPePreparingMsg(msg: unknown): msg is PePreparingMsg {

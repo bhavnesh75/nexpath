@@ -10,6 +10,16 @@ import {
   PROMPT_ENHANCEMENT_COST_VALIDATION_RETRY_COUNT_V1,
 } from './cost-observability.js';
 import { isPromptEnhancementLanguageConsistentV1 } from './language-consistency.js';
+import { promptEnhancementObligationDirectiveV1 } from './section-obligation-directives.js';
+import { isPromptEnhancementNounPurposeV1 } from './noun-purpose-transposition.js';
+import { textNamesKnownToolOrCredentialV1 } from './known-tool-names.js';
+import { promptEnhancementSectionPurposeV1 } from './section-relevance.js';
+import {
+  promptEnhancementGuidanceKindWordingV1,
+  promptEnhancementConfidenceWordingV1,
+  promptEnhancementOriginWordingV1,
+  promptEnhancementClaimWordingV1,
+} from './fact-line-wording.js';
 import {
   promptEnhancementExpectedSignalNamesV1,
   promptEnhancementDraftNamesItsSignalV1,
@@ -183,7 +193,7 @@ function actionWordingDirective(
 ): string {
   switch (action) {
     case 'shorter':
-      return "\n\nRecomposition style — SHORTER: make each section as concise as possible while keeping every required point, safety/confirmation, and source-signal guidance. Cut filler, never substance.";
+      return "\n\nRecomposition style — SHORTER: make each section as concise as possible while keeping every required point, safety/confirmation, and the guidance drawn from the developer's own signals. Cut filler, never substance.";
     case 'more_thorough':
       return '\n\nRecomposition style — MORE THOROUGH: add depth and completeness (specific steps, edge cases, verification) without inventing scope or adding alternative variants.';
     case 'more_project_grounded':
@@ -191,7 +201,7 @@ function actionWordingDirective(
       // were provided — an instruction to ground in something the model never
       // received. resolvedSourceFacts now exist, so it names them, and it says
       // what to do when a section genuinely has none.
-      return '\n\nRecomposition style — MORE PROJECT-GROUNDED: ground each section in its resolvedSourceFacts evidence and the cited source references; where a section has no resolvedSourceFacts, state which project fact is missing instead of inventing one.';
+      return '\n\nRecomposition style — MORE PROJECT-GROUNDED: ground each section in the project facts listed with each section and the cited source references; where a section has no project facts listed, state which project fact is missing instead of inventing one.';
     case 'apply_details':
       return `\n\nRecomposition style — APPLY DETAILS: incorporate these additional user details into the relevant sections and recompose the whole prompt to reflect them:\n${additionalDetailsText ?? ''}`;
     default:
@@ -278,6 +288,59 @@ const SYSTEM_PROMPT = [
   '- composerClaims must be the union of every sourceFactId you used, each prefixed with "claim:".',
 ].join('\n');
 
+/**
+ * Layer 2's declaration block — appended to the user prompt ONLY when the prompt names a known
+ * tool or carries a credential-shaped token (Layer 0's predicate doing double duty; no new
+ * machinery, no new call).
+ *
+ * The wording names the conflict of interest outright, because a generic "be careful" is what
+ * this design exists to avoid: the model is describing text it wrote itself, so the honest answer
+ * is the one that costs it. It is asked only to EXTRACT — never to judge whether it did wrong.
+ *
+ * RECORDED COST: a prompt whose tool the list does not know ("my auth thingy") gets no block at
+ * all, so half A is silently void for it. Acceptable only while half B still runs ungated on
+ * everything; if B is ever gated on this predicate too, this gate must be removed instead.
+ */
+/**
+ * The planning posture, as an instruction to the writer.
+ *
+ * Routing decided the developer asked ABOUT something risky rather than asking for it to be done.
+ * Without this the model writes what it always writes — steps that carry the action out — and the
+ * posture would be a flag nobody acted on.
+ */
+function planningPostureDirective(planningPosture: boolean): string {
+  if (!planningPosture) return '';
+  return [
+    '',
+    '',
+    'STANCE FOR THIS PROMPT — the developer asked ABOUT something risky, not FOR it to be done:',
+    '- Write what to check, what to weigh, and what to confirm with them before anything is done.',
+    '- Do NOT write steps that carry the risky action out, and do not tell the agent to perform it.',
+    '- Their question is the subject; answering it well is the goal, not doing the work behind it.',
+  ].join(String.fromCharCode(10));
+}
+
+function nounPurposeDeclarationBlock(originalPromptText: string): string {
+  if (!textNamesKnownToolOrCredentialV1(originalPromptText)) return '';
+  return [
+    '',
+    '',
+    'ALSO REPORT — nounPurposes (after sectionDrafts, because it describes text you have written):',
+    'For every tool, service, credential or file the developer named in their request that your',
+    'sections mention, add one entry: {"noun":"...","purposeInPrompt":null or "...","purposeInBody":"..."}.',
+    '- purposeInPrompt is the job the DEVELOPER gave that noun, quoted from their own words.',
+    '  ⛔ If they did not say what it is for, it is null. Do NOT infer a purpose, do NOT supply a',
+    '  plausible one, and do NOT copy the purpose your own text uses. A null is a correct answer.',
+    '- purposeInBody is the job YOUR text gives it, in your own words.',
+    '⚠️ You are describing text you wrote yourself, so the accurate answer may be the one that',
+    'shows your draft moved a tool from the job it was given to a different job. Report it anyway:',
+    'a missed move is far worse than a false alarm, and you are not being asked whether it was',
+    'wrong — only what the two purposes are. Something else decides.',
+    '- And while writing: do not repurpose a tool the developer mentioned for a different job than',
+    '  the one they gave it.',
+  ].join(String.fromCharCode(10));
+}
+
 function buildUserPrompt(
   originalPromptText: string,
   sections: readonly {
@@ -297,31 +360,46 @@ function buildUserPrompt(
       // the no-invention state most of all, which used to exist only as prose
       // nobody could check. A field the composer reads and a check enforces is
       // a contract; a sentence in a prompt is only an instruction.
+      // The typed slot obligations become part of the section's instruction — as WORDS. The
+      // model is never shown an obligation's name: a name it cannot act on is a name it may
+      // echo into the developer's prompt (measured: "family-specific verification" reached
+      // real bodies that way). Each obligation has exactly one directive in the composer's
+      // second person; the validator still enforces the typed contract behind it unchanged.
       const obligations = section.slotObligations ?? [];
-      const obligationLine = obligations.length > 0
-        ? `\n  slotObligations: ${JSON.stringify(obligations)}`
-        : '';
-      const noInventionLine = obligations.includes('no_invention_state')
-        ? '\n  NO-INVENTION (hard): this section may not name a tool, library, service, file, API'
-          + ' or project fact that does not appear in the original request or in an allowed source'
-          + ' fact. If the evidence is missing, ASK for it — never supply an example name.'
-        : '';
+      const directiveLines = obligations
+        .map((obligation) => promptEnhancementObligationDirectiveV1(obligation))
+        .filter((directive): directive is string => directive !== undefined)
+        .map((directive) => `\n  - ${directive}`)
+        .join('');
+      const directiveBlock = directiveLines.length > 0 ? `\n  this section must:${directiveLines}` : '';
       // GR-2 steps 1-2 + the §41.3 correction: id, kind, confidence, ORIGIN SCOPE
       // and the claim ceiling travel with the evidence. Origin is what makes the
       // vitest-class line legal — prompt-mined it is illegal, local_probe it is
       // grounded — and the claim policy is the same ceiling the deterministic
       // path obeys, so one rule set now binds both renderers.
+      // The id and the evidence VALUE are byte-identical to what the allow-list keys on; only
+      // the four labels are given as words, and a label with no words is dropped, never echoed.
       const factLines = promptEnhancementSectionModelFactsV1(section.sectionKind, renderedFacts)
-        .map((fact) => `\n    - ${fact.factId} | kind: ${fact.guidanceKind} | confidence: ${fact.confidenceBand}`
-          + ` | origin: ${fact.originScope} | claim: ${fact.claimVerbPolicy}`
-          + (fact.evidence === undefined
-            ? (fact.contentGated
-              ? ' | evidence: WITHHELD (cite the source, never state its content)'
-              : ' | evidence: NONE (nothing resolved — no hidden content to work around)')
-            : ` | evidence: ${fact.evidence}`))
+        .map((fact) => {
+          const labels = [
+            promptEnhancementGuidanceKindWordingV1(fact.guidanceKind),
+            promptEnhancementConfidenceWordingV1(fact.confidenceBand),
+            promptEnhancementOriginWordingV1(fact.originScope),
+            promptEnhancementClaimWordingV1(fact.claimVerbPolicy),
+          ].filter((wording): wording is string => wording !== undefined);
+          return `\n    - ${fact.factId}${labels.map((wording) => ` | ${wording}`).join('')}`
+            + (fact.evidence === undefined
+              ? (fact.contentGated
+                ? ' | evidence: WITHHELD (cite the source, never state its content)'
+                : ' | evidence: NONE (nothing resolved — no hidden content to work around)')
+              : ` | evidence: ${fact.evidence}`);
+        })
         .join('');
       const evidenceBlock = factLines.length > 0 ? `\n  resolvedSourceFacts:${factLines}` : '';
-      return `- sectionId: ${section.sectionId}\n  purpose: ${section.sectionKind}\n  allowedSourceFactIds: ${JSON.stringify(section.structuredContentPartRefs)}${evidenceBlock}${obligationLine}${noInventionLine}`;
+      // The purpose is the SAME sentence the relevance vocabulary carries — one map, one meaning
+      // — never the raw kind. A kind with no sentence falls back to its words, never its id.
+      const purpose = promptEnhancementSectionPurposeV1(section.sectionKind) ?? section.sectionKind.replace(/_/g, ' ');
+      return `- sectionId: ${section.sectionId}\n  purpose: ${purpose}\n  allowedSourceFactIds: ${JSON.stringify(section.structuredContentPartRefs)}${evidenceBlock}${directiveBlock}`;
     })
     .join('\n');
   return [
@@ -381,6 +459,14 @@ function parseStructuredComposerOutput(
   const rawRequestMode = obj['requestModeSelfReport'];
   const requestModeSelfReport = isPromptEnhancementAuthoritySelfReportV1(rawRequestMode) ? rawRequestMode : undefined;
 
+  // Layer 2's declaration, parsed INDEPENDENTLY: anything unexpected leaves it absent, and an
+  // absent declaration is today's behaviour. A malformed value here can never cost a valid reply
+  // its drafts, trigger a retry, or lose a body.
+  const rawNounPurposes = obj['nounPurposes'];
+  const nounPurposes = Array.isArray(rawNounPurposes)
+    ? rawNounPurposes.filter(isPromptEnhancementNounPurposeV1)
+    : undefined;
+
   return {
     outputId: `${enhancementId}:composer-llm`,
     sectionDrafts,
@@ -389,6 +475,7 @@ function parseStructuredComposerOutput(
     authorityModeSelfReport,
     authorityEvidence,
     requestModeSelfReport,
+    ...(nounPurposes !== undefined && nounPurposes.length > 0 ? { nounPurposes } : {}),
   };
 }
 
@@ -409,7 +496,10 @@ export async function composeStructuredComposerOutputV1(
     return { ok: false, reason: 'no_key' };
   }
 
-  const userPrompt = buildUserPrompt(input.originalPromptText, sections, input.planning.renderedFacts) + actionWordingDirective(input.action, input.additionalDetailsText);
+  const userPrompt = buildUserPrompt(input.originalPromptText, sections, input.planning.renderedFacts)
+    + planningPostureDirective(input.planning.planningPosture === true)
+    + nounPurposeDeclarationBlock(input.originalPromptText)
+    + actionWordingDirective(input.action, input.additionalDetailsText);
   // Malformed / empty / language-inconsistent replies retry up to the locked count
   // (§33348: retry up to 3 times). A thrown error (provider unavailable / timeout) is
   // NOT retried — fast deterministic fallback rather than repeated slow waits. On a

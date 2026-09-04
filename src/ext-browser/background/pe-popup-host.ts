@@ -44,13 +44,27 @@ import {
   type PromptEnhancementMpsFirstPopupModelV1,
 } from './pe-engine.js';
 import { recordPeFeedbackEvent, type PeFeedbackKeyStore } from '../adapters/pe-feedback-store.js';
+import { isActionKind, recordSignal } from '../adapters/lifecycle-signals.js';
 import {
   PE_PANEL_SCHEMA_VERSION,
   isPePanelCommandV1,
   type PePanelCommandV1,
   type PeSequenceOfferViewV1,
   type PePanelViewV1,
+  type PeRatingViewV1,
 } from '../ui/pe-contract.js';
+import { markFeedbackShown } from '../adapters/rating-cadence.js';
+import {
+  flushLifecycle,
+  sendRating,
+  sendRatingDismissed,
+  sendRatingOption,
+  type FetchLike,
+  type TelemetryKeyStore,
+} from '../adapters/telemetry-send.js';
+
+/** Cadence + identity + buffer + sender all read one `storage.local` adapter. */
+type RatingStore = TelemetryKeyStore;
 
 // ── Command mailbox ─────────────────────────────────────────────────────────────
 //
@@ -464,7 +478,22 @@ export async function runBrowserPePopup(
       const signalKind = promptEnhancementMpsActionSignalKindV1(
         offerOutcome === 'send' ? 'send' : offerOutcome,
       );
-      if (signalKind) log.debug('pe_action_signal', { kind: signalKind });
+      if (signalKind) {
+        log.debug('pe_action_signal', { kind: signalKind });
+        // CLI parity: `prompt-enhancement-popup-host.ts:222` records this same
+        // MPS kind rather than only logging it. Buffered locally; nothing is
+        // sent until the user consents by rating (§4.2).
+        // `isActionKind` narrows to the kinds THIS extension records. The shared
+        // producer's return type also admits `pe_shown`, which the CLI and the VS
+        // Code extension emit from a popup-shown hook the browser does not have —
+        // so it can never occur here, and recording it would add a seventeenth
+        // event to a store disclosure that promises sixteen. Drop it at the
+        // boundary rather than widen the enum: revisit when the browser gains
+        // that hook AND the disclosure is updated in the same change.
+        if (deps.feedbackStore && isActionKind(signalKind)) {
+          void recordSignal(deps.feedbackStore, signalKind, Date.now());
+        }
+      }
       if (offerOutcome === 'send') {
         return {
           result: { state: 'selected_current', bodyText: sentBody },
@@ -509,9 +538,38 @@ export async function runBrowserPePopup(
         // Drop any MPS command arriving mid-PE-loop (stale/hostile) — only the
         // offer stage may consume those.
         let received = await awaitPanelCommand();
-        while (received.type === 'mps_send' || received.type === 'mps_decline' || received.type === 'mps_cancel') {
+        // Wrong-stage commands are IGNORED here, never acted on — the same rule
+        // the MPS loop applies in the other direction.
+        //
+        // `rating` joined this list the moment it became an accepted command
+        // (Phase 4, #7). Before that the validator refused it at both gates, so
+        // it could not reach this loop at all; after it, `translate()` would have
+        // swept it into its catch-all `{ type: 'close' }` and CLOSED the PE
+        // popup, throwing away the user's enhanced prompt. A rating belongs to
+        // the rating surface and means nothing here.
+        const WRONG_STAGE = new Set(['mps_send', 'mps_decline', 'mps_cancel', 'rating']);
+        while (WRONG_STAGE.has(received.type)) {
           log.debug('pe_command_ignored_wrong_stage', { projectRoot, type: received.type });
           received = await awaitPanelCommand();
+        }
+        // The details merge — the one user action whose signal the browser was
+        // losing.
+        //
+        // In the CLI, Enter on "Additional details" sends `apply_details`, which
+        // the engine maps to `pe_apply_details`
+        // (`cli-submit-popup.ts:64-73`). The browser's dock merges LOCALLY and
+        // sends `edit_body` instead (`pe-dock-adapter.ts:393`), and `edit_body`
+        // is deliberately NOT in that map — in the CLI it is an inline body edit,
+        // which would emit a signal per keystroke-commit.
+        //
+        // So the signal has to be recorded HERE, where the browser knows the
+        // command means a details merge and nothing else: `:393` is the only
+        // panel-side emitter of `edit_body`, and it sits in `case 'apply-details'`.
+        // Same kind the CLI records, so the two surfaces report the same action
+        // under the same name.
+        if (received.type === 'edit_body' && deps.feedbackStore) {
+          void recordSignal(deps.feedbackStore, 'pe_apply_details', Date.now());
+          log.debug('pe_action_signal', { kind: 'pe_apply_details' });
         }
         const { first, stash } = translate(received, view);
         if (stash) stashed = stash;
@@ -539,7 +597,22 @@ export async function runBrowserPePopup(
         reasonCodes: event.reasonCodes.slice(0, 8),
       }),
       // NF Plan B: content-free per-action signals (kind + timestamp only).
-      actionSignalSink: (kind, occurredAt) => log.debug('pe_action_signal', { kind, occurredAt }),
+      //
+      // CLI parity: the sink is wired to the STORE, not just the log —
+      // `auto.ts:841`, `prompt-enhancement-popup-host.ts:216`, `:259`,
+      // `stop.ts:817`, `:899` all do `recordActionSignal(store, …, kind,
+      // occurredAt)`. The log stays because it was already there.
+      //
+      // Buffering is not sending: these sit in storage.local until the user
+      // clicks a rating, which is this extension's consent moment (§4.2). The
+      // kind is a fixed UI-action enum — no prompt or option text.
+      actionSignalSink: (kind, occurredAt) => {
+        log.debug('pe_action_signal', { kind, occurredAt });
+        // Same narrowing as above — see the comment at the MPS outcome sink.
+        if (deps.feedbackStore && isActionKind(kind)) {
+          void recordSignal(deps.feedbackStore, kind, occurredAt);
+        }
+      },
     });
     if (suppressedUneditable) {
       log.debug('pe_popup_suppressed_uneditable_body', { projectRoot });
@@ -551,6 +624,139 @@ export async function runBrowserPePopup(
     return { result, mpsFirstPopupSent: false };
   } finally {
     closePanel();
+    mailboxes.delete(projectRoot);
+  }
+}
+
+
+// ── The advisory rating popup ───────────────────────────────────────────────────
+
+export interface BrowserRatingPopupDeps {
+  log: LogPort;
+  projectRoot: string;
+  /** Same transport the PE popup uses — `browser.tabs.sendMessage(tabId, …)`. */
+  sendToTab: (msg: unknown) => Promise<unknown>;
+  /** Cadence, identity, signal buffer and the sender all read this one store. */
+  store: RatingStore;
+  /** Injected in tests so the real envelope builder runs against a fake wire. */
+  fetch?: FetchLike;
+  now?: () => number;
+}
+
+export type BrowserRatingOutcome =
+  | { state: 'rated'; rating: number }
+  | { state: 'dismissed' }
+  | { state: 'not_shown'; reasonCodes: string[] };
+
+/**
+ * Show the rating surface and act on the answer — the browser's
+ * `stop.ts:513-534`, which is where the CLI reads cadence and shows its own
+ * feedback popup.
+ *
+ * ── WHY THIS SHARES THE PE MAILBOX (§4.1 M1, M2) ────────────────────────────
+ *
+ * Item #7 put `rating` on `PePanelCommandV1`, so a rating click travels the
+ * EXISTING `nexpath:pe-command` route into `deliverPePanelCommand` — which
+ * drops anything whose echoed `viewSeq` does not match `box.expectedSeq`. So the
+ * view has to carry a seq and the box has to expect it before the push, or every
+ * click logs `pe_command_stale` and nothing happens.
+ *
+ * And it must be the SAME `mailboxes` map, not a second one: `isPePopupOpen` is
+ * `mailboxes.has(root)`, the dock is mount-once, and two maps would let a rating
+ * and a PE popup open onto one dock and clobber each other.
+ *
+ * ── WHAT IT DOES NOT DO ─────────────────────────────────────────────────────
+ *
+ * No timeout of its own. The CLI's popup waits for the user indefinitely, and so
+ * does this; if the tab goes away the panel's keepalive stops, the service
+ * worker is torn down, and the map goes with it (§4.1 M4 — the panel already
+ * owns teardown, do not rebuild it here).
+ */
+export async function runBrowserRatingPopup(
+  deps: BrowserRatingPopupDeps,
+): Promise<BrowserRatingOutcome> {
+  const { log, projectRoot, store } = deps;
+  const now = deps.now ?? (() => Date.now());
+
+  // §4.1 M2 — one surface per root, through the one map.
+  if (mailboxes.has(projectRoot)) {
+    log.debug('rating_popup_already_open', { projectRoot });
+    return { state: 'not_shown', reasonCodes: ['popup_already_open'] };
+  }
+
+  const box: Mailbox = { expectedSeq: 0, waiter: null, queued: null };
+  mailboxes.set(projectRoot, box);
+
+  try {
+    // One view, one seq. §4.1 M1: expected BEFORE the push, or the reply that
+    // comes back is dropped as stale.
+    const viewSeq = 1;
+    box.expectedSeq = viewSeq;
+    box.queued = null;
+
+    try {
+      await deps.sendToTab({
+        type: 'nexpath:show-rating',
+        projectRoot,
+        payload: { schemaVersion: PE_PANEL_SCHEMA_VERSION, kind: 'rating', viewSeq } satisfies PeRatingViewV1,
+      });
+    } catch (err) {
+      // §4.1 M3 — the push never rendered, so NO `markFeedbackShown`. Burning
+      // the two-day gap on a popup nobody saw is the one outcome worse than not
+      // asking: the user is not asked now, and not asked again for two days.
+      log.debug('rating_popup_render_failed', { projectRoot, error: String(err) });
+      return { state: 'not_shown', reasonCodes: ['panel_unreachable'] };
+    }
+    log.debug('rating_popup_shown', { projectRoot });
+
+    const command = await new Promise<PePanelCommandV1>((resolve) => {
+      if (box.queued !== null) {
+        const q = box.queued;
+        box.queued = null;
+        resolve(q);
+        return;
+      }
+      box.waiter = resolve;
+    });
+
+    if (command.type === 'rating') {
+      // §4.2 — ORDER MATTERS. The click is the consent for everything buffered,
+      // so the buffer is released FIRST and the rating follows it. Sending the
+      // rating first would put a numerator on the wire ahead of its denominator,
+      // and a flush that then failed would leave the two permanently unmatched.
+      await flushLifecycle(store, deps.fetch ? { fetch: deps.fetch } : {});
+      // ONE timestamp for both envelopes. They describe a single click, so they
+      // must agree: letting each sender call `Date.now()` put them 1 ms apart
+      // under load (caught by the end-to-end suite, which asserts the payloads
+      // are equal), and anything joining them on time would have missed.
+      const answeredAt = now();
+      const opts = deps.fetch ? { fetch: deps.fetch, now: answeredAt } : { now: answeredAt };
+      const sent = await sendRating(store, command.rating, opts);
+      // The same answer under its own event name, AFTER the rating and on the
+      // same consent — CLI parity (`stop.ts`, Phase 2 of r16). The rating is the
+      // record the dashboards were built on; this is the convenience. If one of
+      // the two has to fail, it should be this one, so it goes second.
+      const named = await sendRatingOption(store, command.rating, opts);
+      // Marked shown whether or not the POSTs succeeded: the user was asked and
+      // answered. Re-asking because a network call failed would punish them for
+      // the network. Both results are logged, neither is acted on.
+      await markFeedbackShown(store, answeredAt);
+      log.debug('rating_recorded', { projectRoot, sent, named });
+      return { state: 'rated', rating: command.rating };
+    }
+
+    // Anything else is a dismissal — Esc and the dock's ✕ both arrive as
+    // `close` (there is no "skipped" command; not answering IS closing).
+    // CLI parity, `stop.ts:530`: `markFeedbackShown` runs on EITHER outcome, and
+    // a dismissal sends nothing and flushes nothing.
+    // Reported, but NOT by flushing: the buffer stays for a future consent.
+    // Only the rating click releases it (§4.2).
+    const reported = await sendRatingDismissed(store, deps.fetch ? { fetch: deps.fetch } : {});
+    await markFeedbackShown(store, now());
+    log.debug('rating_dismissed', { projectRoot, via: command.type, reported });
+    return { state: 'dismissed' };
+  } finally {
+    void deps.sendToTab({ type: 'nexpath:pe-close', projectRoot }).catch(() => { /* panel gone */ });
     mailboxes.delete(projectRoot);
   }
 }

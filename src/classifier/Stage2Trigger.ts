@@ -20,10 +20,15 @@ export const STAGE2_MODEL              = 'gpt-4o-mini';
 /** Prompts of recent context to include in the classifier prompt. */
 export const STAGE2_CONTEXT_WINDOW     = 10;
 /** Max output tokens for the classifier call. */
-// 512 since the reply gained primary_intent / intent_confidence /
-// debug_evidence_present / capability_candidates — 256 risked truncating the
-// larger JSON into a parse failure and a silent degrade.
-export const STAGE2_MAX_OUTPUT_TOKENS  = 512;
+// 1024 (was 512): sized against real replies rather than arithmetic — measured over the sim
+// corpus, replies overrun 512 from ~14 named signals up, and the largest observed reply
+// (46 signals) is ~847 tokens WITH the sensitive-action verdict + reason fields included.
+// A truncated reply is not a smaller reply: it is invalid JSON, a parse failure, and a
+// silent degrade — paid for and then thrown away. 1024 clears the observed maximum with
+// headroom; the cliff moves, it does not vanish (over-cap still degrades to the local
+// classifier). ⚠️ The browser path's cap in core/stage2.ts is a DIFFERENT, smaller reply
+// shape and deliberately stays at 256 — do not "sync" them.
+export const STAGE2_MAX_OUTPUT_TOKENS  = 1024;
 /** Classifier confidence below this → do not fire a decision session. */
 export const STAGE2_LLM_MIN_CONFIDENCE = 0.49;
 /** Stage-1 confidence below this → the low-confidence condition for the fire trigger. */

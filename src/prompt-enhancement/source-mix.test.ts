@@ -414,3 +414,67 @@ describe('the secret-class safety signal survives the id fingerprint check', () 
     expect(result.profile).toBe('source_a_heavy_high_risk');
   });
 });
+
+describe('the label-only lane RENDERS, and the guard that makes that safe', () => {
+  /**
+   * 🔒 Owner ruling, 2026-08-20. `selected_source_label_only` rendered nowhere, which silently broke
+   * this module's own stated promise that a source-critical fact is *"never downgraded to invisible
+   * metadata"*, and starved every prompt-history section regardless of producer.
+   */
+  it('a source-critical label-only fact reaches renderedFacts', () => {
+    const safeguard = absence('safeguard1', {
+      sourceType: 'prompt_derived_fact',
+      sourceOriginScope: 'recent_prompt_history',
+      guidanceKind: 'safety_or_confirmation',
+      factRole: 'safety_confirmation_support',
+      suggestedActionKind: 'confirm_risk',
+      privacyClass: 'public_safe',
+      riskLevel: 'sensitive_authority_risky',
+      claimVerbPolicy: 'must_phrase_as_possibility',
+      evidence: { key: 'deployment', value: 'Still, before you do this sensitive action you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.' },
+    });
+    const anchor = absence('anchor1');
+    const result = applyPromptEnhancementSourceMixV1([anchor, safeguard]);
+    expect(result.classifiedFacts.find((c) => c.fact.factId === 'safeguard1')!.selectionRole)
+      .toBe('selected_source_label_only');
+    // The point: label-only is a GROUNDING exclusion, not an existence one.
+    expect(result.renderedFacts.map((f) => f.factId)).toContain('safeguard1');
+  });
+
+  it('it still never counts as grounding — the half of the rule that was already right', () => {
+    const safeguard = absence('safeguard2', {
+      sourceType: 'prompt_derived_fact',
+      sourceOriginScope: 'recent_prompt_history',
+      factRole: 'safety_confirmation_support',
+      privacyClass: 'public_safe',
+      riskLevel: 'sensitive_authority_risky',
+      evidence: { key: 'deployment', value: 'a safeguard line' },
+    });
+    const result = applyPromptEnhancementSourceMixV1([absence('anchor2'), safeguard]);
+    // It is classified label-only, which is what keeps it out of the Source B grounding count.
+    expect(result.classifiedFacts.find((c) => c.fact.factId === 'safeguard2')!.selectionReasonCode)
+      .not.toBe('source_b_grounding_within_cap');
+  });
+
+  /**
+   * 🔒 **THE guard the change above depends on.** Rendering label-only facts is only safe because a
+   * sensitive fact arrives with NOTHING TO RENDER — `evidenceForGuidanceFact` strips its content at
+   * the producer's single exit. Asserted as a producer invariant rather than reasoned about, because
+   * if it were false this fix would have converted an invisibility bug into a leak.
+   */
+  it('no fact leaves the producer with both a sensitive privacy class and renderable evidence', () => {
+    const sensitiveClasses = ['requires_confirmation', 'sensitive_suppress', 'sensitive_ref_only', 'do_not_render'];
+    for (const privacyClass of sensitiveClasses) {
+      const stripped = evidenceForGuidanceFact(
+        privacyClass as never,
+        'not_applicable',
+        { key: 'k', value: 'a literal that must never render' },
+      );
+      expect(stripped, `${privacyClass} let content through`).toBeUndefined();
+    }
+    // Discriminating pair: a public-safe fact DOES keep its content, so the test above is not
+    // passing merely because the helper returns undefined for everything.
+    expect(evidenceForGuidanceFact('public_safe', 'not_applicable', { key: 'k', value: 'v' }))
+      .toEqual({ key: 'k', value: 'v' });
+  });
+});

@@ -25,7 +25,7 @@ vi.mock('./llm-composer.js', () => ({
     const factId = section.structuredContentPartRefs[0];
     return { ok: true, output: {
       outputId: 'test-llm-output',
-      sectionDrafts: [{ sectionId: section.sectionId, bodyText: 'Tailored LLM wording for this section.', sourceFactIds: [factId] }],
+      sectionDrafts: [{ sectionId: section.sectionId, bodyText: 'Tailored model wording for this section.', sourceFactIds: [factId] }],
       composerClaims: [`claim:${factId}`],
     } };
   }),
@@ -81,7 +81,47 @@ describe('E4 — facade LLM composer wiring', () => {
     expect(composeStructuredComposerOutputV1).toHaveBeenCalledTimes(1);
     expect(result.callAndVisibilityMetadata.callVisibilityMode).toBe('llm_wording');
     expect(result.modelVersion).toBe('llm-wording-v1');
-    expect(result.currentBody.text).toContain('Tailored LLM wording');
+    expect(result.currentBody.text).toContain('Tailored model wording');
+  });
+
+  it('Layer 2 reaches the POPUP decision — a declared transposition blocks through the facade', async () => {
+    // The judge can be perfect in isolation and still be inert: the facade re-validates the
+    // composed body, and THAT result decides the popup. This proves the declaration travels.
+    process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
+    const mocked = vi.mocked(composeStructuredComposerOutputV1);
+    const original = mocked.getMockImplementation()!;
+    mocked.mockImplementationOnce(async (input: never) => {
+      const base = await original(input);
+      if (!base.ok) return base;
+      return { ok: true, output: {
+        ...base.output,
+        nounPurposes: [{ noun: 'payment test', purposeInPrompt: 'the failing payment test', purposeInBody: 'for tracking user analytics' }],
+      } };
+    });
+    const result = await preparePromptEnhancement(request());
+    // The model's wording is refused and the deterministic body takes its place: the layer
+    // reached the decision AND the developer keeps a popup. Both halves matter.
+    expect(result.currentBody.text).not.toContain('Tailored model wording');
+    expect(result.disposition).toBe('show_current_body');
+    expect(result.callAndVisibilityMetadata.callVisibilityMode).not.toBe('llm_wording');
+  });
+
+  it('a clean declaration changes nothing — the same request composes and sends', async () => {
+    process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
+    const mocked = vi.mocked(composeStructuredComposerOutputV1);
+    const original = mocked.getMockImplementation()!;
+    mocked.mockImplementationOnce(async (input: never) => {
+      const base = await original(input);
+      if (!base.ok) return base;
+      return { ok: true, output: {
+        ...base.output,
+        nounPurposes: [{ noun: 'payment test', purposeInPrompt: 'the failing payment test', purposeInBody: 'fixing the failing payment test' }],
+      } };
+    });
+    const result = await preparePromptEnhancement(request());
+    expect(result.disposition).toBe('show_current_body');
+    expect(result.currentBody.text).toContain('Tailored model wording');
+    expect(result.callAndVisibilityMetadata.callVisibilityMode).toBe('llm_wording');
   });
 
   it('a plainly unambiguous prompt still composes — the route no longer decides', async () => {
@@ -115,7 +155,7 @@ describe('E4 — facade LLM composer wiring', () => {
     expect(result.disposition).toBe('show_current_body');
     expect(composeStructuredComposerOutputV1).toHaveBeenCalledTimes(1);
     expect(result.callAndVisibilityMetadata.callVisibilityMode).toBe('llm_wording');
-    expect(result.currentBody.text).toContain('Tailored LLM wording');
+    expect(result.currentBody.text).toContain('Tailored model wording');
   });
 
   it('no popup -> composer not called, even with a valid key', async () => {
@@ -320,6 +360,93 @@ describe('E4 — facade LLM composer wiring', () => {
     // A normal run (no over-cap details) leaves the flag unset — visibly distinct.
     const clean = await preparePromptEnhancement(request());
     expect(clean.additionalDetailsTruncated).toBeUndefined();
+  });
+
+  it('owner ruling 2026-08-20: the composer sees the UNPRUNED plan, and a factless section it wrote reaches the body', async () => {
+    // 🔴 The end-to-end half of the I2 placement fix, and the half no unit test can reach: the
+    // pruner's stage (a) is correct in isolation either way — what broke was WHEN it ran. Measured
+    // on the sim, a six-section body lost Approach, Acceptance and Verification, all three written
+    // from the developer's own prompt, because the pruner deleted them before the composer was
+    // asked. Only a run through the facade can prove the two now happen in the right order.
+    // 🔴 **The first version of this test was not discriminating, and a mutation probe proved it.**
+    // It drafted the FIRST factless section, which on this fixture is `test_command_output` — the
+    // first required guidance section, and therefore FLOOR. Floor is exempt from stage (a) either
+    // way, so the test passed with the fix reverted. It now drafts EVERY factless section and counts
+    // how many reach the body, which is a number the old rule cannot produce: at most ONE factless
+    // section survived it (the floor's), and the fix lets the cap's worth through.
+    process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
+    const wordingFor = (kind: string): string => `Model wording for ${kind}, a section with no facts at all.`;
+    let factlessKinds: readonly string[] = [];
+
+    vi.mocked(composeStructuredComposerOutputV1).mockImplementationOnce(async (input: { planning: { sectionPlans: readonly { sectionId: string; sectionKind: string; structuredContentPartRefs: readonly string[] }[] } }) => {
+      // A section with NO guidance-fact refs — the planner cites `section_kind:<kind>` when it has
+      // none, which is the state nine of the eleven kinds are permanently in.
+      const factless = input.planning.sectionPlans.filter(
+        (plan) => plan.sectionKind !== 'original_request_or_goal'
+          && plan.structuredContentPartRefs.every((ref) => ref.startsWith('section_kind:')),
+      );
+      if (factless.length === 0) return { ok: false, reason: 'no_eligible_sections' };
+      factlessKinds = factless.map((plan) => plan.sectionKind);
+      return { ok: true, output: {
+        outputId: 'test-llm-factless-output',
+        sectionDrafts: factless.map((plan) => ({
+          sectionId: plan.sectionId,
+          bodyText: wordingFor(plan.sectionKind),
+          sourceFactIds: [plan.structuredContentPartRefs[0]!],
+        })),
+        composerClaims: factless.map((plan) => `claim:${plan.structuredContentPartRefs[0]!}`),
+      } };
+    });
+
+    const result = await preparePromptEnhancement(request());
+
+    // Premise guard, asserted rather than assumed: the plan handed to the composer really did carry
+    // several factless sections. If planning ever stops producing them this fails loudly instead of
+    // passing while testing nothing.
+    expect(factlessKinds.length).toBeGreaterThan(1);
+    expect(result.disposition).toBe('show_current_body');
+    // 🔒 Prohibition 3, tied to the same run that proves the composer sees the UNPRUNED plan. The
+    // `baseline_pe_composer` cost row records that I2's placement change grew what this ONE call is
+    // sent without adding a second one; both halves of that claim are asserted here together, so a
+    // change that split the work across two calls could not pass while looking like a size change.
+    expect(composeStructuredComposerOutputV1).toHaveBeenCalledTimes(1);
+    expect(result.callAndVisibilityMetadata.callVisibilityMode).toBe('llm_wording');
+
+    // The point: sections with zero facts, kept because the model actually wrote them. More than
+    // one is what makes this a real assertion — a single survivor is what the OLD rule produced.
+    const survivingFactless = factlessKinds.filter((kind) => result.currentBody.text.includes(wordingFor(kind)));
+    expect(survivingFactless.length).toBeGreaterThan(1);
+  });
+
+  it('L1875: a directional action never loses sections the composer had filled', async () => {
+    // 🔒 §47.1 bound: *"`Shorter` obligations survive pruning — no unsafe truncation, no removal of
+    // mandatory guidance/safety"*. Written as a REGRESSION guard for the I2 placement change: the
+    // pruner now runs after the composer, and the composer does not run on the action path, so the
+    // drafted-section set is empty there. Measured: the action body does not shrink (it gains the
+    // mandatory section). Without this, a future change to stage (a) could silently strip an action
+    // body back to its floor and no other test would notice.
+    process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
+    const base = await preparePromptEnhancement(request());
+    const baseKinds = base.currentBody.sections.map((s) => s.sectionKind);
+    const thorough = base.availableActions.find((entry) => entry.actionType === 'more_thorough');
+    const actionRequest = {
+      ...request(),
+      action: thorough!,
+      currentBodyBinding: {
+        currentBodyId: base.currentBody.currentBodyId,
+        bodyRevision: base.currentBody.bodyRevision,
+        validationDecisionId: base.validationDecisionId,
+        editedBodyText: base.currentBody.text,
+        actionSubmittedAtMs: 2,
+        realUserInitiated: true,
+        sectionSpanEditEvents: [],
+      },
+    } as unknown as Parameters<typeof applyPromptEnhancementAction>[0];
+    const after = await applyPromptEnhancementAction(actionRequest);
+    const afterKinds = after.currentBody.sections.map((s) => s.sectionKind);
+    expect(afterKinds.length).toBeGreaterThanOrEqual(baseKinds.length);
+    // The mandatory section is present after the action, not merely a count that happened to hold.
+    expect(afterKinds).toContain('source_signal_guidance');
   });
 
   it('safety still runs on the composed body regardless of the LLM path (validation summary present)', async () => {

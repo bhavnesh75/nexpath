@@ -301,7 +301,7 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
     const confirmation = buildPromptEnhancementCanonicalConfirmation(originalPromptText);
 
     expect(currentBody.text).toContain(confirmation);
-    expect(confirmation).toBe('Still, before you do this production migration or data/schema change you must ask me for go-ahead confirmation.');
+    expect(confirmation).toBe('Still, before you do this production migration or data/schema change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.');
     expect(countOccurrences(currentBody.text, confirmation)).toBe(1);
     expect(currentBody.sections.find((section) => section.sectionKind === 'risk_safety_or_confirmation')?.bodyText.trim())
       .toMatch(new RegExp(`- ${escapeRegExp(confirmation)}$`));
@@ -310,16 +310,16 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
   });
 
   it.each([
-    ['Delete obsolete files.', 'Still, before you do this destructive file or codebase change you must ask me for go-ahead confirmation.'],
-    ['Install the dependency and update the lockfile.', 'Still, before you do this dependency or toolchain change you must ask me for go-ahead confirmation.'],
-    ['Rotate the referenced API key.', 'Still, before you do this referenced credential or environment change you must ask me for go-ahead confirmation.'],
-    ['Deploy this release to production.', 'Still, before you do this production deploy or release you must ask me for go-ahead confirmation.'],
-    ['Force-push the rebased branch.', 'Still, before you do this git history or branch change you must ask me for go-ahead confirmation.'],
-    ['Modify the auth permissions.', 'Still, before you do this security, auth, or permission change you must ask me for go-ahead confirmation.'],
-    ['Increase the cluster resource quota.', 'Still, before you do this cost or resource-changing operation you must ask me for go-ahead confirmation.'],
-    ['Apply this change across the whole repo.', 'Still, before you do this broad-scope codebase change you must ask me for go-ahead confirmation.'],
-    ['Switch from read-only to execute mode.', 'Still, before you do this agent mode or permission-boundary change you must ask me for go-ahead confirmation.'],
-    ['Post the launch update and notify customers.', 'Still, before you do this public or customer-facing communication you must ask me for go-ahead confirmation.'],
+    ['Delete obsolete files.', 'Still, before you do this destructive file or codebase change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Install the dependency and update the lockfile.', 'Still, before you do this dependency or toolchain change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Rotate the referenced API key.', 'Still, before you do this referenced credential or environment change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Deploy this release to production.', 'Still, before you do this production release or rollout you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Force-push the rebased branch.', 'Still, before you do this git history or branch change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Modify the auth permissions.', 'Still, before you do this security, auth, or permission change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Increase the cluster resource quota.', 'Still, before you do this cost or resource-changing operation you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Apply this change across the whole repo.', 'Still, before you do this broad-scope codebase change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Switch from read-only to execute mode.', 'Still, before you do this agent mode or permission-boundary change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
+    ['Post the launch update and notify customers.', 'Still, before you do this public or customer-facing communication you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
   ])('renders a sanitized action-specific canonical confirmation for: %s', (originalPromptText, confirmation) => {
     const currentBody = composedBody({
       originalPromptText,
@@ -402,7 +402,7 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
         }),
       ],
     });
-    const wrongActionConfirmation = 'Still, before you do this dependency or toolchain change you must ask me for go-ahead confirmation.';
+    const wrongActionConfirmation = 'Still, before you do this dependency or toolchain change you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.';
     const editedBodyText = currentBody.text.replaceAll(
       buildPromptEnhancementCanonicalConfirmation(originalPromptText),
       wrongActionConfirmation,
@@ -420,7 +420,7 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
     // Owner ruling 2026-08-14: a user's edit is the user's, so Nexpath no longer refuses a
     // send because the user changed the body. Detection stays (preservation-floors.ts); the
     // refusal is gone. This pins the NEW behaviour.
-    ['generic confirmation', 'Still, before you do this sensitive action you must ask me for go-ahead confirmation.'],
+    ['generic confirmation', 'Still, before you do this sensitive action you must ask me for go-ahead confirmation, and before you ask, confirm the actual state at ground level by reading the real source. Do not assume, and do not rely on what you did earlier in this session.'],
     ['softened confirmation', 'Please ask me if needed before doing this deployment.'],
     ['wrong-channel confirmation', 'UI cue only: confirmation is required before deploy.'],
   ])('rejects weak or wrong-channel generated confirmation text: %s', (_caseName, replacementConfirmation) => {
@@ -658,7 +658,7 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
     });
     const result = validatePromptEnhancementSafety({ currentBody });
 
-    expect(currentBody.text).not.toMatch(/Still, before you do this .+ you must ask me for go-ahead confirmation\./);
+    expect(currentBody.text).not.toMatch(/Still, before you do this .+ you must ask me for go-ahead confirmation/);
     expect(result.sensitiveActionFindings.map((finding) => finding.authorityMode)).toEqual(
       expect.arrayContaining(['plan_or_review']),
     );
@@ -686,7 +686,7 @@ describe('prompt-enhancement safety, privacy, and sendability validation', () =>
     expect(result.sensitiveActionFindings.map((finding) => finding.riskKind)).toContain('wide_scope_or_boundary_expansion');
     expect(result.sensitiveActionFindings.map((finding) => finding.authorityMode)).toContain('observe_or_literal');
     expect(result.sensitiveActionFindings.some((finding) => finding.requiresConfirmation)).toBe(false);
-    expect(currentBody.text).not.toMatch(/Still, before you do this .+ you must ask me for go-ahead confirmation\./);
+    expect(currentBody.text).not.toMatch(/Still, before you do this .+ you must ask me for go-ahead confirmation/);
     expect(result.sendPolicy).toBe('send_current');
   });
 
@@ -1747,10 +1747,17 @@ describe('no-invention state: a section carrying the obligation cannot name what
   });
 
   it('a section WITHOUT the obligation is not policed by this check', () => {
+    // The obligation is now UNIVERSAL over composed prose (the reach widening), so no planned
+    // section arrives without it — the fixture strips it by hand to keep the validator property
+    // pinned: the check keys on the obligation, never on the section kind.
     const body = composedBody({ originalPromptText: debugPrompt, route: reproRoute as never });
     const sections = body.sections.map((section) =>
       section.sectionKind === 'verification_or_test_plan'
-        ? { ...section, bodyText: '- Verify with RabbitMQ management UI.' }
+        ? {
+          ...section,
+          bodyText: '- Verify with RabbitMQ management UI.',
+          slotObligations: section.slotObligations.filter((obligation) => obligation !== 'no_invention_state'),
+        }
         : section,
     );
     const verification = sections.find((section) => section.sectionKind === 'verification_or_test_plan');

@@ -5,6 +5,7 @@ import { resolveOpenAIKey, getKeySource } from '../../config/ApiKeyResolver.js';
 import type { Store } from '../../store/db.js';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { classifyStage } from '../../classifier/stage-classifier.js';
+import { startSensitiveActionMicroClearanceV1 } from '../../classifier/sensitive-action-micro-clearance.js';
 import { SessionStateManager } from '../../classifier/SessionStateManager.js';
 import { detectAbsenceFlags, ABSENCE_MIN_PROMPTS } from '../../classifier/AbsenceDetector.js';
 import { buildRuntimeContext } from '../../classifier/runtime-context.js';
@@ -83,6 +84,17 @@ import { computeWorkStyleProfile } from '../../classifier/work-style-traits.js';
 import { readParamEvents, type ParamEvent } from '../../telemetry/param-events.js';
 import { getProjectEnvFacts } from '../../store/env-facts.js';
 import { cachedPromptDerivedFactsV1, refreshPromptDerivedFactsIfDueV1 } from '../../prompt-enhancement/prompt-derived-facts-refresh.js';
+import {
+  promptHistoryAcceptanceExpectationsV1,
+  promptHistoryVerificationAsksV1,
+  promptHistoryExpectationEvidenceValueV1,
+  PROMPT_HISTORY_EXPECTATION_WINDOW_V1,
+} from '../../prompt-enhancement/prompt-history-expectation-signals.js';
+import {
+  promptHistorySensitiveActionObservationV1,
+  promptHistorySensitiveActionSignalsV1,
+  PROMPT_HISTORY_SIGNAL_WINDOW_V1,
+} from '../../prompt-enhancement/prompt-history-signals.js';
 import { getPromptEnhancementFeedbackSummary, queryRelevantPromptEnhancementMemory, recordPromptEnhancementMemoryEvidence, markPromptEnhancementMemoryUsed } from '../../store/prompt-enhancement.js';
 import { scorePromptEnhancementMemoryCandidates } from '../../prompt-enhancement/memory-scoring.js';
 import {
@@ -217,6 +229,29 @@ export type AutoPromptEnhancementConsumerV1 = (
  * `groundingTierByRef` = typed corroboration tier per crossing env / RIGHT&GOOD ref
  * (promoted_practice_P / capability / uncorroborated) — carried beside the refs, never inside them.
  */
+/**
+ * A popup is worth showing only if an LLM actually worded it.
+ *
+ * 🔒 Owner ruling, 2026-08-19, scope (a): *"we must not show popup if its mere deterministic based
+ * and not the LLM generated"* — INCLUDING when no API key is present. Without a key nexpath stays
+ * silent rather than showing boilerplate.
+ *
+ * ⚠️ Deliberately a DISPLAY decision, beside the blink gate, not an engine one. The engine's
+ * disposition means "what did preparation conclude"; suppressing there would relabel every keyless
+ * preparation as not-applicable — measured: 134 fixtures, because the suite runs without a key and
+ * the deterministic renderer is exactly what most of them assert. Showing is the host's call, this
+ * is the host, and the row it declines to write is the same row the blink fix declines to write.
+ *
+ * ⛔ Only `baseline_deterministic_render` counts — the mode set when no LLM wording survived into
+ * the body. `original_fallback` and `previous_body_preservation` are different outcomes with their
+ * own handling and are not re-decided here.
+ */
+function promptEnhancementBodyHasNoLlmWordingV1(
+  result: { currentBody?: { composerMode?: string } } | undefined,
+): boolean {
+  return result?.currentBody?.composerMode === 'baseline_deterministic_render';
+}
+
 export function buildPromptEnhancementGroundingRefsV1(store: Store, projectRoot: string, signalKeys: readonly string[]): {
   rightGoodWorkStyleEnvRuntimeRefs: readonly string[];
   paramEventChannels: readonly string[];
@@ -327,6 +362,40 @@ export function buildPromptEnhancementGroundingRefsV1(store: Store, projectRoot:
       };
     }
 
+    // ── Recent-history sensitive actions cross as their own confirmation signal ────────────────
+    //
+    // 🔒 Owner-ruled (2026-08-20). The sensitive-action detector already existed and was already
+    // tested, but every consumer of it lived in the option-generation engine, which is switched
+    // off — so a developer could say "deploy to production" three prompts running and the enhanced
+    // prompt would never ask the agent to check first.
+    //
+    // ⛔ **The CATEGORY crosses, never the matched words.** The detector returns the literal text
+    // that satisfied the trigger; the owner reversed an include-the-literal-word preference once
+    // already on leakage grounds, so the signal module drops it before this point and the ref
+    // namespace carries a category name only.
+    //
+    // ⛔ FREE: pure string matching over prompts already in hand. No provider call.
+    // Oldest-last, matching the miner's own convention so both lanes read the same stretch of
+    // history in the same order.
+    const recentPromptTexts = getRecentPrompts(store, projectRoot, PROMPT_HISTORY_SIGNAL_WINDOW_V1)
+      .map((record) => record.text)
+      .reverse();
+    for (const signal of promptHistorySensitiveActionSignalsV1(recentPromptTexts)) {
+      const ref = `history_sensitive_action:${signal.category}`;
+      rightGoodWorkStyleEnvRuntimeRefs.push(ref);
+      groundingTierByRef[ref] = 'uncorroborated';
+      groundingPolarityByRef[ref] = 'present';
+      groundingEvidenceByRef[ref] = {
+        key: signal.category,
+        // ⛔ The OBSERVATION, not the safeguard sentence. The instruction reaches the body on its
+        // own channel, naming the real category; putting it here too produced a clamped, inverted
+        // duplicate. See `promptHistorySensitiveActionObservationV1`.
+        value: promptHistorySensitiveActionObservationV1(),
+        runtimePath: 'local_store',
+        anchorScope: 'current_prompt_scope',
+      };
+    }
+
     // ── §17.11 (owner-ruled: WIRE IT) — env movements cross as their own grounding claim ───────
     //
     // The trajectory probe was never inert: its change events already credit practice scores
@@ -351,6 +420,48 @@ export function buildPromptEnhancementGroundingRefsV1(store: Store, projectRoot:
       };
     }
   } catch { /* no source hard facts available — leave empty */ }
+
+  // The same recent prompts, read for what the developer said DONE looks like and how the work
+  // gets PROVEN. Those two sections had never received a fact and were written from plausibility in
+  // every shipped body; what crosses here is the developer's own sentence, quoted, so a section can
+  // say something they actually wrote instead of something that merely sounds right. Nothing said
+  // means nothing produced — the detectors return empty and no ref is pushed.
+  //
+  // ⚠️ Its OWN try, deliberately: these loops first sat inside the env-facts block above, where an
+  // unrelated store failure would have silenced them without a trace — a project with no stored env
+  // facts would simply never have received either fact. One grounding source, one guard, which is
+  // the convention every other block in this function already follows.
+  //
+  // ⛔ FREE: the same in-hand prompts, matched as strings. No provider call.
+  try {
+    const expectationPrompts = getRecentPrompts(store, projectRoot, PROMPT_HISTORY_EXPECTATION_WINDOW_V1)
+      .map((record) => record.text)
+      .reverse();
+    for (const [index, expectation] of promptHistoryAcceptanceExpectationsV1(expectationPrompts).entries()) {
+      const ref = `history_acceptance:${index}`;
+      rightGoodWorkStyleEnvRuntimeRefs.push(ref);
+      groundingTierByRef[ref] = 'uncorroborated';
+      groundingPolarityByRef[ref] = 'present';
+      groundingEvidenceByRef[ref] = {
+        key: 'what you said done means',
+        value: promptHistoryExpectationEvidenceValueV1(expectation),
+        runtimePath: 'local_store',
+        anchorScope: 'current_prompt_scope',
+      };
+    }
+    for (const [index, expectation] of promptHistoryVerificationAsksV1(expectationPrompts).entries()) {
+      const ref = `history_verification:${index}`;
+      rightGoodWorkStyleEnvRuntimeRefs.push(ref);
+      groundingTierByRef[ref] = 'uncorroborated';
+      groundingPolarityByRef[ref] = 'present';
+      groundingEvidenceByRef[ref] = {
+        key: 'the check you asked for',
+        value: promptHistoryExpectationEvidenceValueV1(expectation),
+        runtimePath: 'local_store',
+        anchorScope: 'current_prompt_scope',
+      };
+    }
+  } catch { /* no readable prompt history — the sections keep saying what they say today */ }
   const scopedFeedbackEvidenceRefs: string[] = [];
   try {
     for (const category of getPromptEnhancementFeedbackSummary(store, projectRoot).categoryCounts) {
@@ -526,7 +637,20 @@ export function buildPromptEnhancementRequestForAuto(input: {
         // Which stored project facts THIS prompt calls for. The registry decides what to do with
         // it; an absent channel fails closed downstream rather than sending all ten facts.
         classifierProjectFactCandidates: input.stageResult.projectFactCandidates,
+        // I1: the relevance ORDERING over section kinds. Carried, not acted on — I2's registry
+        // pruner is what reads it, under the locked drop-criteria.
+        classifierSectionRelevanceOrder: input.stageResult.sectionRelevanceOrder,
         classifierDebugEvidencePresent: input.stageResult.debugEvidencePresent,
+        // The sensitive-action clearance observation, carried ONLY when the verdict exists.
+        // A degraded call has no verdict, so this stays undefined there — and undefined is
+        // the fail-closed state (the confirmation line emits exactly as today).
+        classifierSensitiveActionClearance: input.stageResult.sensitiveActionVerdict !== undefined
+          ? {
+              verdict: input.stageResult.sensitiveActionVerdict,
+              reason: input.stageResult.sensitiveActionReason,
+              name: input.stageResult.sensitiveActionName,
+            }
+          : undefined,
         promptStartBoundary: source.promptStartStop.hookBoundary,
         deliveryBoundary: source.promptStartStop.deliveryBoundary,
         promptStartCanReplaceSameTurn: source.promptStartStop.runAutoCanHoldOrReplaceSubmittedPrompt,
@@ -1053,6 +1177,12 @@ export async function runAuto(
 
   // ── 2.9. Stage classifier — one LLM call (after profile + Stream-B, so it calibrates on the
   //        fresh profile); folds the former cascade + cross-confirmation. Its stage feeds processPrompt. ──
+  // The sensitive-action clearance micro-call starts FIRST and is never awaited: it is
+  // deterministically gated (no risky word ⇒ inert), runs during the classifier's own wait
+  // below, and is read synchronously (then aborted if still pending) right after that await —
+  // added wall time is exactly zero and the hook process's lifetime is unchanged. Every
+  // failure mode reads as "no clearance", which keeps today's confirmation behaviour intact.
+  const microClearance = startSensitiveActionMicroClearanceV1(input.promptText, openai);
   const stageResult = await classifyStage(
     {
       promptText:        input.promptText,
@@ -1064,6 +1194,29 @@ export async function runAuto(
     openai,
     { minConfidence: freqConfig.stage2MinConfidence, contextWindow: freqConfig.stage2ContextWindow },
   );
+  microClearance.abort();
+  const settledClearance = microClearance.read();
+  // Observability for the capture/failure rate (the I1 lesson, applied here from day one):
+  // an absent clearance that cannot be told apart from "never attempted" answers nothing —
+  // gated-out is normal, pending_or_failed counts against the reliability bound the owner
+  // approved (≤ 1-in-20), and this line is what makes that bound readable from any run.
+  logger.debug('sensitive_action_clearance_outcome', { outcome: microClearance.outcome() });
+  if (settledClearance !== undefined) {
+    // Merged into the SAME stageResult both request-build sites pass to the one threading
+    // block, so the provenance field's producer changes with zero second wiring.
+    stageResult.sensitiveActionVerdict = settledClearance.verdict as 'proposed' | 'not_proposed';
+    stageResult.sensitiveActionReason = settledClearance.reason;
+    stageResult.sensitiveActionName = settledClearance.name;
+    // Attributability (a binding condition of the clearance exception): every clearance that
+    // can remove a safety line must be auditable from an ordinary debug run — verdict AND the
+    // model's stated benign reading. Local debug log only, same privacy class as the prompt
+    // slices logged beside it.
+    logger.debug('sensitive_action_clearance', {
+      verdict: settledClearance.verdict,
+      reason: settledClearance.reason?.slice(0, 160),
+      name: settledClearance.name?.slice(0, 60),
+    });
+  }
   const classification = stageResult.classification;
   logger.debug('stage_classified', { stage: classification.stage, confidence: classification.confidence, fire: stageResult.fireRecommendation, degraded: stageResult.degraded });
   writeTelemetry(input.projectRoot, 'prompt_classified', { stage: classification.stage, confidence: classification.confidence }, store);
@@ -1197,6 +1350,29 @@ export async function runAuto(
         ? preparation.validationReasonCodes.slice(0, 10)
         : undefined,
       blockedFailureCodes: blockedFailureCodesForLog(preparation),
+      // Q3 (owner): the deterministic suppression gets its OWN name in the log, so "how often does
+      // a popup get withheld for having no LLM wording" is a number we can read rather than an
+      // impression. `no_popup_not_applicable` alone cannot answer it — the route suppresses under
+      // that same disposition for entirely different reasons.
+      suppressedReason: promptEnhancementBodyHasNoLlmWordingV1(preparation.result)
+        ? 'deterministic_only_no_llm_wording'
+        : undefined,
+      // I1 observability (prohibition 10 — no hidden runtime seams). Fixtures prove the PARSER
+      // reads `section_relevance_order`; they cannot prove the MODEL emits it, and a model that
+      // never does degrades SILENTLY to an empty ordering — I2 would then prune on evidence alone
+      // with every test green. That is C1's own recorded failure shape. Logging the count makes
+      // non-compliance readable from any ordinary run instead of needing a bespoke probe: a keyed
+      // session showing 0 here on every prompt is the model ignoring the instruction.
+      // ⚠️ Logged BESIDE the count because the count alone cannot be read: 0 means either the
+      // model ignored the instruction or NO MODEL RAN (no key, provider failure, degrade). Those
+      // need opposite responses, and without this flag the field answers neither.
+      classifierDegraded: stageResult.degraded,
+      relevanceOrderCount: stageResult.sectionRelevanceOrder.length,
+      // I2 observability (prohibition 10). The pruner's one job is dropping sections, and until this
+      // was logged that job left no trace on an ordinary run — the count existed on the result and
+      // nothing read it. Also phase 37's after-number, so the measurement rides a normal log.
+      prunedSectionCount: preparation.result?.prunedSectionCount,
+      floorSectionCount: preparation.result?.floorSectionCount,
       sequenceShapedFallback: true,
     });
     // Phase 4 (defense-in-depth): do NOT persist an unshowable pending. A display decision of `no_popup`
@@ -1206,7 +1382,10 @@ export async function runAuto(
     // it at the source. Same condition the UI boundary uses (ui-boundary.ts). The skip stays traceable:
     // `prompt_enhancement_prepare_boundary` above logs the disposition, and no `..._stored` log follows.
     const displayDecisionIsNoPopup = preparation.result?.disposition === 'no_popup_not_applicable'
-      || preparation.result?.uiView.body.sendPolicy === 'no_popup';
+      || preparation.result?.uiView.body.sendPolicy === 'no_popup'
+      // Owner ruling (a): a body with no LLM wording is boilerplate, and boilerplate does not
+      // earn a popup. Same row, same gate as the blink fix above.
+      || promptEnhancementBodyHasNoLlmWordingV1(preparation.result);
     if (!preparation.safeFallback && preparation.result && !displayDecisionIsNoPopup) {
       upsertPendingPromptEnhancement(store, {
         projectRoot: input.projectRoot,
@@ -1437,6 +1616,20 @@ export async function runAuto(
       ? preparation.validationReasonCodes.slice(0, 10)
       : undefined,
     blockedFailureCodes: blockedFailureCodesForLog(preparation),
+    // ⚠️ BOTH of these were on the sequence-shaped boundary log and NOT here — the MAIN path, which
+    // is the common one. So the deterministic-popup suppression and the I1 ordering count were
+    // observable only on the rarer route, which is the same one-of-two-sites shape the persistence
+    // gate had. Kept identical to the other site on purpose: two logs of the same event that report
+    // different fields cannot be read together.
+    suppressedReason: promptEnhancementBodyHasNoLlmWordingV1(preparation.result)
+      ? 'deterministic_only_no_llm_wording'
+      : undefined,
+    classifierDegraded: stageResult.degraded,
+    relevanceOrderCount: stageResult.sectionRelevanceOrder.length,
+    // Kept identical to the sequence-shaped site above on purpose: two logs of the same event that
+    // report different fields cannot be read together.
+    prunedSectionCount: preparation.result?.prunedSectionCount,
+    floorSectionCount: preparation.result?.floorSectionCount,
   });
   // Owner decision B-i (2026-08-04): the PE popup is deferred to the Stop hook. Do NOT show a
   // popup on UserPromptSubmit — the prompt passes through raw. When a real (non-fallback) result
@@ -1447,7 +1640,10 @@ export async function runAuto(
   // here removes it at the source. Same condition the UI boundary uses; the skip stays traceable via the
   // `prompt_enhancement_prepare_boundary` log above (no `..._stored` log follows).
   const displayDecisionIsNoPopup = preparation.result?.disposition === 'no_popup_not_applicable'
-    || preparation.result?.uiView.body.sendPolicy === 'no_popup';
+    || preparation.result?.uiView.body.sendPolicy === 'no_popup'
+    // Owner ruling (a): a body with no LLM wording is boilerplate, and boilerplate does not
+    // earn a popup. Same row, same gate as the blink fix above.
+    || promptEnhancementBodyHasNoLlmWordingV1(preparation.result);
   if (!preparation.safeFallback && preparation.result && !displayDecisionIsNoPopup) {
     upsertPendingPromptEnhancement(store, {
       projectRoot: input.projectRoot,

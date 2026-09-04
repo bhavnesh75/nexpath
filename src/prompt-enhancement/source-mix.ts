@@ -106,6 +106,25 @@ const SOURCE_A_TYPES: ReadonlySet<PromptEnhancementGuidanceSourceType> = new Set
 
 const TOTAL_FACT_CAP = 5;
 
+/**
+ * The label-only exclusions that were about GROUNDING and were mis-implemented as invisibility.
+ *
+ * 🔒 Owner ruling, 2026-08-20. Each of these reasons means "this must not count as independent
+ * grounding" — the lane's own comment says such facts *"stay VISIBLE as source labels"*, and the
+ * visibility half was never built. `source_critical_over_cap_kept_visible` is the sharpest case: it
+ * exists so a safety fact is *"never downgraded to invisible metadata"*, and it was doing exactly
+ * that.
+ *
+ * ⛔ Deliberately NOT listed: `stale_or_unknown_not_grounding`. A stale or unknown probe value that
+ * states itself is worse than silence, and its exclusion is a separate locked decision with its own
+ * fixture. Widening this set to it would be re-deciding a rule nobody asked about.
+ */
+const LABEL_ONLY_REASONS_THAT_RENDER_V1: ReadonlySet<string> = new Set([
+  'negative_capability_safety_not_grounding',
+  'prompt_derived_not_independent_grounding',
+  'source_critical_over_cap_kept_visible',
+]);
+
 const RENDERABLE_PRIORITIES: ReadonlySet<PromptEnhancementGuidanceFact['priority']> = new Set([
   'required_survivor',
   'high',
@@ -562,8 +581,63 @@ export function applyPromptEnhancementSourceMixV1(
   promotePromptEnhancementMixDecisionV1(classified, mixRunId);
 
 
+  // ── The label-only lane RENDERS. Owner ruling, 2026-08-20. ──────────────────────────────────
+  //
+  // 🔴 **`selected_source_label_only` rendered NOWHERE, and that was never the intent.** The lane's
+  // own comment above says these facts *"stay VISIBLE as source labels, never as independent
+  // grounding"* — two clauses, and only the second was implemented. Measured: the role appears in
+  // exactly one other place in the entire production tree, a type union. Nothing consumed it.
+  //
+  // ⛔ **That silently broke a safety promise this module states in its own words** — *"a
+  // SOURCE-CRITICAL fact that upstream had blocked would have been downgraded to invisible
+  // metadata, which this module's own rule forbids"*. The Source A branch carves such facts out to
+  // this very role BELIEVING it keeps them visible. It did not.
+  //
+  // 🔑 And it is what starved every prompt-history section: a safeguard built from recent prompts
+  // hits two label-only rules at once, so no producer could ever have reached a body — the routing
+  // gap was only half the story.
+  //
+  // ⚠️ **Rendering these is safe because the two guards that matter travel ON THE FACT and are
+  // already correct**, which is why no new clamp is added here:
+  //   - CONTENT: a `requires_confirmation` / `sensitive_suppress` / `sensitive_ref_only` fact had
+  //     its evidence stripped at the producer's exit by `evidenceForGuidanceFact`. It crosses with
+  //     nothing to render, whatever is selected here.
+  //   - WORDING: `claimVerbPolicy` is each fact's own ceiling, and the sensitive producers already
+  //     set `source_label_only`, which the renderer treats as reference-only — states THAT a source
+  //     exists, never its content.
+  // ⛔ Re-clamping every label-only fact to `source_label_only` HERE was considered and rejected:
+  // it would make a safeguard reference-only, and a safeguard whose text cannot render is the exact
+  // failure this fix exists to end.
+  //
+  // 🔒 Still never grounding: these facts `continue` before the Source B cap above, so the grounding
+  // slots are untouched. The bound below is a PAYLOAD backstop, and source-critical material is
+  // exempt from it — the same carve-out the Source A path already makes, for the same reason
+  // (prohibition 17: safety is never faded for length).
+  // 🔴 **Scoped by REASON, not applied to the whole role — and that was corrected by two existing
+  // fixtures, not by reasoning.** A first version rendered every label-only fact and broke two
+  // deliberate locks: a `stale_or_unknown` probe value must stay out (an unreliable value stating
+  // itself is worse than silence), and a `metadata_only` fact must stay out because its own render
+  // policy says so. Neither is the defect that was ruled on, so neither moves here.
+  let labelOnlyBudget = Math.max(0, TOTAL_FACT_CAP - renderedCount);
+  const labelOnlyRenderedIds = new Set<string>();
+  for (const entry of classified) {
+    if (entry.selectionRole !== 'selected_source_label_only') continue;
+    if (!LABEL_ONLY_REASONS_THAT_RENDER_V1.has(entry.selectionReasonCode)) continue;
+    // The fact's OWN policy still decides whether it is section material at all.
+    if (entry.fact.renderPolicy !== 'render_as_section') continue;
+    if (isSourceCritical(entry.fact)) { labelOnlyRenderedIds.add(entry.fact.factId); continue; }
+    if (labelOnlyBudget > 0) {
+      labelOnlyRenderedIds.add(entry.fact.factId);
+      labelOnlyBudget -= 1;
+    }
+  }
+
   const renderedFacts = classified
-    .filter((entry) => entry.selectionRole === 'selected_required' || entry.selectionRole === 'selected_supporting')
+    .filter((entry) => (
+      entry.selectionRole === 'selected_required'
+      || entry.selectionRole === 'selected_supporting'
+      || (entry.selectionRole === 'selected_source_label_only' && labelOnlyRenderedIds.has(entry.fact.factId))
+    ))
     .map((entry) => entry.fact);
 
   return {

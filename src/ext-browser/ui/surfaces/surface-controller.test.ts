@@ -15,6 +15,7 @@ import { EDIT_KEYS_HINT } from './fixtures/pe.js';
 import { PE_FIXTURE } from './fixtures/pe.js';
 import { MPS_FIRST_FIXTURE, MPS_CONTINUATION_FIXTURE, MPS_CANCEL_LABEL } from './fixtures/mps.js';
 import { PEF_FIXTURE } from './fixtures/pef.js';
+import { RATING_FIXTURE, RATING_SCALE, RATING_NOTE } from './fixtures/rating.js';
 import type { SurfaceModel } from './surface-model.js';
 
 const REGISTRY = {
@@ -22,6 +23,7 @@ const REGISTRY = {
   mps_first: MPS_FIRST_FIXTURE,
   mps_continuation: MPS_CONTINUATION_FIXTURE,
   prompt_enhancement_feedback: PEF_FIXTURE,
+  advisory_rating: RATING_FIXTURE,
 };
 
 let host: HTMLElement;
@@ -1004,5 +1006,80 @@ describe('the focus guard never grabs the keyboard for a hidden panel', () => {
     expect(shadow.activeElement).toBeNull();
     c.destroy();
     outer.remove();
+  });
+});
+
+// ── advisory rating ──────────────────────────────────────────────────────────
+
+describe('advisory_rating', () => {
+  it('the model is the note plus exactly the four scores, worst to best', () => {
+    const rows = RATING_FIXTURE.rows;
+    expect(rows.filter((r) => r.kind === 'note').map((r) => r.kind === 'note' && r.text))
+      .toEqual([RATING_NOTE]);
+    expect(rows.filter((r) => r.kind === 'action').map((r) => r.label))
+      .toEqual(['Bad', 'Fine', 'Good', 'Excellent']);
+    expect(rows).toHaveLength(5);                 // nothing else on the surface
+    expect(rows.some((r) => r.kind === 'field')).toBe(false);  // never a text box
+  });
+
+  it.each(RATING_SCALE.map((c, i) => [i, c.label, c.rating] as const))(
+    'Enter on row %i (%s) emits that score',
+    (index, label, rating) => {
+      const c = mount('advisory_rating');
+      for (let i = 0; i < index; i++) key(c.element, 'ArrowDown');
+
+      key(c.element, 'Enter');
+
+      expect(events).toEqual([{ type: 'rating', surface: 'advisory_rating', rating, label }]);
+    },
+  );
+
+  it('Esc skips', () => {
+    const c = mount('advisory_rating');
+
+    key(c.element, 'Escape');
+
+    expect(events).toEqual([{ type: 'rating-skipped', surface: 'advisory_rating' }]);
+  });
+
+  it('⭐ the score comes off the ROW, not the label — renaming a label cannot move it', () => {
+    // The whole reason `rating` lives on the row. If the controller ever went
+    // back to mapping labels to numbers, this sends 3 for a row worth 1.
+    const renamed: SurfaceModel = {
+      ...RATING_FIXTURE,
+      rows: RATING_FIXTURE.rows.map((r) =>
+        r.kind === 'action' && r.label === 'Bad' ? { ...r, label: 'Not great' } : r),
+    };
+    controller = createSurfaceController(host, {
+      registry: { ...REGISTRY, advisory_rating: renamed },
+      initial: 'advisory_rating',
+      onEvent: (e) => events.push(e),
+    });
+
+    key(controller.element, 'Enter');
+
+    expect(events).toEqual([
+      { type: 'rating', surface: 'advisory_rating', rating: 1, label: 'Not great' },
+    ]);
+  });
+
+  it('an action row carrying NO score is never sent as a rating, and says so', () => {
+    // A4.3: unknown rows are never a silent no-op. It must not become rating 0.
+    const broken: SurfaceModel = {
+      ...RATING_FIXTURE,
+      rows: [{ kind: 'action', label: 'Mystery row' }],
+    };
+    controller = createSurfaceController(host, {
+      registry: { ...REGISTRY, advisory_rating: broken },
+      initial: 'advisory_rating',
+      onEvent: (e) => events.push(e),
+    });
+
+    key(controller.element, 'Enter');
+
+    expect(events).toEqual([
+      { type: 'activate', surface: 'advisory_rating', label: 'Mystery row' },
+    ]);
+    expect(host.textContent).toContain('No action wired');
   });
 });

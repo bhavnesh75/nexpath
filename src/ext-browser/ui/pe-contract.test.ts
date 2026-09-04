@@ -24,6 +24,8 @@ describe('isPePanelCommandV1 — accepts exactly the command union', () => {
     ['mps_send', { type: 'mps_send', bodyText: 'b' }],
     ['mps_decline', { type: 'mps_decline' }],
     ['mps_cancel', { type: 'mps_cancel' }],
+    ['rating 1', { type: 'rating', rating: 1 }],
+    ['rating 4', { type: 'rating', rating: 4 }],
   ];
   for (const [name, value] of VALID) {
     it(`accepts ${name}`, () => { expect(isPePanelCommandV1(value)).toBe(true); });
@@ -43,6 +45,24 @@ describe('isPePanelCommandV1 — accepts exactly the command union', () => {
     ['feedback with free text as category', { type: 'feedback_suggested', category: 'the body was wrong about auth' }],
     ['type as non-string', { type: 3 }],
   ];
+  // The rating is the ONLY user-influenced number that reaches the analytics
+  // envelope, so its bounds are checked here, at the trust boundary, and not
+  // left to the sender.
+  const INVALID_RATINGS: ReadonlyArray<[string, unknown]> = [
+    ['rating missing',      { type: 'rating' }],
+    ['rating 0',            { type: 'rating', rating: 0 }],
+    ['rating 5',            { type: 'rating', rating: 5 }],
+    ['rating -1',           { type: 'rating', rating: -1 }],
+    ['rating 1.5',          { type: 'rating', rating: 1.5 }],
+    ['rating NaN',          { type: 'rating', rating: Number.NaN }],
+    ['rating Infinity',     { type: 'rating', rating: Number.POSITIVE_INFINITY }],
+    ['rating as a string',  { type: 'rating', rating: '3' }],
+    ['rating as null',      { type: 'rating', rating: null }],
+  ];
+  for (const [name, value] of INVALID_RATINGS) {
+    it(`refuses ${name}`, () => { expect(isPePanelCommandV1(value)).toBe(false); });
+  }
+
   for (const [name, value] of INVALID) {
     it(`refuses ${name}`, () => { expect(isPePanelCommandV1(value)).toBe(false); });
   }

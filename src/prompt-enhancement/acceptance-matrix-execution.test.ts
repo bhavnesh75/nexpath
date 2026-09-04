@@ -51,8 +51,20 @@ describe('R1 — eval-rule-3 acceptance-matrix execution (ui-owner release-check
     const result = await preparePromptEnhancement(request('Fix failing tests after a migration while preserving behavior.'));
     expect(result.disposition).toBe('show_current_body');
     expect(result.sourceGuidanceCoverage).toBe('covered');
-    // Grounded, not a canned one-liner: several real sections and a body longer than the echo.
-    expect(result.currentBody.sections.length).toBeGreaterThan(3);
+    // 🔒 RE-SET 2026-08-20 by owner ruling, and the rule changed SHAPE rather than threshold:
+    // *"we are up and open to show enhanced prompt even with one section. but yeah one section is
+    // mandatory. and that mandatory section is Source Signal Guidance."*
+    //
+    // The old bar was `sections.length > 3`, written when factless sections still counted toward
+    // the total. I2's stage (a) drops those, so the count stopped measuring what this gate cares
+    // about — a body of 3 sections that say something is not the skeleton this gate exists to
+    // catch, and 6 sections of canned lines would have passed it. ⚠️ So the gate now asserts the
+    // MANDATORY section is present and the body says more than the echo, which is the same intent
+    // stated against what the body now actually is.
+    expect(
+      result.currentBody.sections.map((section) => section.sectionKind),
+      'the mandatory Source Signal Guidance section is missing — that is the skeleton case now',
+    ).toContain('source_signal_guidance');
     expect(result.currentBody.text.length).toBeGreaterThan(result.currentBody.originalPromptText.length);
     // The original request is preserved verbatim (original-intent-preservation rubric dim).
     expect(result.currentBody.text).toContain('Fix failing tests after a migration');
@@ -61,7 +73,9 @@ describe('R1 — eval-rule-3 acceptance-matrix execution (ui-owner release-check
   it('HARD-FAIL GATE: a second real debug/feature prompt is also grounded (not skeleton)', async () => {
     const result = await preparePromptEnhancement(request('Fix the failing payment test, the test failure blocks ci, and explain the verification.'));
     expect(result.disposition).toBe('show_current_body');
-    expect(result.currentBody.sections.length).toBeGreaterThan(3);
+    // Same re-set as above: the mandatory section, not a section count.
+    expect(result.currentBody.sections.map((section) => section.sectionKind))
+      .toContain('source_signal_guidance');
     expect(result.currentBody.text).toContain('payment test');
   });
 

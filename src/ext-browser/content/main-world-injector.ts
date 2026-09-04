@@ -1,6 +1,6 @@
 import browser from 'webextension-polyfill';
 import { resolveAgentFromHostname, resolveProjectRootFromLocation } from './agents/agent-hosts.js';
-import { isPromptCapturedMsg, isResponseStoppedMsg, isShowAdvisoryMsg, isShowPeMsg } from './ipc.js';
+import { isPromptCapturedMsg, isResponseStoppedMsg, isShowAdvisoryMsg, isShowPeMsg, isShowRatingMsg } from './ipc.js';
 import { setupSubmitFlowBridge } from './submit-flow-bridge.js';
 import type { PromptSubmitMsg, ResponseStopMsg, AdvisoryFooterIntentMsg, PromptInjectedMsg, AdvisoryTerminalMsg, PeCommandMsg, PeTerminalNoticeMsg, PeKeepaliveMsg } from './ipc.js';
 import { isPePanelCommandV1 } from '../ui/pe-contract.js';
@@ -368,7 +368,15 @@ function setupListeners(): void {
     // row, mark cooldown), so a page whose PE wiring is absent/stale must FAIL
     // the send, not silently ack it — hence the reject on timeout. The listener
     // must be registered BEFORE the re-dispatch below or a same-tick ack races.
-    if (isShowPeMsg(msg)) {
+    //
+    // The RATING view takes the same path, and needs it for the same reason
+    // turned around: §4.1 M3 says a failed push must not consume cadence, and
+    // the host can only know a push failed if a missing panel rejects instead of
+    // resolving. Without this branch a `show-rating` fell through to the plain
+    // re-dispatch below and resolved immediately — an ack that proves nothing.
+    // Both views ack on the SAME event, so the machinery is shared rather than
+    // copied; `pe-inject.ts` dispatches it from both branches.
+    if (isShowPeMsg(msg) || isShowRatingMsg(msg)) {
       const ack = new Promise<unknown>((resolve, reject) => {
         const timer = setTimeout(() => {
           window.removeEventListener('nexpath:pe-view-ack', onAck);

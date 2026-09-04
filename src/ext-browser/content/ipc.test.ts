@@ -16,6 +16,7 @@ import {
   isShowPeMsg,
   isPeCloseMsg,
   isPeInjectMsg,
+  isShowRatingMsg,
 } from './ipc.js';
 
 describe('IPC type guards', () => {
@@ -201,7 +202,7 @@ describe('IPC type guards', () => {
       isPanelEventMsg, isPromptCapturedMsg, isResponseStoppedMsg,
       isAdvisoryFooterIntentMsg,
       isPeCommandMsg, isPeTerminalNoticeMsg, isPeKeepaliveMsg,
-      isShowPeMsg, isPeCloseMsg, isPeInjectMsg,
+      isShowPeMsg, isPeCloseMsg, isPeInjectMsg, isShowRatingMsg,
     ];
     for (const guard of guards) {
       expect(guard({})).toBe(false);
@@ -239,5 +240,31 @@ describe('IPC type guards', () => {
       expect(isPeInjectMsg({ type: 'nexpath:pe-inject', projectRoot: 'r', text: 't' })).toBe(true);
       expect(isPeInjectMsg({ type: 'nexpath:pe-inject', projectRoot: 'r' })).toBe(false);
     });
+  });
+});
+
+describe('isShowRatingMsg', () => {
+  const ok = { type: 'nexpath:show-rating', projectRoot: 'https://bolt.new', payload: { schemaVersion: 1, kind: 'rating', viewSeq: 3 } };
+
+  it('accepts a well-formed rating view', () => {
+    expect(isShowRatingMsg(ok)).toBe(true);
+  });
+
+  it.each([
+    ['a PE show message',        { ...ok, type: 'nexpath:show-pe' }],
+    ['no projectRoot',           { type: 'nexpath:show-rating', payload: ok.payload }],
+    ['no payload',               { type: 'nexpath:show-rating', projectRoot: 'r' }],
+    ['a null payload',           { ...ok, payload: null }],
+    ['a payload of the wrong kind', { ...ok, payload: { schemaVersion: 1, kind: 'sequence_offer', viewSeq: 3 } }],
+    ['no viewSeq',               { ...ok, payload: { schemaVersion: 1, kind: 'rating' } }],
+    ['a non-numeric viewSeq',    { ...ok, payload: { schemaVersion: 1, kind: 'rating', viewSeq: '3' } }],
+  ])('refuses %s', (_label, msg) => {
+    expect(isShowRatingMsg(msg)).toBe(false);
+  });
+
+  it('⭐ does not accept a rating view sent as a PE show message', () => {
+    // The two are separate messages on purpose (#11): a rating has no body and
+    // must not go through the PE panel's body/caret preservation.
+    expect(isShowRatingMsg({ ...ok, type: 'nexpath:show-pe' })).toBe(false);
   });
 });

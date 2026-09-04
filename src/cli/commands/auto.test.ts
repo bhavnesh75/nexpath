@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PassThrough } from 'node:stream';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -183,6 +184,35 @@ function primeTaskBreakdownSession(store: Store, projectRoot: string): SessionSt
 }
 
 // ── PE0.1 live-consumer diagnostics ───────────────────────────────────────────
+
+/**
+ * Mark a prepared result as LLM-worded.
+ *
+ * ⚠️ These boundary tests run without an API key, so the real facade returns a DETERMINISTIC body —
+ * and a deterministic body is now withheld from display by owner ruling (a), which means no pending
+ * row is written and the boundary these tests are about never runs. The tests are about PERSISTENCE,
+ * not about the composer, so they state the composed-body condition they have always assumed.
+ */
+function asLlmWorded<T>(prepared: T): T {
+  // `preparePromptEnhancement` returns the RESULT itself; other call sites hand back a wrapper with
+  // `.result`. Both shapes appear in this file, so both are handled rather than assumed.
+  const direct = prepared as unknown as { currentBody?: Record<string, unknown> };
+  if (direct.currentBody) {
+    return {
+      ...prepared,
+      currentBody: { ...direct.currentBody, composerMode: 'baseline_llm_structured_wording' },
+    } as T;
+  }
+  const wrapped = prepared as unknown as { result?: { currentBody?: Record<string, unknown> } };
+  if (!wrapped.result?.currentBody) return prepared;
+  return {
+    ...prepared,
+    result: {
+      ...wrapped.result,
+      currentBody: { ...wrapped.result.currentBody, composerMode: 'baseline_llm_structured_wording' },
+    },
+  } as T;
+}
 
 describe('PE0.1 — live PE consumer diagnostics', () => {
   it('preserves the bounded host failure enums needed to distinguish live failures', () => {
@@ -2240,6 +2270,9 @@ describe('validated PE preparation boundary', () => {
           intentConfidence: 0.8,
           capabilityCandidates: ['capability.confirmation_needed'],
           debugEvidencePresent: ['logs', 'failing_test_details'],
+          sensitiveActionVerdict: 'not_proposed',
+          sensitiveActionReason: 'the risky word names a CSS effect only',
+          sensitiveActionName: 'shadow styling tweak',
         },
         streamBOutputs: [],
       });
@@ -2253,6 +2286,13 @@ describe('validated PE preparation boundary', () => {
       expect(request.reviewMomentContext.triggerProvenance.classifierIntentConfidence).toBe(0.8);
       expect(request.reviewMomentContext.triggerProvenance.classifierCapabilityCandidates).toEqual(['capability.confirmation_needed']);
       expect(request.reviewMomentContext.triggerProvenance.classifierDebugEvidencePresent).toEqual(['logs', 'failing_test_details']);
+      // The sensitive-action clearance rides the same provenance, verdict + reason together —
+      // and only when the verdict exists (a degraded call omits the field: the fail-closed state).
+      expect(request.reviewMomentContext.triggerProvenance.classifierSensitiveActionClearance).toEqual({
+        verdict: 'not_proposed',
+        reason: 'the risky word names a CSS effect only',
+        name: 'shadow styling tweak',
+      });
       expect(request.sourceSignals.promptStartStop.runAutoCanHoldOrReplaceSubmittedPrompt).toBe(false);
 
       const result = await preparePromptEnhancement(request);
@@ -2270,7 +2310,7 @@ describe('validated PE preparation boundary', () => {
       primeTaskBreakdownSession(store, projectRoot);
       const request = makeBoundaryRequest(store, projectRoot);
       const facadeResult = await preparePromptEnhancement(request);
-      const prepare = vi.fn().mockResolvedValue(facadeResult);
+      const prepare = vi.fn().mockResolvedValue(asLlmWorded(facadeResult));
       const onResult = vi.fn();
 
       const result = await runAuto(
@@ -2295,6 +2335,75 @@ describe('validated PE preparation boundary', () => {
     }
   });
 
+  it('and BOTH boundary logs report the same fields — one of two is how observability rots', () => {
+    // ⛔ Found in I1 round 5, twice over: `suppressedReason` (the deterministic-popup fix) and
+    // `relevanceOrderCount` (the I1 ordering) were each added to the sequence-shaped boundary log
+    // and NOT to the main one — the common path. Both fixes were therefore observable only on the
+    // rarer route, and nothing said so.
+    //
+    // Pinned as a COUNT rather than by parsing the calls: the failure is always "added to one site",
+    // and a count catches that without pretending to understand the log's shape. Two logs of the
+    // same event reporting different fields cannot be read together.
+    const source = readFileSync('src/cli/commands/auto.ts', 'utf8');
+    const logs = source.split("logger.debug('prompt_enhancement_prepare_boundary'").length - 1;
+    for (const field of ['suppressedReason:', 'relevanceOrderCount:', 'classifierDegraded:']) {
+      const carried = source.split(field).length - 1;
+      expect(
+        carried,
+        `${logs} prepare-boundary logs exist and ${carried} carry ${field} — the fix is invisible on `
+        + 'the paths that do not',
+      ).toBe(logs);
+    }
+  });
+
+  it('and EVERY display gate carries the check — there are two, and only one is behaviourally reachable here', () => {
+    // ⚠️ Honest about what this proves. The behavioural fixture below drives the main `runAuto`
+    // path; the OTHER persistence site sits inside the sequence-shaped fallback closure, which
+    // needs sequence state this file has no harness for. A mutation confirmed the gap: removing the
+    // check from that site left every test green.
+    //
+    // So the second site is pinned structurally instead of not at all — the check must appear at
+    // BOTH, and a new persistence site added without it fails here with the reason why.
+    const source = readFileSync('src/cli/commands/auto.ts', 'utf8');
+    // Counted as the GATE usage (`|| …;` inside a displayDecision), not as any call: the boundary
+    // log calls the same predicate and must not be mistaken for a guard.
+    const gates = source.split('|| promptEnhancementBodyHasNoLlmWordingV1(preparation.result);').length - 1;
+    const persists = source.split('upsertPendingPromptEnhancement(store, {').length - 1;
+    expect(
+      gates,
+      `${persists} persistence sites exist and ${gates} carry the no-LLM-wording check — a body with `
+      + 'no LLM wording would reach the Stop hook through the unguarded one',
+    ).toBe(persists);
+  });
+
+  it('withholds the popup entirely when the body carries NO LLM wording', async () => {
+    // 🔒 Owner ruling 2026-08-19, scope (a): a deterministic-only body is boilerplate and does not
+    // earn a popup — including when there is no API key at all, which is the case that makes this
+    // whole suite deterministic. Pinned at the DISPLAY seam: no pending row is written, so the Stop
+    // hook has nothing to show and no window is spawned.
+    const store = await openStore(':memory:');
+    try {
+      const projectRoot = '/test/deterministic-only';
+      primeTaskBreakdownSession(store, projectRoot);
+      const request = makeBoundaryRequest(store, projectRoot);
+      const facadeResult = await preparePromptEnhancement(request);
+
+      await runAuto(
+        makeInput({ projectRoot }),
+        store,
+        makeMockOpenAI(FIRE_YES_RESPONSE, 'Hold up.'),
+        { request, prepare: vi.fn().mockResolvedValue(facadeResult) },
+      );
+
+      expect(
+        getPendingPromptEnhancement(store, projectRoot),
+        'a body with no LLM wording was queued for display — that is the boilerplate popup',
+      ).toBeNull();
+    } finally {
+      store.db.close();
+    }
+  });
+
   it("persists a pending PE for the Stop hook and still queues the advisory (B-i)", async () => {
     const store = await openStore(":memory:");
     try {
@@ -2307,7 +2416,7 @@ describe('validated PE preparation boundary', () => {
         makeInput({ projectRoot }),
         store,
         makeMockOpenAI(FIRE_YES_RESPONSE, "Hold up."),
-        { request, prepare: vi.fn().mockResolvedValue(facadeResult) },
+        { request, prepare: vi.fn().mockResolvedValue(asLlmWorded(facadeResult)) },
       );
 
       // B-i: the PE popup is deferred to the Stop hook, so on UserPromptSubmit the PE is stored
@@ -3162,7 +3271,7 @@ describe('validated PE preparation boundary', () => {
       });
       const request = makeBoundaryRequest(store, projectRoot);
       const facadeResult = await preparePromptEnhancement(request);
-      const prepare = vi.fn().mockResolvedValue(facadeResult);
+      const prepare = vi.fn().mockResolvedValue(asLlmWorded(facadeResult));
 
       await runAuto(
         makeInput({ projectRoot }),

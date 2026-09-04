@@ -18,7 +18,8 @@ export type SurfaceId =
   | 'prompt_enhancement'
   | 'mps_first'
   | 'mps_continuation'
-  | 'prompt_enhancement_feedback';
+  | 'prompt_enhancement_feedback'
+  | 'advisory_rating';
 
 /**
  * The hint lines under an editable field.
@@ -82,6 +83,13 @@ export type SurfaceRow =
        * generic activate event — or to its pluggable transitions hook.
        */
       act?: 'use-original' | 'cancel-sequence' | 'interruption';
+      /**
+       * The advisory rating surface's 1-4 score (`feedback-popup.ts:38-43`,
+       * 1 = Bad … 4 = Excellent). On the row for the same reason `act` is: the
+       * controller must not learn that 'Good' means 3, or renaming the label
+       * would silently change what gets sent.
+       */
+      rating?: number;
       /** MPS's Cancel row carries the CLI's paleYellow. */
       tone?: 'plain' | 'cancel';
       /** A line under the label, like MPS-2's interruption helper. */

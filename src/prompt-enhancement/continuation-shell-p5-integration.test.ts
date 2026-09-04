@@ -67,7 +67,18 @@ beforeAll(async () => {
   const prep: PromptEnhancementPrepareResultV1 = await preparePromptEnhancement(request());
   REAL_GRAPH = prep.validationGraph; // a full, builder-valid graph reused as the items' verdict
   ORIGINAL_LEN = 50;
-});
+  // 🔴 **EXPLICIT hook timeout, added at the phase-36 verification pass — and the reason is that the
+  // default was producing a FALSE GREEN, not merely a flaky red.** This file sits marginally against
+  // vitest's 10s default `hookTimeout` under parallel load. When it trips, vitest reports the file's
+  // 14 tests as SKIPPED and the run still says 0 failed — so fourteen integration assertions can
+  // vanish from a "clean" suite without anyone noticing. Measured 3/3 skipping in isolation before
+  // this change, and 14/14 passing with the timeout lifted.
+  //
+  // ⚠️ The cost is NOT this module's work: a keyless `preparePromptEnhancement` measured 34ms cold
+  // and 3ms warm. The time goes to worker + store initialisation resolving inside the hook, which is
+  // environmental. So the honest fix is a realistic budget, not an optimisation hunt — and a
+  // generous one, because a hook that fails on a slow machine is the same false-green risk again.
+}, 60_000);
 
 function items(): readonly PromptEnhancementSequenceItemV1[] {
   return [

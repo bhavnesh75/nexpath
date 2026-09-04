@@ -217,7 +217,7 @@ describe('prompt-enhancement composer and deterministic fallback', () => {
 
     const generatedSection = result.currentBody.sections.find((section) => section.sectionKind === 'source_signal_guidance');
     expect(generatedSection).toMatchObject({
-      title: 'Source Signal Guidance',
+      title: 'Best practices and standards',
       sourceFactIds: ['section_kind:source_signal_guidance'],
       evidenceStatus: 'present',
       requiredSurvivor: true,
@@ -228,7 +228,7 @@ describe('prompt-enhancement composer and deterministic fallback', () => {
       confirmationRequired: false,
       confirmationPresent: false,
     });
-    expect(generatedSection?.bodyText).toContain('Use the current source signal as a task constraint');
+    expect(generatedSection?.bodyText).toContain('Treat what your recent practice shows as a working constraint');
     expect(generatedSection?.axisContributions).toEqual(expect.arrayContaining(['practiceDepth', 'sectionDensity', 'groundingDepth']));
     expect(generatedSection?.whyHelpReasonCodes).toContain('section_kind:source_signal_guidance');
   });
@@ -1509,5 +1509,61 @@ describe('de-nagging: the reproduction section names what was supplied instead o
 
   it('carry never re-asks for what was already supplied', () => {
     expect(reproText(['reproduction_steps', 'logs'])).not.toContain('Capture the failing behavior');
+  });
+});
+
+describe('I2 criterion (c) — a pruned section\'s surviving obligations reach the BODY', () => {
+  /**
+   * 🔴 **The gap this closes was found at the phase-36 verification pass, and it is the exact
+   * "exists ≠ runs" shape.** The pruner had computed `inheritedSlotObligations` since it was built,
+   * and `facade.ts` carried the list onto the planning object — where NOTHING read it. Its own unit
+   * test asserted only the pruner's RETURN VALUE, so it passed while the obligations never reached a
+   * body at all.
+   *
+   * 🔒 Criterion (c): *"a dropped section takes its visible slots, but no-invention state,
+   * send-policy and confirmation linkage stay on the body invisibly for the checks."* Obligations are
+   * otherwise per-section — `safety-sendability.ts` iterates `currentBody.sections` and reads each
+   * section's own `slotObligations` — so a pruned section removed its obligations from the body with
+   * it, which is what the criterion forbids.
+   */
+  it('the composed body carries obligations the pruner rescued from dropped sections', () => {
+    const planned = planningResult();
+    const withInherited = {
+      ...planned,
+      // 🔒 All four surviving classes, including the SAFETY one — the criterion's own title is
+      // "slots follow their section; SAFETY METADATA NEVER DROPS", and the phase's done-when is
+      // *"safety metadata is present on the body even when its section dropped"*. Asserting only
+      // the two non-safety classes would leave the done-when's actual subject untested.
+      inheritedSlotObligations: [
+        'no_invention_state', 'send_policy_metadata', 'safety_hook_linkage', 'confirmation_clarification',
+      ],
+    } as PromptEnhancementSectionPlanningResult;
+
+    const result = composePromptEnhancementBody({
+      enhancementId: 'enh-criterion-c-body',
+      originalPromptText: 'Fix the importCsv parser and verify the regression.',
+      sectionPlanningResult: withInherited,
+    });
+
+    expect(result.currentBody.inheritedSlotObligations).toContain('no_invention_state');
+    expect(result.currentBody.inheritedSlotObligations).toContain('send_policy_metadata');
+    expect(
+      result.currentBody.inheritedSlotObligations,
+      'the done-when names SAFETY metadata specifically, and it must reach the body',
+    ).toContain('safety_hook_linkage');
+    expect(result.currentBody.inheritedSlotObligations).toContain('confirmation_clarification');
+  });
+
+  it('a body with nothing pruned leaves the field UNSET, not an empty array', () => {
+    // The discriminating half: "no pruning happened" and "pruning rescued nothing" stay
+    // distinguishable in the record, and this also proves the assertion above is not passing
+    // because the field is populated unconditionally.
+    const result = composePromptEnhancementBody({
+      enhancementId: 'enh-criterion-c-none',
+      originalPromptText: 'Fix the importCsv parser and verify the regression.',
+      sectionPlanningResult: planningResult(),
+    });
+
+    expect(result.currentBody.inheritedSlotObligations).toBeUndefined();
   });
 });

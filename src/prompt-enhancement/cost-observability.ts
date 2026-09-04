@@ -369,6 +369,7 @@ export interface PromptEnhancementCurrentSourceCostCallInventoryRowV1 {
     | 'current_profile_classifier'
     | 'current_stream_b_presence_classifier'
     | 'current_stage_classifier'
+    | 'current_sensitive_action_micro_clearance'
     | 'current_pinch_label_generator'
     | 'current_decision_session_option_generator'
     | 'current_content_template_grounding'
@@ -448,6 +449,25 @@ const FALLBACK_REASONS: readonly PromptEnhancementRuntimeBlockReason[] = [
 
 const CALL_ROWS: readonly PromptEnhancementAcceptedCostCallInventoryRowV1[] = [
   row({
+    // ⚠️ **WHAT THIS CALL IS SENT CHANGED AT I2 (phase 36), MEASURED 2026-08-20.** The section
+    // pruner used to run BETWEEN planning and composition, so the composer only ever saw survivors.
+    // On the owner's ruling it now runs AFTER composition, because stage (a)'s question became "no
+    // fact AND no draft" and a draft cannot be consulted before the composer produces it.
+    //
+    // 🔑 The call COUNT is unchanged — still exactly one per shown popup, asserted by a fixture
+    // (prohibition 3: no new call). What changed is the size of that one call:
+    //   · INPUT — measured on a real plan for an ordinary debug prompt: 7 planned sections reach the
+    //     composer where 3 survivors used to, ≈ +800 chars ≈ +200 tokens of section descriptors;
+    //   · OUTPUT — up to 4 more section drafts, ≈ 48 words ≈ 65 tokens each, so ≈ +260 tokens.
+    // Both sit well inside the 2,000-token output cap this call runs under.
+    //
+    // ⛔ This RESTORES the load carried before the pruner landed on 2026-08-19 rather than adding a
+    // new one, and the owner accepted the trade with the cost stated. Some wording is now paid for
+    // and then dropped by the cap — that is intrinsic to judging a draft rather than predicting it.
+    //
+    // 🔒 The numbers below are LEFT AT THEIR RECORDED VALUES rather than re-set: moving a cost
+    // number is the owner's call, and the honest thing is that the measurement is written down where
+    // the row can be judged against it. Same treatment as the stage-classifier row's input note.
     callId: 'baseline_pe_composer',
     trigger: 'prepare',
     userVisibleTrigger: 'enhancement_popup_shown',
@@ -705,14 +725,65 @@ const CURRENT_SOURCE_BASELINE_ROWS: readonly PromptEnhancementCurrentSourceCostC
     // (parked on this SAME call — no new call exists): the system prompt grew by
     // the intent menu, the evidence ladder, and the capability conditions
     // (prefix-cached), and the output by four fields.
+    //
+    // ⚠️ TWO MORE OBSERVATIONS RIDE THIS CALL SINCE (still no new call — the PE-EM-1 obligation is
+    // that every field addition is visible here, so both are recorded rather than one):
+    //   · project-fact applicability (§17.12) — ten category ids, at most a short list back;
+    //   · I1 section relevance (§15.2) — an ORDERING over 14 section-kind ids, so the largest
+    //     honest reply now carries 14 ids plus the four original fields.
+    // Output: raised 512 → 1024, ruled by the owner and sized against real runs rather than
+    // arithmetic — across 2,371 measured prompts, 181 (7.6%) would overrun 512 (the observed
+    // maximum names 46 signals at ~847 real tokens), and a truncated reply degrades SILENTLY
+    // to an empty intent (the C1 failure mode), paid for and then thrown away. Output bills
+    // as produced, not as capped, so the raise adds nothing to the cost figures here. The
+    // reply also carries the sensitive-action verdict + reason observation (~25 tokens),
+    // parked on this same call.
+    //
+    // ⚠️ INPUT — measured 2026-08-20, and the number below is NOT what the call costs:
+    //   · system prompt, assembled: 14,405 chars ≈ 3,600 tokens (the two blocks added since C1
+    //     account for roughly 650 of that, and it is prefix-cached across calls);
+    //   · user message, a FULL 10-prompt window of ordinary-length prompts: ≈ 5,600 tokens,
+    //     which is dynamic and is what actually dominates.
+    // So a busy window totals ≈ 9,200 against the 5,000 recorded here. 🔑 The gap is mostly the
+    // WINDOW, not the prompt sections, and it predates both additions — so this row is left at its
+    // recorded value rather than re-set silently: moving a cost number is the owner's call, and the
+    // honest thing is that the measurement is written down where the row can be judged against it.
     assumedInputTokens: 5_000,
-    maxOutputTokens: 512,
+    maxOutputTokens: 1_024,
     timeoutMs: 12_000,
     fallbackState: 'deterministic_or_local_fallback',
     requirementState: 'required_current_source_row',
     userVisibleTrigger: 'prompt_submit',
     hiddenRuntimeTrigger: 'real prompt-submit classification pipeline after profile and Stream-B checks',
     skipCondition: 'generated-origin prompts are excluded from normal submit volume before current-source lifecycle accounting',
+    calls: ['blocked_pending_owner', 'blocked_pending_owner', 'blocked_pending_owner', 'blocked_pending_owner'],
+    costStates: [
+      'accepted_in_private_cost_visibility_packet_not_public_constant',
+      'accepted_in_private_cost_visibility_packet_not_public_constant',
+      'accepted_in_private_cost_visibility_packet_not_public_constant',
+    ],
+    worksheetStatus: 'blocked_pending_owner',
+  }),
+  currentSourceRow({
+    baselineCallId: 'current_sensitive_action_micro_clearance',
+    sourceLayer: 'src/classifier/sensitive-action-micro-clearance.ts',
+    // The sensitive-action clearance's own dedicated call — the precision half of the
+    // confirmation-line design, moved OFF the stage classifier after two failed recall
+    // measurements there (attention dilution) and a 45/45 pass in this focused form.
+    // Owner-approved 2026-08-25 with the measured figures. Deterministically gated: it
+    // fires only when the prompt matches a risk keyword (~17% of prompts in the measured
+    // corpus), runs in PARALLEL inside the stage classifier's own wait (never awaited;
+    // aborted at the join if pending), and every failure mode reads as "no clearance" —
+    // the confirmation line then emits exactly as today. ~250 input + <=120 output tokens
+    // per gated call ≈ $0.02-0.03/month at 2,000 prompts/month.
+    assumedInputTokens: 250,
+    maxOutputTokens: 120,
+    timeoutMs: 8_000,
+    fallbackState: 'null_or_no_action_fallback',
+    requirementState: 'required_current_source_row',
+    userVisibleTrigger: 'prompt_submit',
+    hiddenRuntimeTrigger: 'prompt matches a sensitive-action risk keyword (the deterministic gate)',
+    skipCondition: 'no risk-keyword match, no client/key, or the verdict has not settled by the classifier join (aborted; fail-closed)',
     calls: ['blocked_pending_owner', 'blocked_pending_owner', 'blocked_pending_owner', 'blocked_pending_owner'],
     costStates: [
       'accepted_in_private_cost_visibility_packet_not_public_constant',
@@ -1460,6 +1531,7 @@ const REQUIRED_CURRENT_SOURCE_CALL_IDS: readonly PromptEnhancementCurrentSourceC
   'current_profile_classifier',
   'current_stream_b_presence_classifier',
   'current_stage_classifier',
+  'current_sensitive_action_micro_clearance',
   'current_pinch_label_generator',
   'current_decision_session_option_generator',
   'current_content_template_grounding',

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.36 — 2026-09-02
+
+- The extension now records the same content-free interaction signals the CLI already
+  records for its own popups — which action was taken and when, never any text. They
+  are written locally through the CLI; nothing is sent anywhere unless you have turned
+  telemetry on yourself, which is off by default.
+- Internal comment and documentation cleanup. No change to how the extension behaves.
+
 ## 0.1.35 — 2026-08-26
 
 - Listing: the demo video is now linked at the top, next to what NexPath supports.

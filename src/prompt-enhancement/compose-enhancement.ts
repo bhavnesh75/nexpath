@@ -1,3 +1,6 @@
+import type { PromptEnhancementNounPurposeV1 } from './noun-purpose-transposition.js';
+import { findPromptEnhancementInternalVocabularyLeaksV1 } from './internal-vocabulary-leak.js';
+import { promptEnhancementSectionDisplayNameV1 } from './section-display-names.js';
 import {
   PROMPT_ENHANCEMENT_CONTRACT_VERSION,
   type PromptEnhancementActionEntryV1,
@@ -36,8 +39,15 @@ import {
   withPromptEnhancementCarriedFromPreviousBodyV1,
 } from './original-text-refs.js';
 import type { PromptEnhancementPrimaryIntent } from './routing-taxonomy.js';
+import { promptHistorySensitiveActionFactPresentV1 } from './prompt-history-signals.js';
+import {
+  isPromptEnhancementTypedSensitiveActionVerdictV1,
+  type PromptEnhancementSensitiveActionClearanceV1,
+  type PromptEnhancementTypedSensitiveActionVerdictV1,
+} from './sensitive-action-clearance.js';
 import {
   buildPromptEnhancementCanonicalConfirmation,
+  resolvePromptEnhancementSensitiveActionNamingV1,
   promptEnhancementGeneratedBodyRequiresConfirmationV1,
   requiresPromptEnhancementExecutionConfirmationForPrompt,
   validatePromptEnhancementSafety,
@@ -67,6 +77,16 @@ export interface PromptEnhancementComposeInput {
   acceptedAdditionalDetailsText?: string;
   composerRuntimeState?: PromptEnhancementComposerRuntimeState;
   structuredComposerOutput?: PromptEnhancementStructuredComposerOutputV1;
+  /**
+   * The classifier's sensitive-action clearance for this prompt. Threaded ONCE into
+   * compose, and from here it reaches all three places that consult a risk decision:
+   * insertion point 1, the validator-parity guard, and the composer's self-validate.
+   * Absent (every real call until the prompt block ships) => every decision behaves
+   * exactly as today, by the gate's fail-closed rule.
+   */
+  sensitiveActionClearance?: PromptEnhancementSensitiveActionClearanceV1;
+  /** The typed secret-in-prompt verdict: ACCUSES only, OR-ed after the clearance gate. */
+  typedSensitiveActionVerdict?: PromptEnhancementTypedSensitiveActionVerdictV1;
   previousSendableBody?: PromptEnhancementCurrentBodyV1;
   priorBodyId?: string;
   priorBodyRevision?: number;
@@ -81,6 +101,12 @@ export interface PromptEnhancementStructuredComposerOutputV1 {
     sourceFactIds: readonly string[];
   }[];
   composerClaims: readonly string[];
+  /**
+   * Layer 2's declaration: for each noun the composer used, the purpose the prompt gave it and
+   * the purpose its own text gives it. The composer STATES; a deterministic rule judges — it is
+   * never asked for a verdict on its own output. Absent means today's behaviour exactly.
+   */
+  nounPurposes?: readonly PromptEnhancementNounPurposeV1[];
   // E5: the composer self-reports the detected language of the original prompt
   // (BCP-47-ish, e.g. 'en' / 'hi' / 'hi-Latn' Hinglish / 'gu-Latn' Gujlish). Read by
   // the E5 language-consistency gate; optional so pre-E5 callers stay valid.
@@ -181,6 +207,7 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
     input.structuredComposerOutput,
     sectionPlans,
     input.sectionPlanningResult.renderedFacts,
+    input.originalPromptText,
   );
   const structuredComposerAttempted = runtimeState === 'accepted_structured_output' && input.structuredComposerOutput !== undefined;
   const structuredComposerRejected = structuredComposerAttempted && validatedLlmDrafts.draftsBySectionId.size === 0;
@@ -201,6 +228,8 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
       currentBody: input.previousSendableBody,
       actionType: action,
       callVisibilityMode: 'fallback_no_llm',
+      sensitiveActionClearance: input.sensitiveActionClearance,
+      typedSensitiveActionVerdict: input.typedSensitiveActionVerdict,
     });
     // T2 carriers: the body-level fields below record the carry, but the SECTIONS would
     // otherwise still read as freshly composed. Stamp each one so a section is
@@ -330,7 +359,24 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
   //
   // If the prompt demands confirmation, the clause is placed. Which section hosts it is a matter of
   // taste; whether it appears at all is not.
-  const canonicalConfirmationSectionId = requiresPromptEnhancementExecutionConfirmationForPrompt(input.originalPromptText)
+  //
+  // The sentence is resolved ONCE here — same naming ladder as the validator — and this exact
+  // string is what the renderer inserts, the duplication guard matches, and the parity predicate
+  // strips. One derivation per compose; the sites carry it.
+  const canonicalConfirmationSentence = buildPromptEnhancementCanonicalConfirmation(
+    input.originalPromptText,
+    resolvePromptEnhancementSensitiveActionNamingV1(input.originalPromptText, input.typedSensitiveActionVerdict),
+  );
+  // The THIRD way a body earns the clause, beside the current prompt's own words and a typed
+  // verdict: the recent-history lane fired. Hiren's 2026-08-20 ruling — a developer who said
+  // "deploy to production" in earlier prompts must still be asked, even when today's prompt is
+  // about something harmless. Reads the planned facts rather than taking new plumbing, because the
+  // fact is already here and a second channel could disagree with the first.
+  const historySensitiveActionFired =
+    promptHistorySensitiveActionFactPresentV1(input.sectionPlanningResult.renderedFacts);
+  const canonicalConfirmationSectionId = (requiresPromptEnhancementExecutionConfirmationForPrompt(input.originalPromptText, input.sensitiveActionClearance)
+    || isPromptEnhancementTypedSensitiveActionVerdictV1(input.typedSensitiveActionVerdict)
+    || historySensitiveActionFired)
     ? sectionPlans.find((sectionPlan) => (
       sectionPlan.sectionKind === 'risk_safety_or_confirmation' &&
       sectionPlan.safetyFlags.includes('sensitive_action_confirmation')
@@ -339,8 +385,18 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
         sectionPlan.sectionKind !== 'original_request_or_goal' &&
         sectionPlan.safetyFlags.includes('sensitive_action_confirmation')
       ))?.sectionId
+      // 🔒 Owner-ruled (2026-08-26): NEVER `source_signal_guidance`. Planning now gives the
+      // confirmation its own `risk_safety_or_confirmation` section, so rung 1 answers on the path
+      // that measured wrong (§6d A/B row 7). This last rung stays as the floor under that, and its
+      // one exclusion is the guidance section: it is guaranteed present by a different
+      // sub-milestone — if it cannot be injected the popup is cancelled — and its content belongs
+      // to a later one. Hosting the clause there put it somewhere it does not belong AND coupled
+      // the guidance section's survival to the confirmation, so clearing the clause deleted the
+      // guidance too. Being last, this rung had been picking whatever section happened to sort
+      // last, which on the config-issue preset was exactly that one.
       ?? [...sectionPlans].reverse().find((sectionPlan) => (
-        sectionPlan.sectionKind !== 'original_request_or_goal'
+        sectionPlan.sectionKind !== 'original_request_or_goal' &&
+        sectionPlan.sectionKind !== 'source_signal_guidance'
       ))?.sectionId
     : undefined;
   // Owner ruling 2026-08-14: when the composer RAN and a section's draft did not survive validation,
@@ -375,6 +431,8 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
       validatedLlmDrafts.draftsBySectionId.has(sectionPlan.sectionId)
       || keepsSectionWhenDraftMissing(sectionPlan))
     : sectionPlans;
+  const firstGeneratedSectionId = renderableSectionPlans
+    .find((sectionPlan) => sectionPlan.sectionKind !== 'original_request_or_goal')?.sectionId;
   const renderSectionsWithConfirmation = (confirmationSectionId: string | undefined) => renderableSectionPlans.map((sectionPlan) =>
       renderSection({
         sectionPlan,
@@ -384,6 +442,8 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
         sectionPlanningResult: input.sectionPlanningResult,
         llmDraftsBySectionId: validatedLlmDrafts.draftsBySectionId,
         insertCanonicalConfirmation: sectionPlan.sectionId === confirmationSectionId,
+        isFirstGeneratedSection: sectionPlan.sectionId === firstGeneratedSectionId,
+        canonicalConfirmationSentence,
       }),
   );
   let renderedSections = renderSectionsWithConfirmation(canonicalConfirmationSectionId);
@@ -411,8 +471,9 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
   if (
     canonicalConfirmationSectionId === undefined
     && text === canonicalText
-    && !text.includes(buildPromptEnhancementCanonicalConfirmation(input.originalPromptText))
-    && promptEnhancementGeneratedBodyRequiresConfirmationV1({ sections, originalPromptText: input.originalPromptText }, text)
+    && !text.includes(canonicalConfirmationSentence)
+    && (promptEnhancementGeneratedBodyRequiresConfirmationV1({ sections, originalPromptText: input.originalPromptText }, text, input.sensitiveActionClearance, canonicalConfirmationSentence)
+      || isPromptEnhancementTypedSensitiveActionVerdictV1(input.typedSensitiveActionVerdict))
   ) {
     const lastGeneratedSectionId = [...renderableSectionPlans].reverse()
       .find((sectionPlan) => sectionPlan.sectionKind !== 'original_request_or_goal')?.sectionId;
@@ -484,10 +545,22 @@ export function composePromptEnhancementBody(input: PromptEnhancementComposeInpu
       generatedSafeStatus,
       userDirtyState: action === 'apply_details' && typeof input.editedBodyText === 'string' ? 'dirty_user_edited' : 'clean',
       sections,
+      // I2 criterion (c): obligations whose section was pruned still ride the BODY. Read from the
+      // planning result the pruner wrote them to; absent (nothing pruned) leaves the field unset
+      // rather than an empty array, so "no pruning happened" and "pruning dropped nothing that
+      // survives" stay distinguishable in the record.
+      ...((input.sectionPlanningResult.inheritedSlotObligations ?? []).length > 0
+        ? { inheritedSlotObligations: input.sectionPlanningResult.inheritedSlotObligations }
+        : {}),
     };
   const safetyValidation = validatePromptEnhancementSafety({
     currentBody,
     callVisibilityMode,
+    sensitiveActionClearance: input.sensitiveActionClearance,
+    typedSensitiveActionVerdict: input.typedSensitiveActionVerdict,
+    // Only meaningful while the body still carries the composer's wording: the declaration
+    // describes the text the model wrote, so it must not judge a deterministic render.
+    ...(usesLlmWording ? { nounPurposes: input.structuredComposerOutput?.nounPurposes } : {}),
   });
 
   return {
@@ -603,6 +676,9 @@ function validatedStructuredComposerDrafts(
   output: PromptEnhancementStructuredComposerOutputV1 | undefined,
   sectionPlans: readonly PromptEnhancementSectionPlanItemV1[],
   renderedFacts: readonly PromptEnhancementGuidanceFact[] = [],
+  // The developer's own words: an identifier THEY wrote is theirs to echo, so the leak check
+  // below applies the same allowance the validator does rather than a stricter one.
+  originalPromptText = '',
 ): ValidatedStructuredComposerDrafts {
   const rejectedFor = (
     rejectionReason: PromptEnhancementComposerDraftRejectionReason,
@@ -642,6 +718,16 @@ function validatedStructuredComposerDrafts(
     if (!sectionPlan || sectionPlan.sectionKind === 'original_request_or_goal') { dropDraft('original_section'); continue; }
     const bodyText = normalizeWhitespace(draft.bodyText);
     if (!bodyText || containsDisallowedComposerWording(bodyText, sourceIds, sourceRefIds)) { dropDraft('empty_or_disallowed_wording'); continue; }
+    // A draft echoing the engine's own vocabulary is refused HERE, so the section renders
+    // deterministically and the popup survives. The validator still blocks the same identifier
+    // in a finished body — that is the backstop for text this gate never saw (a user edit, a
+    // body assembled another way); catching it at the draft keeps a model slip from costing the
+    // developer their whole enhancement.
+    const vocabularyLeaks = findPromptEnhancementInternalVocabularyLeaksV1({
+      text: bodyText,
+      allowedTexts: [originalPromptText, ...sectionPlan.structuredContentPartRefs, ...sectionPlan.sourceRefs.map((ref) => ref.sourceId)],
+    });
+    if (vocabularyLeaks.length > 0) { dropDraft('empty_or_disallowed_wording'); continue; }
     // Pasted content-template prose is disallowed wording of exactly the kind the
     // check above refuses, so it rides that reason rather than widening the typed
     // union — and it costs this draft only, leaving the section to render
@@ -673,6 +759,79 @@ function validatedStructuredComposerDrafts(
     droppedDraftCount: droppedDraftCount > 0 ? droppedDraftCount : undefined,
     droppedDraftReason,
   };
+}
+
+/**
+ * WHICH SECTIONS THE COMPOSER ACTUALLY WROTE — the sections whose drafts survived validation.
+ *
+ * 🔴 Exported for the I2 pruner (owner ruling, 2026-08-20). The pruner's stage (a) asks whether a
+ * section has anything to say; it used to answer with FACTS ALONE, and it asked before the composer
+ * had written a word. Measured on the sim: a body that carried Approach / Acceptance / Verification
+ * — every one of them written from the developer's own prompt, every one of them factless — came
+ * out with those three gone, while `context_and_constraints`, factless in exactly the same way,
+ * survived only because the floor happened to reach it first. That is the pruner deleting good
+ * wording on a technicality.
+ *
+ * 🔑 So the question becomes "a fact OR a draft", and this is the draft half of it. It reads the
+ * SAME validation the renderer will read — one map, one meaning (prohibition 15). Predicting the
+ * answer from the raw reply would let a draft that validation later refuses (disallowed wording,
+ * unclaimed fact ids) rescue a section that then renders empty.
+ *
+ * ⚠️ No output — the no-key path, and every test that runs without one — returns an EMPTY set, so
+ * stage (a) falls back to facts alone exactly as before. A keyless body must not sprout headers no
+ * one will fill.
+ */
+export function promptEnhancementValidatedDraftSectionIdsV1(
+  output: PromptEnhancementStructuredComposerOutputV1 | undefined,
+  sectionPlans: readonly PromptEnhancementSectionPlanItemV1[],
+  renderedFacts: readonly PromptEnhancementGuidanceFact[] = [],
+): ReadonlySet<string> {
+  return new Set(validatedStructuredComposerDrafts(output, sectionPlans, renderedFacts).draftsBySectionId.keys());
+}
+
+/**
+ * RESTRICT A COMPOSER REPLY TO THE SECTIONS THAT SURVIVED PRUNING.
+ *
+ * 🔴 Required by moving the pruner AFTER the composer (owner ruling, 2026-08-20), and it is not
+ * cosmetic. `composerClaims` is an OUTPUT-WIDE union — *"the union of every sourceFactId you used"* —
+ * and validation rejects the ENTIRE reply if any claim names a fact no surviving section carries.
+ * So pruning a drafted section without pruning its claim would discard every other draft with it and
+ * fall the whole body back to deterministic text: the pruner silently costing us the LLM wording it
+ * was only supposed to shorten.
+ *
+ * 🔴 **Scoped to the PRUNED sections by id, never to "whatever is still valid".** The first version
+ * kept only drafts naming a surviving section, which also swallowed a draft aimed at a section that
+ * never existed — a real composer fault that `partial_draft_drop` exists to report, and its test
+ * caught this immediately. Removing exactly what the registry pruned leaves every other fault to
+ * the validator that is supposed to judge it.
+ *
+ * ⚠️ The empty-claims fallback re-derives the union from the SURVIVING drafts' own `sourceFactIds`
+ * rather than inventing anything — the same definition the model was given, applied to the subset
+ * that lived. Every such id is provably in a surviving section's `structuredContentPartRefs`,
+ * because that is what admitted the draft in the first place.
+ */
+export function promptEnhancementComposerOutputForSurvivingSectionsV1(
+  output: PromptEnhancementStructuredComposerOutputV1 | undefined,
+  survivingSectionPlans: readonly PromptEnhancementSectionPlanItemV1[],
+  prunedSectionPlans: readonly PromptEnhancementSectionPlanItemV1[],
+): PromptEnhancementStructuredComposerOutputV1 | undefined {
+  if (!output || prunedSectionPlans.length === 0) return output;
+  const prunedIds = new Set(prunedSectionPlans.map((section) => section.sectionId));
+  const sectionDrafts = output.sectionDrafts.filter((draft) => !prunedIds.has(draft.sectionId));
+  if (sectionDrafts.length === output.sectionDrafts.length) return output;
+  // Only claims stranded BY THE PRUNING are withdrawn: an id a surviving section still carries stays,
+  // and an id no section ever carried stays too, so the validator still refuses it.
+  const allowed = new Set(survivingSectionPlans.flatMap((section) => section.structuredContentPartRefs));
+  const stranded = new Set(
+    prunedSectionPlans.flatMap((section) => section.structuredContentPartRefs).filter((ref) => !allowed.has(ref)),
+  );
+  const claimId = (claim: string): string => (claim.startsWith('claim:') ? claim.slice('claim:'.length) : '');
+  const kept = output.composerClaims.filter((claim) => !stranded.has(claimId(claim)));
+  const composerClaims = kept.length > 0
+    ? kept
+    : [...new Set(sectionDrafts.flatMap((draft) => draft.sourceFactIds).filter((id) => allowed.has(id)))]
+      .map((id) => `claim:${id}`);
+  return { ...output, sectionDrafts, composerClaims };
 }
 
 /**
@@ -799,6 +958,14 @@ function renderSection(input: {
   sectionPlanningResult: PromptEnhancementSectionPlanningResult;
   llmDraftsBySectionId?: ReadonlyMap<string, string>;
   insertCanonicalConfirmation?: boolean;
+  /**
+   * True for the first generated section only. The planning posture is a stance for the whole
+   * body, so it is stated ONCE — repeating it under every heading is the kind of line no
+   * developer needs to read five times.
+   */
+  isFirstGeneratedSection?: boolean;
+  /** The compose-level resolved sentence — inserted as-is so every site carries ONE string. */
+  canonicalConfirmationSentence: string;
 }): { sectionId: string; title: string; bodyText: string; text: string } {
   const { sectionPlan, action } = input;
   const heading = headingForSection(sectionPlan.sectionKind);
@@ -818,7 +985,7 @@ function renderSection(input: {
     // evidence statuses on the plan + sectionsForFeedback) — never rendered into the prompt body.
     const lines = [llmDraft];
     if (input.insertCanonicalConfirmation === true) {
-      lines.push(`- ${buildPromptEnhancementCanonicalConfirmation(input.originalPromptText)}`);
+      lines.push(`- ${input.canonicalConfirmationSentence}`);
     }
     const bodyText = lines.join('\n');
     return {
@@ -864,6 +1031,14 @@ function renderSection(input: {
     if (contentFreeInstruction) lines.length = 0;
     lines.unshift(...factValueLines);
   }
+  // The planning posture, stated in the body itself. Added AFTER the fact-value rule above, whose
+  // "is this instruction content-free?" test counts the section's own lines — a stance line
+  // arriving before that count would have kept a standing instruction the fact was meant to
+  // displace. The developer asked ABOUT something risky, so every section says plainly that the
+  // work is to check and confirm, not to carry it out.
+  if (input.sectionPlanningResult.planningPosture === true && input.isFirstGeneratedSection === true) {
+    lines.push('This request touches something risky the developer has not asked to have done: cover what to check and what to confirm with them first, rather than carrying it out.');
+  }
   if (action === 'more_thorough') {
     lines.push(...moreThoroughLines(sectionPlan));
   }
@@ -883,7 +1058,7 @@ function renderSection(input: {
   // Body quality (2026-08-06): no per-section provenance sentence in the editable body — that
   // information already lives in the typed section metadata.
   if (input.insertCanonicalConfirmation === true) {
-    lines.push(buildPromptEnhancementCanonicalConfirmation(input.originalPromptText));
+    lines.push(input.canonicalConfirmationSentence);
   }
   const bodyText = lines.map((line) => `- ${line}`).join('\n');
 
@@ -935,8 +1110,8 @@ function instructionLinesForSection(
   const map: Record<string, string[]> = {
     source_signal_guidance: [
       line(
-        'Use the current source signal as a task constraint and convert it into direct implementation guidance.',
-        'Use the source signal as a direct task constraint.',
+        'Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.',
+        'Treat what your recent practice shows as a direct constraint on this task.',
       ),
     ],
     acceptance_or_output_expectation: [
@@ -1169,7 +1344,7 @@ function compactPointInventoryLine(
   promptReviewOrigin: PromptEnhancementPromptReviewOrigin,
 ): string {
   const points = extractPromptEnhancementPromptPointsV1(originalPromptText, promptReviewOrigin);
-  if (points.length === 0) return 'Keep a compact point inventory.';
+  if (points.length === 0) return 'Keep the list of separate points short and complete.';
   return `Keep these points covered: ${points.join(' | ')}.`;
 }
 
@@ -1622,8 +1797,9 @@ function hasSourceGuidanceSection(
 }
 
 function headingForSection(sectionKind: string): string {
-  const words = sectionKind.split('_').filter(Boolean);
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  // The curated display name, never the internal id title-cased. The map keeps its own
+  // title-case fallback so an unmapped kind renders rather than crashing.
+  return promptEnhancementSectionDisplayNameV1(sectionKind);
 }
 
 function fallbackSourceA(): PromptEnhancementSourceRefV1 {

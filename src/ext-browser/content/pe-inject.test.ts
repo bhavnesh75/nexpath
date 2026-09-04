@@ -299,3 +299,57 @@ describe('announcing a terminal decision early', () => {
     expect(onTerminalIntent).toBeTypeOf('function');
   });
 });
+
+/**
+ * Content-side routing for the rating surface (Phase 4, change-map #12).
+ *
+ * A wire test, and it exists because deleting the whole branch left all 1,413
+ * tests green: the message would arrive, nothing would mount, and there would be
+ * no error to notice — the popup simply never appears.
+ */
+describe('show-rating handling', () => {
+  function showRating(seq = 1, extra: Record<string, unknown> = {}): void {
+    dispatchSwMessage({
+      type: 'nexpath:show-rating',
+      projectRoot: 'https://bolt.new/~/p',
+      payload: { schemaVersion: 1, kind: 'rating', viewSeq: seq, ...extra },
+    });
+  }
+
+  it('⭐ mounts and shows the rating view', () => {
+    showRating(4);
+
+    expect(mountMock).toHaveBeenCalledTimes(1);
+    expect(controller.show).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'rating', viewSeq: 4 }),
+    );
+  });
+
+  it('reuses the mount, exactly as a PE re-render does', () => {
+    showPe();
+    showRating(2);
+
+    expect(mountMock).toHaveBeenCalledTimes(1);
+    expect(controller.show).toHaveBeenCalledTimes(2);
+  });
+
+  it('a schemaVersion mismatch is ignored — no show', () => {
+    showRating(1, { schemaVersion: 99 });
+
+    expect(controller.show).not.toHaveBeenCalled();
+  });
+
+  it('⭐ does NOT dismiss the sticky notice — that notice belongs to a held prompt', () => {
+    // Erasing it would tell the user a hold ended when it had not. The PE branch
+    // dismisses because the PE popup IS the thing the hold was waiting for.
+    showRating();
+
+    expect(dismissStickyNoticeMock).not.toHaveBeenCalled();
+  });
+
+  it('a malformed rating message is ignored rather than mounting something empty', () => {
+    dispatchSwMessage({ type: 'nexpath:show-rating', projectRoot: 'r', payload: { kind: 'rating' } });
+
+    expect(controller.show).not.toHaveBeenCalled();
+  });
+});

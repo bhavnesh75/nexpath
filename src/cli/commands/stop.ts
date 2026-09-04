@@ -10,7 +10,7 @@ import {
 } from '../../store/pending-prompt-enhancements.js';
 import { isFeedbackEligible, markFeedbackShown } from '../../store/feedback-cadence.js';
 import { recordActionSignal, type PromptActionSignalKind } from '../../store/feedback-signals.js';
-import { sendFeedback } from '../../telemetry/feedback-send.js';
+import { sendFeedback, sendFeedbackDismissed, sendFeedbackRatingOption } from '../../telemetry/feedback-send.js';
 import { runFeedbackPopup, type FeedbackRenderFn, type FeedbackResult } from '../../decision-session/feedback-popup.js';
 import { createFeedbackRenderFn } from '../../decision-session/feedback-tty.js';
 import type { SelectFn } from '../../decision-session/DecisionSession.js';
@@ -202,7 +202,21 @@ export function persistPromptEnhancementSequenceContinuationCancelV1(
  */
 export interface FeedbackDeps {
   render: FeedbackRenderFn | null;
-  send:   (store: Store, rating: number) => Promise<boolean>;
+  send:   (store: Store, rating: number, now?: number) => Promise<boolean>;
+  /**
+   * Required, not optional, and deliberately so: an optional field would let a
+   * test that forgets it fall through to the REAL sender, which posts to
+   * PostHog for real — the built-in api key is a shipped default, so nothing
+   * would stop it.
+   *
+   * ⚠️ `tsconfig.json` excludes `**​/*.test.ts`, so this is NOT caught at
+   * typecheck; a test that omits it fails at RUNTIME with "fbDismissed is not a
+   * function". Loud, immediate, and in the test rather than on the wire — which
+   * is the outcome that matters.
+   */
+  sendDismissed: (store: Store) => Promise<boolean>;
+  /** Required for the same reason `sendDismissed` is — see above. */
+  sendRatingOption: (store: Store, rating: number, now?: number) => Promise<boolean>;
 }
 
 // ── Core logic ─────────────────────────────────────────────────────────────────
@@ -501,7 +515,17 @@ export async function runStop(
   //      consuming the cadence) when no renderer is available.
   if (isFeedbackEligible(store)) {
     const fbRender = feedbackDeps ? feedbackDeps.render : createFeedbackRenderFn();
-    const fbSend   = feedbackDeps ? feedbackDeps.send   : sendFeedback;
+    // The two rating envelopes describe ONE click, so they take one timestamp
+    // rather than each calling `Date.now()` — a millisecond apart is enough to
+    // break anything that joins them on time, and the browser's end-to-end suite
+    // caught exactly that happening under load.
+    const fbSend = feedbackDeps
+      ? feedbackDeps.send
+      : (s: Store, r: number, n?: number) => sendFeedback(s, r, n === undefined ? {} : { now: n });
+    const fbDismissed = feedbackDeps ? feedbackDeps.sendDismissed : sendFeedbackDismissed;
+    const fbRatingOption = feedbackDeps
+      ? feedbackDeps.sendRatingOption
+      : (s: Store, r: number, n?: number) => sendFeedbackRatingOption(s, r, n === undefined ? {} : { now: n });
     if (fbRender) {
       // The popup blocks for user input; don't hold the global DB lock across it (MPS-8) — release
       // before, re-acquire + reload after, so other sessions are not blocked and their concurrent
@@ -514,7 +538,26 @@ export async function runStop(
         // events (install + advisory + option-selected), then send the rating.
         // Flush regardless of telemetry.enabled — this explicit action is the consent.
         await flushLifecycle(store);
-        await fbSend(store, result.rating);
+        const answeredAt = Date.now();
+        await fbSend(store, result.rating, answeredAt);
+        // The same answer under its own event NAME (`feedback_rating_good` and
+        // its siblings), alongside `feedback_submitted` rather than instead of
+        // it — replacing would rename history and break existing charts.
+        //
+        // AFTER the rating, not before: this is a second envelope on the SAME
+        // consent, and if one of the two has to fail it should be the
+        // convenience one, not the record the dashboards were built on.
+        await fbRatingOption(store, result.rating, answeredAt);
+      } else {
+        // Shown and closed without an answer. Reported so that "asked and
+        // declined" is distinguishable from "never asked" — without it the
+        // rating has no denominator of its own.
+        //
+        // NO FLUSH HERE, and that is the whole point: releasing the buffer is
+        // what the rating CLICK consents to, and this is the opposite of that
+        // click. The dismissal goes out on its own, carrying an installation id
+        // and a timestamp.
+        await fbDismissed(store);
       }
       markFeedbackShown(store);
       logger.info('stop_feedback_shown', { cwd: payload.cwd, selected: result.outcome === 'selected' });
@@ -718,8 +761,18 @@ export function registerStopCommand(program: import('commander').Command): void 
           const body = pending.result.currentBody;
           const sections = body.sections ?? [];
           const out = process.stdout;
+          // I3 (phase 37): the floor/extras split, reported where the body is actually read.
+          // `sections:N` alone cannot answer §15.4 step 4 — a legitimate floor of 5 with 3 extras
+          // and a genuine cap breach of 4 + 4 render the same count. The boundary log carries these
+          // two fields, but the sim harness does not capture that log, so the one observation point
+          // a sim run HAS was the one place the question could not be asked.
+          const floorCount = pending.result.floorSectionCount;
+          const prunedCount = pending.result.prunedSectionCount ?? 0;
           out.write('[SIM] PE enhanced prompt — disposition:' + pending.result.disposition
             + ' sections:' + sections.length
+            + (floorCount === undefined
+              ? ''
+              : ' floor:' + floorCount + ' extras:' + (sections.length - floorCount) + ' pruned:' + prunedCount)
             + ' composer:' + (body.composerMode ?? 'unknown')
             + ' language:' + (body.effectiveLanguageState ?? 'unknown') + '\n');
           for (const [index, section] of sections.entries()) {

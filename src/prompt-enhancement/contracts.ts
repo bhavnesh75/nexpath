@@ -279,7 +279,19 @@ export interface PromptEnhancementTriggerProvenanceV1 {
    */
   classifierCapabilityCandidates?: readonly string[];
   classifierProjectFactCandidates?: readonly string[];
+  classifierSectionRelevanceOrder?: readonly string[];
   classifierDebugEvidencePresent?: readonly string[];
+  /**
+   * The classifier's sensitive-action precision observation from the same call: whether
+   * the CURRENT prompt PROPOSES performing a risky action or merely MENTIONS one, plus the
+   * stated benign reading. String-typed here like its siblings (the exact-value guard lives
+   * in the clearance gate, which accepts only the literal 'not_proposed' with a non-empty
+   * reason). ⚠️ Unlike the siblings, this field's absence is not merely "no observation" —
+   * it is the FAIL-CLOSED state: absent, degraded, malformed and reasonless all mean the
+   * confirmation line is emitted exactly as it is today. A degraded classifier call omits
+   * the field entirely.
+   */
+  classifierSensitiveActionClearance?: { readonly verdict?: string; readonly reason?: string; readonly name?: string };
   promptStartBoundary: PromptStartStopSourceSnapshot['hookBoundary'];
   deliveryBoundary: PromptStartStopSourceSnapshot['deliveryBoundary'];
   promptStartCanReplaceSameTurn: PromptStartStopSourceSnapshot['runAutoCanHoldOrReplaceSubmittedPrompt'];
@@ -877,6 +889,22 @@ export interface PromptEnhancementCurrentBodyV1 {
   generatedSafeStatus: PromptEnhancementValidationStatus;
   userDirtyState: 'clean' | 'dirty_user_edited' | 'unknown';
   sections: readonly PromptEnhancementSectionV1[];
+  /**
+   * I2 criterion (c): the obligations that OUTLIVED their pruned section.
+   *
+   * 🔒 *"a dropped section takes its visible slots, but no-invention state, send-policy and
+   * confirmation linkage stay on the body invisibly for the checks"* (§15.1 criterion (c)), and the
+   * phase's done-when: *"safety metadata is present on the body even when its section dropped"*.
+   *
+   * 🔴 Added at the phase-36 verification pass. The pruner had computed this list since it was
+   * built, and the facade had carried it on the planning object — where NOTHING read it. Obligations
+   * are otherwise per-section (`safety-sendability.ts` iterates `currentBody.sections` and reads
+   * each section's own `slotObligations`), so a pruned section took its obligations out of the body
+   * with it, which is exactly what the criterion forbids.
+   *
+   * ⚠️ Optional so every existing caller and fixture stays valid; absent means nothing was pruned.
+   */
+  inheritedSlotObligations?: readonly string[];
 }
 
 export interface PromptEnhancementPublicTrustCueV1 {
@@ -1888,6 +1916,32 @@ export interface PromptEnhancementPrepareResultV1 {
   // flag rather than folded into `compositionFallbackReasonCodes`. Present only when truncation
   // occurred; additive + optional → PE/PEF behaviour and the emitted contract stay byte-identical.
   additionalDetailsTruncated?: boolean;
+  /**
+   * I2 observability — how many sections the pruner dropped from this body.
+   *
+   * 🔴 Added at the phase-36 verification pass. The pruner already produced its dropped-section
+   * list and the facade already carried it, but nothing read it: the ONE thing the pruner exists to
+   * do was unobservable from an ordinary run, which is the seam prohibition 10 forbids.
+   *
+   * 🔑 It is also what phase 37 (I3) is required to measure — *"the AFTER number: the same
+   * distribution with the pruner on"* — so the measurement rides an ordinary boundary log rather
+   * than needing a bespoke probe built for it.
+   *
+   * ⚠️ A COUNT, deliberately, not the ids. Section ids embed the route decision id and the section
+   * kind; the count answers "did the pruner do anything, and how much" without putting per-body
+   * identifiers into the log. Present only when something was actually pruned, so absent and zero
+   * stay distinguishable.
+   */
+  prunedSectionCount?: number;
+  /**
+   * I2/I3 observability — how many of this body's sections were FLOOR (exempt from the cap).
+   *
+   * 🔴 Added at phase 37 because §15.4 step 4 judges whether a body exceeded floor + 3, and without
+   * this the split is not reconstructable from a run: a legitimate floor of 5 with 3 extras and a
+   * genuine breach of 4 floor + 4 extras produce the same section count. Emitted alongside
+   * `prunedSectionCount` so the two read together.
+   */
+  floorSectionCount?: number;
 }
 
 export type PromptEnhancementPrepareFacadeV1 = (

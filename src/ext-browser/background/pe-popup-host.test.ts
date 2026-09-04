@@ -7,7 +7,7 @@
  * the synthesized edit_body, F2 smooth send and the terminal outcomes are all
  * proven against the engine's own popup logic, not a mock of it.
  */
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LogPort } from '../../core/ports/log.port.js';
 import type { PendingPeRecord } from '../adapters/pe-pending-store.js';
@@ -17,7 +17,10 @@ import {
   deliverPePanelCommand,
   isPePopupOpen,
   runBrowserPePopup,
+  runBrowserRatingPopup,
 } from './pe-popup-host.js';
+import { recordSignal, readSignals } from '../adapters/lifecycle-signals.js';
+import { _resetIdentityInFlight } from '../adapters/rating-identity.js';
 import type { PePanelCommandV1, PePanelViewV1 } from '../ui/pe-contract.js';
 
 function makeLog(): { log: LogPort; events: Array<[string, Record<string, unknown> | undefined]> } {
@@ -573,5 +576,301 @@ describe('feedback persistence — PE-BR-11 closed (the CLI feedback store, brow
     });
     const list = JSON.parse(store.data.get('nexpath_pe_feedback_events')!) as Array<{ event: unknown }>;
     expect(JSON.stringify(list[0]!.event)).toContain('too_much_or_too_long');
+  });
+  /**
+   * CLI parity for the per-action signals (§4.2). The CLI wires its
+   * `actionSignalSink` to the STORE — `auto.ts:841`,
+   * `prompt-enhancement-popup-host.ts:216`, `:259`, `stop.ts:817`, `:899`. The
+   * browser used to wire it to `log.debug` alone, so every action was observable
+   * for a moment and then gone, and the flush had nothing to send.
+   *
+   * A wire test, because losing the call again would look like nothing: no error,
+   * no failing assertion, just lifecycle events that never arrive.
+   */
+  it('⭐ a popup action is BUFFERED, not merely logged — the CLI records these', async () => {
+    const { log } = makeLog();
+    const store = memoryStore();
+    let seq = 0;
+    const tab = async (msg: unknown): Promise<unknown> => {
+      const m = msg as { type?: string; payload?: PePanelViewV1 };
+      if (m.type === 'nexpath:show-pe' && m.payload) {
+        seq = m.payload.viewSeq;
+        setTimeout(() => { deliverPePanelCommand(log, ROOT, seq, { type: 'use_original' }); }, 0);
+      }
+      return { ok: true };
+    };
+
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab: tab,
+      feedbackStore: store,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+
+    // The sink is fire-and-forget (`void recordSignal(...)`) and the buffer's
+    // writes are serialised, so the write lands a microtask or two after the
+    // popup resolves. Waiting for it is the honest assertion; asserting
+    // immediately would only pass by accident of scheduling.
+    await vi.waitFor(() => expect(store.data.get('nexpath_lifecycle_signals')).toBeTruthy());
+
+    const raw = store.data.get('nexpath_lifecycle_signals');
+    const signals = JSON.parse(raw!) as Array<{ kind: string; occurredAt: number }>;
+    expect(signals.map((s) => s.kind)).toContain('pe_use_original');
+    for (const s of signals) {
+      expect(Object.keys(s).sort()).toEqual(['kind', 'occurredAt']);   // content-free
+      expect(typeof s.occurredAt).toBe('number');
+    }
+  });
+
+  /**
+   * The details merge — the one browser action whose signal was missing.
+   *
+   * The CLI's Enter on "Additional details" sends `apply_details` and the engine
+   * maps it to `pe_apply_details`. The browser's dock merges locally and sends
+   * `edit_body`, which is NOT in that map (in the CLI it means an inline body
+   * edit), so the action was recorded on one surface and not the other.
+   */
+  it('⭐ a details merge records pe_apply_details — the CLI records it, so the browser must too', async () => {
+    const { log } = makeLog();
+    const store = memoryStore();
+    let shows = 0;
+    const tab = async (msg: unknown): Promise<unknown> => {
+      const m = msg as { type?: string; payload?: PePanelViewV1 };
+      if (m.type === 'nexpath:show-pe' && m.payload) {
+        const seq = m.payload.viewSeq;
+        shows += 1;
+        // First frame: merge details. Second frame (the engine's echo): finish.
+        const cmd: PePanelCommandV1 = shows === 1
+          ? { type: 'edit_body', bodyText: 'body plus the merged details' }
+          : { type: 'use_original' };
+        setTimeout(() => { deliverPePanelCommand(log, ROOT, seq, cmd); }, 0);
+      }
+      return { ok: true };
+    };
+
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab: tab,
+      feedbackStore: store,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await vi.waitFor(() => {
+      const raw = store.data.get('nexpath_lifecycle_signals');
+      expect(raw).toBeTruthy();
+      expect(JSON.parse(raw!).map((s: { kind: string }) => s.kind)).toContain('pe_apply_details');
+    });
+  });
+
+  it('with no store wired, an action still completes — buffering is best-effort', async () => {
+    const { log } = makeLog();
+    let seq = 0;
+    const tab = async (msg: unknown): Promise<unknown> => {
+      const m = msg as { type?: string; payload?: PePanelViewV1 };
+      if (m.type === 'nexpath:show-pe' && m.payload) {
+        seq = m.payload.viewSeq;
+        setTimeout(() => { deliverPePanelCommand(log, ROOT, seq, { type: 'use_original' }); }, 0);
+      }
+      return { ok: true };
+    };
+
+    const { result } = await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab: tab,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+
+    expect(result.state).toBe('selected_original');
+  });
+});
+
+describe('⭐ wrong-stage rating command', () => {
+  it('a rating command must NOT close the PE popup', async () => {
+    const { log } = makeLog();
+    let seq = 0;
+    const tab = async (msg: unknown): Promise<unknown> => {
+      const m = msg as { type?: string; payload?: PePanelViewV1 };
+      if (m.type === 'nexpath:show-pe' && m.payload) {
+        seq = m.payload.viewSeq;
+        setTimeout(() => {
+          deliverPePanelCommand(log, ROOT, seq, { type: 'rating', rating: 3 });
+          setTimeout(() => { deliverPePanelCommand(log, ROOT, seq, { type: 'use_original' }); }, 0);
+        }, 0);
+      }
+      return { ok: true };
+    };
+    const { result } = await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab: tab,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    expect(result.state).toBe('selected_original');
+  });
+});
+
+// ── the rating popup loop (Phase 5) ─────────────────────────────────────────
+
+describe('runBrowserRatingPopup', () => {
+  /** A storage.local stand-in; the same shape the other suites here use. */
+  function memoryStore() {
+    const data = new Map<string, string>();
+    return {
+      data,
+      getKey: async (n: string) => data.get(n) ?? null,
+      setKey: async (n: string, v: string) => { data.set(n, v); },
+    };
+  }
+
+  beforeEach(() => { _resetIdentityInFlight(); });
+
+  /** Records every POST so the tests assert the real envelope, not a mock. */
+  function wire(ok = true) {
+    const posts: Record<string, unknown>[] = [];
+    const fetch = (async (_url: string, init: { body: string }) => {
+      posts.push(JSON.parse(init.body) as Record<string, unknown>);
+      return { ok, status: ok ? 200 : 500 };
+    }) as never;
+    return { fetch, posts, events: () => posts.map((p) => p['event'] as string) };
+  }
+
+  /** Show the popup and answer it with `command` once the view has gone out. */
+  async function run(
+    command: unknown,
+    opts: { ok?: boolean; seq?: number; store?: ReturnType<typeof memoryStore>; failPush?: boolean } = {},
+  ) {
+    const { log, events } = makeLog();
+    const store = opts.store ?? memoryStore();
+    const w = wire(opts.ok ?? true);
+    const sent: unknown[] = [];
+    const sendToTab = async (msg: unknown): Promise<unknown> => {
+      sent.push(msg);
+      const m = msg as { type?: string; payload?: { viewSeq: number } };
+      if (m.type === 'nexpath:show-rating') {
+        if (opts.failPush) throw new Error('no content script');
+        const seq = opts.seq ?? m.payload!.viewSeq;
+        if (command !== null) setTimeout(() => { deliverPePanelCommand(log, ROOT, seq, command); }, 0);
+      }
+      return { ok: true };
+    };
+
+    const outcome = await runBrowserRatingPopup({
+      log, projectRoot: ROOT, store, sendToTab, fetch: w.fetch, now: () => 1_700_000_000_000,
+    });
+    return { outcome, store, posts: w.posts, events: w.events(), sent, logEvents: events };
+  }
+
+  it('⭐ a selection sends the rating and marks the popup shown', async () => {
+    const { outcome, store, events, posts } = await run({ type: 'rating', rating: 3 });
+
+    expect(outcome).toEqual({ state: 'rated', rating: 3 });
+    expect(events).toContain('feedback_submitted');
+    const rating = posts.find((p) => p['event'] === 'feedback_submitted');
+    expect((rating!['properties'] as Record<string, unknown>)['rating']).toBe(3);
+    expect(store.data.get('feedback_last_shown_at')).toBe('1700000000000');
+  });
+
+  it('⭐ the lifecycle buffer is flushed BEFORE the rating — denominator first', async () => {
+    const store = memoryStore();
+    await recordSignal(store, 'pe_shorter', 1_699_999_000_000);
+
+    const { events } = await run({ type: 'rating', rating: 4 }, { store });
+
+    // install event, then the buffered action, then the rating — in that order.
+    // The per-option event (r16) trails the rating on the same consent.
+    expect(events.slice(-2)).toEqual(['feedback_submitted', 'feedback_rating_excellent']);
+    expect(events).toContain('pe_shorter');
+    expect(events.indexOf('pe_shorter')).toBeLessThan(events.indexOf('feedback_submitted'));
+    expect(await readSignals(store)).toEqual([]);      // pruned after their sends
+  });
+
+  it('⭐ a dismissal reports ONLY the dismissal — no rating, no flush', async () => {
+    const store = memoryStore();
+    await recordSignal(store, 'pe_close', 1_699_999_000_000);
+
+    const { outcome, posts, events } = await run({ type: 'close' }, { store });
+
+    expect(outcome).toEqual({ state: 'dismissed' });
+    // Exactly one envelope: the dismissal. Not the rating, and NOT the buffer —
+    // releasing that is what the rating click consents to (§4.2).
+    expect(events).toEqual(['feedback_dismissed']);
+    const props = posts[0]!['properties'] as Record<string, unknown>;
+    expect(Object.keys(props).sort())
+      .toEqual(['$lib', '$lib_version', 'dismissed_at', 'installation_id', 'surface']);
+    expect(store.data.get('feedback_last_shown_at')).toBe('1700000000000');
+    expect(await readSignals(store)).toHaveLength(1);   // the buffer is untouched
+  });
+
+  it('⭐ a failed push marks NOTHING shown — §4.1 M3, cadence is not spent on a popup nobody saw', async () => {
+    const { outcome, store, posts } = await run(null, { failPush: true });
+
+    expect(outcome).toEqual({ state: 'not_shown', reasonCodes: ['panel_unreachable'] });
+    expect(store.data.get('feedback_last_shown_at')).toBeUndefined();
+    expect(posts).toEqual([]);
+  });
+
+  it('⭐ a command with a stale viewSeq is dropped, not acted on', async () => {
+    // §4.1 M1: the seq guard is why the view carries one and the box expects it
+    // before the push. A stale reply must not send a rating.
+    const store = memoryStore();
+    const { log } = makeLog();
+    const sendToTab = async (msg: unknown): Promise<unknown> => {
+      const m = msg as { type?: string };
+      if (m.type === 'nexpath:show-rating') {
+        setTimeout(() => {
+          // wrong seq first — dropped; then the right one
+          deliverPePanelCommand(log, ROOT, 99, { type: 'rating', rating: 1 });
+          deliverPePanelCommand(log, ROOT, 1, { type: 'rating', rating: 4 });
+        }, 0);
+      }
+      return { ok: true };
+    };
+    const w = wire();
+
+    const outcome = await runBrowserRatingPopup({
+      log, projectRoot: ROOT, store, sendToTab, fetch: w.fetch, now: () => 1_700_000_000_000,
+    });
+
+    expect(outcome).toEqual({ state: 'rated', rating: 4 });   // NOT 1
+    const rating = w.posts.find((p) => p['event'] === 'feedback_submitted');
+    expect((rating!['properties'] as Record<string, unknown>)['rating']).toBe(4);
+  });
+
+  it('⭐ refuses to open when a PE popup already owns the root — §4.1 M2', async () => {
+    const { log } = makeLog();
+    const store = memoryStore();
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((r) => { release = r; });
+
+    // A PE popup holding the mailbox for ROOT.
+    const pe = runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record,
+      sendToTab: async (msg: unknown) => {
+        const m = msg as { type?: string; payload?: PePanelViewV1 };
+        if (m.type === 'nexpath:show-pe' && m.payload) {
+          const seq = m.payload.viewSeq;
+          void held.then(() => { deliverPePanelCommand(log, ROOT, seq, { type: 'close' }); });
+        }
+        return { ok: true };
+      },
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    await vi.waitFor(() => expect(isPePopupOpen(ROOT)).toBe(true));
+
+    const outcome = await runBrowserRatingPopup({
+      log, projectRoot: ROOT, store,
+      sendToTab: async () => ({ ok: true }),
+      now: () => 1_700_000_000_000,
+    });
+
+    expect(outcome).toEqual({ state: 'not_shown', reasonCodes: ['popup_already_open'] });
+    expect(store.data.get('feedback_last_shown_at')).toBeUndefined();  // no cadence spent
+    release!();
+    await pe;
+  });
+
+  it('releases the mailbox afterwards, so the next stop can open one', async () => {
+    await run({ type: 'rating', rating: 2 });
+    expect(isPePopupOpen(ROOT)).toBe(false);
+  });
+
+  it('closes the panel on the way out', async () => {
+    const { sent } = await run({ type: 'close' });
+    expect((sent as { type?: string }[]).some((m) => m.type === 'nexpath:pe-close')).toBe(true);
   });
 });

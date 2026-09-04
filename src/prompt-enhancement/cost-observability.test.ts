@@ -161,6 +161,9 @@ describe('Phase 12 cost, provider, latency, and observability contracts', () => 
       'current_profile_classifier',
       'current_stream_b_presence_classifier',
       'current_stage_classifier',
+      // The sensitive-action clearance micro-call — owner-approved 2026-08-25, measured
+      // 45/45 on the frozen set in this focused form; gated, parallel, fail-closed.
+      'current_sensitive_action_micro_clearance',
       'current_pinch_label_generator',
       'current_decision_session_option_generator',
       'current_content_template_grounding',

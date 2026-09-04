@@ -5,6 +5,10 @@ import {
   isPromptEnhancementProjectFactCategoryV1,
   type PromptEnhancementProjectFactCategoryV1,
 } from '../prompt-enhancement/project-fact-applicability.js';
+import {
+  promptEnhancementRelevanceMenuLinesV1,
+  normalizePromptEnhancementRelevanceOrderV1,
+} from '../prompt-enhancement/section-relevance.js';
 import { classifyPrompt } from './PromptClassifier.js';
 import {
   PROMPT_ENHANCEMENT_PRIMARY_INTENTS,
@@ -98,6 +102,31 @@ const PROJECT_FACT_APPLICABILITY_BLOCK = [
 ].join('\n');
 
 /**
+ * I1 — the RELEVANCE OBSERVATION (§15.2, §47.2 step 1).
+ *
+ * 🔒 *"an ORDERING, not a deletion — the model deletes nothing"*. It rides THIS already-parked
+ * call (§47.1: the decider rides the same parked classifier call; prohibition 3: no new call), as
+ * the addition C1 built its section to accept.
+ *
+ * ⚠️ The model orders section KINDS, not planned sections: this call runs BEFORE routing and
+ * planning, so no plan exists yet to rank. I2 applies the ordering to whatever is actually planned.
+ *
+ * ⛔ Nothing is decided here. The registry prunes in I2 under the LOCKED drop-criteria, where
+ * evidence is tested before relevance is even consulted — a section the model ranks last still
+ * survives if the criteria say it must.
+ */
+const RELEVANCE_OBSERVATION_BLOCK = [
+  'SECTION RELEVANCE OBSERVATION — the enhanced prompt is built from sections. Order the kinds',
+  'below by how much each would SERVE THIS PROMPT, most useful first, in "section_relevance_order".',
+  '⛔ This is an ORDERING, not a selection: do NOT omit kinds because they seem unlikely, and do not',
+  'decide what gets used — that decision is not yours. Rank what you are given and stop there.',
+  '- Rank on what the developer is trying to DO in this prompt, not on which kinds sound generally',
+  '  important. A kind that would repeat what they already said is LESS useful, not more.',
+  '- If two kinds serve equally, put the one that changes the work first.',
+  ...promptEnhancementRelevanceMenuLinesV1(),
+].join('\n');
+
+/**
  * The evidence-priority ladder, in its LOCKED ORDER. Rung 7 exists but is
  * DEFERRED — coding-agent response context is not exposed in this version, so
  * the model must never solicit or weigh it.
@@ -132,6 +161,43 @@ const INTENT_MENU_BLOCK = [
   'INTENT MENU (choose exactly one for "primary_intent", or empty string):',
   ...PROMPT_ENHANCEMENT_PRIMARY_INTENTS.map((intent) => `- ${intent}`),
 ].join('\n');
+
+/**
+ * SENSITIVE-ACTION OBSERVATION — the precision half of the confirmation-line design.
+ *
+ * The deterministic keyword layer (RISK_PATTERNS) keeps perfect recall and is unchanged;
+ * this observation answers the one question no vocabulary can: does the CURRENT prompt
+ * PROPOSE performing a risky action, or merely MENTION a risk-flavoured word? It is an
+ * APPROVED exception to the additive-only rule (a clearance removes the confirmation
+ * line), bound by: only an explicit negative clears, a reasonless clearance is VOID, and
+ * absence always fails closed. The instruction therefore pushes the model toward
+ * 'proposed'/omission whenever unsure — a wrong 'not_proposed' is the only dangerous
+ * direction.
+ */
+/**
+ * SENSITIVE-ACTION OBSERVATION — the precision half of the confirmation-line design.
+ *
+ * The deterministic keyword layer (RISK_PATTERNS) keeps perfect recall and is unchanged;
+ * this observation answers the one question no vocabulary can: does the CURRENT prompt
+ * ASK for a risky action to be performed, or does the risky word merely play a harmless
+ * role? It is an APPROVED exception to the additive-only rule (a clearance removes the
+ * confirmation line), bound by: only an explicit negative clears, a reasonless clearance
+ * is VOID, and absence always fails closed.
+ *
+ * REVISED after live measurement run 1 (recorded in the acceptance results): the first
+ * wording let the model judge whether a category seemed dangerous in the abstract, and it
+ * wrongly cleared imperative asks it deemed routine (a dependency install; a publish-and-
+ * notify). The rule below now states explicitly that an imperative naming the action IS
+ * the proposal, using exactly those failures as counter-examples. Run 2 judges this text
+ * against the same unchanged recall floor.
+ */
+// ⛔ SENSITIVE-ACTION OBSERVATION — NOT HERE, BY DESIGN (final, 2026-08-25). Hosting this
+// observation on this multi-task prompt failed its absolute recall floor in two live
+// measurements (the model cleared risky imperatives against its own verbatim counter-example
+// — attention dilution). The owner-approved home is the dedicated micro-call in
+// sensitive-action-micro-clearance.ts (45/45 on the frozen set, ship-gated), which produces
+// the same provenance field. A test pins that this prompt never carries the fields again;
+// the failed block's text and the full measurement record live with the acceptance runner.
 
 /**
  * The stable system prompt — the prefix-cache lever. This is a module constant and
@@ -186,6 +252,8 @@ export const STAGE_CLASSIFIER_SYSTEM_PROMPT = [
   '',
   PROJECT_FACT_APPLICABILITY_BLOCK,
   '',
+  RELEVANCE_OBSERVATION_BLOCK,
+  '',
   'OUTPUT — return STRICT JSON only, no markdown, no prose:',
   '{',
   '  "stage": "<one of: Idea | PRD/Spec | Architecture | Task Breakdown | Implementation | Review/Testing | Release | Feedback Loop>",',
@@ -199,6 +267,7 @@ export const STAGE_CLASSIFIER_SYSTEM_PROMPT = [
   '  "debug_evidence_present": ["<evidence form>"],',
   '  "capability_candidates": ["<capability id>"],',
   '  "project_fact_candidates": ["<project-fact category id, or omit — empty is normal>"],',
+  '  "section_relevance_order": ["<section kind id, most useful first — ALL of them>"],',
   '  "reason": "<one sentence>"',
   '}',
   'FEEDBACK-LOOP BOUNDARY: classify Feedback Loop ONLY when the window contains explicit evidence the product is ALREADY deployed/live for real users (e.g. "its live", "deployed", "published", users actively using it). Building features FOR clients/users (a client portal, sending invoices to clients) is NOT live evidence — without it, bug reports and fixes during building are Implementation or Review/Testing, not Feedback Loop.',
@@ -245,6 +314,17 @@ export interface ParsedStageReply {
   capabilityCandidates: readonly PromptEnhancementCapabilityId[];
   /** Project-fact categories THIS prompt calls for. Empty is the common, correct answer. */
   projectFactCandidates: readonly PromptEnhancementProjectFactCategoryV1[];
+  /** I1: section kinds ordered most-useful-first for THIS prompt. Observation only. */
+  sectionRelevanceOrder: readonly string[];
+  /**
+   * Sensitive-action precision observation (see StageClassifierResult for the full
+   * contract). Parses SOFTLY like its sibling observations — but degrades to ABSENT
+   * (undefined), never to a default value, because absence is the fail-closed state.
+   */
+  sensitiveActionVerdict?: 'proposed' | 'not_proposed';
+  sensitiveActionReason?: string;
+  /** The model's noun-phrase name for a proposed action. Captured for the record; consumed by nothing. */
+  sensitiveActionName?: string;
   reason: string;
 }
 
@@ -265,6 +345,21 @@ export interface StageClassifierResult {
   capabilityCandidates: readonly PromptEnhancementCapabilityId[];
   /** Project-fact categories THIS prompt calls for. Empty is the common, correct answer. */
   projectFactCandidates: readonly PromptEnhancementProjectFactCategoryV1[];
+  /** I1: section kinds ordered most-useful-first for THIS prompt. Observation only. */
+  sectionRelevanceOrder: readonly string[];
+  /**
+   * Sensitive-action precision observation: does the CURRENT prompt PROPOSE performing a
+   * risky action, or merely MENTION a risk-flavoured word? Absent until the prompt block
+   * asks for it, and absent on the degraded path — absence always fails CLOSED downstream
+   * (the confirmation is emitted). Unlike every earlier observation, "no answer" and "the
+   * safe answer" are OPPOSITES here, so only an explicit 'not_proposed' WITH a non-empty
+   * reason can ever clear anything.
+   */
+  sensitiveActionVerdict?: 'proposed' | 'not_proposed';
+  /** Required for a clearance to count: what the benign reading IS. Reasonless clearances are void. */
+  sensitiveActionReason?: string;
+  /** The model's noun-phrase name for a proposed action. Captured for the record; consumed by nothing. */
+  sensitiveActionName?: string;
   reason: string;
   /** True when this result came from the local fallback (the model was unavailable). */
   degraded: boolean;
@@ -367,6 +462,20 @@ export function parseStageClassifierReply(raw: string, minConfidence = STAGE2_LL
   // absent CHANNEL (no key, failed call) is undefined and fails closed.
   const projectFactCandidates = (Array.isArray(p.project_fact_candidates) ? p.project_fact_candidates : [])
     .filter(isPromptEnhancementProjectFactCategoryV1);
+  // I1: unknown kinds and repeats are dropped, order preserved — a ranking with a slip in it
+  // is still a ranking, and refusing the whole reply over one would cost the observation.
+  const sectionRelevanceOrder = normalizePromptEnhancementRelevanceOrderV1(p.section_relevance_order);
+  // Sensitive-action verdict: soft like its siblings, but its degraded form is ABSENT
+  // (undefined) — never a default — because for this one field "no answer" and "the safe
+  // answer" are opposites, and absence is what fails closed downstream. Anything other than
+  // the two exact verdict strings parses to undefined; a reason parses only as a non-empty
+  // string (a whitespace-only reason is no reason).
+  const sensitiveActionVerdict = p.sensitive_action_verdict === 'proposed' || p.sensitive_action_verdict === 'not_proposed'
+    ? p.sensitive_action_verdict
+    : undefined;
+  const sensitiveActionReason = typeof p.sensitive_action_reason === 'string' && p.sensitive_action_reason.trim().length > 0
+    ? p.sensitive_action_reason
+    : undefined;
 
   return {
     stage,
@@ -380,6 +489,9 @@ export function parseStageClassifierReply(raw: string, minConfidence = STAGE2_LL
     debugEvidencePresent,
     capabilityCandidates,
     projectFactCandidates,
+    sectionRelevanceOrder,
+    sensitiveActionVerdict,
+    sensitiveActionReason,
     reason: p.reason as string,
   };
 }
@@ -402,6 +514,9 @@ function toResult(parsed: ParsedStageReply): StageClassifierResult {
     debugEvidencePresent: parsed.debugEvidencePresent,
     capabilityCandidates: parsed.capabilityCandidates,
     projectFactCandidates: parsed.projectFactCandidates,
+    sectionRelevanceOrder: parsed.sectionRelevanceOrder,
+    sensitiveActionVerdict: parsed.sensitiveActionVerdict,
+    sensitiveActionReason: parsed.sensitiveActionReason,
     reason: parsed.reason,
     degraded: false,
   };
@@ -419,6 +534,9 @@ async function degrade(promptText: string): Promise<StageClassifierResult> {
     debugEvidencePresent: [],
     capabilityCandidates: [],
     projectFactCandidates: [],
+    sectionRelevanceOrder: [],
+    // The sensitive-action verdict/reason are deliberately OMITTED here: a degraded call
+    // carries no clearance, and omission is the fail-closed state (the confirmation emits).
     signalsPresent: [],
     signalsAbsent: [],
     fireRecommendation: false,

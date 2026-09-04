@@ -531,11 +531,129 @@ export function buildPromptEnhancementGuidanceFactsV1(
       continue;
     }
 
+    if (ref.startsWith('history_acceptance:') || ref.startsWith('history_verification:')) {
+      // The two starved sections, fed at last. What finished looks like, and how the change gets
+      // proven, were the highest-volume sections in shipped bodies and neither had ever received a
+      // fact — so both were written from plausibility, which reads as grounding without being it.
+      //
+      // What crosses here is the DEVELOPER'S OWN SENTENCE from a recent prompt, quoted. That is
+      // what makes it worth carrying: the composer cannot see their history, and a sentence they
+      // wrote themselves cannot be a plausible generality. Where they never said, the detector
+      // returns nothing and NO fact is built — an empty fact would make a section look grounded
+      // while saying less than the honest silence it replaces.
+      //
+      // ⛔ The routing map is the one authority for where these land (`add_acceptance_criteria` →
+      // what-done-looks-like, `add_verification` → how-to-verify), so no `targetSectionKind`.
+      const isAcceptance = ref.startsWith('history_acceptance:');
+      const statedResolved = signals.groundingEvidenceByRef?.[ref];
+      // No resolved value means nothing was actually stated — produce nothing rather than a shell.
+      if (!statedResolved || statedResolved.value.trim() === '') continue;
+      facts.push({
+        factId: nextId(isAcceptance ? 'history-acceptance' : 'history-verification'),
+        sourceType: 'prompt_derived_fact',
+        sourceIds: [ref],
+        // Support only, like every prompt-derived lane: material the developer mentioned enriches a
+        // popup that fired for its own reasons; it must never summon one by itself.
+        sourceEligibilityState: 'support_only_not_triggering',
+        guidanceKind: isAcceptance ? 'requirement_source_state' : 'review_verification',
+        suggestedActionKind: isAcceptance ? 'add_acceptance_criteria' : 'add_verification',
+        targetFamily: 'family_agnostic',
+        targetSectionKind: '',
+        sourceEvidenceState: 'partial',
+        sourceOriginScope: 'recent_prompt_history',
+        // They SAID it; they did not necessarily do it. Possibility strength is the honest ceiling,
+        // and it is what keeps a quoted wish from being restated as an established practice.
+        claimVerbPolicy: 'must_phrase_as_possibility',
+        factRole: isAcceptance ? 'project_grounding_support' : 'supporting_missing_practice',
+        priority: 'low',
+        renderPolicy: 'render_as_section',
+        riskLevel: 'none',
+        safetyHooks: [],
+        // The value quotes the developer's own prompt text, so it is theirs and stays local.
+        privacyClass: 'local_private',
+        sanitizationState: 'prompt_derived_sanitized',
+        evidence: { key: statedResolved.key, value: statedResolved.value },
+        sourceRuntimePath: statedResolved.runtimePath,
+        sourceAnchorScope: statedResolved.anchorScope,
+        confidenceBand: 'low',
+        // They wrote it in this session's recent prompts. "A recent project check" would credit a
+        // probe that never ran, and a fact that misstates where it came from is worse than none.
+        recencyBand: 'current_session',
+        publicCopySafe: false,
+      });
+      continue;
+    }
+
+    if (ref.startsWith('history_sensitive_action:')) {
+      // 🔒 Owner-ruled (2026-08-20). A sensitive action the developer raised in recent prompts asks
+      // the agent to confirm before acting. This is the FIRST producer for
+      // `risk_safety_or_confirmation` — the section was plannable but nothing had ever fed it.
+      //
+      // ⛔ `confirm_risk` is what routes it there, and the routing map is the one authority for
+      // that (prohibition 15). No `targetSectionKind` override.
+      //
+      // ⚠️ `public_safe`, and that is exact rather than lax: the value is the shipped safeguard
+      // sentence with a GENERIC naming, and the key is a category slug. Nothing developer-written
+      // reaches this fact — the signal module drops the matched text before it crosses. A
+      // `requires_confirmation` class here would block the content at the shared evidence gate and
+      // leave the section with nothing to say, which is the opposite of what a safeguard is for.
+      const signalResolved = signals.groundingEvidenceByRef?.[ref];
+      facts.push({
+        factId: nextId('history-safety'),
+        sourceType: 'prompt_derived_fact',
+        sourceIds: [ref],
+        // Support only: a safeguard rides a popup that something else opened. It must never be the
+        // reason one appears, or a stray `-f` in a prompt would summon a popup by itself.
+        sourceEligibilityState: 'support_only_not_triggering',
+        guidanceKind: 'safety_or_confirmation',
+        suggestedActionKind: 'confirm_risk',
+        targetFamily: 'family_agnostic',
+        targetSectionKind: '',
+        sourceEvidenceState: 'partial',
+        sourceOriginScope: 'recent_prompt_history',
+        // The detector reports that a category was MENTIONED, never that the developer does it as a
+        // practice. Possibility strength is the honest ceiling.
+        claimVerbPolicy: 'must_phrase_as_possibility',
+        factRole: 'safety_confirmation_support',
+        priority: 'normal',
+        renderPolicy: 'render_as_section',
+        riskLevel: 'sensitive_authority_risky',
+        // 🔒 The hook is what makes the section SAFETY material, which the pruner reads to keep it
+        // out of the cap (§15.1: safety sections cannot be pruned, ever).
+        safetyHooks: ['safety_sensitive_source'],
+        privacyClass: 'public_safe',
+        sanitizationState: 'not_applicable',
+        evidence: evidenceForGuidanceFact('public_safe', 'not_applicable', signalResolved),
+        sourceRuntimePath: signalResolved?.runtimePath,
+        sourceAnchorScope: signalResolved?.anchorScope,
+        confidenceBand: 'low',
+        recencyBand: 'recent_project',
+        publicCopySafe: true,
+      });
+      continue;
+    }
+
     if (ref.startsWith('prompt_fact:')) {
       const minedResolved = signals.groundingEvidenceByRef?.[ref];
       facts.push({
         factId: nextId('mined'),
-        sourceType: 'hard_fact',
+        // 🔴 **Was `hard_fact`, corrected on the owner's ruling (2026-08-20).** That label filed a
+        // fact the developer merely SAID in the same drawer as one the env probe independently
+        // VERIFIED — and `source-mix.ts` already names that exact collapse as a defect it fixed
+        // once: *"a fact known only from the user's own prompt was labelled `source_b` — the same
+        // label an independently corroborated project fact carries."* The third lane exists for
+        // this material; this producer had simply never been moved into it.
+        //
+        // 🔑 The owner's reason, which is the stronger one: prompts carry far more than a file tree
+        // reveals, and they are re-read every 25 prompts, so this lane tracks change while the probe
+        // reports state. Two different kinds of knowing, and they must not share a label.
+        //
+        // ⚠️ Behaviour that does NOT change, verified before the edit: selection bucket (both lanes
+        // collapse to `source_b` in `laneFor`, so this can still never open a popup on its own),
+        // `support_only_not_triggering` below, and claim strength (already pinned to possibility).
+        // What DOES change is fatigue: `guidance-fatigue.ts` counts this as recent-prompt material
+        // now, which is what it is.
+        sourceType: 'prompt_derived_fact',
         sourceIds: [ref],
         guidanceKind: 'project_grounding',
         // Source B support: prompt-mined material never opens a popup on its own.

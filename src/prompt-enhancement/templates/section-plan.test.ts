@@ -571,11 +571,34 @@ describe('slot obligations: layer 3 is no longer declared-but-inert', () => {
     expect(obligationsOf(carry, 'reproduction_or_evidence')).not.toContain('reproduction_or_evidence_request');
   });
 
-  it('the floor does not leak the obligation onto unrelated sections', () => {
+  it('the floor covers every composed-prose section — and never the user-verbatim section', () => {
+    // Pre-widening this pinned the floor to reproduction_or_evidence alone; the reach widening
+    // is the deliberate change: every planned prose section now carries the no-invention state,
+    // and the one exclusion is the section that IS the user's verbatim prompt.
     const carry = planFor('issue_debug.failing_test');
     for (const section of carry.sectionPlans) {
-      if (section.sectionKind === 'reproduction_or_evidence') continue;
-      expect(section.slotObligations).not.toContain('no_invention_state');
+      if (section.sectionKind === 'original_request_or_goal') {
+        expect(section.slotObligations).not.toContain('no_invention_state');
+      } else {
+        expect(section.slotObligations).toContain('no_invention_state');
+      }
+    }
+  });
+
+  it('the floor is universal across EVERY preset intent — no route plans an unprotected prose section', () => {
+    // The vocabulary is ~200 section kinds fed by the presets, so a per-kind pin cannot cover
+    // it; this walks every preset through the real planner and demands the floor on each
+    // planned prose section, with the user-verbatim section as the only exclusion.
+    for (const preset of PROMPT_ENHANCEMENT_TAXONOMY_PRESETS) {
+      const result = planFor(preset.primaryIntent);
+      expect(result.sectionPlans.length).toBeGreaterThan(1);
+      for (const section of result.sectionPlans) {
+        if (section.sectionKind === 'original_request_or_goal') {
+          expect(section.slotObligations).not.toContain('no_invention_state');
+        } else {
+          expect(section.slotObligations, `${preset.primaryIntent} / ${section.sectionKind}`).toContain('no_invention_state');
+        }
+      }
     }
   });
 
@@ -600,11 +623,13 @@ describe('slot obligations: layer 3 is no longer declared-but-inert', () => {
     for (const obligation of expected) expect(obligations).toContain(obligation);
   });
 
-  it('an unattached capability contributes nothing: the quick merit route carries only the verification obligation', () => {
+  it('an unattached capability contributes nothing: the quick merit route gains no capability obligations', () => {
     const result = planFor('quick_improvement.local_polish_or_small_improvement');
-    expect(obligationsOf(result, 'verification_or_test_plan')).toEqual(['family_specific_verification']);
+    // The universal prose floor rides every kind now; what this pins is that CAPABILITY
+    // obligations still arrive only with their capability — behavior_lock never leaks in, and
+    // the verification section carries exactly its own obligation plus the floor.
+    expect(obligationsOf(result, 'verification_or_test_plan')).toEqual(['family_specific_verification', 'no_invention_state']);
     for (const section of result.sectionPlans) {
-      expect(section.slotObligations).not.toContain('no_invention_state');
       expect(section.slotObligations).not.toContain('behavior_lock');
     }
   });

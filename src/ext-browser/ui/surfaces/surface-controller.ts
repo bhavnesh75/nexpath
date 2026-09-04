@@ -67,6 +67,13 @@ export type SurfaceEvent =
   | { type: 'declined'; surface: SurfaceId }
   | { type: 'feedback'; surface: SurfaceId; category?: string; text?: string }
   | { type: 'feedback-skipped'; surface: SurfaceId }
+  /**
+   * The advisory rating surface's answer. `rating` is the 1-4 score carried on
+   * the row; `label` rides along for logging and is NOT what the score is read
+   * from — see `SurfaceRow`'s `rating`.
+   */
+  | { type: 'rating'; surface: SurfaceId; rating: number; label: string }
+  | { type: 'rating-skipped'; surface: SurfaceId }
   | { type: 'activate'; surface: SurfaceId; label: string };
 
 /**
@@ -399,6 +406,21 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
       say('Feedback recorded — static build.');
       return;
     }
+    if (surface === 'advisory_rating' && row.kind === 'action') {
+      // Mirrors the PEF branch above: a rating surface's action rows all mean
+      // one thing, so they dispatch on the SURFACE, not on `act`. The score
+      // comes off the row — a controller that mapped 'Good' to 3 itself would
+      // send the wrong number the day someone rewords the label.
+      //
+      // A row with no score is not guessed at and not silently swallowed: it
+      // falls through to the `default` below, which emits `activate` and says
+      // so out loud (A4.3).
+      if (typeof row.rating === 'number') {
+        emit?.({ type: 'rating', surface, rating: row.rating, label: row.label });
+        say('Rating recorded — static build.');
+        return;
+      }
+    }
     switch (row.act) {
       case 'use-original':
         // Cancel is where feedback opens (§8.3): Use original or Esc, never send.
@@ -460,6 +482,14 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
         return;
       case 'prompt_enhancement_feedback':
         emit?.({ type: 'feedback-skipped', surface });
+        say('Feedback skipped.');
+        return;
+      case 'advisory_rating':
+        // Esc is a free skip, exactly as PEF's is. NOTE: nothing in TypeScript
+        // forces this case to exist — the switch has no exhaustiveness guard,
+        // so a missing case compiles clean and Esc would silently do nothing.
+        // `surface-controller.test.ts` is what actually holds it in place.
+        emit?.({ type: 'rating-skipped', surface });
         say('Feedback skipped.');
         return;
     }

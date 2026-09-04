@@ -9,7 +9,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountNexpathPeDock, mpsSurfaceModel, peSurfaceModel, pefSurfaceModel } from './pe-dock-adapter.js';
 import { NEXPATH_DOCK_HOST_ID } from './surfaces/dock.js';
-import type { PePanelControllerV1, PePanelEventV1, PeSequenceOfferViewV1, PePanelViewV1 } from './pe-contract.js';
+import type { PePanelControllerV1, PePanelEventV1, PeSequenceOfferViewV1, PePanelViewV1, PeRatingViewV1 } from './pe-contract.js';
 
 let events: PePanelEventV1[];
 let adapter: PePanelControllerV1;
@@ -605,5 +605,92 @@ describe('locked bodies explain themselves (tester read a silent read-only popup
     body.focus();
     const text = surfaceEl().textContent ?? '';
     expect(text).not.toContain('Read-only');
+  });
+});
+
+// ── the advisory rating surface (Phase 4) ────────────────────────────────────
+
+function ratingView(overrides: Partial<PeRatingViewV1> = {}): PeRatingViewV1 {
+  return { schemaVersion: 1, kind: 'rating', viewSeq: 1, ...overrides };
+}
+
+describe('advisory rating (real dock + controller)', () => {
+  it('show() renders the note and exactly the four scores, worst to best', () => {
+    adapter.show(ratingView());
+
+    expect(document.getElementById(NEXPATH_DOCK_HOST_ID)).toBeTruthy();
+    const text = surfaceEl().textContent ?? '';
+    expect(text).toContain("How's nexpath working out for you?");
+    expect(text).toContain('no prompt text');                 // the transparency note
+    for (const label of ['Bad', 'Fine', 'Good', 'Excellent']) expect(text).toContain(label);
+    expect(surfaceEl().querySelector('textarea')).toBeNull(); // never a text box
+  });
+
+  it('⭐ clicking Good sends {type:"rating", rating:3}', () => {
+    adapter.show(ratingView());
+
+    rowByLabel('Good').click();
+
+    expect(commands()).toEqual([{ type: 'rating', rating: 3 }]);
+  });
+
+  it.each([['Bad', 1], ['Fine', 2], ['Good', 3], ['Excellent', 4]] as const)(
+    'Enter on %s sends rating %i',
+    (label, rating) => {
+      adapter.show(ratingView());
+      rowByLabel(label).click();
+      expect(commands()).toEqual([{ type: 'rating', rating }]);
+    },
+  );
+
+  it('⭐ Escape skips — one `close`, and no rating', () => {
+    adapter.show(ratingView());
+
+    pressOn(surfaceEl(), 'Escape');
+
+    expect(commands()).toEqual([{ type: 'close' }]);
+  });
+
+  it('the command echoes the view it came from', () => {
+    adapter.show(ratingView({ viewSeq: 7 }));
+
+    rowByLabel('Excellent').click();
+
+    expect(events).toEqual([{ type: 'command', viewSeq: 7, command: { type: 'rating', rating: 4 } }]);
+  });
+
+  it('⭐ the dock ✕ on a rating sends `close`, NOT `mps_decline`', () => {
+    // The rating view carries a `kind`, and the ✕ handler used to branch on
+    // `'kind' in view` — which would have sent a SEQUENCE DECLINE for a rating.
+    // Both commands typecheck, so nothing but this test catches it. The comment
+    // on that handler explains what a wrong close costs: one wedged mailbox and
+    // no popups again for that project until the worker restarts.
+    adapter.show(ratingView());
+    const root = shadowRoots.find((r) => r.querySelector('button'));
+    const closeBtn = [...(root?.querySelectorAll('button') ?? [])]
+      .find((b) => b.textContent?.includes('✕') || b.getAttribute('aria-label')?.toLowerCase().includes('close'));
+
+    closeBtn!.click();
+
+    expect(commands()).toEqual([{ type: 'close' }]);
+  });
+
+  it('the rating registry holds ONE surface — no feedback form to fall into', () => {
+    adapter.show(ratingView());
+
+    pressOn(surfaceEl(), 'Escape');
+
+    // PEF's rows must never appear: a rating has nowhere to transition to.
+    expect(surfaceEl().textContent ?? '').not.toContain('Not relevant enough');
+  });
+
+  it('a PE view after a rating still behaves like PE — the third branch changed nothing', () => {
+    adapter.show(ratingView());
+    adapter.show(view());
+
+    pressOn(surfaceEl(), 'Escape');
+
+    expect(commands()).toEqual([{ type: 'close' }]);
+    expect(bodyField()).toBeTruthy();          // the PE body is back
   });
 });

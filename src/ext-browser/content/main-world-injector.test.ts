@@ -659,6 +659,43 @@ describe('PE panel channels (PB4)', () => {
     await expect(result).resolves.toEqual({ rendered: true });
   });
 
+  const ratingMsg = { type: 'nexpath:show-rating', projectRoot: 'r', payload: { schemaVersion: 1, kind: 'rating', viewSeq: 1 } };
+
+  it('⭐ show-rating takes the same ack path and resolves {rendered:true}', () => {
+    const listener = capturedOnMessage.fn!;
+
+    const result = listener(ratingMsg);
+
+    expect(result).toBeInstanceOf(Promise);
+    window.dispatchEvent(new CustomEvent('nexpath:pe-view-ack'));
+    return expect(result).resolves.toEqual({ rendered: true });
+  });
+
+  it('⭐ show-rating REJECTS after 3s with no ack — §4.1 M3 needs a failed push to be visible', async () => {
+    // Without this the message fell through to the plain re-dispatch and
+    // resolved immediately: an ack that proves nothing, and a host that would
+    // consume cadence for a popup nobody saw.
+    vi.useFakeTimers();
+    try {
+      const listener = capturedOnMessage.fn!;
+      const result = listener(ratingMsg) as Promise<unknown>;
+      const settled = result.then(() => 'resolved', () => 'rejected');
+      vi.advanceTimersByTime(3_000);
+      await expect(settled).resolves.toBe('rejected');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a malformed rating message is NOT given an ack promise — it re-dispatches like any other', () => {
+    const listener = capturedOnMessage.fn!;
+
+    const result = listener({ type: 'nexpath:show-rating', projectRoot: 'r', payload: { kind: 'rating' } });
+
+    // No viewSeq → not a rating show message → no "did it render" contract.
+    return expect(result).resolves.toBeUndefined();
+  });
+
   it('show-pe REJECTS after 3s with no ack — a page whose PE wiring is absent must fail the send, not silently ack', async () => {
     vi.useFakeTimers();
     try {

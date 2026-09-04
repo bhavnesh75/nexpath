@@ -430,6 +430,27 @@ export interface PromptEnhancementSectionPlanningInput {
   routeResult: PromptEnhancementRouteResult;
   sourceRefs: readonly PromptEnhancementSourceRefV1[];
   guidanceFacts?: readonly PromptEnhancementGuidanceFact[];
+  /**
+   * The prompt needs the go-ahead clause, so the confirmation gets a section of its OWN.
+   *
+   * 🔒 Owner-ruled (2026-08-26). `source_signal_guidance` is guaranteed to appear by a different
+   * sub-milestone — if it cannot be injected the popup is cancelled outright — and its content is a
+   * later sub-milestone's subject. It is NOT a home for the confirmation clause, and in most
+   * scenarios it is the wrong home entirely.
+   *
+   * 🔴 MEASURED (§6d A/B, row 7: "rotate the stripe api key and update .env on the server"). The
+   * `issue_debug.environment_config_issue` preset attaches no `capability.confirmation_needed` and
+   * lists `risk_safety_or_confirmation` in no section list, so nothing carried the confirmation
+   * flag. The composer's host ladder then fell to its last rung — "the last non-original section" —
+   * and that section was `source_signal_guidance`. Two things went wrong at once: the clause landed
+   * somewhere it does not belong, and clearing the clause took the whole guidance section with it,
+   * because the section had no content-carrying fact of its own once the confirmation fact went.
+   *
+   * ⚠️ A boolean rather than the prompt text on purpose: the caller already resolves this, and
+   * importing the safety module here would close an import cycle this layer has been kept out of.
+   * Absent means today's behaviour, so no existing caller changes.
+   */
+  requiresExecutionConfirmation?: boolean;
 }
 
 export interface PromptEnhancementSectionPlanningResult {
@@ -440,6 +461,15 @@ export interface PromptEnhancementSectionPlanningResult {
   promptReviewProcessingPolicy: PromptEnhancementRouteResult['contractDecision']['promptReviewProcessingPolicy'];
   /** Observed evidence forms, carried so the repro section can name what was supplied. */
   debugEvidenceObserved: readonly string[];
+  /**
+   * The planning posture, carried from the route to the writers.
+   *
+   * The developer asked ABOUT something risky rather than asking for it to be done, so the body
+   * must propose and check rather than instruct. The route decides it; the composer prompt and the
+   * deterministic renderer are the two places that can act on it, and both read it from here so
+   * they cannot disagree about the same body.
+   */
+  planningPosture: boolean;
   renderedFactIds: readonly string[];
   /**
    * GR-1: the renderable facts THEMSELVES, not only their ids.
@@ -460,6 +490,22 @@ export interface PromptEnhancementSectionPlanningResult {
   exposesPrecomputedVariants: false;
   usesOldDecisionSessionTemplateRecord: false;
   usesPeOnlyClassifier: false;
+  /**
+   * I2 criterion (c): obligations that OUTLIVED their pruned section, carried to the body.
+   *
+   * 🔴 Declared at the phase-36 verification pass. The facade had been attaching this (and the field
+   * below) to the planning object UNTYPED — which is precisely why nothing consumed them and the
+   * criterion never reached a body: an untyped field is invisible to every reader that goes looking
+   * through the type. Declaring them is what makes the hop checkable rather than incidental.
+   *
+   * ⚠️ Optional: the planner itself never sets these. They appear only after the pruner has run, so
+   * a planning result that was never pruned is still a valid one.
+   */
+  inheritedSlotObligations?: readonly string[];
+  /** I2: the sections the pruner dropped. Feeds the boundary log's count and phase 37's measurement. */
+  prunedSectionIds?: readonly string[];
+  /** I2/I3: how many surviving sections were floor — the other half of phase 37 step 4's question. */
+  floorSectionCount?: number;
 }
 
 const SECTION_KIND_BY_ACTION: Record<PromptEnhancementSuggestedActionKind, string> = {
@@ -615,6 +661,13 @@ function slotObligationsFor(
   // prompt that should change here is the carry route's, which gains the
   // protection it was missing.
   for (const obligation of SECTION_KIND_FLOOR_OBLIGATIONS_V1[sectionKind] ?? []) obligations.add(obligation);
+  // The no-invention state is UNIVERSAL over composed prose: every planned section except the
+  // user's own verbatim text carries it, so the working gate inspects every kind — including
+  // any section kind a future preset introduces, which a per-kind list would silently miss
+  // (the vocabulary is ~200 kinds and growing with presets). `original_request_or_goal` is
+  // excluded because it IS the user's text: an invention check over the user's own words would
+  // flag the user for inventing their own prompt.
+  if (sectionKind !== 'original_request_or_goal') obligations.add('no_invention_state');
   return [...obligations];
 }
 
@@ -629,6 +682,22 @@ const SECTION_REQUIRED_BY_CAPABILITY: Partial<Record<PromptEnhancementCapability
   'capability.behavior_preservation': 'behavior_preservation',
   'capability.source_signal_guidance': 'source_signal_guidance',
 };
+
+/**
+ * Every section kind the planner can produce — DERIVED from the two maps that produce them, never
+ * a hand-kept list beside them (prohibition 15: one map, one meaning).
+ *
+ * Added for I1's relevance observation, which has to offer the model a vocabulary. A kind added to
+ * either map appears there automatically; a kind removed stops being offered. `original_request_or_goal`
+ * is included explicitly because it is planned unconditionally rather than through either map.
+ */
+export const PROMPT_ENHANCEMENT_PLANNABLE_SECTION_KINDS_V1: readonly string[] = [
+  ...new Set<string>([
+    'original_request_or_goal',
+    ...Object.values(SECTION_KIND_BY_ACTION),
+    ...Object.values(SECTION_REQUIRED_BY_CAPABILITY).filter((kind): kind is string => typeof kind === 'string'),
+  ]),
+];
 
 /**
  * The id a section may CITE for a guidance fact. One builder, because it is used
@@ -666,6 +735,12 @@ export function planPromptEnhancementSections(
       .filter(isString)
       .filter((kind) => kind !== 'project_grounding_facts' || hasGroundingFact),
     ...groundedFacts.map(sectionKindForFact),
+    // The confirmation's own section, when the prompt needs one and the preset lists it nowhere.
+    // LAST on purpose, and it matters twice over. `orderedUnique` keeps the first occurrence, so a
+    // preset that already places this kind keeps its own position and nothing is reordered — this
+    // only ever ADDS a home that was missing. And where it is added, a risk section belongs near
+    // the end of a body, which is where every preset that plans one puts it.
+    ...(input.requiresExecutionConfirmation === true ? ['risk_safety_or_confirmation'] : []),
   ]);
 
   if (route.noPopup) {
@@ -685,6 +760,7 @@ export function planPromptEnhancementSections(
       routeDecisionId: route.contractDecision.routeDecisionId,
       promptReviewOrigin: route.contractDecision.promptReviewOrigin,
       promptReviewProcessingPolicy: route.contractDecision.promptReviewProcessingPolicy,
+      planningPosture: false,
       debugEvidenceObserved: route.contractDecision.debugEvidenceObserved,
       renderedFactIds: [],
       renderedFacts: [],
@@ -732,6 +808,7 @@ export function planPromptEnhancementSections(
     routeDecisionId: route.contractDecision.routeDecisionId,
     promptReviewOrigin: route.contractDecision.promptReviewOrigin,
     promptReviewProcessingPolicy: route.contractDecision.promptReviewProcessingPolicy,
+    planningPosture: route.fallbackMode === 'planning_first',
     debugEvidenceObserved: route.contractDecision.debugEvidenceObserved,
     renderedFactIds: facts.filter(isRenderableFact).map((fact) => fact.factId),
     renderedFacts: facts.filter(isRenderableFact),
@@ -987,15 +1064,30 @@ function capabilityAppliesToSection(
   return SECTIONS_BY_CAPABILITY[capability]?.includes(sectionKind) ?? false;
 }
 
+/**
+ * The safety flags EVERY generated section carries, whatever the route asked for.
+ *
+ * Unconditional, and deliberately so: these are not capability overlays. Every generated section
+ * must be honest about its sources and must not escalate authority, and the design does not scope
+ * them to a subset.
+ *
+ * ⚠️ EXPORTED because their unconditional-ness is load-bearing elsewhere: I2's pruner must decide
+ * whether a section is *safety material*, and `safetyFlags.length > 0` cannot answer that when two
+ * flags are on every section. Measured during I2: with that test, the floor swallowed 7 of 7
+ * sections on a real body and the pruner was inert. A consumer needs to know which flags MEAN
+ * something, so the list lives here rather than being re-typed by whoever asks.
+ */
+export const PROMPT_ENHANCEMENT_UNCONDITIONAL_SAFETY_FLAGS_V1: readonly string[] = [
+  'source_honesty',
+  'no_authority_escalation',
+];
+
 function safetyFlagsFor(
   sectionKind: string,
   capabilities: readonly PromptEnhancementCapabilityId[],
   facts: readonly PromptEnhancementGuidanceFact[],
 ): readonly string[] {
-  // Unconditional, and deliberately so: these are not capability overlays. Every generated section
-  // must be honest about its sources and must not escalate authority, whatever the route asked for,
-  // and the design does not scope them to a subset.
-  const flags = new Set(['source_honesty', 'no_authority_escalation']);
+  const flags = new Set(PROMPT_ENHANCEMENT_UNCONDITIONAL_SAFETY_FLAGS_V1);
   if (
     sectionKind === 'risk_safety_or_confirmation'
     || (capabilities.includes('capability.confirmation_needed')
