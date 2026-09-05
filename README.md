@@ -45,6 +45,41 @@ Built during AI Hackfest 2026 by MLH.
 
 ---
 
+##  Benchmarked on SWE-bench Verified
+
+Prompt quality is easy to demonstrate and hard to prove. To check whether Nexpath actually changes
+what a coding agent produces, we ran it against a public benchmark where the answer is graded by
+each project's own test suite — not by a person, and not by another model.
+
+**Setup:** Claude Code (`sonnet`) attempted 40 tasks from SWE-bench Verified twice — once on its
+own, once with the Nexpath-reviewed prompt. The task, starting commit, container, model, time
+limit, and tools were identical in both runs. The prompt is the only thing that changed. Grading
+used the official SWE-bench harness.
+
+| | Claude Code | Claude Code + Nexpath |
+|---|---|---|
+| Tasks solved | 27/40 (67.5%) | **29/40 (72.5%)** |
+| Issue's own tests pass | 27/40 (67.5%) | 29/40 (72.5%) |
+| Ran the project's tests before submitting | 38/40 (95.0%) | 39/40 (97.5%) |
+
+**Paired outcomes:** solved by both — 27 · solved only with Nexpath — **2** · solved only without
+Nexpath — **0** · solved by neither — 11
+
+### Full results
+
+Every number above traces to a file below. The full benchmark report (Nexpath_benchmark/README.md) has the method, the two tasks Nexpath won, and the eleven neither run could solve. These are the raw files behind it — all 40 tasks, both runs, and the list we locked before the first run.
+
+| | |
+|---|---|
+| Complete report | [Benchmark report](Nexpath_benchmark/README.md) |
+| Every task, both runs | [`final_per_task.csv`](Nexpath_benchmark/final_per_task.csv) |
+| All measurements | [`final_summary.json`](Nexpath_benchmark/final_summary.json) |
+| Task list and settings, locked before the run | [`strat40-manifest.json`](Nexpath_benchmark/strat40-manifest.json) |
+| Prompt checks run before starting | [`preflight-strat40.json`](Nexpath_benchmark/preflight-strat40.json) |
+| Raw data for the confirmation-line test | [before](Nexpath_benchmark/gate-experiment-BEFORE-fix.jsonl) · [after](Nexpath_benchmark/gate-experiment-AFTER-fix.jsonl) |
+
+---
+
 ## How Nexpath Reduces Risk
 
 ### Fewer Silent Bugs and Missed Checks

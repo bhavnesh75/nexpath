@@ -1,0 +1,638 @@
+{
+  "manifest_version": 1,
+  "frozen_at": "2026-09-03T06:25:48Z",
+  "hypothesis": "H1: Claude Code + NexPath achieves a higher task-success rate than Claude Code alone.",
+  "primary_metric": "Task Success Rate = resolved / valid evaluated tasks (paired, McNemar exact)",
+  "n_tasks": 40,
+  "sample_file": "swebench_strat40.jsonl",
+  "pe_cache": "pe-strat40-final.jsonl",
+  "seed": 20260902,
+  "config": {
+    "dataset": "SWE-bench/SWE-bench_Verified",
+    "model": "sonnet",
+    "timeout_s": 1800,
+    "max_usd_per_instance": "2.00",
+    "work_root": "C:\\nexpath-sweb-work",
+    "container_network": "none",
+    "setting_sources": "",
+    "disallowed_tools": [
+      "Bash",
+      "WebSearch",
+      "WebFetch",
+      "BashOutput",
+      "KillShell",
+      "Agent"
+    ],
+    "allowed_tools": [
+      "mcp__testbed__run"
+    ],
+    "nexpath_autonomous_mode": true
+  },
+  "nexpath_build": {
+    "sha": "20145f5dd288e0a6eb37d73950fb1a5bef342578",
+    "dirty": true,
+    "worktree_diff_sha256": "1eac5ef4ae99c02c564b8f4adea9d62a957aee805e29e568c072867e7c3c65cf"
+  },
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "repo": "astropy/astropy",
+      "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "ba2017835bb5001413ead181d7468640ff37cc5eabc15a2ec71f0f1e8d47f2b6",
+      "advisory_chars": 4763,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "c01334ec1b21a089c650cf2e7b96ab974469076bf1260d23885799e1f0a7551f"
+    },
+    {
+      "instance_id": "astropy__astropy-14365",
+      "repo": "astropy/astropy",
+      "base_commit": "7269fa3e33e8d02485a647da91a5a2a60a06af61",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "f13e0151ed50ca4bdb2f4eeaf8dd98b5e720e0fdf399ab927f27e46b294bba71",
+      "advisory_chars": 3912,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "615252d5c44819451977588671ce903d3a21c41a8bf011738e2aee39218d56c6"
+    },
+    {
+      "instance_id": "astropy__astropy-7336",
+      "repo": "astropy/astropy",
+      "base_commit": "732d89c2940156bdc0e200bb36dc38b5e424bcba",
+      "difficulty": "<15 min fix",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "880917e443ce8e4572ed6c4e701cecd3aa531f999b37729d325d2d9f81c01bb0",
+      "advisory_chars": 3268,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "1c51cc8817f7b2f1feb043bdd2a54fcc4f89150dad82c60dbd43f68d1dcdf90d"
+    },
+    {
+      "instance_id": "django__django-11211",
+      "repo": "django/django",
+      "base_commit": "ba726067604ce5a8ca3919edf653496722b433ab",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "33e60d00bef120d5536a577870767bf6eaa41398513aa37b5676548c69ceba20",
+      "advisory_chars": 3103,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "658b186e181f63e4cf92e146a414b8f30b0fc898e5bb698a7a45bcd900fce010"
+    },
+    {
+      "instance_id": "django__django-11790",
+      "repo": "django/django",
+      "base_commit": "b1d6b35e146aea83b171c1b921178bbaae2795ed",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "33d5a546ebf0fa25359447117dc0ca2d080ce98bc668e5d79de1a2ae627bea5e",
+      "advisory_chars": 2244,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "4482bb11e178b43b0d8d59d373ea8ed2631996c27f7ec51d89d65dad47ab37cb"
+    },
+    {
+      "instance_id": "django__django-13012",
+      "repo": "django/django",
+      "base_commit": "22a59c01c00cf9fbefaee0e8e67fab82bbaf1fd2",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "047f381def9356e91c4f91e8ffc8f89378732765a9998fbc3fe350687805c400",
+      "advisory_chars": 3849,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "1b11bed9d411d9511fc71355d4a757a90b9abe722332f5c8a986a64f5a33ff59"
+    },
+    {
+      "instance_id": "django__django-13212",
+      "repo": "django/django",
+      "base_commit": "f4e93919e4608cfc50849a1f764fd856e0917401",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "b97f76ab70b496c68464c6ed751d56c8e3d3d7c9e12b8b091f25c99bd53d23a9",
+      "advisory_chars": 3153,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "a79d287e01597f81eca52a95eafec22b22872f3dc0e06b8837a711242627b150"
+    },
+    {
+      "instance_id": "django__django-13346",
+      "repo": "django/django",
+      "base_commit": "9c92924cd5d164701e2514e1c2d6574126bd7cc2",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "e01721ed57f7fc3874fdd31b11e07dba942188033e31c0409c277e0fb40b5ff5",
+      "advisory_chars": 2456,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "3cb764082e21011777c787f5ecf6688762b6f899a8b1f4ef1fab404245dc227c"
+    },
+    {
+      "instance_id": "django__django-13449",
+      "repo": "django/django",
+      "base_commit": "2a55431a5678af52f669ffe7dff3dd0bd21727f8",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "3f2660a775b99a65aab7c61bcf4370e8fea52fbd08a2b6c90df9574e3d625863",
+      "advisory_chars": 9217,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "b082782316bb4c8f2899f9f31d81edd84d4ded60ed7627073f56014db30da0d9"
+    },
+    {
+      "instance_id": "django__django-13590",
+      "repo": "django/django",
+      "base_commit": "755dbf39fcdc491fe9b588358303e259c7750be4",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "250b372520865b181098d2964c6ed35184bd9f1487c14712f3083515c4c898e6",
+      "advisory_chars": 3467,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "05b78c5617cc34ad2af8034fde1a60f353913bda2cecfe6c547ce5f80dfaafbf"
+    },
+    {
+      "instance_id": "django__django-13658",
+      "repo": "django/django",
+      "base_commit": "0773837e15bb632afffb6848a58c59a791008fa1",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "a333ef6d0738bd4f41f34ade5fc0630ee557f2906f65818735cde30002de90cf",
+      "advisory_chars": 3469,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "764f9340434a4ec85588c26979702eceac011b8e753ca0165b78bbdefae98bb5"
+    },
+    {
+      "instance_id": "django__django-13810",
+      "repo": "django/django",
+      "base_commit": "429d089d0a8fbd400e0c010708df4f0d16218970",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "6b357dab8420e871d5d35a0c156e9ccbe09fd67b2b0f0e6d893d81ae80d99dbb",
+      "advisory_chars": 5391,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "56e9927b1d405bb6be5bd7a327cea4ed7a83858f705590310391df2fd2066379"
+    },
+    {
+      "instance_id": "django__django-13820",
+      "repo": "django/django",
+      "base_commit": "98ad327864aed8df245fd19ea9d2743279e11643",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "33dd63c365ba8e6d1806bc052eaff28366f888b5e4cdfc45f0590d7ffea726c2",
+      "advisory_chars": 5568,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "8448b0b82597255474fabc23fafe8fb9aee04c6f7bbc5a59dbec7918a19063e4"
+    },
+    {
+      "instance_id": "django__django-13837",
+      "repo": "django/django",
+      "base_commit": "415f50298f97fb17f841a9df38d995ccf347dfcc",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "16871f50e340ba7a41aa69a9967855d41fe635b1dfb6d01800d1f5132779ecc9",
+      "advisory_chars": 4164,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "34e44d1cfd0354cf9ed68afafef69789c59418e2ea0620e23b6402522a2ae4ac"
+    },
+    {
+      "instance_id": "django__django-14034",
+      "repo": "django/django",
+      "base_commit": "db1fc5cd3c5d36cdb5d0fe4404efd6623dd3e8fb",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "1d3aea40f8ac387e330e5ac8af767410b97aa77643178c5cb9dbd62b7315b195",
+      "advisory_chars": 3223,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "8c9d626d0cc8f675b7b679ccde8ee202319203f4a5c57f2faeb08bbbc7ad7fd9"
+    },
+    {
+      "instance_id": "django__django-14122",
+      "repo": "django/django",
+      "base_commit": "bc04941bf811d1ea2c79fb7fc20457ed2c7e3410",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "38acd0a3560e2f76b2f9b780c8d8a6ef3d35bd09ca659d6c56ab3722de90faec",
+      "advisory_chars": 1606,
+      "routing_state": "suppress",
+      "disposition": "no_popup_not_applicable",
+      "statement_sha256": "977d049025358afe0585a110b6fdcfe236b41139b69f5300d6b4aa5195523097"
+    },
+    {
+      "instance_id": "django__django-14238",
+      "repo": "django/django",
+      "base_commit": "30e123ed351317b7527f632b3b7dc4e81e850449",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "5ad7653866107a064bda3f7fcc65150e25fe6213971dc396bfdf8affc9405a29",
+      "advisory_chars": 4898,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "ee71cd2bf018f9b6642fe511b99cd64cebaf60a85abc709d87d65ee2c97a2ffd"
+    },
+    {
+      "instance_id": "django__django-14631",
+      "repo": "django/django",
+      "base_commit": "84400d2e9db7c51fee4e9bb04c028f665b8e7624",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "16ed02321e2b49b70a2363f4ca9f170e43bda3adf2a1555ed87d47fac93366c8",
+      "advisory_chars": 2542,
+      "routing_state": "suppress",
+      "disposition": "no_popup_not_applicable",
+      "statement_sha256": "1d3f964a6347e618040724052803c6e2011af7a3288f08293494b40da803118d"
+    },
+    {
+      "instance_id": "django__django-14672",
+      "repo": "django/django",
+      "base_commit": "00ea883ef56fb5e092cbe4a6f7ff2e7470886ac4",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "4f633368112c1f0effb84e65a9a8458627a91f85d88fdfecc5026df22e2a62ce",
+      "advisory_chars": 10562,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "ff82815c7599ddedc3670e83f2a86a3ddb817a5697c861baed4cd27146e51f62"
+    },
+    {
+      "instance_id": "django__django-15022",
+      "repo": "django/django",
+      "base_commit": "e1d673c373a7d032060872b690a92fc95496612e",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "8619ee64eb160a0e25c184b92fa2c5a52172bcee1de106f4ba5d8190baac3ead",
+      "advisory_chars": 2501,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "053d6cadf868999d5c91d65c608c767c064794a28f5a6ce572ddb790e1dcd63f"
+    },
+    {
+      "instance_id": "django__django-15128",
+      "repo": "django/django",
+      "base_commit": "cb383753c0e0eb52306e1024d32a782549c27e61",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "85ae73f2b599b0320fcedc37812ea1dd8d5d903c07886932de12104b19cde820",
+      "advisory_chars": 5550,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "45a25eccc76c2a4696cf8ae4ddc4b1d8ccaf016a096c077f16d0db237f16a8f4"
+    },
+    {
+      "instance_id": "django__django-15732",
+      "repo": "django/django",
+      "base_commit": "ce69e34bd646558bb44ea92cecfd98b345a0b3e0",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "2df50ee489bc439a35a0a91fe696e65d45f7ba5d70385f7c7fbe16ca95a516f2",
+      "advisory_chars": 2187,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "9fec2159f491fae94855a4e7f43923ee35d5c1b124f9f26769a0e6015ff0f312"
+    },
+    {
+      "instance_id": "django__django-16136",
+      "repo": "django/django",
+      "base_commit": "19e6efa50b603af325e7f62058364f278596758f",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "9cb74e1b8c5e1e4929bcc0e95e2379db8ea98f1365b2ea8095a1eee2b2deb4eb",
+      "advisory_chars": 4165,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "94dcebd6197a6b892e97650b984227b233cb75312d624d939ff1a2956850c3bc"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-25775",
+      "repo": "matplotlib/matplotlib",
+      "base_commit": "26224d96066b5c60882296c551f54ca7732c0af0",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "a9d290b97a7d567edcd93efabc6fa0538543d12f1e08222663d5b7f1a4507120",
+      "advisory_chars": 2991,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "a15b46987ceec554e057cf8fc62b015b435221182f76357b9d54ada6417c6401"
+    },
+    {
+      "instance_id": "matplotlib__matplotlib-26208",
+      "repo": "matplotlib/matplotlib",
+      "base_commit": "f0f133943d3e4f1e2e665291fe1c8f658a84cc09",
+      "difficulty": "<15 min fix",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "c56d414f6a47d0d3861c47ddb3f342fb8140b1e86c70dc364199259dc96f29d2",
+      "advisory_chars": 5762,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "6c2b512012bf5cab6147cc2fc8c0df54e71b53036615685d77ec186f511a5fdd"
+    },
+    {
+      "instance_id": "pydata__xarray-3095",
+      "repo": "pydata/xarray",
+      "base_commit": "1757dffac2fa493d7b9a074b84cf8c830a706688",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "9cd9282663d43e8be503cad303b6e2996ae667307b4c84cc8e9d1af3a4ba46d2",
+      "advisory_chars": 4709,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "3d8f2d8422b56bd5980ec478be1413ef87805484446fc15dbd482342a59abb25"
+    },
+    {
+      "instance_id": "pydata__xarray-6938",
+      "repo": "pydata/xarray",
+      "base_commit": "c4e40d991c28be51de9ac560ce895ac7f9b14924",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "8813ce792f4ce095eca1ccadcfa14cfc5d1d76913e71c6bfb431e2b734f906a9",
+      "advisory_chars": 5453,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "80200279ed4af4b8b73e3d9bf2ec5a39dbded0c3e337b1b944253fd7b7b04248"
+    },
+    {
+      "instance_id": "pydata__xarray-7229",
+      "repo": "pydata/xarray",
+      "base_commit": "3aa75c8d00a4a2d4acf10d80f76b937cadb666b7",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "400edde90a72cd2dd1919d372fb8a1911f54f3e29305b22c69b9c575535cdd0c",
+      "advisory_chars": 5119,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "1755ba7fe03d6f5917886ea3d5f0e5116a78593b08596ad9d394c5ccbb7f26aa"
+    },
+    {
+      "instance_id": "pylint-dev__pylint-4604",
+      "repo": "pylint-dev/pylint",
+      "base_commit": "1e55ae64624d28c5fe8b63ad7979880ee2e6ef3f",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "ee229ef35e02ede7457b159a135c570584a099f523b407e615d55f0d0429aa80",
+      "advisory_chars": 2314,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "0072c898db86e2500d95b0b95f0929f23f8a733dc9b0eb4a0d170189049a8dbb"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-10844",
+      "repo": "scikit-learn/scikit-learn",
+      "base_commit": "97523985b39ecde369d83352d7c3baf403b60a22",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "e805f4303b6b061b3a78be997bbac6bd6771753be96ec2768d92c40bb6f13470",
+      "advisory_chars": 4677,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "43c3e45ef59dc9057830a2c20fe3663e490c3a54df511936a4c7965337f4d1a0"
+    },
+    {
+      "instance_id": "scikit-learn__scikit-learn-10908",
+      "repo": "scikit-learn/scikit-learn",
+      "base_commit": "67d06b18c68ee4452768f8a1e868565dd4354abf",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "0d19864cb17d44f81c2b801b2820651e1b774eeac86b00ddeea1b82a1df45ba1",
+      "advisory_chars": 3373,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "706f3719994e3076d30e5aeafcaa86f8ce95666d705c8eb5127779336e4d88ae"
+    },
+    {
+      "instance_id": "sphinx-doc__sphinx-10614",
+      "repo": "sphinx-doc/sphinx",
+      "base_commit": "ac2b7599d212af7d04649959ce6926c63c3133fa",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "7105bdd1b3e8ccee4993ac47351655988cece2a5a09f46a65f5966d64cc9403e",
+      "advisory_chars": 5387,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "59e104221b08590febe6ae868c6d35b4348e5c6fbf023b4806df6d313e88c730"
+    },
+    {
+      "instance_id": "sphinx-doc__sphinx-7985",
+      "repo": "sphinx-doc/sphinx",
+      "base_commit": "f30284ef926ebaf04b176f21b421e2dffc679792",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "a9b942afe5945b577e18b237b165e035edcf872d70fcb5651d681e2d802ade95",
+      "advisory_chars": 4028,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "388fe0c5ce4e1358bcc58e7e4314ba618c2bb432bc814c80f0855adcc3659ec4"
+    },
+    {
+      "instance_id": "sympy__sympy-14711",
+      "repo": "sympy/sympy",
+      "base_commit": "c6753448b5c34f95e250105d76709fe4d349ca1f",
+      "difficulty": "<15 min fix",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "4cd9b85bd0c624a46b5e35c3a41d20772d5800c58826a06cad64cb0db4db41e9",
+      "advisory_chars": 2821,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "e4767d6b2a2a74a4b7ef986a9f1f89a8a65d7e7bf026dae881f92dbd7b3ad77c"
+    },
+    {
+      "instance_id": "sympy__sympy-15345",
+      "repo": "sympy/sympy",
+      "base_commit": "9ef28fba5b4d6d0168237c9c005a550e6dc27d81",
+      "difficulty": "<15 min fix",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "b1f32366419130e398aed457deb34ecbca893979bbbaac7468daaac072993abe",
+      "advisory_chars": 1922,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "b4f90f0a60cc245efb58b06f492d4258e4294d809ef39cf896c3713d13ba2905"
+    },
+    {
+      "instance_id": "sympy__sympy-16597",
+      "repo": "sympy/sympy",
+      "base_commit": "6fd65310fa3167b9626c38a5487e171ca407d988",
+      "difficulty": "1-4 hours",
+      "arm_order": [
+        "nexpath",
+        "control"
+      ],
+      "advisory_sha256": "8a3c872e94c4428c109fa66e40243b63dc6247f3a4475d1430451228bbe646ab",
+      "advisory_chars": 642,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "1b04ffa8e91360cc91e2397541d3f8c5f34ffc0cb5cd84b0015747240c26932c"
+    },
+    {
+      "instance_id": "sympy__sympy-21930",
+      "repo": "sympy/sympy",
+      "base_commit": "de446c6d85f633271dfec1452f6f28ea783e293f",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "7082185700f1de6067380e6482c79519ae26aa5d708450882c1a10cafc7b2344",
+      "advisory_chars": 2252,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "867fbad616cdb7324c99258b4bd7ad7f6b4a2fb66f7945b669f9ae279ad38535"
+    },
+    {
+      "instance_id": "sympy__sympy-22080",
+      "repo": "sympy/sympy",
+      "base_commit": "3f8c8c2377cb8e0daaf8073e8d03ac7d87580813",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "af46da00066f75a47731e8349729489324ce8fb0a78c865baa569ed89c2ad77b",
+      "advisory_chars": 2928,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "e4e025ba043919887cf1773f79e5bb6f7b7ad8eab54718e8ec0d0ff2f4c37b14"
+    },
+    {
+      "instance_id": "sympy__sympy-23413",
+      "repo": "sympy/sympy",
+      "base_commit": "10de1a18a0efac0b19b611e40c928250dda688bf",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "2a95121f8740b627300db911181f33fcf398a624b246fe7a49db7e15a56cf03e",
+      "advisory_chars": 2475,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "ab4fff5ca11234b934a212b8d896ccf0c1aaa53e998524f54bff44dc41daa64d"
+    },
+    {
+      "instance_id": "sympy__sympy-24443",
+      "repo": "sympy/sympy",
+      "base_commit": "809c53c077485ca48a206cee78340389cb83b7f1",
+      "difficulty": "15 min - 1 hour",
+      "arm_order": [
+        "control",
+        "nexpath"
+      ],
+      "advisory_sha256": "610cb2e509e96747c0d84dafe870ccd8675ee85a6158b1763ef293a2098bfe26",
+      "advisory_chars": 3105,
+      "routing_state": "show",
+      "disposition": "show_current_body",
+      "statement_sha256": "465efb86a6aacc25222e99cb78b1cdd86248af5a67b27ae1c4a043c1c126c0d4"
+    }
+  ]
+}

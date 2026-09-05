@@ -1,0 +1,151 @@
+NEXPATH POPUP AND AGENT RUN — django__django-13837
+group HARD   difficulty 1-4 hours   repo django/django
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+Allow autoreloading of `python -m pkg_other_than_django runserver`
+Description
+	 
+		(last modified by William Schwartz)
+	 
+​django.utils.autoreload.get_child_arguments detects if Python was launched as python -m django. Currently it detects only when ​-m was passed specifically django (and only in Python environments in which __file__ is set on modules, which is ​not true of all Python environments). Like #32177, this ticket aims to remove one impediment to creating Django-based command-line utilities that have their own ​__main__ sub-module while overriding Django's built-in management commands—in this case, runserver.
+The fix, which I have submitted in the ​attached PR, is to use Python's ​documented way of determining if -m was used in get_child_arguments:
+The top-level __main__ module is always the entry point of a ​complete Python program.
+ __main__.__spec__ is not None ​if and only if Python was launched with -m or the name of a "directory, zipfile or other sys.path entry." In the latter cases, the ​documentation says
+If the script name refers to a directory or zipfile, the script name is added to the start of sys.path and the __main__.py file in that location is executed as the __main__ module.
+Hence __main__.__spec__.parent (which is ​usually but not always __main__.__package__) exists and is the empty string when Python is started with the name of a directory or zip file.
+Therefore Python was started with -m pkg if and only if __main__.__spec__.parent == "pkg".
+Following this algorithm is guaranteed to work as long as Python obeys its own documentation, and has the side benefit of avoiding use of __file__.
+
+
+Context And Constraints:
+- The current behavior of django.utils.autoreload.get_child_arguments only checks if Python was specifically launched with -m django. This restriction limits the ability to make Django-based command-line utilities with their own __main__ sub-module. It relies on a particular definition of __file__, which is not universally applicable across all Python environments. The fix should ensure better compatibility while adhering to Python's documentation regarding __main__ and its specifications.
+
+Approach Or Steps:
+- To resolve the limitation with django.utils.autoreload.get_child_arguments, I'll employ the specified checks on __main__ as outlined in the proposed fix. First, assess if __main__.__spec__ is not None, then confirm the parent of __main__.__spec__ aligns with the expected module name. This guarantees the detection of the correct invocation context, enabling the desired autoreloading feature for commands executed with -m pkg_other_than_django.
+
+Acceptance Or Output Expectation:
+- Successful implementation will manifest as the autoreloader correctly recognizing when Python is launched with -m pkg_other_than_django. The expected output includes successful server start-up without errors related to module loading for scripts that rely on this functionality, thus allowing smooth execution of Django-based commands.
+
+Verification Or Test Plan:
+- To ensure the fix is working, I will set up a series of tests that validate the autorecorder behavior when using -m pkg_other_than_django. Verification will include confirming the presence of __main().__spec__ conditions during various run scenarios and checking that the correct behavior is produced — specifically ensuring that changes to the server code trigger the expected autoreloads without failures. Each test will be aimed at catching edge cases that might still utilize __file__, so careful attention is on scenarios where that could happen.
+
+Source Signal Guidance:
+- Since the stage transition discipline indicates the task is moving from task_breakdown to implementation, I will examine the necessary source signals that have to be set up for this. Ensuring proper documentation and logging around the autoreloading behavior and its verification during development will be crucial to provide clarity and support for future debugging. I'm expecting that the changed behavior will provide a cohesive understanding of how the autoreload works in differing contexts of module invocation.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 16871f50e340ba7a41aa69a9967855d41fe635b1dfb6d01800d1f5132779ecc9
+prompt sha256 handed to the agent : 16871f50e340ba7a41aa69a9967855d41fe635b1dfb6d01800d1f5132779ecc9
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 13   tool calls 12   ran_tests True   cost $0.205
+
+   1. Grep: def get_child_arguments
+   2. Edit: C:\nexpath-sweb-work\django__django-13837\nexpath\django\utils\autoreload.py
+   3. Grep: get_child_arguments|__spec__
+   4. Read: C:\nexpath-sweb-work\django__django-13837\nexpath\tests\utils_tests\test_autoreload.py
+   5. Edit: C:\nexpath-sweb-work\django__django-13837\nexpath\django\utils\autoreload.py
+   6. Read: C:\nexpath-sweb-work\django__django-13837\nexpath\django\utils\autoreload.py
+   7. Grep: django\.__main__|import django
+   8. Grep: django\.
+   9. ToolSearch: 
+  10. mcp__testbed__run: cd /testbed && python -m pytest tests/utils_tests/test_autoreload.py -k ChildArguments -q 2>&1 | tail -50
+  11. mcp__testbed__run: cd /testbed && python tests/runtests.py utils_tests.test_autoreload -v 2 2>&1 | tail -80
+  12. Grep: test_python_m_django
+
+---- patch produced ----
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f..3240f2e 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -216,14 +216,17 @@ def get_child_arguments():
+     executable is reported to not have the .exe extension which can cause bugs
+     on reloading.
+     """
+-    import django.__main__
+-    django_main_path = Path(django.__main__.__file__)
++    import __main__
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
+-        # The server was started with `python -m django runserver`.
+-        args += ['-m', 'django']
++    if getattr(__main__, '__spec__', None) is not None:
++        spec = __main__.__spec__
++        if (spec.name == '__main__' or spec.name.endswith('.__main__')) and spec.parent:
++            name = spec.parent
++        else:
++            name = spec.name
++        args += ['-m', name]
+         args += sys.argv[1:]
+     elif not py_script.exists():
+         # sys.argv[0] may not exist for several reasons on Windows.
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 16   tool calls 15   ran_tests True   cost $0.215
+
+   1. Grep: get_child_arguments
+   2. Read: C:\nexpath-sweb-work\django__django-13837\control\django\utils\autoreload.py
+   3. Edit: C:\nexpath-sweb-work\django__django-13837\control\django\utils\autoreload.py
+   4. Grep: get_child_arguments|__spec__|__main__
+   5. Read: C:\nexpath-sweb-work\django__django-13837\control\tests\utils_tests\test_autoreload.py
+   6. Read: C:\nexpath-sweb-work\django__django-13837\control\django\utils\autoreload.py
+   7. run: cd C:\nexpath-sweb-work\django__django-13837\control && python -m pytest tests/utils_tests/test_autoreload.py -q 2>&1 | 
+   8. ToolSearch: 
+   9. mcp__testbed__run: cd /testbed && python -m pytest tests/utils_tests/test_autoreload.py -q 2>&1 | tail -60
+  10. mcp__testbed__run: cd /testbed/tests && python runtests.py utils_tests.test_autoreload -v 2 2>&1 | tail -80
+  11. Read: C:\nexpath-sweb-work\django__django-13837\control\tests\utils_tests\test_autoreload.py
+  12. mcp__testbed__run: cd /testbed && python -c "
+import subprocess, sys
+r = subprocess.run([sys.executable, '-c', '''
+import runpy, sys
+sys.ar
+  13. mcp__testbed__run: cd /testbed && cat > /tmp/test_mdjango.py << 'EOF'
+import sys, subprocess
+r = subprocess.run(
+    [sys.executable, '-m',
+  14. mcp__testbed__run: mkdir -p /tmp/pkgtest/mypkg && cat > /tmp/pkgtest/mypkg/__init__.py << 'EOF'
+EOF
+cat > /tmp/pkgtest/mypkg/__main__.py <<
+  15. mcp__testbed__run: cd /testbed && cat > /tmp/plain.py << 'EOF'
+import sys
+sys.path.insert(0, '/testbed')
+from django.utils import autoreloa
+
+---- patch produced ----
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index b8efb9f..faa3252 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -216,14 +216,14 @@ def get_child_arguments():
+     executable is reported to not have the .exe extension which can cause bugs
+     on reloading.
+     """
+-    import django.__main__
+-    django_main_path = Path(django.__main__.__file__)
++    import __main__
+     py_script = Path(sys.argv[0])
+ 
+     args = [sys.executable] + ['-W%s' % o for o in sys.warnoptions]
+-    if py_script == django_main_path:
+-        # The server was started with `python -m django runserver`.
+-        args += ['-m', 'django']
++    # __spec__ is set when the server was started with the `-m` option,
++    # see https://docs.python.org/3/reference/import.html#main-spec
++    if __main__.__spec__ is not None and __main__.__spec__.parent:
++        args += ['-m', __main__.__spec__.parent]
+         args += sys.argv[1:]
+     elif not py_script.exists():
+         # sys.argv[0] may not exist for several reasons on Windows.
+

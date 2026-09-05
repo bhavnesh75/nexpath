@@ -1,0 +1,150 @@
+NEXPATH POPUP AND AGENT RUN — django__django-15732
+group MEDIUM   difficulty 15 min - 1 hour   repo django/django
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+Cannot drop unique_together constraint on a single field with its own unique=True constraint
+Description
+	
+I have an erroneous unique_together constraint on a model's primary key (unique_together = (('id',),)) that cannot be dropped by a migration. Apparently the migration tries to find all unique constraints on the column and expects there to be only one, but I've got two — the primary key and the unique_together constraint:
+Indexes:
+	"foo_bar_pkey" PRIMARY KEY, btree (id)
+	"foo_bar_id_1c3b3088c74c3b17_uniq" UNIQUE CONSTRAINT, btree (id)
+Database is PostgreSQL, if that makes any difference.
+
+
+Non Secret Config Names:
+- There’s a chance the unique constraint conflicts with other constraints, so I should check the existing non-secret config names that might be getting involved in this migration.
+
+Version Environment Contrast:
+- I need to confirm if the version environment I’m running on is compatible with the existing migrations—sometimes the framework changes things up and I need to verify the environment version against the migration requirements.
+
+Config Diff Or Evidence:
+- Listing out the configuration differences that might lead to this unique constraint issue can be crucial, so I’ll document any discrepancies I find.
+
+Verification Or Test Plan:
+- If trying to drop that unique constraint goes sideways, I need to set up a verification plan to check what happens during the migration—this includes running tests both before and after the migration is attempted.
+
+Reproduction Or Evidence:
+- I’m not sure if the unique constraint issue is replicable without trying it in a test environment first—if there’s evidence of this, I need to validate the same scenario to see if the error pops up every time.
+
+Source Signal Guidance:
+- The migration obstacle signals potential conflicts during this stage, so I’ll highlight any insights to prevent dropping that unique constraint, keeping in mind the impact on the overall structure.
+
+Risk Safety Or Confirmation:
+- In case things go awry with this migration, I should have a rollback plan and also confirm recovery processes are ready to act without disrupting the overall data integrity.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 2df50ee489bc439a35a0a91fe696e65d45f7ba5d70385f7c7fbe16ca95a516f2
+prompt sha256 handed to the agent : 2df50ee489bc439a35a0a91fe696e65d45f7ba5d70385f7c7fbe16ca95a516f2
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 25   tool calls 24   ran_tests True   cost $0.356
+
+   1. Grep: _delete_composed_index|_constraint_names
+   2. Read: C:\nexpath-sweb-work\django__django-15732\nexpath\django\db\backends\base\schema.py
+   3. Read: C:\nexpath-sweb-work\django__django-15732\nexpath\django\db\backends\base\schema.py
+   4. Grep: unique_together.*pk|_delete_composed_index|wrong number
+   5. Read: C:\nexpath-sweb-work\django__django-15732\nexpath\django\db\backends\base\schema.py
+   6. Edit: C:\nexpath-sweb-work\django__django-15732\nexpath\django\db\backends\base\schema.py
+   7. ToolSearch: 
+   8. mcp__testbed__run: cd /testbed && sed -n '1,50p' tests/schema/tests.py | head -50
+   9. Grep: def test_alter_unique_together
+  10. mcp__testbed__run: cd /testbed && grep -n "def test_alter_unique_together\b" -A 20 tests/schema/tests.py | head -40
+  11. mcp__testbed__run: cd /testbed && grep -n "unique_together" tests/schema/tests.py | head -40
+  12. mcp__testbed__run: cd /testbed && cat > /tmp/repro_test.py << 'EOF'
+import django
+from django.conf import settings
+
+settings.configure(
+   
+  13. mcp__testbed__run: which psql pg_ctl postgres 2>&1; python -c "import psycopg2" 2>&1; env | grep -i postgres
+  14. mcp__testbed__run: cd /testbed && sed -n '2570,2630p' tests/schema/tests.py
+  15. mcp__testbed__run: cd /testbed && grep -rn "allows_multiple_constraints_on_same_fields" django/db/backends/
+  16. mcp__testbed__run: cd /testbed && cat > /tmp/repro_test2.py << 'EOF'
+import django
+from django.conf import settings
+
+settings.configure(
+  
+  17. mcp__testbed__run: cd /testbed && grep -n "unique" django/db/backends/postgresql/introspection.py | head -30
+  18. mcp__testbed__run: cd /testbed && python tests/runtests.py schema -v 1 2>&1 | tail -40
+  19. mcp__testbed__run: cd /testbed && python tests/runtests.py migrations -v 1 2>&1 | tail -20
+  20. mcp__testbed__run: cd /testbed && python tests/runtests.py migrations -v 1 2>&1 | grep -B5 "ERROR\|Error" | head -60
+  21. mcp__testbed__run: cd /testbed && python tests/runtests.py migrations -v 2 2>&1 | tail -80
+  22. mcp__testbed__run: cd /testbed && git stash && python tests/runtests.py migrations -v 1 2>&1 | tail -5; git stash pop
+  23. mcp__testbed__run: cd /testbed && git stash && python tests/runtests.py migrations -v 1 2>&1 | grep -E "^(OK|FAILED|Ran)"; git stash pop
+  24. mcp__testbed__run: cd /testbed && git diff
+
+---- patch produced ----
+diff --git a/django/db/backends/base/schema.py b/django/db/backends/base/schema.py
+index f2ca8c8..88a6d16 100644
+--- a/django/db/backends/base/schema.py
++++ b/django/db/backends/base/schema.py
+@@ -568,6 +568,15 @@ class BaseDatabaseSchemaEditor:
+             exclude=meta_constraint_names | meta_index_names,
+             **constraint_kwargs,
+         )
++        if constraint_kwargs.get("unique") is True and len(constraint_names) != 1:
++            # Prefer a non-primary key unique constraint.
++            constraint_names = self._constraint_names(
++                model,
++                columns,
++                exclude=meta_constraint_names | meta_index_names,
++                primary_key=False,
++                **constraint_kwargs,
++            )
+         if len(constraint_names) != 1:
+             raise ValueError(
+                 "Found wrong number (%s) of constraints for %s(%s)"
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 12   tool calls 11   ran_tests True   cost $0.166
+
+   1. Grep: _delete_composed_index
+   2. Read: C:\nexpath-sweb-work\django__django-15732\control\django\db\backends\base\schema.py
+   3. Grep: def _constraint_names
+   4. Read: C:\nexpath-sweb-work\django__django-15732\control\django\db\backends\base\schema.py
+   5. Edit: C:\nexpath-sweb-work\django__django-15732\control\django\db\backends\base\schema.py
+   6. Grep: unique_together.*pk|pk.*unique_together
+   7. run: cd C:\nexpath-sweb-work\django__django-15732\control && python -c "
+import django
+from django.conf import settings
+setti
+   8. ToolSearch: 
+   9. mcp__testbed__run: cd /testbed && python -c "
+import django
+from django.conf import settings
+settings.configure(
+    DATABASES={'default': 
+  10. mcp__testbed__run: cd /testbed && python tests/runtests.py schema -v1 2>&1 | tail -50
+  11. mcp__testbed__run: cd /testbed && python tests/runtests.py migrations backends -v1 2>&1 | tail -30
+
+---- patch produced ----
+diff --git a/django/db/backends/base/schema.py b/django/db/backends/base/schema.py
+index f2ca8c8..594b155 100644
+--- a/django/db/backends/base/schema.py
++++ b/django/db/backends/base/schema.py
+@@ -528,7 +528,10 @@ class BaseDatabaseSchemaEditor:
+         # Deleted uniques
+         for fields in olds.difference(news):
+             self._delete_composed_index(
+-                model, fields, {"unique": True}, self.sql_delete_unique
++                model,
++                fields,
++                {"unique": True, "primary_key": False},
++                self.sql_delete_unique,
+             )
+         # Created uniques
+         for field_names in news.difference(olds):
+

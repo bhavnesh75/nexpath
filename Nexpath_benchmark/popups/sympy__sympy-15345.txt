@@ -1,0 +1,132 @@
+NEXPATH POPUP AND AGENT RUN — sympy__sympy-15345
+group EASY   difficulty <15 min fix   repo sympy/sympy
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+mathematica_code gives wrong output with Max
+If I run the code
+
+```
+x = symbols('x')
+mathematica_code(Max(x,2))
+```
+
+then I would expect the output `'Max[x,2]'` which is valid Mathematica code but instead I get `'Max(2, x)'` which is not valid Mathematica code.
+
+
+User Journey Screen State:
+- The current implementation outputs 'Max(2, x)' instead of the expected 'Max[x,2]'. This could lead to confusion when trying to write valid Mathematica code since the output isn't in the correct format. Please review the state of the user journey and ensure that valid Mathematica syntax is produced from the Max function.
+
+Expected Actual State:
+- The expected output is 'Max[x, 2]' for the input provided, but the actual output is 'Max(2, x)', which is not a valid form for Mathematica. This mismatch indicates that the transformation logic needs to be checked to align actual and expected outputs.
+
+Reproduction Or Evidence:
+- To reproduce the issue, run the code snippet provided: 'x = symbols('x'); mathematica_code(Max(x,2))'. If the output is not 'Max[x,2]', then there’s an error in how the Max function is generating output for Mathematica. Please also confirm which version of the code or library is being used for this conversion.
+
+Verification Or Test Plan:
+- When verifying the output of the Max function, check that it aligns with the expected Mathematica code generation. It’s crucial to document test cases where 'Max[x, 2]' should be produced to ensure consistency and avoid regressions in future updates.
+
+Source Signal Guidance:
+- The signal from 'stage_transition_discipline' indicates a need for careful task breakdown before implementation. This step is crucial to ensure that proper checks are in place for not just the Max function, but for other potential outputs as well. Make sure to document any changes and their corresponding outputs in line with this guidance.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : b1f32366419130e398aed457deb34ecbca893979bbbaac7468daaac072993abe
+prompt sha256 handed to the agent : b1f32366419130e398aed457deb34ecbca893979bbbaac7468daaac072993abe
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 14   tool calls 13   ran_tests True   cost $0.182
+
+   1. Grep: class MCodePrinter
+   2. Read: C:\nexpath-sweb-work\sympy__sympy-15345\nexpath\sympy\printing\mathematica.py
+   3. Grep: class Max|class Min|class MinMaxBase
+   4. Grep: _print_LatticeOp
+   5. Read: C:\nexpath-sweb-work\sympy__sympy-15345\nexpath\sympy\printing\str.py
+   6. Edit: C:\nexpath-sweb-work\sympy__sympy-15345\nexpath\sympy\printing\mathematica.py
+   7. Edit: C:\nexpath-sweb-work\sympy__sympy-15345\nexpath\sympy\printing\mathematica.py
+   8. Edit: C:\nexpath-sweb-work\sympy__sympy-15345\nexpath\sympy\printing\mathematica.py
+   9. ToolSearch: 
+  10. mcp__testbed__run: cd /testbed && python -c "
+from sympy import symbols, Max, Min, mathematica_code
+x = symbols('x')
+print(mathematica_code
+  11. mcp__testbed__run: cd /testbed && python -m pytest sympy/printing/tests/test_mathematica.py -q
+  12. mcp__testbed__run: cd /testbed && python -m sympy.utilities.runtests sympy/printing/tests/test_mathematica.py 2>&1 | tail -30 || python bin
+  13. mcp__testbed__run: cd /testbed && python bin/test sympy/printing/tests/test_mathematica.py
+
+---- patch produced ----
+diff --git a/sympy/printing/mathematica.py b/sympy/printing/mathematica.py
+index ea7e3a2..d492406 100644
+--- a/sympy/printing/mathematica.py
++++ b/sympy/printing/mathematica.py
+@@ -116,6 +116,12 @@ def _print_Derivative(self, expr):
+         dvars = [i[0] if i[1] == 1 else i for i in expr.variable_count]
+         return "Hold[D[" + ', '.join(self.doprint(a) for a in [dexpr] + dvars) + "]]"
+ 
++    def _print_Min(self, expr, **kwargs):
++        return "Min[%s]" % self.stringify(expr.args, ", ")
++
++    def _print_Max(self, expr, **kwargs):
++        return "Max[%s]" % self.stringify(expr.args, ", ")
++
+ 
+ def mathematica_code(expr, **settings):
+     r"""Converts an expr to a string of the Wolfram Mathematica code
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 11   tool calls 10   ran_tests True   cost $0.144
+
+   1. Grep: known_functions
+   2. Read: C:\nexpath-sweb-work\sympy__sympy-15345\control\sympy\printing\mathematica.py
+   3. run: cd C:\nexpath-sweb-work\sympy__sympy-15345\control && python -c "
+from sympy import Max, symbols
+x = symbols('x')
+m = Ma
+   4. ToolSearch: 
+   5. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Max, symbols
+x = symbols('x')
+m = Max(x,2)
+print(type(m).__mro__)
+"
+
+   6. Edit: C:\nexpath-sweb-work\sympy__sympy-15345\control\sympy\printing\mathematica.py
+   7. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Max, Min, symbols, mathematica_code
+x = symbols('x')
+print(mathematica_code
+   8. mcp__testbed__run: cd /testbed && python -m pytest sympy/printing/tests/test_mathematica.py -q
+   9. mcp__testbed__run: cd /testbed && python -m sympy.utilities.runtests sympy/printing/tests/test_mathematica.py 2>&1 | tail -30 || python -c 
+  10. mcp__testbed__run: cd /testbed && python -c "
+import sympy
+sympy.test('sympy/printing/tests/test_mathematica.py')
+"
+
+---- patch produced ----
+diff --git a/sympy/printing/mathematica.py b/sympy/printing/mathematica.py
+index ea7e3a2..806ac3e 100644
+--- a/sympy/printing/mathematica.py
++++ b/sympy/printing/mathematica.py
+@@ -116,6 +116,12 @@ def _print_Derivative(self, expr):
+         dvars = [i[0] if i[1] == 1 else i for i in expr.variable_count]
+         return "Hold[D[" + ', '.join(self.doprint(a) for a in [dexpr] + dvars) + "]]"
+ 
++    def _print_Max(self, expr):
++        return "Max[%s]" % self.stringify(expr.args, ", ")
++
++    def _print_Min(self, expr):
++        return "Min[%s]" % self.stringify(expr.args, ", ")
++
+ 
+ def mathematica_code(expr, **settings):
+     r"""Converts an expr to a string of the Wolfram Mathematica code
+

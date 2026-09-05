@@ -1,0 +1,283 @@
+NEXPATH POPUP AND AGENT RUN — sphinx-doc__sphinx-7985
+group MEDIUM   difficulty 15 min - 1 hour   repo sphinx-doc/sphinx
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+linkcheck could also check local (internal) links
+Subject: linkcheck currently doesn't check local (internal) links, but this would be useful.
+
+<!--
+  Important: This is a list of issues for Sphinx, not a forum.
+  If you'd like to post a question, please move to sphinx-users group.
+  https://groups.google.com/forum/#!forum/sphinx-users
+
+  Thanks,
+-->
+
+### Problem
+See above.
+
+#### Procedure to reproduce the problem
+Create a template project with sphinx-quickstart, put the following in index.rst
+```
+broken external-link_
+broken local-link_
+
+.. _external-link: https://lkfqhlkghflkhs
+.. _local-link: doesntexist
+```
+
+Run `make linkcheck`
+
+#### Error logs / results
+```
+Running Sphinx v1.7.6
+making output directory...
+loading pickled environment... done
+building [mo]: targets for 0 po files that are out of date
+building [linkcheck]: targets for 1 source files that are out of date
+updating environment: 0 added, 0 changed, 0 removed
+looking for now-outdated files... none found
+preparing documents... done
+writing output... [100%] index                                                                   
+(line   14) -local-   doesntexist
+(line   14) broken    https://lkfqhlkghflkhs - HTTPSConnectionPool(host='lkfqhlkghflkhs', port=443): Max retries exceeded with url: / (Caused by NewConnectionError('<urllib3.connection.VerifiedHTTPSConnection object at 0x7faed7ddfc88>: Failed to establish a new connection: [Errno -2] Name or service not known',))
+
+build finished with problems.
+make: *** [Makefile:20: linkcheck] Error 1
+```
+
+#### Expected results
+Also a check for the local link.
+
+### Reproducible project / your project
+N/A
+
+### Environment info
+- OS: Arch Linux
+- Python version: 3.6
+- Sphinx version: 1.7.6
+
+
+
+Current New Versions:
+- The current new versions section may not clearly outline whether functionality for checking local links is included. I need to confirm if local link checking must be integrated into the next version release. Check the documentation and version logs to see if there's mention of this feature as part of the new updates.
+
+Changelog Breaking Change State:
+- If local link checking is added, it could potentially introduce breaking changes to existing link-checking functionality. I must assess if there are any compatibility issues or necessary adjustments detailed in the changelog before proceeding.
+
+Compatibility:
+- The addition of checking for local links might not be backward compatible with existing projects. I need to review the compatibility section to detail the compatibility impact and find any solutions for existing users.
+
+Rollback Recovery:
+- Local link checking could cause issues if links are misconfigured leading to build failures. I should prepare a rollback plan if the new checks don't work as intended, ensuring that previous stable versions can be restored quickly if necessary.
+
+Verification Or Test Plan:
+- If local links are included in the checks, I must develop a verification plan that specifically tests various configurations of local links to ensure they are processed correctly without failure. List the scenarios for testing this addition.
+
+Behavior Preservation:
+- Introducing checks for local links could affect the overall behavior of the link-checking process. I have to document what existing behaviors must be preserved and outline how to verify that the core functionalities continue to work as expected.
+
+Risk Safety Or Confirmation:
+- There are risks involved with adding local link checking that may compromise system stability during the testing phase. I need to establish safety protocols that cover potential rollback recovery operations and ensure dry runs are conducted before deployment.
+
+Source Signal Guidance:
+- The addition of local link checks aligns with the stage transition discipline currently underway. It's crucial to monitor how this signal influences our project phase and adjust our implementation strategy based on its outcomes.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : a9b942afe5945b577e18b237b165e035edcf872d70fcb5651d681e2d802ade95
+prompt sha256 handed to the agent : a9b942afe5945b577e18b237b165e035edcf872d70fcb5651d681e2d802ade95
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 20   tool calls 19   ran_tests True   cost $0.426
+
+   1. Grep: class CheckExternalLinksBuilder
+   2. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\sphinx\builders\linkcheck.py
+   3. Grep: linkcheck
+   4. Grep: linkcheck
+   5. Grep: local
+   6. Glob: tests/roots/test-linkcheck*/**
+   7. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\tests\roots\test-linkcheck\links.txt
+   8. Grep: 'local'
+   9. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\sphinx\builders\linkcheck.py
+  10. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\sphinx\builders\linkcheck.py
+  11. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\sphinx\builders\linkcheck.py
+  12. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\nexpath\sphinx\builders\linkcheck.py
+  13. ToolSearch: 
+  14. mcp__testbed__run: cd /testbed && mkdir -p /tmp/lc/proj && cat > /tmp/lc/proj/conf.py <<'EOF'
+project = 'test'
+EOF
+cat > /tmp/lc/proj/index
+  15. mcp__testbed__run: cd /testbed && cat > /tmp/lc/proj/other.rst <<'EOF'
+Other page
+==========
+EOF
+cat > /tmp/lc/proj/index.rst <<'EOF'
+worki
+  16. mcp__testbed__run: cd /testbed && python -m pytest tests/test_build_linkcheck.py -q 2>&1 | tail -40
+  17. mcp__testbed__run: cd /testbed && git stash && python -m pytest tests/test_build_linkcheck.py -q 2>&1 | tail -10 && git stash pop
+  18. mcp__testbed__run: cd /testbed && python -m pyflakes sphinx/builders/linkcheck.py
+  19. mcp__testbed__run: cd /testbed && git diff
+
+---- patch produced ----
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index dd53170..e597cac 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
+ DEFAULT_REQUEST_HEADERS = {
+     'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8',
+ }
++uri_re = re.compile('([a-z]+:)?//')  # matches to foo:// and // (a protocol relative URL)
+ 
+ 
+ class AnchorCheckParser(HTMLParser):
+@@ -213,7 +214,22 @@ class CheckExternalLinksBuilder(Builder):
+             if len(uri) == 0 or uri.startswith(('#', 'mailto:', 'ftp:')):
+                 return 'unchecked', '', 0
+             elif not uri.startswith(('http:', 'https:')):
+-                return 'local', '', 0
++                if uri_re.match(uri):
++                    # non supported URI schemes (ex. ftp)
++                    return 'unchecked', '', 0
++                else:
++                    srcdir = path.dirname(self.env.doc2path(docname))
++                    if '#' in uri:
++                        req_path, _ = uri.split('#', 1)
++                    else:
++                        req_path = uri
++                    if path.exists(path.join(srcdir, req_path)):
++                        return 'working', '', 0
++                    else:
++                        for rex in self.to_ignore:
++                            if rex.match(uri):
++                                return 'ignored', '', 0
++                        return 'broken', '', 0
+             elif uri in self.good:
+                 return 'working', 'old', 0
+             elif uri in self.broken:
+@@ -267,10 +283,6 @@ class CheckExternalLinksBuilder(Builder):
+             else:
+                 logger.info(darkgray('-ignored- ') + uri)
+             self.write_linkstat(linkstat)
+-        elif status == 'local':
+-            logger.info(darkgray('-local-   ') + uri)
+-            self.write_entry('local', docname, filename, lineno, uri)
+-            self.write_linkstat(linkstat)
+         elif status == 'working':
+             logger.info(darkgreen('ok        ') + uri + info)
+             self.write_linkstat(linkstat)
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 25   tool calls 24   ran_tests True   cost $0.494
+
+   1. Grep: class CheckExternalLinksBuilder
+   2. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\sphinx\builders\linkcheck.py
+   3. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\tests\test_build_linkcheck.py
+   4. Glob: tests/roots/test-linkcheck/*
+   5. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\CHANGES
+   6. Glob: **/site-packages/sphinx/builders/linkcheck.py
+   7. Glob: **/sphinx-*.whl
+   8. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\tests\roots\test-linkcheck\links.txt
+   9. Grep: def doc2path
+  10. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\sphinx\builders\linkcheck.py
+  11. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\sphinx\builders\linkcheck.py
+  12. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\sphinx\builders\linkcheck.py
+  13. Grep: self.srcdir
+  14. Read: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\sphinx\builders\linkcheck.py
+  15. ToolSearch: 
+  16. mcp__testbed__run: cd /testbed && mkdir -p /tmp/repro && cat > /tmp/repro/conf.py << 'EOF'
+project = 'repro'
+EOF
+cat > /tmp/repro/index.rst
+  17. mcp__testbed__run: cd /testbed && mkdir -p /tmp/repro2/sub
+cat > /tmp/repro2/conf.py << 'EOF'
+project = 'repro2'
+EOF
+cat > /tmp/repro2/inde
+  18. mcp__testbed__run: cd /testbed && mkdir -p /tmp/repro3/sub
+cat > /tmp/repro3/conf.py << 'EOF'
+project = 'repro3'
+EOF
+cat > /tmp/repro3/inde
+  19. mcp__testbed__run: cd /testbed && python -m pytest tests/test_build_linkcheck.py -q 2>&1 | tail -60
+  20. mcp__testbed__run: cd /testbed && git stash && python -m pytest tests/test_build_linkcheck.py -q 2>&1 | tail -15 && git stash pop
+  21. mcp__testbed__run: cd /testbed && python -m pytest tests/test_build_linkcheck.py -q -k "not defaults and not anchors_ignored" 2>&1 | tail -
+  22. mcp__testbed__run: rm -rf /tmp/repro /tmp/repro2 /tmp/repro3
+  23. Edit: C:\nexpath-sweb-work\sphinx-doc__sphinx-7985\control\CHANGES
+  24. mcp__testbed__run: cd /testbed && git diff
+
+---- patch produced ----
+diff --git a/CHANGES b/CHANGES
+index bc932a7..0572ee5 100644
+--- a/CHANGES
++++ b/CHANGES
+@@ -30,6 +30,7 @@ Features added
+ * #7052: add ``:noindexentry:`` to the Python, C, C++, and Javascript domains.
+   Update the documentation to better reflect the relationship between this option
+   and the ``:noindex:`` option.
++* #7893: linkcheck: Check local (internal) links as well as external links
+ * #7899: C, add possibility of parsing of some pre-v3 style type directives and
+   roles and try to convert them to equivalent v3 directives/roles.
+   Set the new option :confval:`c_allow_pre_v3` to ``True`` to enable this.
+diff --git a/sphinx/builders/linkcheck.py b/sphinx/builders/linkcheck.py
+index dd53170..3330761 100644
+--- a/sphinx/builders/linkcheck.py
++++ b/sphinx/builders/linkcheck.py
+@@ -208,12 +208,33 @@ class CheckExternalLinksBuilder(Builder):
+                 else:
+                     return 'redirected', new_url, 0
+ 
++        def check_local_uri() -> Tuple[str, str, int]:
++            # split off anchor
++            if '#' in uri:
++                req_url, _ = uri.split('#', 1)
++            else:
++                req_url = uri
++
++            if req_url.startswith('/'):
++                filename = path.join(self.srcdir, req_url[1:])
++            else:
++                docdir = path.dirname(self.env.doc2path(docname, base=None))
++                filename = path.join(self.srcdir, docdir, req_url)
++
++            if path.exists(filename):
++                return 'working', '', 0
++            else:
++                return 'broken', __("Local file %s does not exist") % req_url, 0
++
+         def check() -> Tuple[str, str, int]:
+             # check for various conditions without bothering the network
+             if len(uri) == 0 or uri.startswith(('#', 'mailto:', 'ftp:')):
+                 return 'unchecked', '', 0
+             elif not uri.startswith(('http:', 'https:')):
+-                return 'local', '', 0
++                for rex in self.to_ignore:
++                    if rex.match(uri):
++                        return 'ignored', '', 0
++                return check_local_uri()
+             elif uri in self.good:
+                 return 'working', 'old', 0
+             elif uri in self.broken:
+@@ -267,10 +288,6 @@ class CheckExternalLinksBuilder(Builder):
+             else:
+                 logger.info(darkgray('-ignored- ') + uri)
+             self.write_linkstat(linkstat)
+-        elif status == 'local':
+-            logger.info(darkgray('-local-   ') + uri)
+-            self.write_entry('local', docname, filename, lineno, uri)
+-            self.write_linkstat(linkstat)
+         elif status == 'working':
+             logger.info(darkgreen('ok        ') + uri + info)
+             self.write_linkstat(linkstat)
+

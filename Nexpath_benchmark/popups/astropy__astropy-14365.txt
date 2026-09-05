@@ -1,0 +1,165 @@
+NEXPATH POPUP AND AGENT RUN — astropy__astropy-14365
+group MEDIUM   difficulty 15 min - 1 hour   repo astropy/astropy
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+ascii.qdp Table format assumes QDP commands are upper case
+### Description
+
+ascii.qdp assumes that commands in a QDP file are upper case, for example, for errors they must be "READ SERR 1 2" whereas QDP itself is not case sensitive and case use "read serr 1 2". 
+
+As many QDP files are created by hand, the expectation that all commands be all-caps should be removed.
+
+### Expected behavior
+
+The following qdp file should read into a `Table` with errors, rather than crashing.
+```
+read serr 1 2 
+1 0.5 1 0.5
+```
+
+### How to Reproduce
+
+Create a QDP file:
+```
+> cat > test.qdp
+read serr 1 2 
+1 0.5 1 0.5
+<EOF>
+
+ > python
+Python 3.10.9 (main, Dec  7 2022, 02:03:23) [Clang 13.0.0 (clang-1300.0.29.30)] on darwin
+Type "help", "copyright", "credits" or "license" for more information.
+>>> from astropy.table import Table
+>>> Table.read('test.qdp',format='ascii.qdp')
+WARNING: table_id not specified. Reading the first available table [astropy.io.ascii.qdp]
+Traceback (most recent call last):
+...
+    raise ValueError(f'Unrecognized QDP line: {line}')
+ValueError: Unrecognized QDP line: read serr 1 2
+```
+
+Running "qdp test.qdp" works just fine.
+
+
+### Versions
+
+Python 3.10.9 (main, Dec  7 2022, 02:03:23) [Clang 13.0.0 (clang-1300.0.29.30)]
+astropy 5.1
+Numpy 1.24.1
+pyerfa 2.0.0.1
+Scipy 1.10.0
+Matplotlib 3.6.3
+
+
+
+Context And Constraints:
+- The current setup in the ascii.qdp format is too strict with command casing, where it only accepts upper-case commands like 'READ SERR 1 2'. This limitation is a concern since so many QDP files are manually created, leading to a mismatch with this expectation. We need to adjust the ascii.qdp handling to be case insensitive, allowing commands to be read in their lowercase form without errors.
+
+Approach Or Steps:
+- Changing the behavior of the Table.read method to be flexible with command casing is key here. I should modify the parsing logic to either convert incoming commands to upper-case before processing, or handle both cases (upper and lower) as valid. Ensuring backward compatibility while allowing mixed casing in input will be essential for implementation. I'll also need to run some tests using QDP files created with both upper and lower cases to confirm this adjustment holds.
+
+Acceptance Or Output Expectation:
+- The modified behavior of Table.read should allow the following input to be processed without raising errors, but instead, read into a Table correctly: ``` read serr 1 2 1 0.5 1 0.5 ``` This means that a input that originally caused a crash will now be accepted and result in appropriate output instead.
+
+Verification Or Test Plan:
+- To ensure that the adjustments are not introducing new issues, I should define a verification plan that includes scenarios for different cases of command usage. Testing against both upper and lower case command inputs will be critical. If any input still leads to crashes, the verification plan will need to be revisited. I'll document each test case, track results, and iterate on the implementation if necessary.
+
+Source Signal Guidance:
+- I need to confirm that the transition from task breakdown to implementation stage is well defined and indicates the need for this case insensitivity feature in the ascii.qdp format. The adjustments made should reflect this guidance and require clarity on how the new parsing approach will operate. Verifying that tasks align with this transition is important before finalizing implementation.
+
+Point Inventory Or Decomposition:
+- It's important to break down the current ascii.qdp handling constraints versus the new approach. I'll need to create a clear set of points outlining the differences and describe how each command's case is processed in terms of performance and output results. Making this comparison readily available will help in checking if there are dependencies or impacts from the changes.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : f13e0151ed50ca4bdb2f4eeaf8dd98b5e720e0fdf399ab927f27e46b294bba71
+prompt sha256 handed to the agent : f13e0151ed50ca4bdb2f4eeaf8dd98b5e720e0fdf399ab927f27e46b294bba71
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 13   tool calls 12   ran_tests True   cost $0.253
+
+   1. Grep: Unrecognized QDP line
+   2. Read: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   3. Edit: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   4. Read: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   5. Edit: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   6. Read: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   7. Read: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   8. Edit: C:\nexpath-sweb-work\astropy__astropy-14365\nexpath\astropy\io\ascii\qdp.py
+   9. ToolSearch: 
+  10. mcp__testbed__run: cd /testbed && printf 'read serr 1 2 \n1 0.5 1 0.5\n' > /tmp/test.qdp && python -c "
+from astropy.table import Table
+t =
+  11. mcp__testbed__run: cd /testbed && python -c "
+from astropy.table import Table
+import io
+qdp = '''read serr 1 2
+1 0.5 1 0.5
+no no no no
+2 0.
+  12. mcp__testbed__run: cd /testbed && python -m pytest astropy/io/ascii/tests/test_qdp.py -q --doctest-modules astropy/io/ascii/qdp.py 2>&1 | t
+
+---- patch produced ----
+diff --git a/astropy/io/ascii/qdp.py b/astropy/io/ascii/qdp.py
+index 83a4f00..5324dc8 100644
+--- a/astropy/io/ascii/qdp.py
++++ b/astropy/io/ascii/qdp.py
+@@ -68,7 +68,7 @@ def _line_type(line, delimiter=None):
+     _new_re = rf"NO({sep}NO)+"
+     _data_re = rf"({_decimal_re}|NO|[-+]?nan)({sep}({_decimal_re}|NO|[-+]?nan))*)"
+     _type_re = rf"^\s*((?P<command>{_command_re})|(?P<new>{_new_re})|(?P<data>{_data_re})?\s*(\!(?P<comment>.*))?\s*$"
+-    _line_type_re = re.compile(_type_re)
++    _line_type_re = re.compile(_type_re, re.IGNORECASE)
+     line = line.strip()
+     if not line:
+         return "comment"
+@@ -306,7 +306,7 @@ def _get_tables_from_qdp_file(qdp_file, input_colnames=None, delimiter=None):
+ 
+             values = []
+             for v in line.split(delimiter):
+-                if v == "NO":
++                if v.upper() == "NO":
+                     values.append(np.ma.masked)
+                 else:
+                     # Understand if number is int or float
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 10   tool calls 9   ran_tests True   cost $0.147
+
+   1. Grep: Unrecognized QDP line|def _line_type|command_re|READ [SD]ERR|line_type_re
+   2. Read: C:\nexpath-sweb-work\astropy__astropy-14365\control\astropy\io\ascii\qdp.py
+   3. Grep: command|\.upper\(\)|\.startswith\("READ"|split()
+   4. Read: C:\nexpath-sweb-work\astropy__astropy-14365\control\astropy\io\ascii\qdp.py
+   5. Edit: C:\nexpath-sweb-work\astropy__astropy-14365\control\astropy\io\ascii\qdp.py
+   6. ToolSearch: 
+   7. mcp__testbed__run: cd /testbed && printf 'read serr 1 2 \n1 0.5 1 0.5\n' > /tmp/test.qdp && python -c "
+from astropy.table import Table
+t =
+   8. mcp__testbed__run: cd /testbed && python -m pytest astropy/io/ascii/tests/test_qdp.py -q
+   9. mcp__testbed__run: cd /testbed && python -m pytest --doctest-modules astropy/io/ascii/qdp.py -q
+
+---- patch produced ----
+diff --git a/astropy/io/ascii/qdp.py b/astropy/io/ascii/qdp.py
+index 83a4f00..768beb0 100644
+--- a/astropy/io/ascii/qdp.py
++++ b/astropy/io/ascii/qdp.py
+@@ -68,7 +68,7 @@ def _line_type(line, delimiter=None):
+     _new_re = rf"NO({sep}NO)+"
+     _data_re = rf"({_decimal_re}|NO|[-+]?nan)({sep}({_decimal_re}|NO|[-+]?nan))*)"
+     _type_re = rf"^\s*((?P<command>{_command_re})|(?P<new>{_new_re})|(?P<data>{_data_re})?\s*(\!(?P<comment>.*))?\s*$"
+-    _line_type_re = re.compile(_type_re)
++    _line_type_re = re.compile(_type_re, re.IGNORECASE)
+     line = line.strip()
+     if not line:
+         return "comment"
+

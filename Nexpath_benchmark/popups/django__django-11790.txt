@@ -1,0 +1,123 @@
+NEXPATH POPUP AND AGENT RUN — django__django-11790
+group MEDIUM   difficulty 15 min - 1 hour   repo django/django
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+AuthenticationForm's username field doesn't set maxlength HTML attribute.
+Description
+	
+AuthenticationForm's username field doesn't render with maxlength HTML attribute anymore.
+Regression introduced in #27515 and 5ceaf14686ce626404afb6a5fbd3d8286410bf13.
+​https://groups.google.com/forum/?utm_source=digest&utm_medium=email#!topic/django-developers/qnfSqro0DlA
+​https://forum.djangoproject.com/t/possible-authenticationform-max-length-regression-in-django-2-1/241
+
+
+Last Known Good Current Behavior:
+- The last known good behavior for AuthenticationForm's username field included the correct rendering of the maxlength HTML attribute, ensuring it restricted input as intended. This functionality appears to be absent in the current implementation, so verify how this was functioning prior to the regression.
+
+Recent Change:
+- Recent changes include regression introduced in commit #27515 and in the commit 5ceaf14686ce626404afb6a5fbd3d8286410bf13, which seemed to affect the maxlength attribute. Review these commits to identify specific alterations that led to this behavior.
+
+Reproduction Or Evidence:
+- To confirm this issue, reproduce the scenario by implementing the AuthenticationForm and checking if the maxlength HTML attribute is present in the username field. Track and document any differences across environments or versions that may affect this output.
+
+Intended Work Preservation:
+- It's crucial to ensure that if the maxlength attribute is reinstated, it should not inadvertently impact other fields or functionalities within the AuthenticationForm. Outline protections against any unintended consequences during this modification.
+
+Verification Or Test Plan:
+- For verifying the proper implementation, set up a test plan that involves checking when the maxlength HTML attribute is applied to the username field in different scenarios. Include a checklist of cases to ensure it enforces character limits correctly across various conditions.
+
+Source Signal Guidance:
+- This process will transition from task breakdown to implementation; ensure to follow the stage transition discipline accordingly. Collect baseline evidence during this shift to validate the implementation meets set expectations.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 33d5a546ebf0fa25359447117dc0ca2d080ce98bc668e5d79de1a2ae627bea5e
+prompt sha256 handed to the agent : 33d5a546ebf0fa25359447117dc0ca2d080ce98bc668e5d79de1a2ae627bea5e
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 8   tool calls 7   ran_tests True   cost $0.125
+
+   1. Grep: class AuthenticationForm
+   2. Grep: class UsernameField|widget_attrs
+   3. Grep: widget_attrs|class CharField
+   4. Edit: C:\nexpath-sweb-work\django__django-11790\nexpath\django\contrib\auth\forms.py
+   5. mcp__testbed__run: python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_sqlite')
+import sys
+sys.path.insert(
+   6. mcp__testbed__run: cd tests && python runtests.py auth_tests.test_forms -v 1 2>&1 | tail -30
+   7. mcp__testbed__run: cd tests && DJANGO_SETTINGS_MODULE=test_sqlite python -c "
+import django
+django.setup()
+from django.contrib.auth.forms i
+
+---- patch produced ----
+diff --git a/django/contrib/auth/forms.py b/django/contrib/auth/forms.py
+index a0cfed0..b4fb55c 100644
+--- a/django/contrib/auth/forms.py
++++ b/django/contrib/auth/forms.py
+@@ -191,7 +191,9 @@ class AuthenticationForm(forms.Form):
+ 
+         # Set the max length and label for the "username" field.
+         self.username_field = UserModel._meta.get_field(UserModel.USERNAME_FIELD)
+-        self.fields['username'].max_length = self.username_field.max_length or 254
++        username_max_length = self.username_field.max_length or 254
++        self.fields['username'].max_length = username_max_length
++        self.fields['username'].widget.attrs['maxlength'] = username_max_length
+         if self.fields['username'].label is None:
+             self.fields['username'].label = capfirst(self.username_field.verbose_name)
+ 
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 12   tool calls 11   ran_tests True   cost $0.159
+
+   1. Grep: class AuthenticationForm|class UsernameField|max_length
+   2. Grep: class AuthenticationForm|class UsernameField|max_length|widget_attrs
+   3. Read: C:\nexpath-sweb-work\django__django-11790\control\django\contrib\auth\forms.py
+   4. Grep: class CharField|widget_attrs|def __init__
+   5. Edit: C:\nexpath-sweb-work\django__django-11790\control\django\contrib\auth\forms.py
+   6. run: cd C:\nexpath-sweb-work\django__django-11790\control && python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETT
+   7. ToolSearch: 
+   8. mcp__testbed__run: cd /testbed && python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_sqlite')
+import sys
+s
+   9. mcp__testbed__run: cd /testbed && python tests/runtests.py auth_tests.test_forms -v 1 2>&1 | tail -40
+  10. mcp__testbed__run: cd /testbed && DJANGO_SETTINGS_MODULE=test_sqlite python -c "
+import sys
+sys.path.insert(0, 'tests')
+import django
+djang
+  11. mcp__testbed__run: cd /testbed && git diff
+
+---- patch produced ----
+diff --git a/django/contrib/auth/forms.py b/django/contrib/auth/forms.py
+index a0cfed0..b4fb55c 100644
+--- a/django/contrib/auth/forms.py
++++ b/django/contrib/auth/forms.py
+@@ -191,7 +191,9 @@ class AuthenticationForm(forms.Form):
+ 
+         # Set the max length and label for the "username" field.
+         self.username_field = UserModel._meta.get_field(UserModel.USERNAME_FIELD)
+-        self.fields['username'].max_length = self.username_field.max_length or 254
++        username_max_length = self.username_field.max_length or 254
++        self.fields['username'].max_length = username_max_length
++        self.fields['username'].widget.attrs['maxlength'] = username_max_length
+         if self.fields['username'].label is None:
+             self.fields['username'].label = capfirst(self.username_field.verbose_name)
+ 
+

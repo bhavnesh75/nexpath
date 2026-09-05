@@ -1,0 +1,402 @@
+[
+  {
+    "instance_id": "astropy__astropy-12907",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4763,
+    "prompt_sha256_expected": "ba2017835bb5001413ead181d7468640ff37cc5eabc15a2ec71f0f1e8d47f2b6"
+  },
+  {
+    "instance_id": "astropy__astropy-14365",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3912,
+    "prompt_sha256_expected": "f13e0151ed50ca4bdb2f4eeaf8dd98b5e720e0fdf399ab927f27e46b294bba71"
+  },
+  {
+    "instance_id": "astropy__astropy-7336",
+    "group": "EASY",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3268,
+    "prompt_sha256_expected": "880917e443ce8e4572ed6c4e701cecd3aa531f999b37729d325d2d9f81c01bb0"
+  },
+  {
+    "instance_id": "django__django-11211",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3103,
+    "prompt_sha256_expected": "33e60d00bef120d5536a577870767bf6eaa41398513aa37b5676548c69ceba20"
+  },
+  {
+    "instance_id": "django__django-11790",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2244,
+    "prompt_sha256_expected": "33d5a546ebf0fa25359447117dc0ca2d080ce98bc668e5d79de1a2ae627bea5e"
+  },
+  {
+    "instance_id": "django__django-13012",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3849,
+    "prompt_sha256_expected": "047f381def9356e91c4f91e8ffc8f89378732765a9998fbc3fe350687805c400"
+  },
+  {
+    "instance_id": "django__django-13212",
+    "group": "HARD",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3153,
+    "prompt_sha256_expected": "b97f76ab70b496c68464c6ed751d56c8e3d3d7c9e12b8b091f25c99bd53d23a9"
+  },
+  {
+    "instance_id": "django__django-13346",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2456,
+    "prompt_sha256_expected": "e01721ed57f7fc3874fdd31b11e07dba942188033e31c0409c277e0fb40b5ff5"
+  },
+  {
+    "instance_id": "django__django-13449",
+    "group": "HARD",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 9217,
+    "prompt_sha256_expected": "3f2660a775b99a65aab7c61bcf4370e8fea52fbd08a2b6c90df9574e3d625863"
+  },
+  {
+    "instance_id": "django__django-13590",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3467,
+    "prompt_sha256_expected": "250b372520865b181098d2964c6ed35184bd9f1487c14712f3083515c4c898e6"
+  },
+  {
+    "instance_id": "django__django-13658",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3469,
+    "prompt_sha256_expected": "a333ef6d0738bd4f41f34ade5fc0630ee557f2906f65818735cde30002de90cf"
+  },
+  {
+    "instance_id": "django__django-13810",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5391,
+    "prompt_sha256_expected": "6b357dab8420e871d5d35a0c156e9ccbe09fd67b2b0f0e6d893d81ae80d99dbb"
+  },
+  {
+    "instance_id": "django__django-13820",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5568,
+    "prompt_sha256_expected": "33dd63c365ba8e6d1806bc052eaff28366f888b5e4cdfc45f0590d7ffea726c2"
+  },
+  {
+    "instance_id": "django__django-13837",
+    "group": "HARD",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4164,
+    "prompt_sha256_expected": "16871f50e340ba7a41aa69a9967855d41fe635b1dfb6d01800d1f5132779ecc9"
+  },
+  {
+    "instance_id": "django__django-14034",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3223,
+    "prompt_sha256_expected": "1d3aea40f8ac387e330e5ac8af767410b97aa77643178c5cb9dbd62b7315b195"
+  },
+  {
+    "instance_id": "django__django-14122",
+    "group": "MEDIUM",
+    "popup_shown": false,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 1606,
+    "prompt_sha256_expected": "977d049025358afe0585a110b6fdcfe236b41139b69f5300d6b4aa5195523097"
+  },
+  {
+    "instance_id": "django__django-14238",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4898,
+    "prompt_sha256_expected": "5ad7653866107a064bda3f7fcc65150e25fe6213971dc396bfdf8affc9405a29"
+  },
+  {
+    "instance_id": "django__django-14631",
+    "group": "HARD",
+    "popup_shown": false,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2542,
+    "prompt_sha256_expected": "1d3f964a6347e618040724052803c6e2011af7a3288f08293494b40da803118d"
+  },
+  {
+    "instance_id": "django__django-14672",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 10562,
+    "prompt_sha256_expected": "4f633368112c1f0effb84e65a9a8458627a91f85d88fdfecc5026df22e2a62ce"
+  },
+  {
+    "instance_id": "django__django-15022",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2501,
+    "prompt_sha256_expected": "8619ee64eb160a0e25c184b92fa2c5a52172bcee1de106f4ba5d8190baac3ead"
+  },
+  {
+    "instance_id": "django__django-15128",
+    "group": "HARD",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5550,
+    "prompt_sha256_expected": "85ae73f2b599b0320fcedc37812ea1dd8d5d903c07886932de12104b19cde820"
+  },
+  {
+    "instance_id": "django__django-15732",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2187,
+    "prompt_sha256_expected": "2df50ee489bc439a35a0a91fe696e65d45f7ba5d70385f7c7fbe16ca95a516f2"
+  },
+  {
+    "instance_id": "django__django-16136",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4165,
+    "prompt_sha256_expected": "9cb74e1b8c5e1e4929bcc0e95e2379db8ea98f1365b2ea8095a1eee2b2deb4eb"
+  },
+  {
+    "instance_id": "matplotlib__matplotlib-25775",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2991,
+    "prompt_sha256_expected": "a9d290b97a7d567edcd93efabc6fa0538543d12f1e08222663d5b7f1a4507120"
+  },
+  {
+    "instance_id": "matplotlib__matplotlib-26208",
+    "group": "EASY",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5762,
+    "prompt_sha256_expected": "c56d414f6a47d0d3861c47ddb3f342fb8140b1e86c70dc364199259dc96f29d2"
+  },
+  {
+    "instance_id": "pydata__xarray-3095",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4709,
+    "prompt_sha256_expected": "9cd9282663d43e8be503cad303b6e2996ae667307b4c84cc8e9d1af3a4ba46d2"
+  },
+  {
+    "instance_id": "pydata__xarray-6938",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5453,
+    "prompt_sha256_expected": "8813ce792f4ce095eca1ccadcfa14cfc5d1d76913e71c6bfb431e2b734f906a9"
+  },
+  {
+    "instance_id": "pydata__xarray-7229",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5119,
+    "prompt_sha256_expected": "400edde90a72cd2dd1919d372fb8a1911f54f3e29305b22c69b9c575535cdd0c"
+  },
+  {
+    "instance_id": "pylint-dev__pylint-4604",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2314,
+    "prompt_sha256_expected": "ee229ef35e02ede7457b159a135c570584a099f523b407e615d55f0d0429aa80"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-10844",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4677,
+    "prompt_sha256_expected": "e805f4303b6b061b3a78be997bbac6bd6771753be96ec2768d92c40bb6f13470"
+  },
+  {
+    "instance_id": "scikit-learn__scikit-learn-10908",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3373,
+    "prompt_sha256_expected": "0d19864cb17d44f81c2b801b2820651e1b774eeac86b00ddeea1b82a1df45ba1"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-10614",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 5387,
+    "prompt_sha256_expected": "7105bdd1b3e8ccee4993ac47351655988cece2a5a09f46a65f5966d64cc9403e"
+  },
+  {
+    "instance_id": "sphinx-doc__sphinx-7985",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 4028,
+    "prompt_sha256_expected": "a9b942afe5945b577e18b237b165e035edcf872d70fcb5651d681e2d802ade95"
+  },
+  {
+    "instance_id": "sympy__sympy-14711",
+    "group": "EASY",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2821,
+    "prompt_sha256_expected": "4cd9b85bd0c624a46b5e35c3a41d20772d5800c58826a06cad64cb0db4db41e9"
+  },
+  {
+    "instance_id": "sympy__sympy-15345",
+    "group": "EASY",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 1922,
+    "prompt_sha256_expected": "b1f32366419130e398aed457deb34ecbca893979bbbaac7468daaac072993abe"
+  },
+  {
+    "instance_id": "sympy__sympy-16597",
+    "group": "HARD",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 642,
+    "prompt_sha256_expected": "8a3c872e94c4428c109fa66e40243b63dc6247f3a4475d1430451228bbe646ab"
+  },
+  {
+    "instance_id": "sympy__sympy-21930",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2252,
+    "prompt_sha256_expected": "7082185700f1de6067380e6482c79519ae26aa5d708450882c1a10cafc7b2344"
+  },
+  {
+    "instance_id": "sympy__sympy-22080",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2928,
+    "prompt_sha256_expected": "af46da00066f75a47731e8349729489324ce8fb0a78c865baa569ed89c2ad77b"
+  },
+  {
+    "instance_id": "sympy__sympy-23413",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 2475,
+    "prompt_sha256_expected": "2a95121f8740b627300db911181f33fcf398a624b246fe7a49db7e15a56cf03e"
+  },
+  {
+    "instance_id": "sympy__sympy-24443",
+    "group": "MEDIUM",
+    "popup_shown": true,
+    "gate_present": false,
+    "statement_preserved": true,
+    "prompt_changed": true,
+    "advisory_chars": 3105,
+    "prompt_sha256_expected": "610cb2e509e96747c0d84dafe870ccd8675ee85a6158b1763ef293a2098bfe26"
+  }
+]

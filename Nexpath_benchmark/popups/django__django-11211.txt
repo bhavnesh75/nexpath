@@ -1,0 +1,134 @@
+NEXPATH POPUP AND AGENT RUN — django__django-11211
+group MEDIUM   difficulty 15 min - 1 hour   repo django/django
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+Prefetch related is not working when used GFK for model that uses UUID field as PK.
+Description
+	
+How to reproduce:
+create model with UUID as primary key
+class Foo(models.Model):
+	id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	...
+create another model with GFK to model Foo
+class Bar(models.Model):
+	foo_content_type = models.ForeignKey(
+		ContentType, related_name='actor',
+		on_delete=models.CASCADE, db_index=True
+	)
+	foo_object_id = models.CharField(max_length=255, db_index=True)
+	foo = GenericForeignKey('foo_content_type', 'foo_object_id')
+	...
+and try to get queryset with prefetch related (django orm engine return None for attribute foo):
+Bar.objects.all().prefetch_related('foo')
+Thanks a lot for your attention! Also i wanna point out some related bug report from third party library in which previously i faced with that issue, maybe it would useful – ​https://github.com/justquick/django-activity-stream/issues/245
+
+
+Smallest Repro Request:
+- The UUID implementation with GFK isn't working correctly, and I have not specified the minimum code to reproduce this issue — please define the necessary code implementations to properly create the Foo model with UUID as a primary key and the Bar model with a Generic Foreign Key pointing to Foo.
+
+Exact Steps Request:
+- Not clearly laying out the steps to reproduce this issue may lead to misunderstandings. Thus, make sure to provide the exact lines of code and the commands to execute, observing if the prefetch_related is returning None for the 'foo' attribute when querying Bar objects.
+
+Expected Actual State:
+- Since the expected behavior with prefetch_related in this GFK context is to get the correct Foo instance, I need to clarify what I am receiving instead. Confirm the actual output when running Bar.objects.all().prefetch_related('foo') and note whether it shows None or returns any effective results.
+
+Evidence Request:
+- Given I'm seeing this reflection of the issue, I haven't attached any evidence or logs to support this GFK problem yet — provide any error messages, logs, or unexpected behaviors observed during execution to help diagnose this situation.
+
+Reproduction Or Evidence:
+- As the reproduction path is vague, specifying precise evidence of the failure in the context of using UUIDs and GFK would be necessary. Check for the failure cases and be ready to share whatever concrete evidence, like Django shell attempts or query outputs, can showcase the discrepancy with prefetch_related functionality.
+
+Verification Or Test Plan:
+- Since there could be potential issues with GFK behavior regarding UUIDs, I'll need to plan specific tests for the code to ensure it interacts correctly. Draft a test plan to verify that the prefetching works and returns the expected results when querying Bar models with a filled out Foo model.
+
+Source Signal Guidance:
+- The stage transition discipline indicates a need for task breakdown before implementation; thus I need to follow the earlier guidance to structure my plan moving forward in resolving this GFK situation.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 33e60d00bef120d5536a577870767bf6eaa41398513aa37b5676548c69ceba20
+prompt sha256 handed to the agent : 33e60d00bef120d5536a577870767bf6eaa41398513aa37b5676548c69ceba20
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 17   tool calls 16   ran_tests True   cost $0.254
+
+   1. Grep: get_prefetch_queryset
+   2. Read: C:\nexpath-sweb-work\django__django-11211\nexpath\django\contrib\contenttypes\fields.py
+   3. Grep: class UUIDField" -A 40
+   4. Grep: class UUIDField
+   5. Read: C:\nexpath-sweb-work\django__django-11211\nexpath\django\db\models\fields\__init__.py
+   6. Edit: C:\nexpath-sweb-work\django__django-11211\nexpath\django\contrib\contenttypes\fields.py
+   7. Grep: class.*Tests.*Generic
+   8. Grep: UUID
+   9. Read: C:\nexpath-sweb-work\django__django-11211\nexpath\tests\prefetch_related\test_uuid.py
+  10. Grep: uuid
+  11. Write: C:\nexpath-sweb-work\django__django-11211\nexpath\repro_gfk_uuid.py
+  12. ToolSearch: 
+  13. mcp__testbed__run: cd /testbed && python repro_gfk_uuid.py
+  14. mcp__testbed__run: cd /testbed && git stash && python repro_gfk_uuid.py; git stash pop
+  15. mcp__testbed__run: cd /testbed && python tests/runtests.py generic_relations generic_relations_regress contenttypes_tests prefetch_related 
+  16. mcp__testbed__run: cd /testbed && rm repro_gfk_uuid.py && git status
+
+---- patch produced ----
+diff --git a/django/contrib/contenttypes/fields.py b/django/contrib/contenttypes/fields.py
+index ed98ecb..6098b71 100644
+--- a/django/contrib/contenttypes/fields.py
++++ b/django/contrib/contenttypes/fields.py
+@@ -202,7 +202,7 @@ class GenericForeignKey(FieldCacheMixin):
+             else:
+                 model = self.get_content_type(id=ct_id,
+                                               using=obj._state.db).model_class()
+-                return (model._meta.pk.get_prep_value(getattr(obj, self.fk_field)),
++                return (model._meta.pk.to_python(getattr(obj, self.fk_field)),
+                         model)
+ 
+         return (
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 15   tool calls 14   ran_tests True   cost $0.241
+
+   1. Grep: get_prefetch_queryset" -n django/contrib/contenttypes/fields.py
+   2. Grep: get_prefetch_queryset
+   3. Read: django/contrib/contenttypes/fields.py
+   4. Grep: class UUIDField" -A 30
+   5. Grep: class UUIDField
+   6. Grep: def get_prep_value
+   7. Edit: django/contrib/contenttypes/fields.py
+   8. run: cd tests && python runtests.py generic_relations generic_relations_regress prefetch_related contenttypes_tests -v 1 2>&1
+   9. ToolSearch: 
+  10. mcp__testbed__run: cd /testbed/tests && python runtests.py generic_relations generic_relations_regress prefetch_related contenttypes_tests 
+  11. mcp__testbed__run: cd /testbed && cat > /tmp/repro.py << 'EOF'
+import django, uuid
+from django.conf import settings
+settings.configure(
+   
+  12. mcp__testbed__run: cd /testbed && sed -i "s/from django.core.management import call_command/from django.db import connection/; s/call_comma
+  13. mcp__testbed__run: cd /testbed && sed -i "s/    se.create_model(Bar)/    se.create_model(Bar)\n    se.create_model(ContentType)/" /tmp/repr
+  14. mcp__testbed__run: cd /testbed && git stash && python /tmp/repro.py; git stash pop
+
+---- patch produced ----
+diff --git a/django/contrib/contenttypes/fields.py b/django/contrib/contenttypes/fields.py
+index ed98ecb..6098b71 100644
+--- a/django/contrib/contenttypes/fields.py
++++ b/django/contrib/contenttypes/fields.py
+@@ -202,7 +202,7 @@ class GenericForeignKey(FieldCacheMixin):
+             else:
+                 model = self.get_content_type(id=ct_id,
+                                               using=obj._state.db).model_class()
+-                return (model._meta.pk.get_prep_value(getattr(obj, self.fk_field)),
++                return (model._meta.pk.to_python(getattr(obj, self.fk_field)),
+                         model)
+ 
+         return (
+

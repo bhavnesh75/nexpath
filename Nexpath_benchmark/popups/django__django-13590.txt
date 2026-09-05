@@ -1,0 +1,123 @@
+NEXPATH POPUP AND AGENT RUN — django__django-13590
+group MEDIUM   difficulty 15 min - 1 hour   repo django/django
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+Upgrading 2.2>3.0 causes named tuples used as arguments to __range to error.
+Description
+	
+I noticed this while upgrading a project from 2.2 to 3.0.
+This project passes named 2-tuples as arguments to range queryset filters. This works fine on 2.2. On 3.0 it causes the following error: TypeError: __new__() missing 1 required positional argument: 'far'.
+This happens because django.db.models.sql.query.Query.resolve_lookup_value goes into the tuple elements to resolve lookups and then attempts to reconstitute the tuple with the resolved elements.
+When it attempts to construct the new tuple it preserves the type (the named tuple) but it passes a iterator to it's constructor.
+NamedTuples don't have the code path for copying an iterator, and so it errors on insufficient arguments.
+The fix is to * expand the contents of the iterator into the constructor.
+
+
+Smallest Repro Request:
+- The named tuple being passed to the range queryset filter needs to be precisely defined to avoid TypeError when upgrading from 2.2 to 3.0. Ensure that I'm accurately specifying the named tuple elements in the function that utilizes it. If the tuple definition is incorrect or incomplete, it will lead to errors during the query resolution process, so I gotta double-check that definition carefully.
+
+Exact Steps Request:
+- I must outline the exact steps to reproduce this issue, making sure to specify how the named tuples are constructed and passed to the queryset filters in both versions. Failing to document the exact format can lead to misunderstandings on what triggers the error, so I need to detail every step clearly to ensure accurate reproduction.
+
+Expected Actual State:
+- The expected behavior when using named tuples with queryset filters in Django 2.2 should be that the query executes successfully without errors. However, after upgrading to 3.0, I'm expecting a TypeError due to the iterator being passed into the named tuple constructor. I need to make sure I'm explicitly stating this inconsistency for clarity.
+
+Evidence Request:
+- I need to gather evidence demonstrating the occurrence of the TypeError when using named tuples in version 3.0. If I can't find specific error logs or output demonstrating this issue, it will be vital to ask for relevant logs from the upgrade process to substantiate the claim.
+
+Reproduction Or Evidence:
+- I’m not sure I have all the necessary reproduction evidence to see this issue’s full impact. I should verify that the changes made during the upgrade are fully captured in the examples provided and if there are specific scenarios under which it fails. Making sure to outline these scenarios will help establish clearer reproduction paths without presumption of what's used in the project.
+
+Verification Or Test Plan:
+- The verification or test plan needs to include steps for testing named tuple handling after the upgrade to 3.0. I should ensure it checks for both successful query execution and error generation. If the test plan doesn't adequately cover the named tuples' behavior in both versions, it risks missing critical issues in the upgrading process.
+
+Source Signal Guidance:
+- I should align my handling of named tuples with the current source signal guidance that emphasizes critical stage transitions — in this scenario, the task breakdown to implementation step may influence how I approach fixing the problem with named tuples in the queryset filters after upgrading to 3.0.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 250b372520865b181098d2964c6ed35184bd9f1487c14712f3083515c4c898e6
+prompt sha256 handed to the agent : 250b372520865b181098d2964c6ed35184bd9f1487c14712f3083515c4c898e6
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 11   tool calls 10   ran_tests True   cost $0.135
+
+   1. Grep: def resolve_lookup_value
+   2. Read: C:\nexpath-sweb-work\django__django-13590\nexpath\django\db\models\sql\query.py
+   3. Edit: C:\nexpath-sweb-work\django__django-13590\nexpath\django\db\models\sql\query.py
+   4. ToolSearch: 
+   5. mcp__testbed__run: cd /testbed && python -c "
+import django, os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'test_sqlite')
+import sys
+s
+   6. mcp__testbed__run: cd /testbed && grep -rl "range" tests/lookup/tests.py | head
+   7. mcp__testbed__run: cd /testbed && python tests/runtests.py lookup -v1 2>&1 | tail -30
+   8. mcp__testbed__run: cd /testbed && cat > /tmp/repro_test.py << 'EOF'
+import collections
+from django.test import TestCase
+from lookup.models 
+   9. mcp__testbed__run: cd /testbed && git stash && python tests/runtests.py lookup.test_repro -v2 2>&1 | tail -15; git stash pop
+  10. mcp__testbed__run: cd /testbed && rm tests/lookup/test_repro.py && python tests/runtests.py lookup queries expressions -v1 2>&1 | tail -15
+
+---- patch produced ----
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index 4648daf..e5adf8d 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1077,10 +1077,14 @@ class Query(BaseExpression):
+         elif isinstance(value, (list, tuple)):
+             # The items of the iterable may be expressions and therefore need
+             # to be resolved independently.
+-            return type(value)(
++            values = (
+                 self.resolve_lookup_value(sub_value, can_reuse, allow_joins)
+                 for sub_value in value
+             )
++            type_ = type(value)
++            if hasattr(type_, '_make'):
++                return type_(*values)
++            return type_(values)
+         return value
+ 
+     def solve_lookup_type(self, lookup):
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 4   tool calls 3   ran_tests False   cost $0.066
+
+   1. Grep: def resolve_lookup_value
+   2. Read: C:\nexpath-sweb-work\django__django-13590\control\django\db\models\sql\query.py
+   3. Edit: C:\nexpath-sweb-work\django__django-13590\control\django\db\models\sql\query.py
+
+---- patch produced ----
+diff --git a/django/db/models/sql/query.py b/django/db/models/sql/query.py
+index 4648daf..e5adf8d 100644
+--- a/django/db/models/sql/query.py
++++ b/django/db/models/sql/query.py
+@@ -1077,10 +1077,14 @@ class Query(BaseExpression):
+         elif isinstance(value, (list, tuple)):
+             # The items of the iterable may be expressions and therefore need
+             # to be resolved independently.
+-            return type(value)(
++            values = (
+                 self.resolve_lookup_value(sub_value, can_reuse, allow_joins)
+                 for sub_value in value
+             )
++            type_ = type(value)
++            if hasattr(type_, '_make'):
++                return type_(*values)
++            return type_(values)
+         return value
+ 
+     def solve_lookup_type(self, lookup):
+
