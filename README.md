@@ -113,12 +113,12 @@ Nexpath CLI is built for prompt capture across AI coding agents.
 
 | Agent | Status in v0.1.5 |
 |-------|-----------------|
-| **Claude Code** | Fully supported — end-to-end tested |
-| **Cursor** | Fully supported — end-to-end tested |
-| **Windsurf** | Fully supported — end-to-end tested |
-| **Replit** | Fully supported — end-to-end tested |
-| **Lovable** | Fully supported — end-to-end tested |
-| **Bolt.new** | Fully supported — end-to-end tested |
+| [**Claude Code**](#add-nexpath-to-your-development-workflow--installation) | Fully supported — end-to-end tested |
+| [**Cursor**](https://marketplace.visualstudio.com/items?itemName=nexpath.nexpath-vscode) | Fully supported — end-to-end tested |
+| [**Windsurf**](https://marketplace.visualstudio.com/items?itemName=nexpath.nexpath-vscode) | Fully supported — end-to-end tested |
+| [**Replit**](https://chromewebstore.google.com/search/nexpath) | Fully supported — end-to-end tested |
+| [**Lovable**](https://chromewebstore.google.com/search/nexpath) | Fully supported — end-to-end tested |
+| [**Bolt.new**](https://chromewebstore.google.com/search/nexpath) | Fully supported — end-to-end tested |
 
 ---
 
