@@ -1,0 +1,314 @@
+NEXPATH POPUP AND AGENT RUN — django__django-14631
+group HARD   difficulty 1-4 hours   repo django/django
+routing_state suppress   disposition no_popup_not_applicable
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+BaseForm's _clean_fields() and changed_data should access values via BoundField
+Description
+	 
+		(last modified by Chris Jerdonek)
+	 
+While working on #32917, I noticed that ​BaseForm._clean_fields() and ​BaseForm.changed_data don't currently access their values through a BoundField object. It would be better for consistency if they did, and to reduce the number of code paths.
+One consequence of the current code is that form._clean_fields() can return a different value from form[name].initial when they should be the same. This case is almost, but not quite, covered by ​test_datetime_clean_initial_callable_disabled() (the test can be adjusted to cover this case).
+As part of this ticket and in line with accessing data through the BoundField objects, I noticed that the code would also be simpler if the per-field logic of changed_data() were moved into a method of the BoundField class. It could be called something like bf.did_change(). This would be more appropriate because whether form data changed for a field is a property of its BoundField (as it depends on the underlying form data), as opposed to the unbound field. With this change, the method could change from its current ~20 lines to something like this--
+@cached_property
+def changed_data(self):
+	return [name for name, bf in self._bound_items() if bf._did_change()]
+A similar change could be made to BaseForm._clean_fields().
+
+
+Scope Non Goals:
+- Cover Scope Non Goals for this request with concrete, source-backed specifics — state what is required, how to implement it, and how to verify it.
+
+Assumptions Open Questions:
+- Cover Assumptions Open Questions for this request with concrete, source-backed specifics — state what is required, how to implement it, and how to verify it.
+
+Acceptance Or Output Expectation:
+- State the expected output and acceptance criteria clearly enough that the implementation can be checked.
+
+Point Inventory Or Decomposition:
+- Preserve the original request, dependencies, and completion checks inside this one prompt body.
+
+Risk Safety Or Confirmation:
+- Name risky or irreversible actions, ask for required confirmation, and include rollback or recovery checks.
+
+Verification Or Test Plan:
+- Include the verification command, focused scenario, or regression check that should prove the change.
+
+Source Signal Guidance:
+- The current source signal reports stage as task_breakdown → implementation.
+- Use the current source signal as a task constraint and convert it into direct implementation guidance.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 16ed02321e2b49b70a2363f4ca9f170e43bda3adf2a1555ed87d47fac93366c8
+prompt sha256 handed to the agent : 1d3f964a6347e618040724052803c6e2011af7a3288f08293494b40da803118d
+identical                         : False
+popup_shown / submitted / received: False / False / False
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 16   tool calls 15   ran_tests True   cost $0.309
+
+   1. Grep: def _clean_fields|def changed_data|class BaseForm|class BoundField|def _bound_items
+   2. Read: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\forms.py
+   3. Read: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\boundfield.py
+   4. Edit: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\forms.py
+   5. Edit: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\forms.py
+   6. Edit: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\forms.py
+   7. Edit: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\boundfield.py
+   8. Edit: C:\nexpath-sweb-work\django__django-14631\nexpath\django\forms\boundfield.py
+   9. run: cd C:\nexpath-sweb-work\django__django-14631\nexpath && python -m pytest tests/forms_tests -q 2>&1 | tail -50
+  10. ToolSearch: 
+  11. ToolSearch: 
+  12. mcp__testbed__run: cd /testbed && python -m pytest tests/forms_tests -q 2>&1 | tail -60
+  13. mcp__testbed__run: cd /testbed && python tests/runtests.py forms_tests -v 1 2>&1 | tail -80
+  14. Read: C:\nexpath-sweb-work\django__django-14631\nexpath\tests\forms_tests\tests\test_forms.py
+  15. mcp__testbed__run: cd /testbed && python tests/runtests.py forms_tests model_forms model_formsets postgres_tests -v 1 2>&1 | tail -40
+
+---- patch produced ----
+diff --git a/django/forms/boundfield.py b/django/forms/boundfield.py
+index 88adadb..a1040f8 100644
+--- a/django/forms/boundfield.py
++++ b/django/forms/boundfield.py
+@@ -1,6 +1,7 @@
+ import datetime
+ import re
+ 
++from django.core.exceptions import ValidationError
+ from django.forms.utils import flatatt, pretty_name
+ from django.forms.widgets import Textarea, TextInput
+ from django.utils.functional import cached_property
+@@ -219,6 +220,27 @@ class BoundField:
+             data = data.replace(microsecond=0)
+         return data
+ 
++    def _did_change(self):
++        """
++        Return True if data differs from initial.
++        """
++        data_value = self.data
++        if not self.field.show_hidden_initial:
++            # Use the BoundField's initial as this is the value passed to
++            # the widget.
++            initial_value = self.initial
++        else:
++            initial_prefixed_name = self.form.add_initial_prefix(self.name)
++            hidden_widget = self.field.hidden_widget()
++            try:
++                initial_value = self.field.to_python(
++                    self.form._widget_data_value(hidden_widget, initial_prefixed_name)
++                )
++            except ValidationError:
++                # Always assume data has changed if validation fails.
++                return True
++        return self.field.has_changed(initial_value, data_value)
++
+     def build_widget_attrs(self, attrs, widget=None):
+         widget = widget or self.field.widget
+         attrs = dict(attrs)  # Copy attrs to avoid modifying the argument.
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index d14037b..292935a 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -147,6 +147,11 @@ class BaseForm:
+         for name in self.fields:
+             yield self[name]
+ 
++    def _bound_items(self):
++        """Yield (name, bf) pairs, where bf is a BoundField object."""
++        for name in self.fields:
++            yield name, self[name]
++
+     def __getitem__(self, name):
+         """Return a BoundField with the given name."""
+         try:
+@@ -387,15 +392,12 @@ class BaseForm:
+         self._post_clean()
+ 
+     def _clean_fields(self):
+-        for name, field in self.fields.items():
+-            if field.disabled:
+-                value = self.get_initial_for_field(field, name)
+-            else:
+-                value = self._field_data_value(field, self.add_prefix(name))
++        for name, bf in self._bound_items():
++            field = bf.field
++            value = bf.initial if field.disabled else bf.data
+             try:
+                 if isinstance(field, FileField):
+-                    initial = self.get_initial_for_field(field, name)
+-                    value = field.clean(value, initial)
++                    value = field.clean(value, bf.initial)
+                 else:
+                     value = field.clean(value)
+                 self.cleaned_data[name] = value
+@@ -436,27 +438,7 @@ class BaseForm:
+ 
+     @cached_property
+     def changed_data(self):
+-        data = []
+-        for name, field in self.fields.items():
+-            data_value = self._field_data_value(field, self.add_prefix(name))
+-            if not field.show_hidden_initial:
+-                # Use the BoundField's initial as this is the value passed to
+-                # the widget.
+-                initial_value = self[name].initial
+-            else:
+-                initial_prefixed_name = self.add_initial_prefix(name)
+-                hidden_widget = field.hidden_widget()
+-                try:
+-                    initial_value = field.to_python(
+-                        self._widget_data_value(hidden_widget, initial_prefixed_name)
+-                    )
+-                except ValidationError:
+-                    # Always assume data has changed if validation fails.
+-                    data.append(name)
+-                    continue
+-            if field.has_changed(initial_value, data_value):
+-                data.append(name)
+-        return data
++        return [name for name, bf in self._bound_items() if bf._did_change()]
+ 
+     @property
+     def media(self):
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 26   tool calls 25   ran_tests True   cost $0.423
+
+   1. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+   2. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\boundfield.py
+   3. Grep: _did_change|_has_changed|_bound_items|bf\.data|bf\.initial
+   4. Grep: _did_change|_bound_items
+   5. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+   6. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+   7. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+   8. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+   9. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+  10. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\boundfield.py
+  11. Grep: def has_changed
+  12. Grep: has_changed
+  13. Grep: has_changed
+  14. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\fields.py
+  15. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\boundfield.py
+  16. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\boundfield.py
+  17. Edit: C:\nexpath-sweb-work\django__django-14631\control\django\forms\boundfield.py
+  18. Read: C:\nexpath-sweb-work\django__django-14631\control\django\forms\forms.py
+  19. ToolSearch: 
+  20. mcp__testbed__run: cd /testbed && python tests/runtests.py forms_tests model_forms --parallel 1 2>&1 | tail -60
+  21. Read: C:\nexpath-sweb-work\django__django-14631\control\tests\forms_tests\tests\test_forms.py
+  22. Grep: supports_microseconds
+  23. mcp__testbed__run: cd /testbed && python -c "
+from django import forms
+f = forms.DateTimeField()
+print(f.widget)
+print(f.widget.supports_mi
+  24. mcp__testbed__run: cd /testbed && python tests/runtests.py forms_tests model_forms model_formsets generic_views admin_views.test_forms 2>&1
+  25. mcp__testbed__run: cd /testbed && python tests/runtests.py forms_tests.tests.test_forms.FormsTestCase.test_datetime_changed_data_callable_w
+
+---- patch produced ----
+diff --git a/django/forms/boundfield.py b/django/forms/boundfield.py
+index 88adadb..c623211 100644
+--- a/django/forms/boundfield.py
++++ b/django/forms/boundfield.py
+@@ -1,6 +1,7 @@
+ import datetime
+ import re
+ 
++from django.core.exceptions import ValidationError
+ from django.forms.utils import flatatt, pretty_name
+ from django.forms.widgets import Textarea, TextInput
+ from django.utils.functional import cached_property
+@@ -219,6 +220,20 @@ class BoundField:
+             data = data.replace(microsecond=0)
+         return data
+ 
++    def _did_change(self):
++        """Return True if data differs from initial."""
++        if self.field.show_hidden_initial:
++            hidden_widget = self.field.hidden_widget()
++            initial_value = self.form._widget_data_value(hidden_widget, self.html_initial_name)
++            try:
++                initial_value = self.field.to_python(initial_value)
++            except ValidationError:
++                # Always assume data has changed if validation fails.
++                return True
++        else:
++            initial_value = self.initial
++        return self.field.has_changed(initial_value, self.data)
++
+     def build_widget_attrs(self, attrs, widget=None):
+         widget = widget or self.field.widget
+         attrs = dict(attrs)  # Copy attrs to avoid modifying the argument.
+diff --git a/django/forms/forms.py b/django/forms/forms.py
+index d14037b..9cb77ab 100644
+--- a/django/forms/forms.py
++++ b/django/forms/forms.py
+@@ -167,6 +167,11 @@ class BaseForm:
+         self._bound_fields_cache[name] = bound_field
+         return bound_field
+ 
++    def _bound_items(self):
++        """Yield (name, bf) pairs, where bf is a BoundField object."""
++        for name in self.fields:
++            yield name, self[name]
++
+     @property
+     def errors(self):
+         """Return an ErrorDict for the data provided for the form."""
+@@ -387,15 +392,12 @@ class BaseForm:
+         self._post_clean()
+ 
+     def _clean_fields(self):
+-        for name, field in self.fields.items():
+-            if field.disabled:
+-                value = self.get_initial_for_field(field, name)
+-            else:
+-                value = self._field_data_value(field, self.add_prefix(name))
++        for name, bf in self._bound_items():
++            field = bf.field
++            value = bf.initial if field.disabled else bf.data
+             try:
+                 if isinstance(field, FileField):
+-                    initial = self.get_initial_for_field(field, name)
+-                    value = field.clean(value, initial)
++                    value = field.clean(value, bf.initial)
+                 else:
+                     value = field.clean(value)
+                 self.cleaned_data[name] = value
+@@ -436,27 +438,7 @@ class BaseForm:
+ 
+     @cached_property
+     def changed_data(self):
+-        data = []
+-        for name, field in self.fields.items():
+-            data_value = self._field_data_value(field, self.add_prefix(name))
+-            if not field.show_hidden_initial:
+-                # Use the BoundField's initial as this is the value passed to
+-                # the widget.
+-                initial_value = self[name].initial
+-            else:
+-                initial_prefixed_name = self.add_initial_prefix(name)
+-                hidden_widget = field.hidden_widget()
+-                try:
+-                    initial_value = field.to_python(
+-                        self._widget_data_value(hidden_widget, initial_prefixed_name)
+-                    )
+-                except ValidationError:
+-                    # Always assume data has changed if validation fails.
+-                    data.append(name)
+-                    continue
+-            if field.has_changed(initial_value, data_value):
+-                data.append(name)
+-        return data
++        return [name for name, bf in self._bound_items() if bf._did_change()]
+ 
+     @property
+     def media(self):
+

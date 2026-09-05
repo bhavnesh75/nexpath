@@ -1,0 +1,529 @@
+NEXPATH POPUP AND AGENT RUN — matplotlib__matplotlib-25775
+group MEDIUM   difficulty 15 min - 1 hour   repo matplotlib/matplotlib
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+[ENH]: Add get/set_antialiased to Text objects
+### Problem
+
+Currently, Text objects always retrieve their antialiasing state via the global rcParams["text.antialias"], unlike other artists for which this can be configured on a per-artist basis via `set_antialiased` (and read via `set_antialiased`).
+
+### Proposed solution
+
+Add similar getters/setters on Text objects (also adjusting Annotations accordingly, if needed) and use that info in the drawing stage.
+
+Should be relatively easy to implement, except that the slight fiddling needed with backends requires some understanding of backend code (I think we need to replace the access to `rcParams["text.antialiased"]` by going through the GraphicsContext state).
+
+
+Context And Constraints:
+- Changing how Text objects handle antialiasing might mess with current expectations around text rendering. I need to ensure that any modifications don’t break existing functionality or cause compatibility issues with other artist objects that use `set_antialiased`. Assess existing dependencies and impacts this change could have on backward compatibility and overall rendering behavior before proceeding.
+
+Approach Or Steps:
+- To implement the get/set_antialiased methods in Text objects, first, I’ll study the existing implementation of `set_antialiased` in other artist classes to ensure consistency. Then, replace references to the global rcParams for antialiasing with the new methods, making sure I also keep track of how it interacts with GraphicsContext. Finally, I'll review any affected Annotations and apply similar adjustments as necessary to maintain coherence across the framework.
+
+Acceptance Or Output Expectation:
+- I expect that after implementing the getters and setters, Text objects should allow for individual antialiasing configuration, reflecting the changes accurately in rendered output. It’s crucial to verify that the output visual consistency across different artists remains intact and that changes are reflected in both initial state and subsequent modifications without unexpected behaviors.
+
+Verification Or Test Plan:
+- I’ll need to design a test plan that verifies the new get/set_antialiased methods are functioning as intended. This includes unit tests that cover various scenarios of modifying antialiasing settings and checking if the output changes accordingly. I must also ensure existing tests still pass after this implementation to avoid regressions. Additionally, key interactions with the GraphicsContext should be tested to confirm that the changes didn’t break any rendering paths.
+
+Source Signal Guidance:
+- The stage transition signal indicates we are moving from task breakdown to implementation, so I should ensure that all considered implications of this transition are addressed. I will gather data and implement checks to confirm every related dependency is properly accounted for during this process, thus supporting a seamless transition to implementation.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : a9d290b97a7d567edcd93efabc6fa0538543d12f1e08222663d5b7f1a4507120
+prompt sha256 handed to the agent : a9d290b97a7d567edcd93efabc6fa0538543d12f1e08222663d5b7f1a4507120
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 45   tool calls 44   ran_tests True   cost $0.612
+
+   1. Grep: antialiased
+   2. Grep: text.antialiased|antialiased
+   3. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_agg.py
+   4. Grep: antialiased
+   5. Grep: antialiased
+   6. Grep: antialiased|_antialiased
+   7. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+   8. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+   9. Grep: def draw|gc\.set_|new_gc
+  10. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  11. Grep: antialiased
+  12. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_cairo.py
+  13. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_cairo.py
+  14. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\patches.py
+  15. Grep: "antialiased"|aa.*antialiased
+  16. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  17. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  18. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  19. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  20. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  21. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  22. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  23. Grep: def set_color|def set_alpha
+  24. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  25. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  26. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_agg.py
+  27. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_cairo.py
+  28. Grep: class Annotation|def __init__|_reset_visual_defaults|def draw
+  29. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  30. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\text.py
+  31. ToolSearch: 
+  32. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+t = plt.text(0.5, 0.5
+  33. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_text.py -q 2>&1 | tail -40
+  34. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_agg.py lib/matplotlib/tests/test_backend_cairo.py -q 2>&1 | ta
+  35. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_pickle.py -q 2>&1 | tail -20
+  36. Grep: antialiased
+  37. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_artist.py -q 2>&1 | tail -20
+  38. mcp__testbed__run: cd /testbed && git diff
+  39. mcp__testbed__run: cd /testbed && python -m flake8 lib/matplotlib/text.py lib/matplotlib/backends/backend_agg.py lib/matplotlib/backends/ba
+  40. Grep: \bmpl\.
+  41. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_cairo.py
+  42. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\nexpath\lib\matplotlib\backends\backend_cairo.py
+  43. mcp__testbed__run: cd /testbed && python -m flake8 lib/matplotlib/backends/backend_cairo.py --max-line-length=88 2>&1 | head -20 && python 
+  44. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_text.py lib/matplotlib/tests/test_agg.py lib/matplotlib/tests/
+
+---- patch produced ----
+diff --git a/lib/matplotlib/backends/backend_agg.py b/lib/matplotlib/backends/backend_agg.py
+index 7d038a9..22907b0 100644
+--- a/lib/matplotlib/backends/backend_agg.py
++++ b/lib/matplotlib/backends/backend_agg.py
+@@ -206,7 +206,7 @@ class RendererAgg(RendererBase):
+         # space) in the following call to draw_text_image).
+         font.set_text(s, 0, flags=get_hinting_flag())
+         font.draw_glyphs_to_bitmap(
+-            antialiased=mpl.rcParams['text.antialiased'])
++            antialiased=gc.get_antialiased())
+         d = font.get_descent() / 64.0
+         # The descent needs to be adjusted for the angle.
+         xo, yo = font.get_bitmap_offset()
+diff --git a/lib/matplotlib/backends/backend_cairo.py b/lib/matplotlib/backends/backend_cairo.py
+index 9ccadcd..196e414 100644
+--- a/lib/matplotlib/backends/backend_cairo.py
++++ b/lib/matplotlib/backends/backend_cairo.py
+@@ -25,7 +25,6 @@ except ImportError:
+             "cairo backend requires that pycairo>=1.14.0 or cairocffi "
+             "is installed") from err
+ 
+-import matplotlib as mpl
+ from .. import _api, cbook, font_manager
+ from matplotlib.backend_bases import (
+     _Backend, FigureCanvasBase, FigureManagerBase, GraphicsContextBase,
+@@ -205,7 +204,7 @@ class RendererCairo(RendererBase):
+             ctx.set_font_size(self.points_to_pixels(prop.get_size_in_points()))
+             opts = cairo.FontOptions()
+             opts.set_antialias(
+-                cairo.ANTIALIAS_DEFAULT if mpl.rcParams["text.antialiased"]
++                cairo.ANTIALIAS_DEFAULT if gc.get_antialiased()
+                 else cairo.ANTIALIAS_NONE)
+             ctx.set_font_options(opts)
+             if angle:
+diff --git a/lib/matplotlib/text.py b/lib/matplotlib/text.py
+index 4591316..a50f340 100644
+--- a/lib/matplotlib/text.py
++++ b/lib/matplotlib/text.py
+@@ -79,6 +79,7 @@ def _get_text_metrics_with_cache_impl(
+ 
+ @_docstring.interpd
+ @_api.define_aliases({
++    "antialiased": ["aa"],
+     "color": ["c"],
+     "fontfamily": ["family"],
+     "fontproperties": ["font", "font_properties"],
+@@ -115,6 +116,7 @@ class Text(Artist):
+                  wrap=False,
+                  transform_rotates_text=False,
+                  parse_math=None,    # defaults to rcParams['text.parse_math']
++                 antialiased=None,   # defaults to rcParams['text.antialiased']
+                  **kwargs
+                  ):
+         """
+@@ -149,6 +151,7 @@ class Text(Artist):
+             transform_rotates_text=transform_rotates_text,
+             linespacing=linespacing,
+             rotation_mode=rotation_mode,
++            antialiased=antialiased,
+         )
+         self.update(kwargs)
+ 
+@@ -167,6 +170,7 @@ class Text(Artist):
+         transform_rotates_text=False,
+         linespacing=None,
+         rotation_mode=None,
++        antialiased=None,
+     ):
+         self.set_text(text)
+         self.set_color(
+@@ -187,6 +191,7 @@ class Text(Artist):
+             linespacing = 1.2  # Maybe use rcParam later.
+         self.set_linespacing(linespacing)
+         self.set_rotation_mode(rotation_mode)
++        self.set_antialiased(antialiased)
+ 
+     def update(self, kwargs):
+         # docstring inherited
+@@ -737,6 +742,7 @@ class Text(Artist):
+             gc.set_foreground(self.get_color())
+             gc.set_alpha(self.get_alpha())
+             gc.set_url(self._url)
++            gc.set_antialiased(self._antialiased)
+             self._set_gc_clip(gc)
+ 
+             angle = self.get_rotation()
+@@ -770,6 +776,10 @@ class Text(Artist):
+         renderer.close_group('text')
+         self.stale = False
+ 
++    def get_antialiased(self):
++        """Return whether antialiased rendering is used."""
++        return self._antialiased
++
+     def get_color(self):
+         """Return the color of the text."""
+         return self._color
+@@ -962,6 +972,20 @@ class Text(Artist):
+         self._color = color
+         self.stale = True
+ 
++    def set_antialiased(self, antialiased):
++        """
++        Set whether to use antialiased rendering.
++
++        Parameters
++        ----------
++        antialiased : bool or None
++            If None, use :rc:`text.antialiased`.
++        """
++        if antialiased is None:
++            antialiased = mpl.rcParams['text.antialiased']
++        self._antialiased = antialiased
++        self.stale = True
++
+     def set_horizontalalignment(self, align):
+         """
+         Set the horizontal alignment relative to the anchor point.
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 68   tool calls 67   ran_tests True   cost $1.192
+
+   1. Grep: text.antialiased|antialiased
+   2. Grep: text.antialiased
+   3. Grep: text.antialiased
+   4. Grep: text.antialiased
+   5. Grep: test.*antialias
+   6. Grep: antialiased|_antialiased
+   7. Grep: def __init__|def draw|def get_antialiased|def set_antialiased|class Text|class Annotation|gc\.set_|_get_rgba|def set_use
+   8. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+   9. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  10. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  11. Grep: antialiased
+  12. Grep: draw_mathtext|def render|class MathTextParser|get_results
+  13. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_agg.py
+  14. Grep: def parse|class MathtextBackendAgg|def render\(|def get_results" 
+  15. Grep: class MathTextParser|def parse\(|class MathtextBackendAgg" 
+  16. Grep: class MathtextBackendAgg|class MathtextBackendPath|def render_glyph|def get_results" 
+  17. Grep: antialiased
+  18. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\_mathtext.py
+  19. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  20. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_cairo.py
+  21. Grep: _val_or_rc
+  22. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  23. Grep: to_raster\(|mathtext_parser\.parse\(|MathTextParser\(
+  24. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_agg.py
+  25. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  26. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  27. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  28. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  29. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  30. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  31. Glob: lib/matplotlib/text.pyi
+  32. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.pyi
+  33. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.pyi
+  34. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.pyi
+  35. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\text.py
+  36. Grep: Text\.__init__|super\(\)\.__init__" 
+  37. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_agg.py
+  38. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_agg.py
+  39. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  40. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  41. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  42. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  43. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\mathtext.py
+  44. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\_mathtext.py
+  45. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\_mathtext.py
+  46. Grep: mpl\.
+  47. Grep: to_raster\(|mathtext_parser\.parse\(|MathTextParser\('agg'\)|MathTextParser\("agg"\)
+  48. Grep: antialiased|draw_mathtext|class RendererMac
+  49. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_cairo.py
+  50. Grep: mpl\.
+  51. Grep: ^import matplotlib|^import matplotlib as mpl
+  52. Read: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_cairo.py
+  53. Edit: C:\nexpath-sweb-work\matplotlib__matplotlib-25775\control\lib\matplotlib\backends\backend_cairo.py
+  54. Grep: mpl\.
+  55. Grep: Text:kwdoc|interpd.register|_docstring.interpd
+  56. ToolSearch: 
+  57. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+fig, ax = plt.subplot
+  58. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+fig, ax = plt.subplot
+  59. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib
+matplotlib.use('cairo')
+import matplotlib.pyplot as plt
+fig, ax = plt.subpl
+  60. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_text.py lib/matplotlib/tests/test_mathtext.py -q 2>&1 | tail -
+  61. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_backend_pdf.py lib/matplotlib/tests/test_backend_ps.py lib/mat
+  62. mcp__testbed__run: cd /testbed && python -m pyflakes lib/matplotlib/text.py lib/matplotlib/mathtext.py lib/matplotlib/_mathtext.py lib/matp
+  63. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib.text as text
+doc = text.Text.__init__.__doc__
+print('antialiased' in doc)
+"
+  64. mcp__testbed__run: cd /testbed && python -c "
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+fig, ax = plt.subplot
+  65. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_pickle.py -q -k text 2>&1 | tail -20
+  66. mcp__testbed__run: cd /testbed && python -m pytest lib/matplotlib/tests/test_pickle.py -q 2>&1 | tail -20
+  67. Grep: text.antialiased|text\[.antialiased.\]
+
+---- patch produced ----
+diff --git a/lib/matplotlib/_mathtext.py b/lib/matplotlib/_mathtext.py
+index 09f5c61..0ca6b71 100644
+--- a/lib/matplotlib/_mathtext.py
++++ b/lib/matplotlib/_mathtext.py
+@@ -99,7 +99,7 @@ class Output:
+               for x1, y1, x2, y2 in self.rects]
+         return VectorParse(w, h + d, d, gs, rs)
+ 
+-    def to_raster(self):
++    def to_raster(self, *, antialiased):
+         # Metrics y's and mathtext y's are oriented in opposite directions,
+         # hence the switch between ymin and ymax.
+         xmin = min([*[ox + info.metrics.xmin for ox, oy, info in self.glyphs],
+@@ -124,7 +124,7 @@ class Output:
+         for ox, oy, info in shifted.glyphs:
+             info.font.draw_glyph_to_bitmap(
+                 image, ox, oy - info.metrics.iceberg, info.glyph,
+-                antialiased=mpl.rcParams['text.antialiased'])
++                antialiased=antialiased)
+         for x1, y1, x2, y2 in shifted.rects:
+             height = max(int(y2 - y1) - 1, 0)
+             if height == 0:
+diff --git a/lib/matplotlib/backends/backend_agg.py b/lib/matplotlib/backends/backend_agg.py
+index 7d038a9..4608a32 100644
+--- a/lib/matplotlib/backends/backend_agg.py
++++ b/lib/matplotlib/backends/backend_agg.py
+@@ -189,7 +189,8 @@ class RendererAgg(RendererBase):
+     def draw_mathtext(self, gc, x, y, s, prop, angle):
+         """Draw mathtext using :mod:`matplotlib.mathtext`."""
+         ox, oy, width, height, descent, font_image = \
+-            self.mathtext_parser.parse(s, self.dpi, prop)
++            self.mathtext_parser.parse(s, self.dpi, prop,
++                                        antialiased=gc.get_antialiased())
+ 
+         xd = descent * sin(radians(angle))
+         yd = descent * cos(radians(angle))
+@@ -206,7 +207,7 @@ class RendererAgg(RendererBase):
+         # space) in the following call to draw_text_image).
+         font.set_text(s, 0, flags=get_hinting_flag())
+         font.draw_glyphs_to_bitmap(
+-            antialiased=mpl.rcParams['text.antialiased'])
++            antialiased=gc.get_antialiased())
+         d = font.get_descent() / 64.0
+         # The descent needs to be adjusted for the angle.
+         xo, yo = font.get_bitmap_offset()
+diff --git a/lib/matplotlib/backends/backend_cairo.py b/lib/matplotlib/backends/backend_cairo.py
+index 9ccadcd..196e414 100644
+--- a/lib/matplotlib/backends/backend_cairo.py
++++ b/lib/matplotlib/backends/backend_cairo.py
+@@ -25,7 +25,6 @@ except ImportError:
+             "cairo backend requires that pycairo>=1.14.0 or cairocffi "
+             "is installed") from err
+ 
+-import matplotlib as mpl
+ from .. import _api, cbook, font_manager
+ from matplotlib.backend_bases import (
+     _Backend, FigureCanvasBase, FigureManagerBase, GraphicsContextBase,
+@@ -205,7 +204,7 @@ class RendererCairo(RendererBase):
+             ctx.set_font_size(self.points_to_pixels(prop.get_size_in_points()))
+             opts = cairo.FontOptions()
+             opts.set_antialias(
+-                cairo.ANTIALIAS_DEFAULT if mpl.rcParams["text.antialiased"]
++                cairo.ANTIALIAS_DEFAULT if gc.get_antialiased()
+                 else cairo.ANTIALIAS_NONE)
+             ctx.set_font_options(opts)
+             if angle:
+diff --git a/lib/matplotlib/mathtext.py b/lib/matplotlib/mathtext.py
+index e538d45..7f639d2 100644
+--- a/lib/matplotlib/mathtext.py
++++ b/lib/matplotlib/mathtext.py
+@@ -18,6 +18,7 @@ metrics for those fonts.
+ import functools
+ import logging
+ 
++import matplotlib as mpl
+ from matplotlib import _api, _mathtext
+ from matplotlib.ft2font import LOAD_NO_HINTING
+ from matplotlib.font_manager import FontProperties
+@@ -58,7 +59,7 @@ class MathTextParser:
+             {"path": "vector", "agg": "raster", "macosx": "raster"},
+             output=output.lower())
+ 
+-    def parse(self, s, dpi=72, prop=None):
++    def parse(self, s, dpi=72, prop=None, *, antialiased=None):
+         """
+         Parse the given math expression *s* at the given *dpi*.  If *prop* is
+         provided, it is a `.FontProperties` object specifying the "default"
+@@ -74,10 +75,12 @@ class MathTextParser:
+         # is mutable; key the cache using an internal copy (see
+         # text._get_text_metrics_with_cache for a similar case).
+         prop = prop.copy() if prop is not None else None
+-        return self._parse_cached(s, dpi, prop)
++        if antialiased is None:
++            antialiased = mpl.rcParams['text.antialiased']
++        return self._parse_cached(s, dpi, prop, antialiased)
+ 
+     @functools.lru_cache(50)
+-    def _parse_cached(self, s, dpi, prop):
++    def _parse_cached(self, s, dpi, prop, antialiased):
+         from matplotlib.backends import backend_agg
+ 
+         if prop is None:
+@@ -100,7 +103,7 @@ class MathTextParser:
+         if self._output_type == "vector":
+             return output.to_vector()
+         elif self._output_type == "raster":
+-            return output.to_raster()
++            return output.to_raster(antialiased=antialiased)
+ 
+ 
+ def math_to_image(s, filename_or_obj, prop=None, dpi=None, format=None,
+diff --git a/lib/matplotlib/text.py b/lib/matplotlib/text.py
+index 4591316..60853d3 100644
+--- a/lib/matplotlib/text.py
++++ b/lib/matplotlib/text.py
+@@ -115,6 +115,7 @@ class Text(Artist):
+                  wrap=False,
+                  transform_rotates_text=False,
+                  parse_math=None,    # defaults to rcParams['text.parse_math']
++                 antialiased=None,   # defaults to rcParams['text.antialiased']
+                  **kwargs
+                  ):
+         """
+@@ -149,6 +150,7 @@ class Text(Artist):
+             transform_rotates_text=transform_rotates_text,
+             linespacing=linespacing,
+             rotation_mode=rotation_mode,
++            antialiased=antialiased,
+         )
+         self.update(kwargs)
+ 
+@@ -167,6 +169,7 @@ class Text(Artist):
+         transform_rotates_text=False,
+         linespacing=None,
+         rotation_mode=None,
++        antialiased=None,
+     ):
+         self.set_text(text)
+         self.set_color(
+@@ -175,6 +178,8 @@ class Text(Artist):
+         self.set_usetex(usetex)
+         self.set_parse_math(parse_math if parse_math is not None else
+                             mpl.rcParams['text.parse_math'])
++        self.set_antialiased(antialiased if antialiased is not None else
++                              mpl.rcParams['text.antialiased'])
+         self.set_wrap(wrap)
+         self.set_verticalalignment(verticalalignment)
+         self.set_horizontalalignment(horizontalalignment)
+@@ -318,6 +323,7 @@ class Text(Artist):
+         self._horizontalalignment = other._horizontalalignment
+         self._fontproperties = other._fontproperties.copy()
+         self._usetex = other._usetex
++        self._antialiased = other._antialiased
+         self._rotation = other._rotation
+         self._transform_rotates_text = other._transform_rotates_text
+         self._picker = other._picker
+@@ -737,6 +743,7 @@ class Text(Artist):
+             gc.set_foreground(self.get_color())
+             gc.set_alpha(self.get_alpha())
+             gc.set_url(self._url)
++            gc.set_antialiased(self._antialiased)
+             self._set_gc_clip(gc)
+ 
+             angle = self.get_rotation()
+@@ -1301,6 +1308,32 @@ class Text(Artist):
+         """Return whether this `Text` object uses TeX for rendering."""
+         return self._usetex
+ 
++    def set_antialiased(self, antialiased):
++        """
++        Set whether to antialias the text.
++
++        Parameters
++        ----------
++        antialiased : bool or None
++            Whether to antialias the text. ``None`` means to use
++            :rc:`text.antialiased`.
++
++        Notes
++        -----
++        Antialiasing will be determined by :rc:`text.antialiased`
++        regardless of this setting when rendering to the PS, PDF and SVG
++        backends, as they do not support this setting.
++        """
++        if antialiased is None:
++            self._antialiased = mpl.rcParams['text.antialiased']
++        else:
++            self._antialiased = antialiased
++        self.stale = True
++
++    def get_antialiased(self):
++        """Return whether antialiased rendering is used."""
++        return self._antialiased
++
+     def set_parse_math(self, parse_math):
+         """
+         Override switch to disable any mathtext parsing for this `Text`.
+diff --git a/lib/matplotlib/text.pyi b/lib/matplotlib/text.pyi
+index bb2f529..5889cf7 100644
+--- a/lib/matplotlib/text.pyi
++++ b/lib/matplotlib/text.pyi
+@@ -36,6 +36,7 @@ class Text(Artist):
+         wrap: bool = ...,
+         transform_rotates_text: bool = ...,
+         parse_math: bool | None = ...,
++        antialiased: bool | None = ...,
+         **kwargs
+     ) -> None: ...
+     def update(self, kwargs: dict[str, Any]) -> None: ...
+@@ -98,6 +99,8 @@ class Text(Artist):
+     def get_usetex(self) -> bool: ...
+     def set_parse_math(self, parse_math: bool) -> None: ...
+     def get_parse_math(self) -> bool: ...
++    def set_antialiased(self, antialiased: bool) -> None: ...
++    def get_antialiased(self) -> bool: ...
+     def set_fontname(self, fontname: str | Iterable[str]): ...
+ 
+ class OffsetFrom:
+

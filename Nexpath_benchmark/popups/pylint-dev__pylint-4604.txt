@@ -1,0 +1,205 @@
+NEXPATH POPUP AND AGENT RUN — pylint-dev__pylint-4604
+group MEDIUM   difficulty 15 min - 1 hour   repo pylint-dev/pylint
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+unused-import false positive for a module used in a type comment
+### Steps to reproduce
+
+```python
+"""Docstring."""
+
+import abc
+from abc import ABC
+
+X = ...  # type: abc.ABC
+Y = ...  # type: ABC
+```
+
+### Current behavior
+
+```
+************* Module a
+/tmp/a.py:3:0: W0611: Unused import abc (unused-import)
+
+-----------------------------------
+Your code has been rated at 7.50/10
+```
+
+### Expected behavior
+
+`unused-import` should not be emitted.
+
+### pylint --version output
+
+Result of `pylint --version` output:
+
+```
+pylint 2.8.3
+astroid 2.5.6
+Python 3.9.2 (default, Feb 28 2021, 17:03:44) 
+[GCC 10.2.1 20210110]
+```
+
+This is a follow up to #3112.
+
+
+Problem Statement:
+- The pylint tool is incorrectly flagging an import as unused despite its valid use in a type comment. This leads to confusion and potential misinterpretation of the actual code usage, negatively impacting code reviews and maintenance.
+
+Expected Actual State:
+- The expected behavior is that pylint should recognize the import's usage within the type comments and not emit the `unused-import` warning. However, the current behavior is that the warning is unnecessarily raised, indicating a discrepancy between expected and actual functionality.
+
+Reproduction Or Evidence:
+- To reproduce this issue, run pylint on the provided module with the code snippet. Ensure the module includes the given imports within type comments and check for any `unused-import` warnings. Confirm that the code setup matches the environment specified in the pylint version output to see if the false positive persists.
+
+Verification Or Test Plan:
+- Verify that the handling of type comments with imports is functioning correctly by integrating tests that check for these imports not being flagged. Consider adding specific test cases which include various patterns of type comments to ensure comprehensive coverage of scenarios where imports are in use but are falsely flagged as unused.
+
+Source Signal Guidance:
+- This verification process aligns with the task breakdown → implementation stage transition discipline, so I need to ensure that the verification addresses situations where false positives may occur, particularly in the context of imports used within type comments for better accuracy.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : ee229ef35e02ede7457b159a135c570584a099f523b407e615d55f0d0429aa80
+prompt sha256 handed to the agent : ee229ef35e02ede7457b159a135c570584a099f523b407e615d55f0d0429aa80
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 28   tool calls 27   ran_tests True   cost $0.291
+
+   1. Grep: type_comment
+   2. Grep: unused-import|_check_imports_used|_import_refs|def visit_module|def leave_module
+   3. Grep: type_comment
+   4. Grep: type_annotation|type_comment
+   5. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\nexpath\pylint\checkers\variables.py
+   6. Grep: _store_type_annotation_node|_store_type_annotation_names|def visit_assignname|def visit_assign\b|type_comment
+   7. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\nexpath\pylint\checkers\variables.py
+   8. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\nexpath\pylint\checkers\variables.py
+   9. Grep: type_comment
+  10. Glob: **/astroid/node_classes.py
+  11. Glob: **/site-packages/astroid
+  12. Glob: **/astroid/*.py
+  13. ToolSearch: 
+  14. mcp__testbed__run: python -c "import astroid; print(astroid.__file__)"
+  15. mcp__testbed__run: cd /testbed && cat > /tmp/a.py << 'EOF'
+"""Docstring."""
+
+import abc
+from abc import ABC
+
+X = ...  # type: abc.ABC
+Y = .
+  16. mcp__testbed__run: cd /testbed && python -c "
+import astroid
+mod = astroid.parse('''
+X = ...  # type: abc.ABC
+Y = ...  # type: ABC
+''', typ
+  17. mcp__testbed__run: cd /testbed && python -c "
+import astroid
+mod = astroid.parse('''
+X = ...  # type: abc.ABC
+Y = ...  # type: ABC
+''')
+for
+  18. mcp__testbed__run: cd /testbed && python -m pylint /tmp/a.py --disable=all --enable=unused-import 2>&1 | head -5
+cat > /tmp/b.py << 'EOF'
+"
+  19. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\nexpath\pylint\checkers\variables.py
+  20. Edit: C:\nexpath-sweb-work\pylint-dev__pylint-4604\nexpath\pylint\checkers\variables.py
+  21. mcp__testbed__run: cd /testbed && python -m pylint /tmp/a.py --disable=all --enable=unused-import
+  22. mcp__testbed__run: cd /testbed && python -m pytest tests/checkers/unittest_variables.py -q 2>&1 | tail -30
+  23. mcp__testbed__run: cd /testbed && python -m pytest tests/functional/u/unused -q 2>&1 | tail -40
+  24. mcp__testbed__run: cd /testbed && python -m pytest tests/functional/ -k unused -q 2>&1 | tail -20
+  25. mcp__testbed__run: cd /testbed && python -m pytest tests/test_functional.py -k unused -q 2>&1 | tail -30
+  26. mcp__testbed__run: cd /testbed && python -m pytest tests/test_functional.py -q 2>&1 | tail -15
+  27. mcp__testbed__run: cd /testbed && git stash && python -m pytest tests/test_functional.py -k recursion_error_3152 -q 2>&1 | tail -15 && git 
+
+---- patch produced ----
+diff --git a/pylint/checkers/variables.py b/pylint/checkers/variables.py
+index 3ddafd5..8a46375 100644
+--- a/pylint/checkers/variables.py
++++ b/pylint/checkers/variables.py
+@@ -1826,6 +1826,10 @@ class VariablesChecker(BaseChecker):
+             self._type_annotation_names.append(type_annotation.name)
+             return
+ 
++        if isinstance(type_annotation, astroid.Attribute):
++            self._store_type_annotation_node(type_annotation.expr)
++            return
++
+         if not isinstance(type_annotation, astroid.Subscript):
+             return
+ 
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 21   tool calls 20   ran_tests True   cost $0.244
+
+   1. Grep: type_comment
+   2. Grep: _store_type_annotation|type_annotation_names|type_comment
+   3. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\pylint\checkers\variables.py
+   4. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\pylint\checkers\variables.py
+   5. Write: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\a.py
+   6. ToolSearch: 
+   7. mcp__testbed__run: cat > /tmp/a.py << 'EOF'
+"""Docstring."""
+
+import abc
+from abc import ABC
+
+X = ...  # type: abc.ABC
+Y = ...  # type: ABC
+   8. mcp__testbed__run: cd /testbed && python -c "
+import astroid
+node = astroid.extract_node('''
+X = ...  # type: abc.ABC
+''')
+print(node.type_
+   9. mcp__testbed__run: cd /testbed && python -c "
+import astroid
+node = astroid.extract_node('''
+X = ...  # type: abc.ABC
+''')
+ann = node.type_
+  10. Edit: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\pylint\checkers\variables.py
+  11. Read: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\pylint\checkers\variables.py
+  12. Edit: C:\nexpath-sweb-work\pylint-dev__pylint-4604\control\pylint\checkers\variables.py
+  13. mcp__testbed__run: cd /testbed && sed -n '1820,1845p' pylint/checkers/variables.py
+  14. mcp__testbed__run: cd /testbed && python -m pylint /tmp/a.py --disable=all --enable=unused-import
+  15. mcp__testbed__run: cd /testbed && python -m pytest tests/unittest_checker_variables.py tests/test_functional.py -k "unused_import or type_c
+  16. mcp__testbed__run: cd /testbed && find tests -iname "*variable*"
+  17. mcp__testbed__run: cd /testbed && python -m pytest tests/checkers/unittest_variables.py -q 2>&1 | tail -30 && python -m pytest tests/test_f
+  18. mcp__testbed__run: rm -f /tmp/a.py
+  19. mcp__testbed__run: rm -f /testbed/a.py 2>/dev/null; ls /testbed/a.py 2>&1 || true
+  20. mcp__testbed__run: find / -maxdepth 3 -iname "a.py" 2>/dev/null; pwd; ls -la /testbed | head
+
+---- patch produced ----
+diff --git a/pylint/checkers/variables.py b/pylint/checkers/variables.py
+index 3ddafd5..c68be33 100644
+--- a/pylint/checkers/variables.py
++++ b/pylint/checkers/variables.py
+@@ -1826,11 +1826,12 @@ class VariablesChecker(BaseChecker):
+             self._type_annotation_names.append(type_annotation.name)
+             return
+ 
+-        if not isinstance(type_annotation, astroid.Subscript):
++        if not isinstance(type_annotation, (astroid.Subscript, astroid.Attribute)):
+             return
+ 
+         if (
+-            isinstance(type_annotation.value, astroid.Attribute)
++            isinstance(type_annotation, astroid.Subscript)
++            and isinstance(type_annotation.value, astroid.Attribute)
+             and isinstance(type_annotation.value.expr, astroid.Name)
+             and type_annotation.value.expr.name == TYPING_MODULE
+         ):
+

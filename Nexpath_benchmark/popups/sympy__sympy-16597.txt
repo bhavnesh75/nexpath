@@ -1,0 +1,128 @@
+NEXPATH POPUP AND AGENT RUN — sympy__sympy-16597
+group HARD   difficulty 1-4 hours   repo sympy/sympy
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+a.is_even does not imply a.is_finite
+I'm not sure what the right answer is here:
+```julia
+In [1]: m = Symbol('m', even=True)                                                                                                             
+
+In [2]: m.is_finite                                                                                                                            
+
+In [3]: print(m.is_finite)                                                                                                                     
+None
+```
+I would expect that a number should be finite before it can be even.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 8a3c872e94c4428c109fa66e40243b63dc6247f3a4475d1430451228bbe646ab
+prompt sha256 handed to the agent : 8a3c872e94c4428c109fa66e40243b63dc6247f3a4475d1430451228bbe646ab
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 15   tool calls 14   ran_tests True   cost $0.257
+
+   1. Grep: even|odd|finite|integer" ->|composite" ->|prime" ->" 
+   2. Read: C:\nexpath-sweb-work\sympy__sympy-16597\nexpath\sympy\core\assumptions.py
+   3. Grep: is_even.*is_finite|even.*finite|integer.*finite
+   4. run: cd C:\nexpath-sweb-work\sympy__sympy-16597\nexpath && python -c "
+from sympy import oo, S
+print('oo.is_real', oo.is_real
+   5. ToolSearch: 
+   6. mcp__testbed__run: cd /testbed && python -c "
+from sympy import oo, S
+print('oo.is_real', oo.is_real)
+print('oo.is_finite', oo.is_finite)
+p
+   7. mcp__testbed__run: cd /testbed && grep -rn "is_integer" sympy/core/numbers.py | head -30
+   8. Edit: C:\nexpath-sweb-work\sympy__sympy-16597\nexpath\sympy\core\assumptions.py
+   9. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Symbol, oo
+m = Symbol('m', even=True)
+print('m.is_finite', m.is_finite)
+n =
+  10. mcp__testbed__run: cd /testbed && python -m pytest sympy/core/tests/test_assumptions.py -q 2>&1 | tail -40
+  11. mcp__testbed__run: cd /testbed && python bin/test sympy/core/tests/test_assumptions.py sympy/core/tests/test_numbers.py sympy/core/tests/te
+  12. Grep: is_integer|is_finite|is_rational
+  13. mcp__testbed__run: cd /testbed && python bin/test sympy/core sympy/functions/elementary/tests/test_exponential.py sympy/series/tests/test_l
+  14. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Symbol
+m = Symbol('m', even=True)
+print(m.is_finite)
+" 2>/dev/null
+
+---- patch produced ----
+diff --git a/sympy/core/assumptions.py b/sympy/core/assumptions.py
+index ce4dd30..0444eb0 100644
+--- a/sympy/core/assumptions.py
++++ b/sympy/core/assumptions.py
+@@ -163,6 +163,7 @@
+ _assume_rules = FactRules([
+ 
+     'integer        ->  rational',
++    'integer        ->  finite',
+     'rational       ->  real',
+     'rational       ->  algebraic',
+     'algebraic      ->  complex',
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 22   tool calls 21   ran_tests True   cost $0.285
+
+   1. Grep: even ==
+   2. Grep: 'even'|'odd'|'finite'
+   3. Grep: even
+   4. Grep: even.*integer|integer.*even
+   5. Read: C:\nexpath-sweb-work\sympy__sympy-16597\control\sympy\core\assumptions.py
+   6. Grep: extended_real|real.*finite|finite.*real
+   7. run: cd /d C:\nexpath-sweb-work\sympy__sympy-16597\control && python -c "from sympy import S; print(S.Infinity.is_real, S.Inf
+   8. ToolSearch: 
+   9. mcp__testbed__run: cd /testbed && python -c "
+from sympy import S, Symbol
+print(S.Infinity.is_real, S.Infinity.is_finite)
+m = Symbol('m', e
+  10. mcp__testbed__run: cd /testbed && grep -rn "is_finite" sympy/core/tests/test_assumptions.py | head -50
+  11. mcp__testbed__run: cd /testbed && sed -n '1,50p' sympy/core/tests/test_assumptions.py
+  12. Edit: C:\nexpath-sweb-work\sympy__sympy-16597\control\sympy\core\assumptions.py
+  13. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Symbol
+m = Symbol('m', even=True)
+print(m.is_finite)
+i = Symbol('i', intege
+  14. mcp__testbed__run: cd /testbed && python -m pytest sympy/core/tests/test_assumptions.py sympy/core/tests/test_arit.py sympy/core/tests/test
+  15. mcp__testbed__run: cd /testbed && python -m sympy.utilities.runtests sympy/core/tests/test_assumptions.py 2>&1 | tail -60 || python bin/tes
+  16. mcp__testbed__run: cd /testbed && python bin/test sympy/core/tests/test_assumptions.py 2>&1 | tail -80
+  17. mcp__testbed__run: cd /testbed && grep -n "is_integer\|is_finite\|is_infinite" sympy/core/numbers.py | sed -n '1,80p'
+  18. mcp__testbed__run: cd /testbed && python bin/test sympy/core sympy/functions/elementary sympy/sets sympy/simplify sympy/solvers 2>&1 | tail
+  19. mcp__testbed__run: cd /testbed && timeout 280 python bin/test sympy/core 2>&1 | tail -150
+  20. mcp__testbed__run: cd /testbed && git stash && timeout 60 python bin/test sympy/core/tests/test_sympify.py 2>&1 | tail -20; git stash pop
+  21. mcp__testbed__run: cd /testbed && python -c "
+from sympy import Symbol, S
+m = Symbol('m', even=True)
+print('is_finite:', m.is_finite)
+print
+
+---- patch produced ----
+diff --git a/sympy/core/assumptions.py b/sympy/core/assumptions.py
+index ce4dd30..4c1ad58 100644
+--- a/sympy/core/assumptions.py
++++ b/sympy/core/assumptions.py
+@@ -187,6 +187,8 @@
+ 
+     'zero           ->  even & finite',
+ 
++    'integer        ->  finite',
++
+     'prime          ->  integer & positive',
+     'composite      ->  integer & positive & !prime',
+     '!composite     ->  !positive | !even | prime',
+

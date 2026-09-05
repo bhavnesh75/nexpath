@@ -1,0 +1,142 @@
+NEXPATH POPUP AND AGENT RUN — sympy__sympy-14711
+group EASY   difficulty <15 min fix   repo sympy/sympy
+routing_state show   disposition show_current_body
+====================================================================================================
+
+---- THE POPUP: text displayed, and submitted verbatim on Enter ----
+
+My original request (verbatim):
+vector add 0 error
+```python
+from sympy.physics.vector import ReferenceFrame, Vector
+from sympy import symbols
+sum([N.x, (0 * N.x)])
+```
+gives
+```
+---------------------------------------------------------------------------
+TypeError                                 Traceback (most recent call last)
+<ipython-input-1-0b9155eecc0e> in <module>()
+      2 from sympy import symbols
+      3 N = ReferenceFrame('N')
+----> 4 sum([N.x, (0 * N.x)])
+
+/usr/local/lib/python3.6/site-packages/sympy/physics/vector/vector.py in __add__(self, other)
+     59         """The add operator for Vector. """
+     60         #if other == 0: return self
+---> 61         other = _check_vector(other)
+     62         return Vector(self.args + other.args)
+     63 
+
+/usr/local/lib/python3.6/site-packages/sympy/physics/vector/vector.py in _check_vector(other)
+    708 def _check_vector(other):
+    709     if not isinstance(other, Vector):
+--> 710         raise TypeError('A Vector must be supplied')
+    711     return other
+
+TypeError: A Vector must be supplied
+```
+
+
+Smallest Repro Request:
+- The code snippet I provided is supposed to reproduce the error I’m facing when I try to sum a vector and a multiplication of it with zero. It should be enough to reproduce the issue without any additional context.
+
+Exact Steps Request:
+- To reproduce this error, first, initialize a Sympy ReferenceFrame named 'N'. Then, create a list that includes a vector from the frame and the result of multiplying that vector with zero. Finally, use the sum function on that list and observe the TypeError that gets thrown.
+
+Expected Actual State:
+- I expect that when I execute the sum on the list of vectors, I should get a Vector result. Instead, I get a TypeError that states 'A Vector must be supplied' when the list includes (0 * N.x).
+
+Evidence Request:
+- I need to check if the version of the Sympy library I’m using supports the addition of vectors with scalar multiples of zero. This could be relevant in understanding why I'm getting a TypeError in this case.
+
+Reproduction Or Evidence:
+- I haven’t run the code snippet in a fresh environment to confirm the error's persistence. Run the provided code again to see if the error remains consistent, which would give solid reproduction evidence.
+
+Verification Or Test Plan:
+- I have yet to confirm the expected behavior of addition with zero multipliers on vectors in Sympy. Check the documentation or run tests to validate how it interacts with the addition operator.
+
+Source Signal Guidance:
+- The stage of the task is currently at implementation, so I need to focus on understanding how the addition of zero affects vector operations in Sympy. This means checking the relevant details from the documentation during this implementation phase.
+
+====================================================================================================
+---- SUBMISSION PROOF ----
+advisory sha256 (frozen manifest) : 4cd9b85bd0c624a46b5e35c3a41d20772d5800c58826a06cad64cb0db4db41e9
+prompt sha256 handed to the agent : 4cd9b85bd0c624a46b5e35c3a41d20772d5800c58826a06cad64cb0db4db41e9
+identical                         : True
+popup_shown / submitted / received: True / True / True
+hooks_fired (contamination)       : False
+
+====================================================================================================
+---- sonnet+nexpath: what the coding agent did ----
+stop_reason finished   turns 17   tool calls 16   ran_tests True   cost $0.220
+
+   1. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   2. Grep: __radd__|__rsub__|_check_vector|def __mul__|def __rmul__
+   3. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   4. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   5. Grep: def __sub__
+   6. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   7. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   8. Edit: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+   9. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+  10. Grep: __rmul__|__eq__
+  11. Read: C:\nexpath-sweb-work\sympy__sympy-14711\nexpath\sympy\physics\vector\vector.py
+  12. ToolSearch: 
+  13. mcp__testbed__run: cd /testbed && python -c "
+from sympy.physics.vector import ReferenceFrame, Vector
+N = ReferenceFrame('N')
+print(sum([N.
+  14. mcp__testbed__run: cd /testbed && python -m pytest sympy/physics/vector/tests/ -q 2>&1 | tail -30
+  15. mcp__testbed__run: cd /testbed && python -m sympy.utilities.runtests sympy/physics/vector/tests/ 2>&1 | tail -40 || python bin/test sympy/p
+  16. mcp__testbed__run: cd /testbed && python bin/test sympy/physics/vector 2>&1 | tail -60
+
+---- patch produced ----
+diff --git a/sympy/physics/vector/vector.py b/sympy/physics/vector/vector.py
+index a048ee5..8849119 100644
+--- a/sympy/physics/vector/vector.py
++++ b/sympy/physics/vector/vector.py
+@@ -57,6 +57,8 @@ def __hash__(self):
+ 
+     def __add__(self, other):
+         """The add operator for Vector. """
++        if other == 0:
++            return self
+         other = _check_vector(other)
+         return Vector(self.args + other.args)
+ 
+
+
+====================================================================================================
+---- sonnet (baseline): what the coding agent did ----
+stop_reason finished   turns 11   tool calls 10   ran_tests True   cost $0.133
+
+   1. Grep: def __add__|def __radd__|def _check_vector
+   2. Read: C:\nexpath-sweb-work\sympy__sympy-14711\control\sympy\physics\vector\vector.py
+   3. Grep: __radd__|__sub__|__rsub__
+   4. Edit: C:\nexpath-sweb-work\sympy__sympy-14711\control\sympy\physics\vector\vector.py
+   5. Read: C:\nexpath-sweb-work\sympy__sympy-14711\control\sympy\physics\vector\vector.py
+   6. ToolSearch: 
+   7. mcp__testbed__run: cd /testbed && python -c "
+from sympy.physics.vector import ReferenceFrame, Vector
+N = ReferenceFrame('N')
+print(sum([N.
+   8. mcp__testbed__run: cd /testbed && python -m pytest sympy/physics/vector/tests/test_vector.py -q 2>&1 | tail -30
+   9. mcp__testbed__run: cd /testbed && python -m sympy.utilities.runtests 2>&1 | head -5; python bin/test sympy/physics/vector -q 2>&1 | tail -4
+  10. mcp__testbed__run: cd /testbed && python bin/test sympy/physics/vector 2>&1 | tail -40
+
+---- patch produced ----
+diff --git a/sympy/physics/vector/vector.py b/sympy/physics/vector/vector.py
+index a048ee5..8849119 100644
+--- a/sympy/physics/vector/vector.py
++++ b/sympy/physics/vector/vector.py
+@@ -57,6 +57,8 @@ def __hash__(self):
+ 
+     def __add__(self, other):
+         """The add operator for Vector. """
++        if other == 0:
++            return self
+         other = _check_vector(other)
+         return Vector(self.args + other.args)
+ 
+
