@@ -99,7 +99,6 @@ npm link
 
 # Register with your coding agent and verify
 nexpath install
-nexpath install --yes      # or accept defaults without prompts
 
 # Verify
 nexpath --version
