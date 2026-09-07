@@ -10,6 +10,7 @@ import {
   normalizePromptEnhancementRelevanceOrderV1,
 } from '../prompt-enhancement/section-relevance.js';
 import { classifyPrompt } from './PromptClassifier.js';
+import { extractApiError, type ApiErrorDetails } from '../utils/api-error.js';
 import {
   PROMPT_ENHANCEMENT_PRIMARY_INTENTS,
   PROMPT_ENHANCEMENT_CAPABILITIES,
@@ -581,13 +582,30 @@ export function applyReleaseGuard(result: StageClassifierResult, windowText: str
 export async function classifyStage(
   input: StageClassifierInput,
   client?: OpenAI,
-  config?: { minConfidence?: number; contextWindow?: number },
+  config?: {
+    minConfidence?: number;
+    contextWindow?: number;
+    /**
+     * Called when the provider call FAILED — not when there was no credential
+     * to make one with. Degrading stays silent to the user either way; this
+     * only lets a caller that owns a log record which of the two happened.
+     *
+     * ⚠️ A callback rather than a logger import: this module is bundled into
+     * the browser service worker, where `src/logger.ts`'s `node:fs` cannot go.
+     */
+    onProviderError?: (details: ApiErrorDetails) => void;
+  },
 ): Promise<StageClassifierResult> {
   const minConfidence = config?.minConfidence ?? STAGE2_LLM_MIN_CONFIDENCE;
   const contextWindow = config?.contextWindow ?? STAGE2_CONTEXT_WINDOW;
   const windowText = input.window.map((w) => w.text).join('\n');
 
   let result: StageClassifierResult;
+  // ⚠️ Separates "we never got a reply" from "the reply was unusable". A garbage
+  // or empty reply also lands in the catch below — `parseStageClassifierReply`
+  // throws on one — but the provider DID answer, so it is not a provider
+  // failure and must not be reported as one.
+  let providerAnswered = false;
   try {
     // Construct inside the try: with no client and no API key, `new OpenAI()` throws
     // synchronously — degrade to the local classifier instead of crashing the caller.
@@ -604,9 +622,24 @@ export async function classifyStage(
       },
       { timeout: STAGE_CLASSIFIER_TIMEOUT_MS },
     );
+    providerAnswered = true;
     const rawReply = response.choices[0]?.message?.content ?? '';
     result = rawReply ? toResult(parseStageClassifierReply(rawReply, minConfidence)) : await degrade(input.promptText);
-  } catch {
+  } catch (err) {
+    // Degrading is still right. Degrading SILENTLY was not: a refused call and
+    // a machine with no credential at all produced identical behaviour and
+    // identical silence, so "guidance went quiet" had no traceable cause.
+    //
+    // ⚠️ It reports the SHAPE of the failure and does not interpret it. This
+    // layer cannot know what a given status means for a given provider — and
+    // for the Nexpath service in particular, which code an exhausted balance
+    // returns is not settled. Naming a cause we have not confirmed would be
+    // worse than the silence it replaces; the status is reported and the reader
+    // decides.
+    //
+    // A construction failure (no credential) never reaches the network and so
+    // carries no status — which is exactly what tells the two apart.
+    if (!providerAnswered) config?.onProviderError?.(extractApiError(err, 'openai'));
     result = await degrade(input.promptText);
   }
   return applyReleaseGuard(result, windowText);

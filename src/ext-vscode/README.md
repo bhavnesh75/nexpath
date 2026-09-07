@@ -99,8 +99,9 @@ Not a new tool to learn. A workflow step to adopt.
      **Allow**. (This lets Nexpath see your prompts so it can guide you — your data stays
      on your machine. Without it, Nexpath will not work.)
    - **"Set up Nexpath for Cursor now?"** → click **Set up**.
-3. A terminal opens — answer the one-time prompts: your **OpenAI API key** and a quick
-   **telemetry** choice.
+3. A terminal opens — answer the one-time prompts. First, how Nexpath should run:
+   your own **OpenAI API key**, or a **Nexpath token** if you would rather not create an
+   OpenAI account. Then your project role.
 4. **Fully restart your editor** (quit and reopen — agents load their hooks at startup),
    then start prompting — Nexpath surfaces guidance when it helps.
 
@@ -120,8 +121,12 @@ Windsurf (Devin).
 
 - **Cursor** or **Windsurf (Devin)** — VS Code `^1.80.0` or compatible.
 - **Node.js ≥ 20.19** on your machine (the bundled engine needs it; older Node will fail to start).
-- An **OpenAI API key** — <https://platform.openai.com/api-keys>. Without a valid key,
-  prompts are tracked but no guidance is generated.
+- **One credential.** Either your own **OpenAI API key**
+  (<https://platform.openai.com/api-keys>), or a **Nexpath token** from a free account at
+  [parseos.tech/nexpath](https://parseos.tech/nexpath/) if you would rather not create an
+  OpenAI account. Setup asks which you want. Without one, prompts are tracked but no
+  guidance is generated.
+  If both are configured, your OpenAI key is the one used.
 
 ---
 
@@ -132,9 +137,11 @@ Windsurf (Devin).
 - To generate guidance, Nexpath sends **recent prompt context to OpenAI** using **your**
   key — or, with a Nexpath token configured in the CLI, through **Nexpath's own service**,
   which forwards it to OpenAI and meters your account credit — and only when guidance fires.
-- **Telemetry is opt-in.** If you enable it, only anonymous usage events (command names,
-  timings, error types) are collected — never your code, prompts, key, or file paths.
-  You choose at setup. No vendor lock-in.
+- **Telemetry is off unless you turn it on.** Setup does not ask, and nothing is enabled
+  for you — it starts off and stays off until you run
+  `nexpath config set telemetry.enabled true`. If you do turn it on, only anonymous usage
+  events (command names, timings, error types) are collected — never your code, prompts,
+  credential, or file paths. No vendor lock-in.
 
 ---
 

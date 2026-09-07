@@ -96,8 +96,14 @@ describe('the two credential formats never validate against each other (RISK-2)'
 });
 
 describe('isValidNexpathToken', () => {
-  it('accepts npk_ + 40 chars', () => {
+  it('accepts a token of exactly TOKEN_MIN_LENGTH', () => {
     expect(isValidNexpathToken(VALID_TOKEN)).toBe(true);
+  });
+
+  it('accepts the full-length shape the service actually issues', () => {
+    // A real-shaped token — longer than the minimum, and carrying both url-safe
+    // extras. The minimum is a floor, not the expected size.
+    expect(isValidNexpathToken('npk_-7zI1d-H_obJzkBkWgzA97lEWGUR_BUvMXFrz2AzgJk')).toBe(true);
   });
 
   it('rejects an sk- shaped key — the two formats must never be interchangeable', () => {
@@ -111,8 +117,8 @@ describe('isValidNexpathToken', () => {
 
   it('the length boundary is exactly TOKEN_MIN_LENGTH, pinned rather than approximate', () => {
     // 'npk_short' above is nowhere near the real boundary — a change to
-    // TOKEN_MIN_LENGTH from 40 down to, say, 10 would still pass it, and
-    // nothing else here checks the actual configured cutoff.
+    // TOKEN_MIN_LENGTH down to, say, 10 would still pass it, and nothing else
+    // here checks the actual configured cutoff.
     const oneUnder = TOKEN_PREFIX + 'a'.repeat(TOKEN_MIN_LENGTH - TOKEN_PREFIX.length - 1);
     const exact    = TOKEN_PREFIX + 'a'.repeat(TOKEN_MIN_LENGTH - TOKEN_PREFIX.length);
     expect(oneUnder.length).toBe(TOKEN_MIN_LENGTH - 1);
@@ -265,15 +271,20 @@ describe('coexistence with an OpenAI key in the same fallback file', () => {
   });
 });
 
-// ── The API base (DEP-FP-04 does not exist yet) ─────────────────────────────────
+// ── The API base ────────────────────────────────────────────────────────────────
+//
+// 🔒 This block is the ONLY place the base-URL value is written out as a literal.
+// Every other test that touches it imports `DEFAULT_API_BASE_URL` and asserts
+// against that, so changing the address fails exactly one test — this one — for
+// exactly one reason: the value changed and the pin must be re-approved.
 
 describe('resolveApiBaseUrl', () => {
-  it('defaults to the local-development address matching the server\'s own default', () => {
+  it('defaults to the live service, the same origin the browser extension ships', () => {
     expect(resolveApiBaseUrl()).toBe(DEFAULT_API_BASE_URL);
-    expect(DEFAULT_API_BASE_URL).toBe('http://localhost:8000/v1');
+    expect(DEFAULT_API_BASE_URL).toBe('https://parseos.tech/v1');
   });
 
-  it('is overridden by NEXPATH_API_BASE_URL — this is where the real domain lands, one line, at DEP-FP-04', () => {
+  it('is overridden by NEXPATH_API_BASE_URL, so a build can be pointed at a local instance', () => {
     process.env.NEXPATH_API_BASE_URL = 'https://api.example-configured.test/v1';
     expect(resolveApiBaseUrl()).toBe('https://api.example-configured.test/v1');
   });

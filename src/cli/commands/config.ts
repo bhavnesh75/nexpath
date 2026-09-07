@@ -15,6 +15,7 @@ import {
   getKeySource,
   isValidApiKey,
 } from '../../config/ApiKeyResolver.js';
+import { resolveApiBaseUrl } from '../../config/NexpathTokenStore.js';
 
 export async function configGetAction(key: string, dbPath = DEFAULT_DB_PATH): Promise<void> {
   const store = await openStore(dbPath);
@@ -124,6 +125,16 @@ export async function configRotateApiKeyAction(opts: ConfigApiKeyOpts = {}): Pro
     process.exitCode = 1;
     return;
   }
+  // ⚠️ `nexpath_token` means the resolver found NO OpenAI key at any layer and
+  // fell through to the token. Without this, a token-only machine was told
+  // "Existing API key is stored in nexpath_token" and then offered to overwrite
+  // a key that does not exist.
+  if (currentSource === 'nexpath_token') {
+    print('Error: No existing API key to rotate — a Nexpath token is configured instead.');
+    print('Use `nexpath config set-api-key` to store a key, or `nexpath config rotate-token` to replace the token.');
+    process.exitCode = 1;
+    return;
+  }
 
   print(`Existing API key is stored in ${currentSource}.`);
   const ok = await confirmFn();
@@ -145,7 +156,16 @@ export async function configShowKeySourceAction(opts: ConfigApiKeyOpts = {}): Pr
   const print       = opts.output      ?? defaultPrint;
   const projectRoot = opts.projectRoot ?? process.cwd();
   const source      = await getKeySource(projectRoot);
-  print(`API key source: ${source}`);
+  // "API key source" was accurate while there was one credential. `nexpath_token`
+  // is not an API key and not a layer an API key was found in — it is the other
+  // credential entirely, so the line has to say what was found, not where a key
+  // came from.
+  print(`Credential source: ${source}`);
+  if (source === 'nexpath_token') {
+    // In token mode the base URL decides where the calls actually go, and it is
+    // env-overridable — so the value in effect is worth stating, not inferring.
+    print(`Service: ${resolveApiBaseUrl()}`);
+  }
 }
 
 export async function configRemoveApiKeyAction(opts: ConfigApiKeyOpts = {}): Promise<void> {

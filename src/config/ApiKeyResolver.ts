@@ -4,11 +4,17 @@ import { homedir } from 'node:os';
 import { config as loadDotenv } from 'dotenv';
 import { getPassword, setPassword, deletePassword } from 'cross-keychain';
 import { readNexpathToken, resolveApiBaseUrl } from './NexpathTokenStore.js';
+import { OPENAI_KEY_REGEX, isValidApiKey } from './credential-shape.js';
 
 export const KEYCHAIN_SERVICE = 'nexpath';
 export const KEYCHAIN_ACCOUNT = 'openai_api_key';
 export const FALLBACK_PATH    = join(homedir(), '.nexpath', 'config.json');
-export const API_KEY_REGEX    = /^sk-[A-Za-z0-9_-]{20,}$/;
+
+// The shape rules moved to the zero-import `credential-shape` module so the
+// browser build can share them instead of copying them. Re-exported here under
+// their established names: every existing importer of this module is unchanged,
+// and both values behave exactly as before.
+export { OPENAI_KEY_REGEX as API_KEY_REGEX, isValidApiKey };
 
 // The fifth and last resolution layer. `nexpath_token` means Mode B — no
 // OpenAI key anywhere, a Nexpath token stored instead. This is the single
@@ -19,10 +25,6 @@ export type KeySource = 'env' | 'dotenv' | 'keychain' | 'file' | 'nexpath_token'
 
 export interface ResolveOptions {
   fallbackPath?: string;
-}
-
-export function isValidApiKey(key: string): boolean {
-  return API_KEY_REGEX.test(key);
 }
 
 export async function resolveOpenAIKey(projectRoot: string, opts: ResolveOptions = {}): Promise<string | null> {
@@ -102,7 +104,32 @@ export async function removeApiKey(opts: ResolveOptions = {}): Promise<void> {
   const fallbackPath = opts.fallbackPath ?? FALLBACK_PATH;
 
   try { await deletePassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT); } catch { /* silent */ }
-  try { await fs.unlink(fallbackPath); } catch { /* silent */ }
+  try {
+    // The fallback file may also hold a Nexpath token under a different JSON
+    // key (NexpathTokenStore's own field), so remove only our own key rather
+    // than the whole file. Unlinking it took the token with it.
+    const raw = await fs.readFile(fallbackPath, 'utf8');
+
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
+
+    // ⚠️ Not a JSON object: no store can read a credential out of it, but it may
+    // still hold the key as raw text — and this function must never report a
+    // removal it did not perform. Remove the file, as it did before it learned
+    // to share one.
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      await fs.unlink(fallbackPath);
+      return;
+    }
+
+    const fields = parsed as Record<string, unknown>;
+    if ('openai_api_key' in fields) {
+      delete fields.openai_api_key;
+      await fs.writeFile(fallbackPath, JSON.stringify(fields, null, 2), { mode: 0o600 });
+    }
+  } catch {
+    /* no fallback file, or unreadable — nothing to remove */
+  }
 }
 
 function tryEnv(): string | null {
@@ -148,7 +175,21 @@ async function tryFallbackFile(fallbackPath: string): Promise<string | null> {
 
 async function writeFallbackFile(fallbackPath: string, key: string): Promise<void> {
   await fs.mkdir(dirname(fallbackPath), { recursive: true });
-  const payload = JSON.stringify({ openai_api_key: key }, null, 2);
+
+  // The fallback file is SHARED: NexpathTokenStore keeps its own token under a
+  // different JSON key in this same file. Writing `{ openai_api_key }` flat
+  // destroyed it — on any machine where the keychain is unavailable, storing a
+  // key silently removed a stored token. Merge, exactly as writeFallbackToken
+  // already does in the other direction.
+  let existing: Record<string, unknown> = {};
+  try {
+    existing = JSON.parse(await fs.readFile(fallbackPath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    /* no existing file, or unreadable — start fresh rather than fail; a corrupt
+       file is replaced by the valid one written below. Mirrors the token side. */
+  }
+
+  const payload = JSON.stringify({ ...existing, openai_api_key: key }, null, 2);
   await fs.writeFile(fallbackPath, payload, { mode: 0o600 });
   await fs.chmod(fallbackPath, 0o600);
 }

@@ -82,6 +82,29 @@ describe('configRotateApiKeyAction', () => {
     expect(lines.join('\n')).toContain('No existing API key to rotate');
   });
 
+  // `nexpath_token` means the resolver found NO OpenAI key at any layer and fell
+  // through to the token. Without a guard, this command told a token-only
+  // machine "Existing API key is stored in nexpath_token" and then offered to
+  // overwrite a key that does not exist.
+  it('refuses on a token-only machine, and says which command to use instead', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('nexpath_token');
+    const { lines, print } = captureOutput();
+    const confirmFn = vi.fn<() => Promise<boolean>>();
+    await configRotateApiKeyAction({
+      output:     print,
+      confirmFn,
+      passwordFn: async () => VALID_KEY,
+    });
+    const text = lines.join('\n');
+    expect(process.exitCode).toBe(1);
+    expect(resolver.storeApiKey).not.toHaveBeenCalled();
+    expect(confirmFn).not.toHaveBeenCalled();
+    expect(text).toContain('a Nexpath token is configured instead');
+    expect(text).toContain('nexpath config rotate-token');
+    // ⛔ The old, misleading line must be gone, not merely joined by a better one.
+    expect(text).not.toContain('Existing API key is stored in nexpath_token');
+  });
+
   it('rotates when an existing key is present and reports the previous source', async () => {
     vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
     const { lines, print } = captureOutput();
@@ -148,7 +171,7 @@ describe('configShowKeySourceAction', () => {
       vi.mocked(resolver.getKeySource).mockResolvedValueOnce(source);
       const { lines, print } = captureOutput();
       await configShowKeySourceAction({ output: print });
-      expect(lines.join('\n')).toContain(`API key source: ${source}`);
+      expect(lines.join('\n')).toContain(`Credential source: ${source}`);
     },
   );
 
@@ -157,6 +180,25 @@ describe('configShowKeySourceAction', () => {
     const { print } = captureOutput();
     await configShowKeySourceAction({ output: print, projectRoot: '/explicit/project' });
     expect(resolver.getKeySource).toHaveBeenCalledWith('/explicit/project');
+  });
+
+  // In token mode the base URL decides where calls actually go, and it is
+  // env-overridable — so the value in effect is worth stating rather than
+  // leaving the reader to infer it from the source name.
+  it('names the service in token mode', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('nexpath_token');
+    const { lines, print } = captureOutput();
+    await configShowKeySourceAction({ output: print });
+    expect(lines.join('\n')).toContain('Service: https://parseos.tech/v1');
+  });
+
+  it('does NOT name a service for any OpenAI-key source', async () => {
+    for (const source of ['env', 'dotenv', 'keychain', 'file', 'none'] as const) {
+      vi.mocked(resolver.getKeySource).mockResolvedValueOnce(source);
+      const { lines, print } = captureOutput();
+      await configShowKeySourceAction({ output: print });
+      expect(lines.join('\n')).not.toContain('Service:');
+    }
   });
 });
 

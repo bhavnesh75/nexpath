@@ -16,3 +16,6 @@ src/ext-vscode/prebuilds/
 # Local runtime artifacts (never ship): nexpath state dir + hook lib skeleton
 .nexpath/
 lib/
+
+# npm lockfile. NB: the publish workflows run `npm ci`, which requires a lockfile.
+package-lock.json

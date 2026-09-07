@@ -15,6 +15,13 @@ vi.mock('cross-keychain', () => ({
 }));
 
 import { resolveOpenAIKey, getKeySource } from './ApiKeyResolver.js';
+// ⚠️ Imported, never written out as a literal. The two assertions below are about
+// PLUMBING — that resolveOpenAIKey publishes the base URL, and that the SDK reads
+// what it published — not about what the value happens to be. The value itself is
+// pinned in exactly one test, `nexpath-token-store.test.ts`'s `resolveApiBaseUrl`
+// block, which is the test whose job that is. Duplicating the literal here once
+// meant a base-URL change failed three files for one reason.
+import { DEFAULT_API_BASE_URL } from './NexpathTokenStore.js';
 import * as keychain from 'cross-keychain';
 
 const VALID_OPENAI_KEY = 'sk-abcdefghij1234567890ABCDEFGHIJ';
@@ -86,7 +93,7 @@ describe('FP-4.2 mode matrix — resolveOpenAIKey (process.env side effects)', (
     const resolved = await resolveOpenAIKey(projectRoot, { fallbackPath });
     expect(resolved).toBe(VALID_TOKEN);
     expect(process.env.OPENAI_API_KEY).toBe(VALID_TOKEN);
-    expect(process.env.OPENAI_BASE_URL).toBe('http://localhost:8000/v1');
+    expect(process.env.OPENAI_BASE_URL).toBe(DEFAULT_API_BASE_URL);
   });
 
   it('both present → L2/RISK-4: the own key wins, server not contacted, no OPENAI_BASE_URL written', async () => {
@@ -196,7 +203,7 @@ describe('SDK contract pin (RISK-16)', () => {
     const { default: OpenAI } = await import('openai');
     const client = new OpenAI();
 
-    expect(client.baseURL).toBe('http://localhost:8000/v1');
+    expect(client.baseURL).toBe(DEFAULT_API_BASE_URL);
     expect(client.apiKey).toBe(VALID_TOKEN);
   });
 

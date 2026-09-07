@@ -11,12 +11,13 @@ import {
 } from './commands/config.js';
 import {
   configSetTokenAction,
+  configRotateTokenAction,
   configRemoveTokenAction,
 } from './commands/token.js';
 import { runMigrations } from '../store/schema.js';
 import { logAction } from './commands/log.js';
 import { storeDeleteAction, storeEnableAction, storeDisableAction, storePruneAction } from './commands/store.js';
-import { installAction, uninstallAction } from './commands/install.js';
+import { installAction, uninstallAction, NonInteractiveTerminalError } from './commands/install.js';
 import {
   DEFAULT_PLATFORM,
   PLATFORM_VALUES,
@@ -56,8 +57,8 @@ export function createProgram(): Command {
 
   program
     .command('install')
-    .description('Interactive 3-step setup: OpenAI API key → telemetry consent → agent registration')
-    .option('-y, --yes', 'Non-interactive mode: skip the API key and telemetry prompts and auto-confirm agent registration')
+    .description('Interactive setup: credential (OpenAI API key or Nexpath token) → agent registration')
+    .option('-y, --yes', 'Non-interactive mode: skip the credential prompt and auto-confirm agent registration')
     .option('--db <path>', 'Path to the SQLite database file')
     .option(
       '--for <platform>',
@@ -73,16 +74,28 @@ export function createProgram(): Command {
         process.stderr.write('Run `nexpath install --help` for usage details.\n');
         process.exit(1);
       }
-      await installAction(
-        { yes: opts.yes, platform },
-        { dbPath: opts.db ?? DEFAULT_DB_PATH },
-      );
+      try {
+        await installAction(
+          { yes: opts.yes, platform },
+          { dbPath: opts.db ?? DEFAULT_DB_PATH },
+        );
+      } catch (err) {
+        // The one failure that is a usage problem rather than a fault: the
+        // prompts had no terminal to attach to. Printed as the instruction it
+        // is, instead of the raw `uv_tty_init` stack the user got before.
+        // Everything else still propagates untouched.
+        if (err instanceof NonInteractiveTerminalError) {
+          process.stderr.write(`\n${err.message}\n`);
+          process.exit(1);
+        }
+        throw err;
+      }
     });
 
   program
     .command('uninstall')
-    .description('Remove nexpath-serve MCP registration from all agents (and stored API key)')
-    .option('-y, --yes', 'Skip confirmation prompt for API key removal (assumes yes)')
+    .description('Remove nexpath-serve MCP registration from all agents (and the stored credential)')
+    .option('-y, --yes', 'Skip confirmation prompt for credential removal (assumes yes)')
     .action(async (opts: { yes?: boolean }) => {
       const uninstallOpts: { yes?: boolean } = {};
       if (opts.yes) uninstallOpts.yes = true;
@@ -186,7 +199,7 @@ export function createProgram(): Command {
 
   configCmd
     .command('show-key-source')
-    .description('Print which layer is supplying the OpenAI API key (env / dotenv / keychain / file / none)')
+    .description('Print which credential is in effect (env / dotenv / keychain / file / nexpath_token / none)')
     .action(async () => {
       await configShowKeySourceAction();
     });
@@ -203,6 +216,13 @@ export function createProgram(): Command {
     .description('Prompt for a Nexpath token and store it securely (keychain → fallback file)')
     .action(async () => {
       await configSetTokenAction();
+    });
+
+  configCmd
+    .command('rotate-token')
+    .description('Replace the stored Nexpath token (errors if no token is currently stored)')
+    .action(async () => {
+      await configRotateTokenAction();
     });
 
   configCmd

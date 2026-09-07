@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { getPassword, setPassword, deletePassword } from 'cross-keychain';
+import { TOKEN_PREFIX, TOKEN_MIN_LENGTH, isValidNexpathToken } from './credential-shape.js';
 
 // Mirrors ApiKeyResolver.ts's own plumbing exactly (same keychain service, same
 // fallback file), but under a distinct account and JSON key, so an OpenAI key and
@@ -12,19 +13,14 @@ export const FALLBACK_PATH    = join(homedir(), '.nexpath', 'config.json');
 
 // ⛔ A Nexpath token must never be checked against ApiKeyResolver's
 // API_KEY_REGEX (the `sk-` shape) — the two credential formats must never be
-// confused with each other, in either direction. Checked here and nowhere else.
-export const TOKEN_PREFIX     = 'npk_';
-export const TOKEN_MIN_LENGTH = 40; // "npk_" (4) + the server's 32-byte urlsafe body
+// confused with each other, in either direction. The shape rules now live in the
+// zero-import `credential-shape` module so the browser build can share them
+// instead of copying them; re-exported here under their established names, so
+// every existing importer of this module is unchanged.
+export { TOKEN_PREFIX, TOKEN_MIN_LENGTH, isValidNexpathToken };
 
 export interface TokenStoreOptions {
   fallbackPath?: string;
-}
-
-export function isValidNexpathToken(value: string): boolean {
-  return typeof value === 'string'
-    && value.startsWith(TOKEN_PREFIX)
-    && value.length >= TOKEN_MIN_LENGTH
-    && !/\s/.test(value);
 }
 
 export async function storeNexpathToken(token: string, opts: TokenStoreOptions = {}): Promise<{ source: 'keychain' | 'file' }> {
@@ -102,11 +98,10 @@ async function writeFallbackToken(fallbackPath: string, token: string): Promise<
 
 // ── The API base the token is redeemed against ──────────────────────────────────
 //
-// ⚠️ The production domain does not exist yet. Rather than invent one, this is
-// an explicit, env-overridable value whose local-development default matches
-// the server's own default for local runs. Setting `NEXPATH_API_BASE_URL` once
-// a real domain exists is a one-line deploy change, not a client rewrite.
-export const DEFAULT_API_BASE_URL = 'http://localhost:8000/v1';
+// The live service, and the same origin the browser extension already ships. It
+// stays env-overridable via `NEXPATH_API_BASE_URL` so a developer can point a
+// build at a local instance without editing source.
+export const DEFAULT_API_BASE_URL = 'https://parseos.tech/v1';
 
 export function resolveApiBaseUrl(): string {
   const configured = process.env.NEXPATH_API_BASE_URL;

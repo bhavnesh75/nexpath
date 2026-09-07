@@ -16,8 +16,21 @@ vi.mock('../../config/ApiKeyResolver.js', () => ({
   isValidApiKey:  (key: string) => /^sk-[A-Za-z0-9_-]{20,}$/.test(key),
 }));
 
+// Uninstall removes BOTH credentials now, so the token store needs mocking for
+// the same reason the resolver does: unmocked, `removeNexpathToken` reaches the
+// real OS keychain from a test run.
+vi.mock('../../config/NexpathTokenStore.js', async () => {
+  const shape = await import('../../config/credential-shape.js');
+  return {
+    storeNexpathToken:   vi.fn(),
+    removeNexpathToken:  vi.fn(),
+    isValidNexpathToken: shape.isValidNexpathToken,
+  };
+});
+
 import { uninstallAction, resolveAgentPaths } from './install.js';
 import * as resolver from '../../config/ApiKeyResolver.js';
+import * as tokenStore from '../../config/NexpathTokenStore.js';
 
 function tmpDirAgents(): { dir: string; cleanup: () => void } {
   const dir = join(tmpdir(), `nexpath-uninstall-${randomUUID()}`);
@@ -28,13 +41,14 @@ function tmpDirAgents(): { dir: string; cleanup: () => void } {
 beforeEach(() => {
   vi.mocked(resolver.removeApiKey).mockReset().mockResolvedValue(undefined);
   vi.mocked(resolver.getKeySource).mockReset().mockResolvedValue('none');
+  vi.mocked(tokenStore.removeNexpathToken).mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
+describe('uninstallAction — credential cleanup (Plan #1 Phase 6)', () => {
   it('confirm Y → calls removeApiKey and logs the previous source', async () => {
     vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
     const { dir, cleanup } = tmpDirAgents();
@@ -48,7 +62,62 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
         apiKeyConfirmFn: async () => true,
       });
       expect(resolver.removeApiKey).toHaveBeenCalledTimes(1);
-      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('API key removed (was in keychain)');
+      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('Credential removed (was in keychain)');
+    } finally { cleanup(); }
+  });
+
+  // `removeNexpathToken` existed but had no caller here, so a token survived
+  // uninstall indefinitely. And `getKeySource` reports only the WINNING layer,
+  // so a machine holding both answers 'keychain' — the token is never named and
+  // would never be reached by a check that keyed off the reported source.
+  it('confirm Y → removes the Nexpath token as well as the key', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await uninstallAction({
+        paths,
+        execFn: () => {},
+        storeDeleteConfirmFn: async () => false,
+        apiKeyConfirmFn: async () => true,
+      });
+      expect(tokenStore.removeNexpathToken).toHaveBeenCalledTimes(1);
+    } finally { cleanup(); }
+  });
+
+  it('a token-only machine still has its token removed', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('nexpath_token');
+    const { dir, cleanup } = tmpDirAgents();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await uninstallAction({
+        paths,
+        execFn: () => {},
+        storeDeleteConfirmFn: async () => false,
+        apiKeyConfirmFn: async () => true,
+      });
+      expect(tokenStore.removeNexpathToken).toHaveBeenCalledTimes(1);
+      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n'))
+        .toContain('Credential removed (was in nexpath_token)');
+    } finally { cleanup(); }
+  });
+
+  it('declining leaves BOTH credentials in place', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await uninstallAction({
+        paths,
+        execFn: () => {},
+        storeDeleteConfirmFn: async () => false,
+        apiKeyConfirmFn: async () => false,
+      });
+      expect(resolver.removeApiKey).not.toHaveBeenCalled();
+      expect(tokenStore.removeNexpathToken).not.toHaveBeenCalled();
     } finally { cleanup(); }
   });
 
@@ -66,7 +135,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
       });
       expect(resolver.removeApiKey).not.toHaveBeenCalled();
       const text = logSpy.mock.calls.map(c => c[0] as string).join('\n');
-      expect(text).toContain('API key retained');
+      expect(text).toContain('Credential retained');
       expect(text).toContain('nexpath config remove-api-key');
     } finally { cleanup(); }
   });
@@ -86,7 +155,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
       });
       expect(confirmFn).not.toHaveBeenCalled();
       expect(resolver.removeApiKey).not.toHaveBeenCalled();
-      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('No stored API key found');
+      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('No stored credential found');
     } finally { cleanup(); }
   });
 
@@ -106,11 +175,11 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
       });
       expect(confirmFn).not.toHaveBeenCalled();
       expect(resolver.removeApiKey).toHaveBeenCalledTimes(1);
-      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('API key removed (was in file)');
+      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('Credential removed (was in file)');
     } finally { cleanup(); }
   });
 
-  it('logs MCP-removal summary BEFORE the API key cleanup section', async () => {
+  it('logs MCP-removal summary BEFORE the credential cleanup section', async () => {
     vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
     const { dir, cleanup } = tmpDirAgents();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -124,7 +193,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
       });
       const lines = logSpy.mock.calls.map(c => c[0] as string);
       const mcpIdx = lines.findIndex(l => l.includes('MCP registration removed'));
-      const keyIdx = lines.findIndex(l => l.includes('API key removed'));
+      const keyIdx = lines.findIndex(l => l.includes('Credential removed'));
       expect(mcpIdx).toBeGreaterThanOrEqual(0);
       expect(keyIdx).toBeGreaterThanOrEqual(0);
       expect(mcpIdx).toBeLessThan(keyIdx);
@@ -178,11 +247,11 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
         yes: true,
       });
       expect(resolver.removeApiKey).not.toHaveBeenCalled();
-      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('No stored API key found');
+      expect(logSpy.mock.calls.map(c => c[0] as string).join('\n')).toContain('No stored credential found');
     } finally { cleanup(); }
   });
 
-  it('"Prompt history retained" line appears AFTER the API key cleanup section', async () => {
+  it('"Prompt history retained" line appears AFTER the credential cleanup section', async () => {
     vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
     const { dir, cleanup } = tmpDirAgents();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -195,7 +264,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
         apiKeyConfirmFn: async () => true,
       });
       const lines = logSpy.mock.calls.map(c => c[0] as string);
-      const keyIdx     = lines.findIndex(l => l.includes('API key removed'));
+      const keyIdx     = lines.findIndex(l => l.includes('Credential removed'));
       const historyIdx = lines.findIndex(l => l.includes('Prompt history retained'));
       expect(keyIdx).toBeGreaterThanOrEqual(0);
       expect(historyIdx).toBeGreaterThanOrEqual(0);
@@ -203,7 +272,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
     } finally { cleanup(); }
   });
 
-  it('agent MCP unregistration still runs regardless of the API key cleanup branch (none source)', async () => {
+  it('agent MCP unregistration still runs regardless of the credential cleanup branch (none source)', async () => {
     vi.mocked(resolver.getKeySource).mockResolvedValueOnce('none');
     const { dir, cleanup } = tmpDirAgents();
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -216,7 +285,7 @@ describe('uninstallAction — API key cleanup (Plan #1 Phase 6)', () => {
       });
       const text = logSpy.mock.calls.map(c => c[0] as string).join('\n');
       expect(text).toContain('MCP registration removed from all agents');
-      expect(text).toContain('No stored API key found');
+      expect(text).toContain('No stored credential found');
     } finally { cleanup(); }
   });
 });

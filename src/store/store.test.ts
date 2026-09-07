@@ -28,6 +28,22 @@ describe('redactSecrets', () => {
     expect(out).not.toContain('sk-abc123');
   });
 
+  it('redacts Nexpath tokens (npk_)', () => {
+    const token = 'npk_' + 'a'.repeat(43);
+    const out = redactSecrets(`my token is ${token} ok`);
+    expect(out).toContain('npk_[REDACTED');
+    expect(out).not.toContain('npk_aaa');
+  });
+
+  it('redacts a Nexpath token containing url-safe - and _ characters', () => {
+    // The class carries `-` and `_` where the `sk-` pattern does not; a token
+    // that stopped at the first `-` would leave the rest of it in the store.
+    const token = 'npk_-7zI1d-H_obJzkBkWgzA97lEWGUR_BUvMXFrz2AzgJk';
+    const out = redactSecrets(`token: ${token}`);
+    expect(out).toContain('npk_[REDACTED');
+    expect(out).not.toContain('BUvMXFrz2AzgJk');
+  });
+
   it('redacts GitHub PATs (ghp_)', () => {
     const token = 'ghp_' + 'a'.repeat(36);
     const out = redactSecrets(`token: ${token}`);
@@ -65,6 +81,8 @@ describe('redactSecrets', () => {
     // shifts every position after it — silently, and only on prompts containing a secret.
     const cases = [
       'key is sk-abc123def456ghi789jkl012mno and then some more text',
+      `nexpath token: npk_${'a'.repeat(43)} trailing`,
+      'npk_-7zI1d-H_obJzkBkWgzA97lEWGUR_BUvMXFrz2AzgJk trailing',
       `token: ghp_${'a'.repeat(36)} trailing`,
       `auth: ghu_${'b'.repeat(36)} trailing`,
       'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.payload done',

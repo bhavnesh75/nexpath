@@ -60,10 +60,14 @@ if (!step('installing dependencies (npm ci)', 'npm',
 }
 
 // 2. Register Cursor + Windsurf for VS Code — INTERACTIVE. This extension's
-//    platform IS VS Code, so it installs '--for vscode' (the user answers API
-//    key, telemetry, the agent-register confirm, frequency, role — the full
-//    flow, exactly like the CLI). No separate Claude Code / '--for cli' pass:
-//    Claude is a CLI agent set up via the CLI, not this extension.
+//    platform IS VS Code, so it installs '--for vscode': the user answers the
+//    credential question (their own OpenAI key, or a Nexpath token), the
+//    agent-register confirm, and their project role — the full flow, exactly
+//    like the CLI. The telemetry and frequency prompts this comment used to
+//    list are gone: telemetry now defaults off and is never asked, and the
+//    frequency picker is commented out in installAction. No separate Claude
+//    Code / '--for cli' pass: Claude is a CLI agent set up via the CLI, not
+//    this extension.
 if (!failed && !step('registering Cursor + Windsurf (interactive)', node,
                      [cliEntry, 'install', '--for', 'vscode'])) {
   failed = 'install --for vscode';

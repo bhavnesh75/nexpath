@@ -14,6 +14,8 @@ import {
   type DetectedAgent,
 } from './install.js';
 import { allSupportedIds } from './supported-agents-by-platform.js';
+import { getKeySource, type KeySource } from '../../config/ApiKeyResolver.js';
+import { resolveApiBaseUrl } from '../../config/NexpathTokenStore.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -36,10 +38,24 @@ export interface StoreStatus {
   perProject:    Array<{ projectRoot: string; count: number }>;
 }
 
+/**
+ * Which credential is actually in effect. `status` reported neither before, so
+ * "why is nothing firing?" could not be answered from it — the answer is very
+ * often that no credential resolves. Symmetric by design: it names whichever is
+ * in effect, and is not a token-only readout.
+ */
+export interface CredentialStatus {
+  /** The layer `resolveOpenAIKey` would stop at. `none` means nothing resolves. */
+  source: KeySource;
+  /** The service base URL, only in token mode — it is what decides where calls go. */
+  serviceBaseUrl: string | null;
+}
+
 export interface StatusResult {
   agents:     AgentStatus[];
   hook:       HookStatus;
   store:      StoreStatus;
+  credential: CredentialStatus;
   promptEnhancement: PromptEnhancementStoreStatus;
   config:     Record<string, string>;
   hookStats:  ProjectHookStats[];
@@ -109,6 +125,9 @@ export interface StatusInput {
   home?:       string;
   agents?:     DetectedAgent[];  // injectable for tests
   settingsPath?: string;         // injectable for tests
+  projectRoot?: string;          // injectable for tests
+  /** Injectable so a status run in a test never reads the real keychain. */
+  keySourceFn?: (projectRoot: string) => Promise<KeySource>;
 }
 
 export async function runStatus(input: StatusInput): Promise<StatusResult> {
@@ -201,7 +220,16 @@ export async function runStatus(input: StatusInput): Promise<StatusResult> {
     b.lastRunAt.localeCompare(a.lastRunAt),
   );
 
-  return { agents: agentStatuses, hook, store, promptEnhancement, config, hookStats };
+  // ── Credential ─────────────────────────────────────────────────────────────
+  const credentialSource = await (input.keySourceFn ?? getKeySource)(
+    input.projectRoot ?? process.cwd(),
+  );
+  const credential: CredentialStatus = {
+    source: credentialSource,
+    serviceBaseUrl: credentialSource === 'nexpath_token' ? resolveApiBaseUrl() : null,
+  };
+
+  return { agents: agentStatuses, hook, store, credential, promptEnhancement, config, hookStats };
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -242,6 +270,21 @@ export function renderStatus(result: StatusResult): string {
   // lines.push(line(sym, 'Claude Code', detail));
   //
   // lines.push('');
+
+  // ── Credential ────────────────────────────────────────────────────────────
+  // First, because "nothing is firing" is most often "nothing resolves", and
+  // that answer should not be at the bottom of a long dump.
+  lines.push('Credential');
+  const noCredential = result.credential.source === 'none';
+  lines.push(`  Source        : ${result.credential.source}`);
+  if (result.credential.serviceBaseUrl !== null) {
+    lines.push(`  Service       : ${result.credential.serviceBaseUrl}`);
+  }
+  if (noCredential) {
+    lines.push('  None resolves — guidance stays deterministic.');
+    lines.push('  Set one: nexpath config set-api-key  |  nexpath config set-token');
+  }
+  lines.push('');
 
   // ── Prompt store ──────────────────────────────────────────────────────────
   if (result.store.exists) {
@@ -319,7 +362,11 @@ function formatOptionalTimestamp(value: number | null): string {
 export function registerStatusCommand(program: import('commander').Command): void {
   program
     .command('status')
-    .description('Verify MCP connections across detected agents, prompt store stats, and config summary')
+    // ⚠️ "MCP connections" STAYS. It reads as stale — that section is commented
+    // out in renderStatus — but the removal is temporary and a test pins the
+    // word deliberately, so dropping it would quietly undo that decision. The
+    // credential is added beside it because the output now leads with one.
+    .description('Verify MCP connections across detected agents, which credential is in effect, prompt store stats, and config summary')
     .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
     .action(async (opts: { db: string }) => {
       const result = await runStatus({ dbPath: opts.db });

@@ -25,6 +25,7 @@ import type { FlagType, Stage2TriggerResult } from '../../core/stage2.js';
 import type { StageClassifierResult } from '../../classifier/stage-classifier.js';
 import { resolveLanguage } from '../../classifier/LanguageDetector.js';
 import { insertPrompt } from '../../store/prompts.js';
+import { redactSecrets } from '../../store/redact.js';
 import { getConfig } from '../../store/config.js';
 import { getProject, upsertProject } from '../../store/projects.js';
 import { getRecentPrompts } from '../../store/prompts.js';
@@ -1192,7 +1193,27 @@ export async function runAuto(
       profile:           mgr.current.profile,
     },
     openai,
-    { minConfidence: freqConfig.stage2MinConfidence, contextWindow: freqConfig.stage2ContextWindow },
+    {
+      minConfidence: freqConfig.stage2MinConfidence,
+      contextWindow: freqConfig.stage2ContextWindow,
+      // A refused call and a machine with no credential both degrade to the
+      // local classifier and both go quiet, which made "guidance stopped
+      // helping" untraceable. This records WHICH — a construction failure never
+      // reaches the network and so carries no status.
+      //
+      // ⚠️ Reported, not interpreted: the status is written down and nothing
+      // here claims to know what it means. The provider's message is redacted
+      // first — this line lands in ~/.nexpath/nexpath.log, and an error string
+      // is not a place a credential is guaranteed never to appear.
+      onProviderError: (details) => {
+        logger.warn('stage_classifier_provider_error', {
+          status:  details.status,
+          code:    details.code,
+          type:    details.type,
+          message: redactSecrets(details.message).slice(0, 300),
+        });
+      },
+    },
   );
   microClearance.abort();
   const settledClearance = microClearance.read();

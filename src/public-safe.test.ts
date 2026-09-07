@@ -20,7 +20,12 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const OWNED_FILES = [
   'src/config/NexpathTokenStore.ts',
   'src/config/ApiKeyResolver.ts',
+  'src/config/credential-shape.ts',
   'src/cli/commands/token.ts',
+  // The install-time credential copy. It is the ONE file in this seam written to
+  // be read by a user, so it is the one where plan vocabulary would be easiest
+  // to reach for and most visible if it landed.
+  'src/cli/shared/credential-description.ts',
 ];
 
 const sourceFiles = OWNED_FILES.map((relative) => join(ROOT, relative));

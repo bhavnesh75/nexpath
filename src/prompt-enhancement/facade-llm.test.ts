@@ -191,6 +191,58 @@ describe('E4 — facade LLM composer wiring', () => {
     expect(result.modelVersion).toBe('deterministic-v1');
   });
 
+  // ── The credential the guard accepts ──────────────────────────────────────
+  //
+  // The guard asks "do we have something to call with". It used to ask
+  // `isValidApiKey`, which is the narrower "is this an OpenAI key" — so a
+  // perfectly good Nexpath token answered no, the composer was never called at
+  // all, and the popup silently fell back to the deterministic render while the
+  // account's credit was still being spent on the classifier calls upstream.
+  //
+  // These four pin the corrected behaviour in every direction, because the
+  // failure was invisible: nothing threw, nothing logged, and the popup still
+  // appeared.
+
+  const NEXPATH_TOKEN = `npk_${'a'.repeat(43)}`;
+
+  it('a Nexpath token reaches the composer, exactly as an OpenAI key does', async () => {
+    process.env['OPENAI_API_KEY'] = NEXPATH_TOKEN;
+    const result = await preparePromptEnhancement(request());
+    expect(composeStructuredComposerOutputV1).toHaveBeenCalledTimes(1);
+    expect(result.callAndVisibilityMetadata.callVisibilityMode).toBe('llm_wording');
+    expect(result.modelVersion).toBe('llm-wording-v1');
+    expect(result.currentBody.text).toContain('Tailored model wording');
+  });
+
+  it('token mode and key mode produce the same wording outcome for the same prompt', async () => {
+    process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
+    const withKey = await preparePromptEnhancement(request());
+    vi.clearAllMocks();
+
+    process.env['OPENAI_API_KEY'] = NEXPATH_TOKEN;
+    const withToken = await preparePromptEnhancement(request());
+
+    expect(withToken.disposition).toBe(withKey.disposition);
+    expect(withToken.callAndVisibilityMetadata.callVisibilityMode)
+      .toBe(withKey.callAndVisibilityMetadata.callVisibilityMode);
+    expect(withToken.modelVersion).toBe(withKey.modelVersion);
+    expect(withToken.currentBody.text).toBe(withKey.currentBody.text);
+  });
+
+  it('a malformed token is still no credential — the deterministic fallback stands', async () => {
+    process.env['OPENAI_API_KEY'] = 'npk_short';
+    const result = await preparePromptEnhancement(request());
+    expect(composeStructuredComposerOutputV1).not.toHaveBeenCalled();
+    expect(result.modelVersion).toBe('deterministic-v1');
+  });
+
+  it('a value that is neither format is still no credential', async () => {
+    process.env['OPENAI_API_KEY'] = 'not-a-credential-at-all-000000000000';
+    const result = await preparePromptEnhancement(request());
+    expect(composeStructuredComposerOutputV1).not.toHaveBeenCalled();
+    expect(result.modelVersion).toBe('deterministic-v1');
+  });
+
   it('popup actions are INSTANT deterministic (owner decision 2026-08-06): a directional action never calls the LLM', async () => {
     process.env['OPENAI_API_KEY'] = `sk-${'x'.repeat(40)}`;
     const base = await preparePromptEnhancement(request());

@@ -16,6 +16,19 @@ vi.mock('../../config/ApiKeyResolver.js', () => ({
   removeApiKey:    vi.fn().mockResolvedValue(undefined),
 }));
 
+// Step 1 can now store either credential, so the token store needs mocking for
+// the same reason the resolver does: unmocked, `storeNexpathToken` reaches the
+// real OS keychain from a test run. The validator is the real one — a stub
+// would let a fixture drift from the rule it is meant to exercise.
+vi.mock('../../config/NexpathTokenStore.js', async () => {
+  const shape = await import('../../config/credential-shape.js');
+  return {
+    storeNexpathToken:   vi.fn().mockResolvedValue({ source: 'keychain' }),
+    removeNexpathToken:  vi.fn().mockResolvedValue(undefined),
+    isValidNexpathToken: shape.isValidNexpathToken,
+  };
+});
+
 import {
   installAction,
   resolveAgentPaths,
@@ -23,6 +36,7 @@ import {
   type InstallPrompts,
 } from './install.js';
 import * as resolver from '../../config/ApiKeyResolver.js';
+import * as tokenStore from '../../config/NexpathTokenStore.js';
 import { openStore, closeStore } from '../../store/db.js';
 import { getConfig, isConfigSet, setConfig } from '../../store/config.js';
 
@@ -39,6 +53,7 @@ beforeEach(() => {
   delete process.env.OPENAI_API_KEY;
   vi.mocked(resolver.storeApiKey).mockReset().mockResolvedValue({ source: 'keychain' });
   vi.mocked(resolver.getKeySource).mockReset().mockResolvedValue('none');
+  vi.mocked(tokenStore.storeNexpathToken).mockReset().mockResolvedValue({ source: 'keychain' });
 });
 
 afterEach(() => {
@@ -49,7 +64,8 @@ afterEach(() => {
 
 function makePrompts(overrides: Partial<InstallPrompts> = {}): InstallPrompts {
   return {
-    apiKeyPrompt:     async () => ({ kind: 'skip' }),
+    apiKeyPrompt:           async () => ({ kind: 'skip' }),
+    credentialChoicePrompt: async () => 'openai_key',
     ...overrides,
   };
 }
@@ -133,6 +149,117 @@ describe('install 3-step — Step 1: API key', () => {
       expect(resolver.storeApiKey).not.toHaveBeenCalled();
       expect(summary!.apiKey.source).toBe('skipped');
     } finally { cleanup(); }
+  });
+
+  // ── The second credential ───────────────────────────────────────────────
+  //
+  // One credential was required before and one still is; the choice is which,
+  // not whether. So these mirror the key cases above rather than adding a new
+  // shape beside them.
+
+  const TOKEN = `npk_${'a'.repeat(43)}`;
+
+  it('nexpath_token result → storeNexpathToken called; summary source = nexpath_token', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const summary = await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async () => ({ kind: 'nexpath_token', value: TOKEN }),
+        }),
+      });
+      expect(tokenStore.storeNexpathToken).toHaveBeenCalledWith(TOKEN);
+      expect(resolver.storeApiKey).not.toHaveBeenCalled();
+      expect(summary!.apiKey.source).toBe('nexpath_token');
+    } finally { cleanup(); }
+  });
+
+  it('a stored token is offered "keep existing" — hasStoredToken reaches the prompt', async () => {
+    // getKeySource reports the token as its own layer, which is neither
+    // 'keychain' nor 'file'. Before this, a returning token user was prompted
+    // as though nothing were configured.
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('nexpath_token');
+    const seen: unknown[] = [];
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async (ctx) => { seen.push(ctx); return { kind: 'keep_existing' }; },
+        }),
+      });
+      expect(seen[0]).toMatchObject({ hasStoredToken: true, hasStoredKey: false });
+    } finally { cleanup(); }
+  });
+
+  it('a stored OpenAI key still reports hasStoredKey, not hasStoredToken', async () => {
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('keychain');
+    const seen: unknown[] = [];
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async (ctx) => { seen.push(ctx); return { kind: 'keep_existing' }; },
+        }),
+      });
+      expect(seen[0]).toMatchObject({ hasStoredKey: true, hasStoredToken: false });
+    } finally { cleanup(); }
+  });
+
+  it('an environment key suppresses both stored flags, as it always has', async () => {
+    process.env.OPENAI_API_KEY = 'sk-fromenv1234567890abcdefghij1234';
+    vi.mocked(resolver.getKeySource).mockResolvedValueOnce('nexpath_token');
+    const seen: unknown[] = [];
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async (ctx) => { seen.push(ctx); return { kind: 'use_env' }; },
+        }),
+      });
+      expect(seen[0]).toMatchObject({ hasEnvKey: true, hasStoredKey: false, hasStoredToken: false });
+    } finally { cleanup(); }
+  });
+
+  // The summary block is rendered by clack's `note`, which writes straight to
+  // stdout rather than through console.log — so the line has to be read there.
+  it('the Setup Complete summary names which credential was stored', async () => {
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const written: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write')
+      .mockImplementation((chunk: unknown) => { written.push(String(chunk)); return true; });
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      await installAction({}, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        confirmFn: async () => true,
+        promptFn: makePrompts({
+          apiKeyPrompt: async () => ({ kind: 'nexpath_token', value: TOKEN }),
+        }),
+      });
+      stdoutSpy.mockRestore();
+      expect(written.join('')).toContain('Nexpath token');
+    } finally { stdoutSpy.mockRestore(); cleanup(); }
   });
 
   it('cancel result → returns null and writes nothing', async () => {

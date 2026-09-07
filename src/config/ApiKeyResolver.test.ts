@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, statSync, existsSync, accessSync, constants } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, statSync, existsSync, accessSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -36,6 +36,10 @@ import * as keychain from 'cross-keychain';
 const VALID_KEY  = 'sk-abcdefghij1234567890ABCDEFGHIJ';
 const VALID_KEY2 = 'sk-zyxwvutsrq0987654321ABCDEFGHIJ';
 const INVALID_KEY = 'not-a-valid-key';
+// The other credential's field in the same shared file — this module must never
+// touch it. Not imported from the token store: the point is that this side does
+// not know or care what the value is, only that it survives.
+const NEXPATH_TOKEN = 'npk_' + 'a'.repeat(43);
 
 let tmpDir:        string;
 let fallbackPath:  string;
@@ -250,24 +254,118 @@ describe('storeApiKey', () => {
 // ── removeApiKey ─────────────────────────────────────────────────────────────
 
 describe('removeApiKey', () => {
-  it('removes from both keychain and fallback file', async () => {
+  it('removes from the keychain and drops the key from the fallback file', async () => {
     writeFileSync(fallbackPath, JSON.stringify({ openai_api_key: VALID_KEY }), { mode: 0o600 });
     vi.mocked(keychain.deletePassword).mockResolvedValue(undefined);
     await removeApiKey({ fallbackPath });
     expect(keychain.deletePassword).toHaveBeenCalledWith(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
-    expect(existsSync(fallbackPath)).toBe(false);
+    // The file is SHARED with the token store, so it survives; only our own
+    // field goes. Unlinking it used to take a stored token with it.
+    expect(existsSync(fallbackPath)).toBe(true);
+    expect(JSON.parse(readFileSync(fallbackPath, 'utf8')).openai_api_key).toBeUndefined();
+  });
+
+  it('leaves a Nexpath token in the shared file untouched', async () => {
+    writeFileSync(
+      fallbackPath,
+      JSON.stringify({ openai_api_key: VALID_KEY, nexpath_token: NEXPATH_TOKEN }),
+      { mode: 0o600 },
+    );
+    vi.mocked(keychain.deletePassword).mockResolvedValue(undefined);
+    await removeApiKey({ fallbackPath });
+    const onDisk = JSON.parse(readFileSync(fallbackPath, 'utf8'));
+    expect(onDisk.openai_api_key).toBeUndefined();
+    expect(onDisk.nexpath_token).toBe(NEXPATH_TOKEN);
   });
 
   it('silently succeeds when keychain delete throws', async () => {
     writeFileSync(fallbackPath, JSON.stringify({ openai_api_key: VALID_KEY }), { mode: 0o600 });
     vi.mocked(keychain.deletePassword).mockRejectedValue(new Error('NoKeyringError'));
     await expect(removeApiKey({ fallbackPath })).resolves.toBeUndefined();
-    expect(existsSync(fallbackPath)).toBe(false);
+    expect(JSON.parse(readFileSync(fallbackPath, 'utf8')).openai_api_key).toBeUndefined();
   });
 
   it('silently succeeds when fallback file does not exist', async () => {
     vi.mocked(keychain.deletePassword).mockResolvedValue(undefined);
     await expect(removeApiKey({ fallbackPath })).resolves.toBeUndefined();
+  });
+
+  it('does not create a file that was never there', async () => {
+    vi.mocked(keychain.deletePassword).mockResolvedValue(undefined);
+    await removeApiKey({ fallbackPath });
+    expect(existsSync(fallbackPath)).toBe(false);
+  });
+
+  // Sharing the file must not weaken the guarantee this command makes. A file
+  // that is not a JSON object holds nothing either store can read, but it may
+  // still carry the key as raw text — and reporting a removal that did not
+  // happen is worse than removing a file no store can use.
+  it.each([
+    ['unparseable text', `openai_api_key = ${VALID_KEY}`],
+    ['a JSON array',     '[1,2,3]'],
+    ['a JSON string',    JSON.stringify(`openai_api_key = ${VALID_KEY}`)],
+  ])('removes a fallback file that is %s', async (_label, contents) => {
+    writeFileSync(fallbackPath, contents, { mode: 0o600 });
+    vi.mocked(keychain.deletePassword).mockResolvedValue(undefined);
+    await removeApiKey({ fallbackPath });
+    expect(existsSync(fallbackPath)).toBe(false);
+  });
+});
+
+// ── The shared fallback file: neither credential may destroy the other ────────
+//
+// Both stores keep their own field in `~/.nexpath/config.json`. On a machine
+// where the keychain is unavailable that file is the only store there is, so a
+// write or a delete from one side must leave the other side's field alone.
+
+describe('shared fallback file — round trip in both orders', () => {
+  it('storing a key preserves a token already in the file', async () => {
+    writeFileSync(fallbackPath, JSON.stringify({ nexpath_token: NEXPATH_TOKEN }), { mode: 0o600 });
+    vi.mocked(keychain.setPassword).mockRejectedValue(new Error('NoKeyringError'));
+
+    const result = await storeApiKey(VALID_KEY, { fallbackPath });
+    expect(result.source).toBe('file');
+
+    const onDisk = JSON.parse(readFileSync(fallbackPath, 'utf8'));
+    expect(onDisk.openai_api_key).toBe(VALID_KEY);
+    expect(onDisk.nexpath_token).toBe(NEXPATH_TOKEN);
+  });
+
+  it('overwriting the key preserves the token', async () => {
+    writeFileSync(
+      fallbackPath,
+      JSON.stringify({ openai_api_key: VALID_KEY, nexpath_token: NEXPATH_TOKEN }),
+      { mode: 0o600 },
+    );
+    vi.mocked(keychain.setPassword).mockRejectedValue(new Error('NoKeyringError'));
+
+    await storeApiKey(VALID_KEY2, { fallbackPath });
+
+    const onDisk = JSON.parse(readFileSync(fallbackPath, 'utf8'));
+    expect(onDisk.openai_api_key).toBe(VALID_KEY2);
+    expect(onDisk.nexpath_token).toBe(NEXPATH_TOKEN);
+  });
+
+  it('a store into a corrupt file still yields a valid file holding our key', async () => {
+    writeFileSync(fallbackPath, '{ not json at all', { mode: 0o600 });
+    vi.mocked(keychain.setPassword).mockRejectedValue(new Error('NoKeyringError'));
+
+    await storeApiKey(VALID_KEY, { fallbackPath });
+
+    expect(JSON.parse(readFileSync(fallbackPath, 'utf8')).openai_api_key).toBe(VALID_KEY);
+  });
+
+  it('the file keeps 0600 after a merging write', async () => {
+    writeFileSync(fallbackPath, JSON.stringify({ nexpath_token: NEXPATH_TOKEN }), { mode: 0o600 });
+    vi.mocked(keychain.setPassword).mockRejectedValue(new Error('NoKeyringError'));
+
+    await storeApiKey(VALID_KEY, { fallbackPath });
+
+    if (process.platform === 'win32') {
+      expect(() => accessSync(fallbackPath, constants.R_OK | constants.W_OK)).not.toThrow();
+    } else {
+      expect(statSync(fallbackPath).mode & 0o777).toBe(0o600);
+    }
   });
 });
 

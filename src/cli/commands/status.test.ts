@@ -511,6 +511,7 @@ function makeResult(overrides: Partial<StatusResult> = {}): StatusResult {
       errorCount: 0,
     },
     config: { prompt_capture_enabled: 'true', prompt_store_max_per_project: '500', prompt_store_max_db_mb: '100' },
+    credential: { source: 'keychain', serviceBaseUrl: null },
     hookStats: [],
     ...overrides,
   };
@@ -843,5 +844,86 @@ describe('registerStatusCommand — CLI integration', () => {
     expect(out).not.toContain('MCP connections');
     expect(out).toContain('Prompt store');
     expect(out).toContain('Config');
+  });
+});
+
+// ── Credential block ─────────────────────────────────────────────────────────
+//
+// `status` reported neither credential before, so "why is nothing firing?"
+// could not be answered from it — and the answer is very often that nothing
+// resolves. Symmetric: it names whichever is in effect, never token-only.
+
+describe('renderStatus — credential', () => {
+  it('names the source for every OpenAI-key layer, and no service', () => {
+    for (const source of ['env', 'dotenv', 'keychain', 'file'] as const) {
+      const out = renderStatus(makeResult({ credential: { source, serviceBaseUrl: null } }));
+      expect(out).toContain('Credential');
+      expect(out).toContain(`Source        : ${source}`);
+      expect(out).not.toContain('Service       :');
+    }
+  });
+
+  it('names the service in token mode — it is what decides where calls go', () => {
+    const out = renderStatus(makeResult({
+      credential: { source: 'nexpath_token', serviceBaseUrl: 'https://parseos.tech/v1' },
+    }));
+    expect(out).toContain('Source        : nexpath_token');
+    expect(out).toContain('Service       : https://parseos.tech/v1');
+  });
+
+  it('says plainly when nothing resolves, and how to fix it', () => {
+    const out = renderStatus(makeResult({ credential: { source: 'none', serviceBaseUrl: null } }));
+    expect(out).toContain('None resolves');
+    expect(out).toContain('nexpath config set-api-key');
+    expect(out).toContain('nexpath config set-token');
+  });
+
+  it('shows no remedy line when a credential IS resolving', () => {
+    const out = renderStatus(makeResult({ credential: { source: 'keychain', serviceBaseUrl: null } }));
+    expect(out).not.toContain('None resolves');
+    expect(out).not.toContain('nexpath config set-api-key');
+  });
+
+  // First on purpose: the answer to "nothing is firing" should not sit at the
+  // bottom of a long dump.
+  it('comes before the prompt store', () => {
+    const out = renderStatus(makeResult());
+    expect(out.indexOf('Credential')).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf('Credential')).toBeLessThan(out.indexOf('Prompt store'));
+  });
+});
+
+describe('runStatus — credential resolution', () => {
+  let dir: string;
+  beforeEach(() => { dir = tmp(); });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  // ⚠️ Injectable for the reason the other seams here are: an unmocked
+  // getKeySource reaches the real OS keychain from a test run.
+  it('reports whatever the resolver reports, and passes the project root through', async () => {
+    const seen: string[] = [];
+    const result = await runStatus({
+      dbPath: join(dir, 'missing.db'),
+      agents: [],
+      settingsPath: join(dir, 'settings.json'),
+      projectRoot: '/explicit/project',
+      keySourceFn: async (root) => { seen.push(root); return 'file'; },
+    });
+    expect(seen).toEqual(['/explicit/project']);
+    expect(result.credential).toEqual({ source: 'file', serviceBaseUrl: null });
+  });
+
+  it('carries the service base URL only in token mode', async () => {
+    const token = await runStatus({
+      dbPath: join(dir, 'a.db'), agents: [], settingsPath: join(dir, 's.json'),
+      projectRoot: '/p', keySourceFn: async () => 'nexpath_token',
+    });
+    expect(token.credential.serviceBaseUrl).toBe('https://parseos.tech/v1');
+
+    const none = await runStatus({
+      dbPath: join(dir, 'b.db'), agents: [], settingsPath: join(dir, 's.json'),
+      projectRoot: '/p', keySourceFn: async () => 'none',
+    });
+    expect(none.credential.serviceBaseUrl).toBeNull();
   });
 });

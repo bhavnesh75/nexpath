@@ -132,6 +132,52 @@ describe('stage-classifier — degrade path (model unavailable)', () => {
     expect(garbage.degraded).toBe(true);
     expect(garbage.fireRecommendation).toBe(false);
   });
+
+  // ── Telling a refusal apart from having nothing to call with ──────────────
+  //
+  // Both degrade, and both are silent to the user. Before this they were also
+  // indistinguishable afterwards, so "guidance stopped helping" had no
+  // traceable cause. The callback reports the SHAPE of the failure and does not
+  // interpret it — this layer cannot know what a given status means, and for
+  // the Nexpath service which code an exhausted balance returns is unsettled.
+
+  it('reports a refused call, with its status, and still degrades', async () => {
+    const seen: unknown[] = [];
+    const refused = Object.assign(new Error('Insufficient credit'), { status: 402, code: 'insufficient_quota' });
+    const out = await classifyStage(
+      input('write unit tests'),
+      { chat: { completions: { create: async () => { throw refused; } } } } as never,
+      { onProviderError: (d) => seen.push(d) },
+    );
+    expect(out.degraded).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ provider: 'openai', status: 402, code: 'insufficient_quota' });
+  });
+
+  // A construction failure never reaches the network, so it carries no status —
+  // which is exactly what separates "we were refused" from "we never asked".
+  it('a failure with no status is still reported, and carries none', async () => {
+    const seen: Array<{ status?: number }> = [];
+    await classifyStage(
+      input('write unit tests'),
+      { chat: { completions: { create: async () => { throw new Error('missing api key'); } } } } as never,
+      { onProviderError: (d) => seen.push(d) },
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.status).toBeUndefined();
+  });
+
+  it('is NOT called when the model answers, even unusably', async () => {
+    const seen: unknown[] = [];
+    await classifyStage(input('write unit tests'), mockClient(''), { onProviderError: (d) => seen.push(d) });
+    await classifyStage(input('write unit tests'), mockClient('not json'), { onProviderError: (d) => seen.push(d) });
+    expect(seen).toEqual([]);
+  });
+
+  it('is optional — omitting it changes nothing', async () => {
+    const out = await classifyStage(input('write unit tests'), throwingClient());
+    expect(out.degraded).toBe(true);
+  });
 });
 
 describe('stage-classifier — system prompt encodes the hardening requirements', () => {

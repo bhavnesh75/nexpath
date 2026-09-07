@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 vi.mock('../../telemetry/lifecycle-flush.js', () => ({
   flushIfTelemetryOn: vi.fn().mockResolvedValue(undefined),
@@ -26,6 +26,7 @@ import {
   resolveAgentPaths,
   detectAgentsForPlatform,
   detectAgentsForCleanup,
+  NonInteractiveTerminalError,
   writeMcpEntry,
   removeMcpEntry,
   writeOpenCodeEntry,
@@ -46,6 +47,18 @@ import {
 import { buildRoleMenuLines } from '../shared/role-description.js';
 
 afterEach(() => vi.restoreAllMocks());
+
+// ⚠️ `--yes` resolves a credential non-interactively: with a valid key in the
+// environment it STORES it, which on a developer's machine means their real
+// keychain. Whether the suite writes there must not depend on whose shell it
+// runs in, so the variable is cleared for every test in this file and restored
+// afterwards. Tests that want the env branch set it themselves.
+const savedOpenAiKey = process.env.OPENAI_API_KEY;
+beforeEach(() => { delete process.env.OPENAI_API_KEY; });
+afterEach(() => {
+  if (savedOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+  else process.env.OPENAI_API_KEY = savedOpenAiKey;
+});
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -2458,5 +2471,171 @@ describe('ensureLinuxInjectTools', () => {
     });
     expect(mockExec).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('copy to clipboard'));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// `--yes` and the credential.
+//
+// `--yes` cannot prompt, so it used to hard-code 'skipped' — a non-interactive
+// install reported success and left the machine with no credential resolved
+// even when one was sitting right there, which only surfaced much later as
+// "the popup stopped being helpful". It now takes the answer the interactive
+// flow would have DEFAULTED to, and treats both credential formats alike.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('installAction --yes resolves a credential without prompting', () => {
+  const base = (dir: string) => ({
+    paths: resolveAgentPaths(dir, dir, dir),
+    isWin: false,
+    execFn: () => {},
+    skipClipboardCheck: true,
+  });
+
+  it('stores a valid key found in the environment — the env prompt defaults to Yes', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      process.env.OPENAI_API_KEY = 'sk-abcdefghij1234567890ABCDEFGHIJ';
+      const storeSpy = vi.fn(async () => ({ source: 'keychain' as const }));
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: storeSpy,
+        keySourceFn:   async () => 'none' as const,
+      });
+      expect(storeSpy).toHaveBeenCalledWith('sk-abcdefghij1234567890ABCDEFGHIJ');
+      expect(summary?.apiKey.source).toBe('keychain');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('never stores a malformed environment value', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      process.env.OPENAI_API_KEY = 'sk-short';
+      const storeSpy = vi.fn(async () => ({ source: 'keychain' as const }));
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: storeSpy,
+        keySourceFn:   async () => 'none' as const,
+      });
+      expect(storeSpy).not.toHaveBeenCalled();
+      expect(summary?.apiKey.source).toBe('skipped');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('keeps an already-stored key instead of overwriting it', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const storeSpy = vi.fn(async () => ({ source: 'keychain' as const }));
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: storeSpy,
+        keySourceFn:   async () => 'keychain' as const,
+      });
+      expect(storeSpy).not.toHaveBeenCalled();
+      expect(summary?.apiKey.source).toBe('kept');
+    } finally {
+      cleanup();
+    }
+  });
+
+  // The point of the whole change: a token is a working credential, and an
+  // install that called it 'skipped' was reporting the wrong thing.
+  it('recognises an already-stored Nexpath token, exactly as it does a key', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const storeSpy = vi.fn(async () => ({ source: 'keychain' as const }));
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: storeSpy,
+        keySourceFn:   async () => 'nexpath_token' as const,
+      });
+      expect(storeSpy).not.toHaveBeenCalled();
+      // Reported as the token, NOT as 'kept' — the summary renders anything
+      // that is not 'nexpath_token' as "OpenAI key (…)".
+      expect(summary?.apiKey.source).toBe('nexpath_token');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('reports skipped only when nothing at all resolves', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: async () => ({ source: 'keychain' as const }),
+        keySourceFn:   async () => 'none' as const,
+      });
+      expect(summary?.apiKey.source).toBe('skipped');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('a key in the environment wins over a stored token, as everywhere else', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      process.env.OPENAI_API_KEY = 'sk-abcdefghij1234567890ABCDEFGHIJ';
+      const storeSpy = vi.fn(async () => ({ source: 'file' as const }));
+      const summary = await installAction({ yes: true }, {
+        ...base(dir),
+        storeApiKeyFn: storeSpy,
+        keySourceFn:   async () => 'nexpath_token' as const,
+      });
+      expect(storeSpy).toHaveBeenCalledTimes(1);
+      expect(summary?.apiKey.source).toBe('file');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('still does not prompt — the interactive seam is never reached', async () => {
+    const { dir, cleanup } = tmpDir();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const apiKeyPromptSpy = vi.fn(async () => ({ kind: 'skip' as const }));
+      await installAction({ yes: true }, {
+        ...base(dir),
+        promptFn:      { apiKeyPrompt: apiKeyPromptSpy },
+        storeApiKeyFn: async () => ({ source: 'keychain' as const }),
+        keySourceFn:   async () => 'nexpath_token' as const,
+      });
+      expect(apiKeyPromptSpy).not.toHaveBeenCalled();
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Running install without a terminal.
+//
+// The prompt library needs a TTY; with stdin or stdout redirected it threw
+// `ERR_TTY_INIT_FAILED: uv_tty_init returned EBADF` and a stack trace, which
+// told the user nothing about what to do. The failure is now re-described.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('NonInteractiveTerminalError', () => {
+  it('names the command to run and the unattended alternative', () => {
+    const message = new NonInteractiveTerminalError().message;
+    expect(message).toContain('interactive terminal');
+    expect(message).toContain('nexpath install --yes');
+    // The raw failure must not be what the user is shown.
+    expect(message).not.toContain('uv_tty_init');
+    expect(message).not.toContain('EBADF');
+  });
+
+  it('is an Error, so an uncaught one still behaves like any other', () => {
+    const err = new NonInteractiveTerminalError();
+    expect(err).toBeInstanceOf(Error);
+    expect(err.name).toBe('NonInteractiveTerminalError');
   });
 });
