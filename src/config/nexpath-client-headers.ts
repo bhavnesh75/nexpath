@@ -14,12 +14,19 @@ import { isValidNexpathToken } from './credential-shape.js';
  * that way)". It has zero imports so it can be bundled into the browser extension, where
  * `ApiKeyResolver` and `NexpathTokenStore` cannot go. A `process.env` reader belongs nowhere near it.
  *
- * ⚠️ A claim worth correcting for whoever reads this next, because it will otherwise be repeated: it
- * was reported that a `NodeJS.ProcessEnv` signature in `credential-shape.ts` would break
- * `npm run typecheck:ext`. Measured — it does not. `tsconfig.ext-browser.json` includes only
- * `src/core/**` and `src/ext-browser/**`, and nothing under either imports `credential-shape.ts`, so
- * it is not in that graph at all. The separation below is right for the LEAF rule, not because the
- * type-check would have caught it. Do not rely on the type-check to enforce this.
+ * ⚠️ `npm run typecheck:ext` DOES NOT GUARD `credential-shape.ts`. Do not rely on it to.
+ *
+ * It was reported that a `NodeJS.ProcessEnv` signature there would break that check. It does not,
+ * and this was measured twice, on both sides of the one condition that could have mattered —
+ * whether anything in the browser graph imports the file:
+ *
+ *   · here, where nothing under `src/core/**` or `src/ext-browser/**` imports it — passes;
+ *   · on Vedansi's `freeProPlan/0155-token-mode`, where `ext-browser/adapters/llm-credentials.ts`
+ *     DOES import it — passes there too (Vedansi, 2026-09-08).
+ *
+ * The import graph is therefore not what makes this safe, and the first of those two facts stops
+ * being true the moment 0155 merges. The durable part is the conclusion: the separation below stands
+ * on the LEAF rule alone, and a Node-only signature in that file would not be caught.
  *
  * ── WHY THE TOKEN CHECK IS SYNCHRONOUS ───────────────────────────────────────
  * `resolveOpenAIKey` writes the resolved credential into `OPENAI_API_KEY` verbatim, tokens included
