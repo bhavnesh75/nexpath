@@ -132,3 +132,55 @@ export function checkAndRecordCursorInvocation(
     return false; // fail-open — never block the primary invocation
   }
 }
+
+// ── RC78: the twin mirrors a block ───────────────────────────────────────────
+//
+// Devin runs the hooks of one event IN ORDER (docs: system → user → workspace),
+// so the workspace-file twin starts the instant the user-file primary returns.
+// Which exit code the host honours when two hooks answer differently is not
+// documented. The primary therefore leaves a `.blocked` marker beside its claim
+// right before it exits 2, and the twin — which used to exit 0 untouched —
+// exits 2 as well when it finds one. Two blocks are what Windsurf saw before
+// RC64 existed ("one card renders"); a 0 after a 2 is the only combination that
+// could ever release a held prompt, and it no longer occurs.
+
+export const INVOCATION_BLOCKED_SUFFIX = '.blocked';
+
+export function invocationBlockedMarkerPath(projectRoot: string, event: string, key: string, dirName: string): string {
+  return join(projectRoot, '.nexpath', dirName, cursorInvocationMarkerName(event, key) + INVOCATION_BLOCKED_SUFFIX);
+}
+
+/** Written by the primary right before `exit(2)`. Best-effort; never throws. */
+export function markInvocationBlocked(
+  projectRoot: string,
+  event: string,
+  key: string,
+  deps: { dirName?: string; writeFn?: (p: string) => void } = {},
+): boolean {
+  if (!key) return false;
+  try {
+    const dirName = deps.dirName ?? CURSOR_INVOCATION_DIRNAME;
+    try { mkdirSync(join(projectRoot, '.nexpath', dirName), { recursive: true }); } catch { /* exists */ }
+    (deps.writeFn ?? ((p: string) => writeFileSync(p, '', { flag: 'w' })))(invocationBlockedMarkerPath(projectRoot, event, key, dirName));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True when the primary of this (event, key) blocked within the window. Never throws. */
+export function isInvocationBlocked(
+  projectRoot: string,
+  event: string,
+  key: string,
+  deps: { dirName?: string; maxAgeMs?: number; now?: () => number; mtimeMsFn?: (p: string) => number } = {},
+): boolean {
+  if (!key) return false;
+  try {
+    const p = invocationBlockedMarkerPath(projectRoot, event, key, deps.dirName ?? CURSOR_INVOCATION_DIRNAME);
+    const age = (deps.now ?? (() => Date.now()))() - (deps.mtimeMsFn ?? ((q: string) => statSync(q).mtimeMs))(p);
+    return age <= (deps.maxAgeMs ?? CURSOR_INVOCATION_MAX_AGE_MS);
+  } catch {
+    return false;
+  }
+}

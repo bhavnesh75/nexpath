@@ -1,4 +1,4 @@
-import { watch, existsSync as existsSyncDefault, type FSWatcher, type WatchListener } from 'node:fs';
+import { watch, existsSync as existsSyncDefault, statSync as statSyncDefault, type FSWatcher, type WatchListener } from 'node:fs';
 import type {
   ChatHistoryEvent,
   ChatHistoryExtractor,
@@ -111,6 +111,80 @@ export const defaultReadWindsurfJsonFiles: ReadWindsurfJsonFilesFn = async (
  *
  * Pure (fs + path-join injected) so it unit-tests without a real filesystem.
  */
+/**
+ * RC79 — is this failure the NATIVE MODULE refusing to load at all?
+ *
+ * ⚠ ROOT CAUSE (Windows/Cursor tester, 2026-09-08). Cursor and Windsurf ship an
+ * Electron runtime, and an editor auto-update can move that runtime to a new
+ * NODE_MODULE_VERSION (measured: the tester's Cursor moved to Electron 42 =
+ * ABI 146, while the .vsix carried prebuilds up to ABI 145). `better-sqlite3`
+ * then throws on EVERY open:
+ *
+ *   "was compiled against a different Node.js version using NODE_MODULE_VERSION
+ *    143. This version of Node.js requires NODE_MODULE_VERSION 146."
+ *
+ * That failure can NEVER recover inside the running session — no amount of
+ * retrying re-links a native module. But the watcher's polling backstop re-read
+ * every database every `pollMs`, so the identical error was raised 3-5 times
+ * every two seconds for the life of the window: hundreds of lines in the user's
+ * Output channel, and continuous wasted work on the extension host at exactly
+ * the moment the submit flow needs it to be responsive (the same session logged
+ * a 24 s `composer.focusComposer` and a 58 s delivery).
+ *
+ * So a load failure is latched instead of retried: reported ONCE with the ABI
+ * the host actually wants, then chat-history reads stand down for the session.
+ * Only these unrecoverable shapes latch — a locked, malformed, or missing
+ * database is transient and keeps today's retry behaviour exactly.
+ */
+/**
+ * RC79b — refuse to touch the native module on a runtime that would CRASH.
+ *
+ * ⚠ FOUND WHILE CHECKING PUBLISH READINESS, before shipping. better-sqlite3 13
+ * is Node-API (which is what closes the NODE_MODULE_VERSION class), but it
+ * declares `engines.node >= 22` and does not merely warn below that: on Node
+ * 20.19 it SEGFAULTS the process the moment a database is opened (measured
+ * here: exit 139, core dumped). A segfault takes the whole extension host with
+ * it, which is far worse than the error it replaced, and it cannot be caught.
+ *
+ * Electron bundles Node as follows (electron/releases.json, checked 2026-09-08):
+ *   Electron 34 → Node 20.18   ← the only exposed build
+ *   Electron 35-39 → Node 22.x     Electron 40-43 → Node 24.x
+ * So exactly one old editor generation is at risk. Rather than gamble on nobody
+ * running it, the readers ask this first and stand down cleanly, reusing the
+ * RC79 latch (reported once, capture paused, submit flow untouched).
+ *
+ * An unparseable version is treated as SUPPORTED: that is today's behaviour, and
+ * guessing "unsupported" would disable capture for everyone on an odd runtime.
+ */
+export const NATIVE_SQLITE_MIN_NODE_MAJOR = 22;
+export const NATIVE_SQLITE_UNSUPPORTED_MARKER = 'nexpath-native-sqlite-unsupported-runtime';
+
+export function nativeSqliteUnsupportedReason(
+  nodeVersion: string | undefined = process.versions.node,
+): string | null {
+  const major = Number.parseInt(String(nodeVersion ?? '').split('.')[0] ?? '', 10);
+  if (!Number.isFinite(major)) return null; // unknown runtime — behave exactly as before
+  if (major >= NATIVE_SQLITE_MIN_NODE_MAJOR) return null;
+  return `${NATIVE_SQLITE_UNSUPPORTED_MARKER}: the bundled SQLite reader needs Node `
+    + `>= ${NATIVE_SQLITE_MIN_NODE_MAJOR}, but this editor runs Node ${nodeVersion}. `
+    + `Opening a database on this runtime crashes the extension host, so chat-history `
+    + `capture is skipped. Update the editor to re-enable it.`;
+}
+
+export function isUnrecoverableNativeLoadError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes(NATIVE_SQLITE_UNSUPPORTED_MARKER)       // RC79b: runtime too old to open a db safely
+    || m.includes('node_module_version')               // ABI mismatch (the measured case)
+    || m.includes('err_dlopen_failed')                 // dlopen refused the binary
+    || m.includes('was compiled against a different')  // node-gyp's wording
+    || m.includes('is not a valid win32 application')  // wrong arch on Windows
+    || m.includes('invalid elf header')                // wrong arch/platform on Linux
+    || m.includes('incompatible architecture')         // wrong arch on macOS
+    || m.includes("cannot find module 'better-sqlite3'")
+  );
+}
+
 export function resolveBundledNativeBinding(
   extRoot: string | undefined,
   abi: string,
@@ -140,6 +214,10 @@ export function resolveBundledNativeBinding(
  * (cheaper extension startup; only loaded on first chat-history read).
  */
 export const defaultReadItemTable: ReadItemTableFn = async (dbPath) => {
+  // RC79b: never open (or even stage a copy for) a database on a runtime that
+  // would segfault. The latch turns this into one report, then silence.
+  const unsupported = nativeSqliteUnsupportedReason();
+  if (unsupported) throw new Error(unsupported);
   const { copyFile, mkdir, rm } = await import('node:fs/promises');
   const { existsSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
@@ -280,6 +358,8 @@ export interface ChatHistoryWatcherOptions {
   onInfo?: (message: string) => void;
   /** RC53 seam: file-existence probe for the vanished-db check (tests inject). */
   existsSyncFn?: (p: string) => boolean;
+  /** RC80 seam: stat used for the unchanged-content gate. Injected in tests. */
+  statSyncFn?: (p: string) => { size: number; mtimeMs: number };
   /**
    * Emitted when a Cursor target's ItemTable doesn't fingerprint to any
    * known extractor — extension layer surfaces this as a "schema unknown,
@@ -334,6 +414,37 @@ export function createChatHistoryWatcher(
 ): ChatHistoryWatcher {
   const debounceMs = opts.debounceMs ?? 250;
   const pollMs = opts.pollMs ?? 0;
+  // RC79: set once the native module proves unloadable (see
+  // isUnrecoverableNativeLoadError). SQLite reads then stand down for the rest
+  // of the session instead of re-raising the same error on every poll tick.
+  let nativeLoadFailed = false;
+  /**
+   * RC80 — the content signature of each database at its last SUCCESSFUL read.
+   *
+   * ⚠ MEASURED ROOT CAUSE (Windows/Cursor tester, 2026-09-08: "cancelling the
+   * prompt takes so long"). The decision poller runs every 2 s, yet the extension
+   * took 29.6 s to notice a written decision, and a fixed 400 ms settle timer was
+   * measured at 6114 ms. Both are the same symptom: the extension host event loop
+   * is starved ~15x. The cause is this watcher. Every 2 s, for EVERY database, it
+   * copied the whole file plus its WAL to a temp dir and then ran
+   * `SELECT key, value` over `ItemTable` AND `cursorDiskKV` — full scans, no
+   * WHERE, no LIMIT — and better-sqlite3 is synchronous, so the extension host
+   * blocks throughout. Measured on this machine's real Cursor store: the global
+   * database is 51 MB and `cursorDiskKV` holds 6,903 rows totalling 42.5 MB of
+   * values, i.e. ~50 MB copied and ~44 MB pulled into JS strings, per database,
+   * every two seconds. On Windows each of those copies is also scanned by the
+   * antivirus, which is why that machine suffers far more than this one.
+   *
+   * Nearly all of that work was WASTE: emissions are de-duplicated by signature,
+   * so re-reading unchanged bytes emits nothing. Skipping a read whose inputs are
+   * byte-identical is therefore EQUIVALENT, not a behaviour change: identical
+   * bytes produce identical rows, and every one of those rows was already seen.
+   *
+   * Fail-open by construction: if the signature cannot be taken (the file does not
+   * exist, or stat throws), it reads exactly as before. The signature is stored
+   * only AFTER a successful read, so a failed read always retries.
+   */
+  const lastReadSignatures = new Map<string, string>();
   const watchFn = opts.watchFn ?? watch;
   const readItemTableFn = opts.readItemTableFn ?? defaultReadItemTable;
   const readWindsurfJsonFilesFn =
@@ -408,6 +519,21 @@ export function createChatHistoryWatcher(
 
   function reportError(err: unknown, path: string): void {
     const e = err instanceof Error ? err : new Error(String(err));
+    // RC79: an unloadable native module is permanent for this session. Say so
+    // once, in terms the user can act on, then stop reading (the poll backstop
+    // would otherwise repeat this identical error every tick, forever).
+    if (isUnrecoverableNativeLoadError(e.message)) {
+      if (!nativeLoadFailed) {
+        nativeLoadFailed = true;
+        opts.onError?.(new Error(
+          `[chat-history-watcher] chat-history capture is paused for this session: this editor's `
+          + `native module could not be loaded (it needs NODE_MODULE_VERSION ${process.versions.modules}). `
+          + `The editor updated its runtime; install a Nexpath build that ships a matching prebuild. `
+          + `Everything else — the submit popup and its delivery — is unaffected. Original error: ${e.message}`,
+        ));
+      }
+      return;
+    }
     opts.onError?.(new Error(`[chat-history-watcher] ${path}: ${e.message}`));
   }
 
@@ -433,9 +559,40 @@ export function createChatHistoryWatcher(
     reportError(err, path);
   }
 
+  /**
+   * RC80: size+mtime of the main database and its WAL/SHM siblings. SQLite writes
+   * go to the WAL, so the WAL is the part that actually moves between polls.
+   * Returns null when nothing can be stat'd, which the caller treats as "changed".
+   */
+  function sqliteContentSignature(path: string): string | null {
+    const statFn = opts.statSyncFn ?? statSyncDefault;
+    const parts: string[] = [];
+    for (const suffix of ['', '-wal', '-shm'] as const) {
+      try {
+        const st = statFn(path + suffix);
+        parts.push(`${suffix}:${st.size}:${st.mtimeMs}`);
+      } catch {
+        parts.push(`${suffix}:-`); // absent is itself a stable, meaningful state
+      }
+    }
+    return parts.every((p) => p.endsWith(':-')) ? null : parts.join('|');
+  }
+
   async function processSqliteTarget(target: WatchTarget): Promise<void> {
+    // RC79: the native module is unloadable — nothing here can succeed, and
+    // retrying is what flooded the host. Windsurf's JSON targets are untouched.
+    if (nativeLoadFailed) return;
+    // RC80: nothing has changed since the last successful read, so a re-read would
+    // copy ~50 MB, scan it, and emit nothing. Skip it and leave the host free.
+    const signature = sqliteContentSignature(target.path);
+    if (signature !== null && lastReadSignatures.get(target.path) === signature) return;
     try {
       const rows = await readItemTableFn(target.path);
+      // RC80: the costly part is done and these exact bytes are now accounted
+      // for. Recorded here rather than at the end so the early returns below
+      // (unknown schema) also stop re-reading. A THROWN read never records, so
+      // a transient failure still retries on the next tick.
+      if (signature !== null) lastReadSignatures.set(target.path, signature);
       const isInitialPass = !primedTargets.has(target.path);
       primedTargets.add(target.path);
 

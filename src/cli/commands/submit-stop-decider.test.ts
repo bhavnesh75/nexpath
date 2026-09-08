@@ -22,6 +22,7 @@ vi.mock('../../store/pending-sequences.js', async (importOriginal) => {
   };
 });
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import {
   buildStopDrivenPromptSubmitDecider,
@@ -631,5 +632,147 @@ describe('⭐ RC70 — the decider refuses to block without a deliverer', () => 
     expect(await decide('beforeSubmitPrompt', { project: '/proj' }, '')).toBe('allow');          // empty prompt
     expect(await decide('beforeSubmitPrompt', { project: '/proj' }, 'x')).toBe('allow');         // unwritable root
     expect(readDelivererState).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⭐ RC76 — a previous prompt's suggestion must never be the popup for this one.
+ *
+ * Tester report 2026-09-08: the popup on the 4th prompt showed the 3rd prompt's content.
+ * `stop` pops the newest pending row for the project with no check that it belongs to
+ * THIS prompt, and `auto` never clears an older row on a no-popup turn. The decider now
+ * consumes every row created before this turn's `auto` started, in the instant before
+ * `stop` is spawned. These pins go through the consumer seam; the store semantics of the
+ * consumer itself are pinned in submit-expiry-consumer.test.ts (RC71).
+ */
+describe('⭐ RC76 — stale rows from earlier turns are consumed before stop runs', () => {
+  const armed = { readDelivererState: (() => ({ state: 'armed' as const })) as never };
+  function build(over: Record<string, unknown>, events: string[]) {
+    // The child is created INSIDE spawnFn: with a boundary the decider awaits the store
+    // before spawning, so a child created up-front would emit `exit` before listeners
+    // attach — in production the child does not exist until `spawn` either.
+    return buildStopDrivenPromptSubmitDecider(
+      { project: '/proj' },
+      {
+        host: 'cursor', mkdirFn: (() => {}) as never,
+        spawnFn: (() => { events.push('spawn:stop'); return fakeChild('').child; }) as never,   // stop shows nothing ⇒ allow
+        writeDecision: vi.fn(async () => {}) as never,
+        logEvent: ((_l: string, name: string, data: unknown) => { events.push(`log:${name}:${JSON.stringify(data)}`); }) as never,
+        openStoreFn: (async () => { events.push('store:open'); return { db: 'fake' }; }) as never,
+        closeStoreFn: (() => { events.push('store:close'); }) as never,
+        ...armed,
+        ...over,
+      },
+    );
+  }
+
+  it('⭐ with a turn boundary: the consumer runs BEFORE stop is spawned, with before = turnStartedAt - 1, on the project root', async () => {
+    const events: string[] = [];
+    const consume = vi.fn((_s: unknown, input: { projectRoot: string; before: number }) => { events.push(`consume:${input.projectRoot}:${input.before}`); return { advisories: 0, promptEnhancements: 1 }; });
+    const decide = build({ consumeStaleRows: consume }, events);
+    await expect(decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 1_000_000 }, 'p')).resolves.toBe('allow');
+    expect(consume).toHaveBeenCalledTimes(1);
+    const consumeAt = events.findIndex((e) => e.startsWith('consume:'));
+    expect(events[consumeAt]).toBe('consume:/proj:999999');
+    expect(consumeAt).toBeLessThan(events.indexOf('spawn:stop'));
+    expect(events.indexOf('store:open')).toBeLessThan(consumeAt);
+    expect(events.indexOf('store:close')).toBeLessThan(events.indexOf('spawn:stop'));
+    // Something was consumed ⇒ it is said in the log, with the boundary.
+    expect(events.some((e) => e.startsWith('log:submit_stop_decider_stale_rows_consumed:') && e.includes('"prompt_enhancements":1') && e.includes('"before":999999'))).toBe(true);
+  });
+
+  it('⭐ no turn boundary (the shipped call shape) ⇒ no store is opened and nothing is consumed before stop — byte-identical', async () => {
+    const events: string[] = [];
+    const consume = vi.fn(() => ({ advisories: 0, promptEnhancements: 0 }));
+    const decide = build({ consumeStaleRows: consume }, events);
+    await expect(decide('beforeSubmitPrompt', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    expect(consume).not.toHaveBeenCalled();
+    expect(events.slice(0, events.indexOf('spawn:stop'))).not.toContain('store:open');
+    for (const bad of [0, -1, Number.NaN]) {
+      events.length = 0;
+      await decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: bad }, 'p');
+      expect(consume).not.toHaveBeenCalled();
+    }
+  });
+
+  it('nothing stale ⇒ silent (no consumed-log line), stop runs as before', async () => {
+    const events: string[] = [];
+    const decide = build({ consumeStaleRows: vi.fn(() => ({ advisories: 0, promptEnhancements: 0 })) }, events);
+    await decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p');
+    expect(events.some((e) => e.includes('stale_rows_consumed'))).toBe(false);
+    expect(events).toContain('spawn:stop');
+  });
+
+  it('⭐ fail-open: the consumer throwing, or the store not opening, is logged and stop still runs', async () => {
+    const e1: string[] = [];
+    const d1 = build({ consumeStaleRows: () => { throw new Error('locked'); } }, e1);
+    await expect(d1('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    expect(e1).toContain('spawn:stop');
+    expect(e1.some((e) => e.startsWith('log:submit_stop_decider_stale_sweep_failed:') && e.includes('locked'))).toBe(true);
+    expect(e1).toContain('store:close');            // the store is closed even when the consumer threw
+
+    const e2: string[] = [];
+    const d2 = build({ openStoreFn: async () => { e2.push('store:open-failed'); throw new Error('no store'); }, consumeStaleRows: vi.fn() }, e2);
+    await expect(d2('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    expect(e2).toContain('spawn:stop');
+    expect(e2.some((e) => e.startsWith('log:submit_stop_decider_stale_sweep_failed:'))).toBe(true);
+  });
+
+  it('the sweep runs only when a popup is about to be shown: a not-armed deliverer returns allow with no store touched', async () => {
+    const events: string[] = [];
+    const consume = vi.fn(() => ({ advisories: 0, promptEnhancements: 0 }));
+    const decide = build({ consumeStaleRows: consume, readDelivererState: (() => ({ state: 'not_armed' as const, reason: 'consent' })) as never }, events);
+    await expect(decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    expect(consume).not.toHaveBeenCalled();
+    expect(events).not.toContain('spawn:stop');
+  });
+
+  it('⭐ both hooks pass this turn\'s auto start as the boundary (structural)', () => {
+    const cursor = readFileSync(fileURLToPath(new URL('./cursor-hook.ts', import.meta.url)), 'utf8');
+    const windsurf = readFileSync(fileURLToPath(new URL('./windsurf-hook.ts', import.meta.url)), 'utf8');
+    expect(cursor).toContain("d('beforeSubmitPrompt', { project: pl.projectRoot, turnStartedAt }, pl.promptText ?? '')");
+    expect(cursor).toContain('turnStartedAt = autoStartedAt; // RC76');
+    expect(windsurf).toContain('decidePromptSubmit(event, { ...opts, turnStartedAt }, pendingPromptText)');
+    expect(windsurf).toContain('turnStartedAt = autoStartedAt; // RC76');
+  });
+});
+
+// ── RC78: the record names the process the host waits on ────────────────────
+describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () => {
+  it('stamps the caller-supplied pids on a block record (the detached supervisor passes the HOOK\'s)', async () => {
+    const writeDecision = vi.fn(async () => {});
+    const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+      host: 'windsurf',
+      spawnFn: (() => child) as never,
+      writeDecision: writeDecision as never,
+      mkdirFn: (() => undefined) as never,
+      readDelivererState: (() => ({ state: 'absent' })) as never,
+      logEvent: () => {},
+      ...FAKE_SWEEP_STORE,
+      hookPid: 1111,
+      hookShellPid: 2222,
+    });
+    await expect(decide('pre_user_prompt', { project: '/p' }, 'prompt')).resolves.toBe('block');
+    expect(writeDecision).toHaveBeenCalledTimes(1);
+    expect((writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({ hookPid: 1111, hookShellPid: 2222 });
+  });
+
+  it('without the ports the record still names THIS process (byte-identical to RC77 for in-process callers)', async () => {
+    const writeDecision = vi.fn(async () => {});
+    const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+      host: 'windsurf',
+      spawnFn: (() => child) as never,
+      writeDecision: writeDecision as never,
+      mkdirFn: (() => undefined) as never,
+      readDelivererState: (() => ({ state: 'absent' })) as never,
+      logEvent: () => {},
+      ...FAKE_SWEEP_STORE,
+    });
+    await decide('pre_user_prompt', { project: '/p' }, 'prompt');
+    const rec = (writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    expect(rec.hookPid).toBe(process.pid);
+    if (process.platform !== 'win32') expect('hookShellPid' in rec).toBe(false);
   });
 });

@@ -30,8 +30,10 @@ import { activateDarwinApp, activateDarwinAppWindow } from './darwin-focus.js';
 import {
   parseWmctrlList,
   rankEditorWindows,
+  isOurWindowTitle,
   type EditorWindowTarget,
 } from './editor-window-target.js';
+import { darwinEditorIsFrontmost } from './darwin-focus.js';
 
 export interface AutoPasteDeps {
   /**
@@ -58,6 +60,22 @@ export interface AutoPasteDeps {
    * WM_CLASS. Absent ⇒ the pre-RC73 class raise, byte-identical.
    */
   windowTarget?: EditorWindowTarget;
+  /**
+   * RC75: why a paste was REFUSED (which window was in front). Only ever called with a
+   * window title or a diagnostic — never with the pasted text.
+   */
+  refused?: (reason: string) => void;
+  /** Run `cmd args` and return its status + stdout (test seam for the win32 script). */
+  runStatus?: (cmd: string, args: string[]) => { status: number | null; stdout: string };
+}
+
+function defaultRunStatus(cmd: string, args: string[]): { status: number | null; stdout: string } {
+  try {
+    const r = spawnSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], timeout: WIN32_KEYSTROKE_TIMEOUT_MS, encoding: 'utf8' });
+    return { status: r.status, stdout: r.stdout ?? '' };
+  } catch {
+    return { status: null, stdout: '' };
+  }
 }
 
 /**
@@ -208,6 +226,15 @@ export function pasteKeystroke(deps: AutoPasteDeps = {}): boolean {
   const run = deps.run ?? defaultRun;
 
   if (platform === 'darwin') {
+    // RC75 (macOS): the submit key has had F-9's "editor frontmost" gate; the paste never did.
+    // With the target known, refuse to paste into whatever application is in front.
+    if (deps.windowTarget?.appName) {
+      const frontDeps = deps.runCapture ? { runCapture: deps.runCapture } : {};
+      if (!darwinEditorIsFrontmost([deps.windowTarget.appName], frontDeps)) {
+        deps.refused?.(`another application is frontmost, not ${deps.windowTarget.appName}`);
+        return false;
+      }
+    }
     return run('osascript', [
       '-e',
       'tell application "System Events" to keystroke "v" using command down',
@@ -223,13 +250,13 @@ export function pasteKeystroke(deps: AutoPasteDeps = {}): boolean {
       // RC72: the cached user32 helper (see win32HelperPrelude) — no per-keystroke compile.
       const script = buildWin32KeystrokeScript(deps.win32Titles, '^v', { helperDll: win32HelperAssemblyPath(env), target: deps.windowTarget });
       if (deps.run) return deps.run('powershell', ['-NoProfile', '-Command', script]);
-      try {
-        return spawnSync('powershell', ['-NoProfile', '-Command', script], {
-          stdio: 'ignore', timeout: WIN32_KEYSTROKE_TIMEOUT_MS,
-        }).status === 0;
-      } catch {
-        return false;
-      }
+      // RC75: the script now REFUSES (exit 1, "FOREGROUND=<title>") when the editor is not the
+      // window in front at the instant of typing; surface that reason instead of "no tool".
+      const res = (deps.runStatus ?? defaultRunStatus)('powershell', ['-NoProfile', '-Command', script]);
+      if (res.status === 0) return true;
+      const fg = res.stdout.split('\n').map((l) => l.trim()).find((l) => l.startsWith('FOREGROUND='));
+      deps.refused?.(fg ? fg.slice('FOREGROUND='.length) : `powershell exited ${res.status ?? 'null'}`);
+      return false;
     }
     return run('powershell', [
       '-NoProfile', '-Command',
@@ -238,6 +265,16 @@ export function pasteKeystroke(deps: AutoPasteDeps = {}): boolean {
   }
   // Linux (X11 / Wayland-with-tool)
   if (!env.DISPLAY && !env.WAYLAND_DISPLAY) return false;
+  // RC75 (Linux): the same instant-before-typing gate as win32. The raise may have brought
+  // our window forward, and the user may have switched away since — read what is in front
+  // NOW and refuse anything that is not this host's window. No xdotool ⇒ prior behaviour.
+  if (deps.windowTarget && has('xdotool')) {
+    const active = (deps.runCapture ?? defaultRunCapture)('xdotool', ['getactivewindow', 'getwindowname']);
+    if (!isOurWindowTitle(active, deps.windowTarget)) {
+      deps.refused?.(`"${active ?? '<unreadable>'}" is in front, not this editor window`);
+      return false;
+    }
+  }
   if (has('xdotool')) return run('xdotool', ['key', '--clearmodifiers', 'ctrl+v']);
   if (has('wtype')) return run('wtype', ['-M', 'ctrl', 'v', '-m', 'ctrl']);
   if (has('ydotool')) return run('ydotool', ['key', '29:1', '47:1', '47:0', '29:0']); // ctrl+v

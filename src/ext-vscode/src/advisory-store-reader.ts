@@ -1,3 +1,4 @@
+import { nativeSqliteUnsupportedReason } from './chat-history-watcher.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -70,6 +71,10 @@ export async function stagedGetRow(
   const { basename, join: pjoin } = await import('node:path');
 
   if (!existsSync(dbPath)) return null;
+  // RC79b: on a runtime below the reader's minimum Node, opening a database
+  // segfaults the extension host. Degrade to "no row" (this function's normal
+  // failure result) instead of crashing the editor.
+  if (nativeSqliteUnsupportedReason() !== null) return null;
 
   const stagingDir = pjoin(
     tmpdir(),

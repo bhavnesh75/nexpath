@@ -135,6 +135,9 @@ describe('H4 — every named failure mode releases the prompt unmodified (A3)', 
     const f = fakeBudget(60_000);
     const exits = await run({
       holdBudget: f.budget,
+      // RC77: the popup has its OWN window now (30 min by default); make it explicit here so
+      // this pin keeps its arithmetic — "no decision within the popup window ⇒ released".
+      popupWaitBudgetMs: () => 60_000,
       decidePromptSubmit: () => new Promise(() => { f.advance(60_000); }), // never resolves
     });
     expect(exits).not.toContain(2);
@@ -147,6 +150,7 @@ describe('H4 — every named failure mode releases the prompt unmodified (A3)', 
     const f = fakeBudget(60_000);
     const exits = await run({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77: explicit popup window (see above)
       decidePromptSubmit: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }),
     });
     expect(exits).not.toContain(2);

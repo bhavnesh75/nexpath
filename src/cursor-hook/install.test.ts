@@ -13,6 +13,7 @@ import {
   writeCursorHooks, removeCursorHooks, buildCursorHookEntry, buildCursorHookCommand, buildCursorHooksConfig,
   isNexpathCursorHook, getCursorUserHooksPath, getCursorProjectHooksPath,
   CURSOR_HOOK_TIMEOUT_SECONDS, CURSOR_HOOK_EVENTS,
+  readRegisteredCursorHookTimeoutSec,
 } from './install.js';
 
 const CLI = '/opt/nexpath/dist/cli/index.js';
@@ -28,13 +29,16 @@ describe('⚠ R4 — timeout is written in SECONDS, not milliseconds', () => {
     // Cursor multiplies by 1000: "timeout": 180000 was logged as 180000000ms.
     // Emitting ms here would produce a timeout ~1000x too long, so a hung hook
     // would appear to hang forever.
-    expect(buildCursorHookEntry(CLI, 'beforeSubmitPrompt').timeout).toBe(120);
-    expect(CURSOR_HOOK_TIMEOUT_SECONDS).toBe(120);
+    expect(buildCursorHookEntry(CLI, 'beforeSubmitPrompt').timeout).toBe(1900);
+    expect(CURSOR_HOOK_TIMEOUT_SECONDS).toBe(1900);
   });
 
   it('is a plausible SECONDS value, never a milliseconds one', () => {
     // MUTATION GUARD: 120_000 would pass a naive "is it set?" check.
-    expect(CURSOR_HOOK_TIMEOUT_SECONDS).toBeLessThan(1000);
+    // RC77: the popup may wait up to 30 minutes (1800 s); the registration sits above that and
+    // below an hour. A milliseconds mistake would be ≥ 60_000 — still caught.
+    expect(CURSOR_HOOK_TIMEOUT_SECONDS).toBeGreaterThan(1800);
+    expect(CURSOR_HOOK_TIMEOUT_SECONDS).toBeLessThan(3600);
   });
 
   it('⚠ R3 — sits above H4\'s 60-90s hold budget, never relying on the 60s default', () => {
@@ -61,11 +65,11 @@ describe('registered events (RC41)', () => {
     expect(Object.keys(buildCursorHooksConfig(CLI))).toEqual(['beforeSubmitPrompt', 'afterAgentResponse']);
   });
 
-  it('⭐ RC41 — the continuation entry carries the LONG timeout (600s, human-wait popup)', () => {
+  it('⭐ RC41/RC77 — both entries carry explicit human-wait timeouts: submit 1900 s (RC77), continuation 600 s (RC41)', () => {
     const cfg = buildCursorHooksConfig(CLI);
     expect(cfg.afterAgentResponse[0].timeout).toBe(600);
     // The submit entry keeps its measured 120s — unchanged.
-    expect(cfg.beforeSubmitPrompt[0].timeout).toBe(120);
+    expect(cfg.beforeSubmitPrompt[0].timeout).toBe(1900);
     // Both commands carry the event name they serve.
     expect(cfg.afterAgentResponse[0].command).toContain('cursor-hook afterAgentResponse');
   });
@@ -349,5 +353,49 @@ describe('⭐ RC25 — the hook command carries an ABSOLUTE node path (never bar
   it('⭐ isNexpathCursorHook still identifies the entry (command-substring detection unaffected)', () => {
     const e = buildCursorHookEntry('/cli/index.js', 'beforeSubmitPrompt');
     expect(isNexpathCursorHook(e)).toBe(true);
+  });
+});
+
+/**
+ * ⭐ RC77 — the registration is what bounds the popup wait on Cursor, so (a) re-running setup
+ * over an install that still carries the old 120 s must yield the new value, and (b) the
+ * hook must be able to read back what THIS machine registered.
+ */
+describe('⭐ RC77 — registered timeout: upgrade path + read-back', () => {
+  it('⭐ writing over an existing entry with the old 120 s replaces it with 1900 s, other tools untouched', () => {
+    const t = tmp();
+    try {
+      mkdirSync(dirname(t.file), { recursive: true });
+      writeFileSync(t.file, JSON.stringify({
+        version: 1,
+        hooks: {
+          beforeSubmitPrompt: [
+            { command: '"/usr/bin/node" "/x/dist/cli/index.js" cursor-hook beforeSubmitPrompt', timeout: 120 },
+            { command: 'other-tool --pre', timeout: 5 },
+          ],
+        },
+      }));
+      writeCursorHooks(t.file, CLI);
+      const data = JSON.parse(readFileSync(t.file, 'utf8')) as { hooks: Record<string, Array<{ command: string; timeout?: number }>> };
+      const ours = data.hooks.beforeSubmitPrompt.filter((e) => e.command.includes('cursor-hook'));
+      expect(ours).toHaveLength(1);
+      expect(ours[0]!.timeout).toBe(1900);
+      expect(data.hooks.beforeSubmitPrompt.find((e) => e.command === 'other-tool --pre')?.timeout).toBe(5);
+    } finally { t.cleanup(); }
+  });
+  it('⭐ readRegisteredCursorHookTimeoutSec returns our entry\'s value, and null for absent / malformed / foreign entries', () => {
+    const t = tmp();
+    try {
+      mkdirSync(dirname(t.file), { recursive: true });
+      writeCursorHooks(t.file, CLI);
+      expect(readRegisteredCursorHookTimeoutSec(t.file)).toBe(1900);
+      writeFileSync(t.file, JSON.stringify({ hooks: { beforeSubmitPrompt: [{ command: 'other-tool', timeout: 7 }] } }));
+      expect(readRegisteredCursorHookTimeoutSec(t.file)).toBeNull();
+      writeFileSync(t.file, '{not json');
+      expect(readRegisteredCursorHookTimeoutSec(t.file)).toBeNull();
+      expect(readRegisteredCursorHookTimeoutSec(t.file + '.missing')).toBeNull();
+      writeFileSync(t.file, JSON.stringify({ hooks: { beforeSubmitPrompt: [{ command: 'x cursor-hook beforeSubmitPrompt' }] } }));
+      expect(readRegisteredCursorHookTimeoutSec(t.file)).toBeNull();   // no timeout field ⇒ Cursor's default applies upstream
+    } finally { t.cleanup(); }
   });
 });
