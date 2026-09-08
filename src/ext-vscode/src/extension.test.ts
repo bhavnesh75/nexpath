@@ -1726,6 +1726,9 @@ describe('RC73 window targeting is wired, not just available', () => {
     expect((src.match(/pasteKeystroke\(\{/g) ?? []).length).toBe(4);
     expect((src.match(/submitKeystroke\(\{/g) ?? []).length).toBe(3);
     expect(targeted.length).toBe(7 + 4 + 3);   // raises + pastes + submits, none left blind
+    // RC75: every paste site reports a refusal (the window that was in front) instead of typing into it.
+    expect((src.match(/refused: \(r\) =>/g) ?? []).length).toBe(4);
+    expect(src).toContain('paste REFUSED');
     expect(src).toContain('function editorWindowTarget(): EditorWindowTarget');
     expect(src).toContain('appName: vscode.env.appName, workspaceName: vscode.workspace.name');
   });

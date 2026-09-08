@@ -1,3 +1,4 @@
+import { createHoldBudget } from './submit-hold-budget.js';
 import { describe, it, expect, vi } from 'vitest';
 import { SUBMIT_POPUP_MIN_REMAINING_MS } from './submit-expiry-consumer.js';
 vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
@@ -618,7 +619,7 @@ describe('⭐ RC64 — duplicate windsurf invocations (global + workspace both e
     expect(calls[0]!.deps.maxAgeMs).toBeUndefined(); // execution_id is unique per action — cursor default window
     expect(calls[1]!.key.startsWith('t-')).toBe(true);
     expect(calls[1]!.deps.maxAgeMs).toBe(WINDSURF_FALLBACK_WINDOW_MS);
-    expect(none).toEqual({ duplicate: false, key_kind: 'none' });
+    expect(none).toEqual({ duplicate: false, key_kind: 'none', key: '' }); // RC78: the key rides along for the twin mirror
     expect(calls).toHaveLength(2); // the keyless payload never reached the guard
   });
 
@@ -810,6 +811,56 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
       env: {}, logEvent: c.logEvent, exit: () => {},
     }) as never);
     expect(c.logEvent).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⭐ RC77 — the popup waits for the human. Devin/Windows tester, 2026-09-08: the popup
+   * vanished at the shared 75 s while they were still reading and the held prompt ran.
+   * Windsurf/Devin never kill a hook (spike-measured), so the popup gets its own window.
+   */
+  describe('⭐ RC77 — the popup outlives the preparation budget (real budget, virtual clock)', () => {
+    function virtualBudget(totalMs: number) {
+      let t = 0; const timers: Array<{ at: number; fn: () => void }> = [];
+      const budget = createHoldBudget({
+        totalMs, now: () => t,
+        setTimeoutFn: (fn, ms) => { const e = { at: t + ms, fn }; timers.push(e); return e; },
+        clearTimeoutFn: (h) => { const i = timers.indexOf(h as never); if (i >= 0) timers.splice(i, 1); },
+      });
+      return { budget, advance(ms: number) { t += ms; for (const e of [...timers]) if (e.at <= t) { timers.splice(timers.indexOf(e), 1); e.fn(); } } };
+    }
+    it('⭐ preparation 60 s, popup window 30 min: a block chosen after 5 minutes still blocks (exit 2)', async () => {
+      const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
+      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+        logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 30 * 60_000,
+        decidePromptSubmit: () => new Promise((r) => { v.advance(5 * 60_000); setTimeout(() => r('block' as const), 0); }),
+        exit: (code: number) => { exits.push(code); },
+      }) as never);
+      expect(exits).toEqual([2]);
+      expect(c.find('windsurf_hook_hold_expired')).toHaveLength(0);
+      expect(c.find('windsurf_hook_popup_budget')[0]!.data).toMatchObject({ popup_wait_ms: 30 * 60_000 });
+      expect(c.find('windsurf_hook_hold_split')[0]!.data).toMatchObject({ decision: 'block', decider_timed_out: false });
+    });
+    it('the popup window still expires (a forgotten popup is not forever) — same fail-open as RC67', async () => {
+      const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
+      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+        logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 120_000,
+        decidePromptSubmit: () => new Promise(() => { v.advance(120_000); }),
+        exit: (code: number) => { exits.push(code); },
+      }) as never);
+      expect(exits).toEqual([0]);
+      expect(c.find('windsurf_hook_hold_expired')[0]!.data.segment).toBe('decider');
+    });
+    it('an exhausted preparation never grants a popup window', async () => {
+      const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
+      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+        logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 30 * 60_000,
+        readStdin: async () => { v.advance(60_000); return PAYLOAD; },
+        decidePromptSubmit: async () => 'block' as const,
+        exit: (code: number) => { exits.push(code); },
+      }) as never);
+      expect(exits).toEqual([0]);
+      expect(c.find('windsurf_hook_popup_budget')).toHaveLength(0);
+    });
   });
 });
 

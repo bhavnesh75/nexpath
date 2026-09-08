@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { nexpathClientHeaders } from '../config/nexpath-client-headers.js';
 import {
   PROMPT_ENHANCEMENT_FAMILIES,
   PROMPT_ENHANCEMENT_PRIMARY_INTENTS,
@@ -124,7 +125,10 @@ export async function decidePromptEnhancementRouteViaLlmV1(
 ): Promise<PromptEnhancementLlmRouteDecisionV1 | undefined> {
   let openai: PromptEnhancementComposerClientV1;
   try {
-    openai = client ?? (new OpenAI() as unknown as PromptEnhancementComposerClientV1);
+    // Token attribution rides on the client, never on the call: `defaultHeaders` is applied by the
+    // SDK to every request this client makes. `undefined` — which is what an own-key user gets — is
+    // the same as passing nothing, so their requests are unchanged by this.
+    openai = client ?? (new OpenAI({ defaultHeaders: nexpathClientHeaders() }) as unknown as PromptEnhancementComposerClientV1);
   } catch {
     return undefined;
   }

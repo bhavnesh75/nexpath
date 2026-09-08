@@ -52,6 +52,62 @@ export interface HoldBudget {
    * the budget itself.
    */
   run: <T>(work: () => Promise<T>) => Promise<{ timedOut: boolean; value?: T }>;
+  /**
+   * RC77: grant the NEXT segment its own window — the deadline becomes now + ms, ignoring
+   * the preparation clamp. Only the real budget implements it; hook fakes may omit it, and
+   * the hooks call it as `hold.extendFor?.(…)`, so a fake keeps its own arithmetic.
+   */
+  extendFor?: (ms: number) => void;
+  /** RC77: time since the hold started, on the budget's own clock. */
+  elapsed?: () => number;
+}
+
+/**
+ * RC77 — the popup waits for the HUMAN, and a human reading a prepared prompt body takes
+ * as long as it takes (tester report, Devin/Windows, 2026-09-08: the popup vanished and
+ * the held prompt ran while they were still reading). The measured facts (the executed
+ * host-timeout spike): Windsurf/Devin NEVER kill a hook — a 300 s hook ran 205 s+ while
+ * Cascade waited; Cursor honours a configured `timeout` (unit: SECONDS) and only fails open
+ * at its 60 s default when none is set. So the 75 s cliff was entirely our own shared hold.
+ *
+ * The preparation segments (stdin + `auto`) keep the clamped shared hold — a stuck `auto`
+ * must never hold a prompt for long. The popup segment gets THIS budget instead:
+ *   - default 30 minutes, overridable with NEXPATH_SUBMIT_POPUP_WAIT_MS (a positive integer);
+ *   - on Cursor, never past the registered hook timeout minus a margin, because at that
+ *     timeout Cursor releases the prompt AND orphans the hook (R2) — if the registration is
+ *     unreadable, Cursor's measured 60 s default is assumed;
+ *   - on Windsurf/Devin there is no host ceiling, so the cap alone applies.
+ * A forgotten popup therefore still cannot hold an editor prompt for hours, and on Cursor
+ * our own expiry always fires BEFORE the host's, so the RC68 kill reach still finds the popup.
+ */
+export const DEFAULT_POPUP_WAIT_MS = 30 * 60_000;
+export const POPUP_WAIT_ENV = 'NEXPATH_SUBMIT_POPUP_WAIT_MS';
+/** Cursor's measured default when no `timeout` is registered (spike, 2026-08). */
+export const CURSOR_DEFAULT_HOOK_TIMEOUT_S = 60;
+/** Leave this much of Cursor's window unused so our expiry precedes the host's. */
+export const CURSOR_HOST_TIMEOUT_MARGIN_MS = 10_000;
+
+export interface PopupWaitBudgetInput {
+  host: 'cursor' | 'windsurf';
+  /** Time already spent in this hook (stdin + auto) — Cursor's timeout counts from hook start. */
+  elapsedMs: number;
+  env?: NodeJS.ProcessEnv;
+  /** Cursor only: the `timeout` (seconds) registered for our beforeSubmitPrompt entry; null when unreadable. */
+  registeredCursorTimeoutSec?: number | null;
+}
+
+export function computePopupWaitBudgetMs(input: PopupWaitBudgetInput): number {
+  const env = input.env ?? process.env;
+  const raw = env[POPUP_WAIT_ENV];
+  const parsed = raw !== undefined ? Number.parseInt(String(raw), 10) : Number.NaN;
+  const cap = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_POPUP_WAIT_MS;
+  if (input.host !== 'cursor') return cap;
+  const registeredSec = typeof input.registeredCursorTimeoutSec === 'number' && input.registeredCursorTimeoutSec > 0
+    ? input.registeredCursorTimeoutSec
+    : CURSOR_DEFAULT_HOOK_TIMEOUT_S;
+  const elapsed = Number.isFinite(input.elapsedMs) && input.elapsedMs > 0 ? input.elapsedMs : 0;
+  const ceiling = registeredSec * 1000 - elapsed - CURSOR_HOST_TIMEOUT_MARGIN_MS;
+  return Math.max(0, Math.min(cap, ceiling));
 }
 
 export interface HoldBudgetDeps {
@@ -78,11 +134,14 @@ export function createHoldBudget(deps: HoldBudgetDeps = {}): HoldBudget {
   const totalMs = Math.min(MAX_HOLD_BUDGET_MS, Math.max(MIN_HOLD_BUDGET_MS, requested));
 
   const startedAt = now();
-  const remaining = (): number => Math.max(0, totalMs - (now() - startedAt));
+  let deadline = startedAt + totalMs;
+  const remaining = (): number => Math.max(0, deadline - now());
 
   return {
     remaining,
     expired: () => remaining() <= 0,
+    extendFor: (ms: number) => { deadline = now() + Math.max(0, ms); },
+    elapsed: () => Math.max(0, now() - startedAt),
     async run<T>(work: () => Promise<T>): Promise<{ timedOut: boolean; value?: T }> {
       const left = remaining();
       // Already exhausted — do not even start the work. Starting it would be how

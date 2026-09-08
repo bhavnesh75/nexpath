@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.1.36 — 2026-09-07
+## 0.1.36 — 2026-09-08
+
+- Chat-history capture survives an editor update. Cursor and Windsurf ship their own
+  runtime, and when they upgraded it the bundled database reader could no longer load,
+  so capture stopped and the Output panel filled with a repeating
+  "NODE_MODULE_VERSION" error every couple of seconds. The reader is now built on a
+  runtime-independent interface, so the same build works on current and future editor
+  versions.
+- That same repeating failure was re-copying every chat database every two seconds,
+  which slowed the editor down: on one machine a submit-time selection took nearly a
+  minute to reach the chat. If the reader ever cannot load, it now reports once and
+  stands down instead of retrying, and the submit popup and its delivery are unaffected.
+- On an editor too old to run the reader safely, capture is skipped with a single
+  explanatory line rather than risking a crash.
+- Windsurf and Devin: your original prompt is no longer released while the popup is
+  still open. If you take your time, the prompt is held and cancelled on your behalf,
+  and whichever option you then choose is sent: the strengthened prompt, or your
+  original text unchanged.
+- The "schema is not recognised" notice no longer appears for an empty database, which
+  the editor creates and removes routinely.
+
+## 0.1.36 (earlier notes) — 2026-09-07
 
 - Windsurf (Devin) and Cursor: a submit-time popup left unanswered until the hold expires
   now closes on Linux and macOS too (it could previously stay open and keep the local
@@ -33,15 +54,41 @@
   are written locally through the CLI; nothing is sent anywhere unless you have turned
   telemetry on yourself, which is off by default.
 - Internal comment and documentation cleanup. No change to how the extension behaves.
+- The submit-time popup now waits for you. It used to close by itself after about
+  75 seconds and let the held prompt run, which cut off anyone still reading the prepared
+  text. Preparing the suggestion is still bounded (a stuck preparation never holds a prompt
+  for long), but once the popup is open it stays until you choose — Enter, "use original",
+  or Esc — for up to 30 minutes by default (`NEXPATH_SUBMIT_POPUP_WAIT_MS` overrides it). On
+  Cursor the wait also never exceeds the hook timeout Nexpath registers, which setup now sets
+  to 1900 seconds (it was 120); an install that has not re-run setup keeps the shorter, safe
+  window until it does. `~/.nexpath/nexpath.log` records the granted window per turn as
+  `cursor_hook_popup_budget` / `windsurf_hook_popup_budget`.
+- The submit-time popup never shows a previous prompt's suggestion again. A suggestion
+  prepared for one prompt could be left waiting (the extension not ready at that moment, the
+  popup unable to open, a crash) and was then shown for the NEXT prompt that had none of its
+  own — a tester saw the 3rd prompt's text in the 4th prompt's popup. Before opening a popup,
+  anything prepared before the current prompt was received is now discarded; only a
+  suggestion prepared for this prompt can be shown. `~/.nexpath/nexpath.log` records each
+  discard as `submit_stop_decider_stale_rows_consumed`.
+- Sending never types into another application any more. If you switch to a browser or a
+  messenger while the strengthened prompt is being delivered, the paste and the Enter used
+  to follow your focus into that window. Now, in the instant before each keystroke, the
+  window in front is re-checked; if it is not this editor window — another application, or
+  even a second window of the same editor — nothing is typed. A refused paste leaves the
+  text on your clipboard and says so once; a refused Enter leaves it in the chat input with
+  the existing "press Enter yourself" note. On Windows the delivery log now also records
+  which window was in front when a keystroke was refused.
 - Cursor and Windsurf: with more than one editor window open, the strengthened prompt
   could be pasted and sent into the wrong window. Sending brought whichever window the
   system happened to list first for that application to the front, so a prompt written in
   one window could be answered in another, and that other window would jump forward on its
   own. Sending now identifies this window by its own title, the folder name together with
-  the editor name, and brings exactly that window forward before typing. This applies on
-  Linux, Windows and macOS. If the window cannot be identified — an unusual window title,
-  or no folder open — sending falls back to exactly what it did before, and a setup with a
-  single editor window is unchanged on every platform.
+  the editor name, and brings exactly that window forward before typing — on Windows also
+  when another application (a browser, a messenger) is in front at that moment. Devin's
+  window title, which puts the product name in the middle ("<folder> - Devin - <session>"),
+  is recognised. This applies on Linux, Windows and macOS. If the window cannot be
+  identified — an unusual window title, or no folder open — sending falls back to exactly
+  what it did before, and a setup with a single editor window is unchanged on every platform.
 - Windows: sending the strengthened prompt (paste, then Enter) no longer compiles the
   small window-targeting helper on every keystroke. The helper is compiled once, in the
   background when the extension starts, into `%LOCALAPPDATA%\nexpath\` and reused from

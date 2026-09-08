@@ -67,20 +67,29 @@ export function scoreEditorWindow(title: string, target: EditorWindowTarget = {}
   const ws = String(target.workspaceName ?? '').trim();
   if (!t || !app) return 0;
 
-  // These editors always end the window title with the application name. A title that does
-  // not is either another application (a browser tab called "nexpath - Chrome" scored 75
-  // before this guard) or a custom `window.title`; both must fall through to the class
-  // raise rather than be attributed to us.
-  if (!(t === app || t.endsWith(` - ${app}`) || t.endsWith(app))) return 0;
+  // Is this a window of THIS application at all? The same four delimiter-safe shapes the
+  // shipped win32 foreground check has accepted since RC60: exact, suffix, prefix, and
+  // MID-TITLE — the Devin build titles its window "<folder> - Devin - <session title>",
+  // and a suffix-only guard here scored that 0 on the Windows tester's machine (RC74a:
+  // `window=0`, so the targeting never engaged). A title with none of these shapes is
+  // another application (a browser tab "nexpath - Chrome") or a custom `window.title`;
+  // both fall through to the class raise rather than being attributed to us.
+  const ofThisApp =
+    t === app || t.endsWith(` - ${app}`) || t.endsWith(app) ||
+    t.startsWith(`${app} - `) || t.includes(` - ${app} - `);
+  if (!ofThisApp) return 0;
 
   if (ws) {
-    if (t === `${ws} - ${app}`) return 100;          // folder open, no editor tab
-    if (t.endsWith(` - ${ws} - ${app}`)) return 90;  // a file open inside that folder
-    if (t.includes(` - ${ws} - `)) return 80;        // custom window.title layouts
+    if (t === `${ws} - ${app}`) return 100;             // folder open, no editor tab
+    if (t.startsWith(`${ws} - ${app} - `)) return 95;   // Devin: "<folder> - Devin - <session>"
+    if (t.endsWith(` - ${ws} - ${app}`)) return 90;     // a file open inside that folder
+    if (t.includes(` - ${ws} - ${app} - `)) return 85;  // "<file> - <folder> - Devin - <session>"
+    if (t.includes(` - ${ws} - `)) return 80;           // custom window.title layouts
     if (t.startsWith(`${ws} - `)) return 75;
-    if (t.includes(ws)) return 30;                   // weak: the name appears somewhere
+    if (t.includes(ws)) return 30;                      // weak: the name appears somewhere
   } else {
-    if (t === app) return 100;                       // folder-less window: exactly "Cursor"
+    if (t === app) return 100;                          // folder-less window: exactly "Cursor"
+    if (t.startsWith(`${app} - `)) return 70;           // folder-less Devin: "Devin - <session>"
     // "file.ts - Cursor" — a folder-less window with a tab open. Two segments only, so a
     // folder window ("nexpath - Cursor") scores here too; it is deliberately below an
     // exact app-name match and above the bare application tier.
@@ -88,6 +97,19 @@ export function scoreEditorWindow(title: string, target: EditorWindowTarget = {}
   }
   // Some window of this application, but not identifiable as ours.
   return 10;
+}
+
+/**
+ * RC75 — the gate every synthetic keystroke passes in the instant before it is sent: is the
+ * window in front, right now, THIS host's window? With a workspace name the title must hit
+ * one of the identifying tiers (≥ 75); the weak "contains the name somewhere" tier and the
+ * bare "some window of this app" tier are refused — a second window of the same editor is
+ * exactly the wrong place to type. Without a workspace name the folder-less shapes (100 / 70
+ * / 60) count. A title of another application is always refused.
+ */
+export function isOurWindowTitle(title: string | null | undefined, target: EditorWindowTarget = {}): boolean {
+  const score = scoreEditorWindow(String(title ?? ''), target);
+  return String(target.workspaceName ?? '').trim() ? score >= 75 : score >= 60;
 }
 
 /** True when a WM_CLASS ("cursor.Cursor") matches any of the raise candidates ("cursor", "devin"…). */

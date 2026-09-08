@@ -248,7 +248,7 @@ function buildSubmitAdvisory(
     // Reuse the shipped raiser — Linux/X11 only by design; elsewhere it returns
     // false and the paste still proceeds.
     focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host], { windowTarget: editorWindowTarget() }),
-    pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, host === 'cursor' ? 'Cursor' : 'Devin', 'Windsurf'], windowTarget: editorWindowTarget() }),
+    pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, host === 'cursor' ? 'Cursor' : 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => log(`[nexpath] submit-clipboard: paste REFUSED — ${r}; nothing typed`) }),
     // RC11: Enter only when THIS editor is focused (one raise retry inside).
     submitKeystroke: () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host], { windowTarget: editorWindowTarget() }), appName: vscode.env.appName, windowTarget: editorWindowTarget(), submitLog: log }),
     log,
@@ -351,6 +351,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // RC16: one-time darwin auto-send permission hint (per activation).
   let darwinSubmitHintShown = false;
   let win32SubmitHintShown = false;
+  // RC75: a paste REFUSED because another window was in front. Nothing was typed — that is
+  // the point — so the user must be told where the text is. One warning per session; every
+  // refusal is logged with the window that was in front (never the text).
+  let pasteRefusedHintShown = false;
+  const onPasteRefused = (where: string, reason: string): void => {
+    log(`[nexpath] ${where}: paste REFUSED — ${reason}; nothing typed, the refined prompt is on the clipboard`);
+    if (pasteRefusedHintShown) return;
+    pasteRefusedHintShown = true;
+    void vscode.window.showWarningMessage(
+      'Nexpath: your refined prompt was not pasted because another window was in front. It is on your clipboard — click into the chat, paste it, and press Enter.',
+    );
+  };
   // RC19 (Windows tester, 2026-08-17): a disarmed submit flow used to log
   // NOTHING — the ENABLED line was simply absent, so diagnosing meant
   // guessing. Say WHY, once per distinct reason (the RC15 re-check ticks
@@ -476,7 +488,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       focused = true;
     } catch { /* command absent on this build — paste into whatever has focus */ }
     await new Promise((r) => setTimeout(r, focused ? 400 : 250));
-    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget() });
+    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('windsurf inject (fallback)', r) });
     log(`[nexpath] windsurf inject (fallback) → ${ok ? `auto-pasted into Cascade (${focused ? 'openChatPanel → ' : ''}Ctrl+V)` : 'no keystroke tool; left on clipboard'}`);
     return ok;
   };
@@ -530,7 +542,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tFocus = Date.now();
     await new Promise((r) => setTimeout(r, focused ? 400 : 250));
     const tSettle = Date.now();
-    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Cursor'], windowTarget: editorWindowTarget() });
+    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Cursor'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('cursor inject', r) });
     const tPaste = Date.now();
     log(`[nexpath] cursor inject → ${ok ? `auto-pasted into existing chat (${focused ? focusedVia + ' → ' : ''}Ctrl+V)` : 'no keystroke tool found; left on clipboard'}`);
     log(`[nexpath] cursor inject timing: clipboard=${tClip - t0}ms focus=${tFocus - tClip}ms(${focusedVia || 'none'}) settle=${tSettle - tFocus}ms paste=${tPaste - tSettle}ms total=${tPaste - t0}ms`);
@@ -914,7 +926,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Reuse the shipped raiser — Linux/X11 only by design; on other OSes it
         // returns false and the paste still proceeds (see the module's notes).
         focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf'], { windowTarget: editorWindowTarget() }),
-        pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget() }),
+        pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('submit-clipboard', r) }),
         // RC11: Enter only when Windsurf itself is focused — a blind Enter
         // pressed the Welcome view's "Start session" and closed the chat.
         submitKeystroke: () => submitKeystroke({ host: 'windsurf', focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf'], { windowTarget: editorWindowTarget() }), appName: vscode.env.appName, windowTarget: editorWindowTarget(), submitLog: log }),
@@ -1398,6 +1410,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     onInfo: (message) => log(`[nexpath] ${message}`),
     onSchemaUnknown: ({ path, observedSampleKeys }) => {
       log(`[nexpath] schema unknown for ${path}; sample keys: ${observedSampleKeys.slice(0, 3).join(', ')}`);
+      // RC79: an EMPTY key list is not an unrecognised schema — it is an empty
+      // database. Cursor creates transient numeric workspaceStorage folders and
+      // deletes them minutes later (RC53), and a freshly created state.vscdb has
+      // no rows yet, so there is nothing to recognise. The tester's screenshot
+      // shows exactly that popup with "Observed keys: …" and nothing before it.
+      // Keep the log line (diagnosis) and drop the alarm the user cannot act on;
+      // a real unknown schema still carries keys and still surfaces.
+      if (observedSampleKeys.length === 0) return;
       void vscode.window.showInformationMessage(
         `Nexpath: ${path} schema is not recognised. The chat-history extractors may need updating. ` +
           `Observed keys: ${observedSampleKeys.slice(0, 3).join(', ')}…`,

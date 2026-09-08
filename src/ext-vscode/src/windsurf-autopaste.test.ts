@@ -315,3 +315,47 @@ describe('⭐ RC73 — a slow window manager never causes a DIFFERENT window to 
     expect(settles).toBe(2);
   });
 });
+
+/** ⭐ RC75 — the paste gets the same instant-before-typing gate as the Enter, on every platform. */
+describe('⭐ RC75 — pasteKeystroke refuses to type into another window', () => {
+  const target = { appName: 'Cursor', workspaceName: 'nexpath' };
+  it('⭐ linux: another application in front ⇒ refused with the reason, nothing typed', () => {
+    const run = vi.fn(() => true); const refused: string[] = [];
+    expect(pasteKeystroke({ platform: 'linux', env: { DISPLAY: ':0' }, hasCommand: () => true, run,
+      runCapture: () => 'WhatsApp', windowTarget: target, refused: (r) => refused.push(r) })).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(refused[0]).toContain('"WhatsApp"');
+  });
+  it('⭐ linux: a second window of the same editor ⇒ refused; our window ⇒ pasted', () => {
+    const run = vi.fn(() => true);
+    expect(pasteKeystroke({ platform: 'linux', env: { DISPLAY: ':0' }, hasCommand: () => true, run, runCapture: () => 'Cursor', windowTarget: target })).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(pasteKeystroke({ platform: 'linux', env: { DISPLAY: ':0' }, hasCommand: () => true, run, runCapture: () => 'nexpath - Cursor', windowTarget: target })).toBe(true);
+    expect(run).toHaveBeenCalledWith('xdotool', ['key', '--clearmodifiers', 'ctrl+v']);
+  });
+  it('linux: no xdotool ⇒ prior behaviour; no windowTarget ⇒ prior behaviour (byte-identical calls)', () => {
+    const run = vi.fn(() => true);
+    pasteKeystroke({ platform: 'linux', env: { DISPLAY: ':0' }, hasCommand: (c) => c === 'wtype', run, runCapture: () => 'WhatsApp', windowTarget: target });
+    expect(run).toHaveBeenCalledWith('wtype', ['-M', 'ctrl', 'v', '-m', 'ctrl']);
+    const run2 = vi.fn(() => true);
+    pasteKeystroke({ platform: 'linux', env: { DISPLAY: ':0' }, hasCommand: () => true, run: run2, runCapture: () => 'WhatsApp' });
+    expect(run2).toHaveBeenCalledWith('xdotool', ['key', '--clearmodifiers', 'ctrl+v']);
+  });
+  it('⭐ macOS: another application frontmost ⇒ refused; the editor frontmost ⇒ pasted', () => {
+    const run = vi.fn(() => true); const refused: string[] = [];
+    expect(pasteKeystroke({ platform: 'darwin', run, runCapture: () => 'WhatsApp', windowTarget: target, refused: (r) => refused.push(r) })).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(refused[0]).toContain('not Cursor');
+    expect(pasteKeystroke({ platform: 'darwin', run, runCapture: () => 'Cursor', windowTarget: target })).toBe(true);
+    expect(run.mock.calls[0]![0]).toBe('osascript');
+  });
+  it('⭐ win32: the script\'s refusal (exit 1 + FOREGROUND=) is surfaced as the reason', () => {
+    const refused: string[] = [];
+    const ok = pasteKeystroke({ platform: 'win32', env: {}, win32Titles: ['Cursor'], windowTarget: target,
+      runStatus: () => ({ status: 1, stdout: 'NXHELPER=cached\nNXWIN=100/1\nFOREGROUND=WhatsApp (changed before send)\n' }),
+      refused: (r) => refused.push(r) });
+    expect(ok).toBe(false);
+    expect(refused).toEqual(['WhatsApp (changed before send)']);
+    expect(pasteKeystroke({ platform: 'win32', env: {}, win32Titles: ['Cursor'], windowTarget: target, runStatus: () => ({ status: 0, stdout: '' }) })).toBe(true);
+  });
+});

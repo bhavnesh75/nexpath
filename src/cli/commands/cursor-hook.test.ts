@@ -170,6 +170,7 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     const f = fakeBudget();
     const h = harness({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77: the popup's own window — explicit, so this pin is host-independent
       decide: () => new Promise(() => { f.advance(60_000); }),   // never settles
     });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
@@ -183,14 +184,16 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     const f = fakeBudget();
     const h = harness({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77
       decide: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }),
     });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
     expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
   });
 
-  it('the budget is SHARED — a slow stdin read leaves less for the decision', async () => {
-    // Per-segment timeouts would sum and could exceed the cap.
+  it('the PREPARATION budget is SHARED — a slow stdin read exhausts it and no popup is granted', async () => {
+    // Per-segment timeouts would sum and could exceed the cap. RC77 grants the popup its
+    // own window ONLY when the preparation finished; an exhausted preparation stays exhausted.
     const f = fakeBudget(60_000);
     const h = harness({
       holdBudget: f.budget,
@@ -202,6 +205,48 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
     expect(h.exits).toEqual([0]);
   });
+
+/**
+ * ⭐ RC77 — the popup waits for the human. Devin/Windows tester, 2026-09-08: the popup
+ * vanished at the shared 75 s while they were still reading, and the held prompt ran.
+ */
+describe('⭐ RC77 — the popup outlives the preparation budget', () => {
+  it('⭐ preparation 60 s, popup window 30 min: a decision taken after 5 minutes is still a decision', async () => {
+    const f = fakeBudget(60_000);
+    const h = harness({
+      holdBudget: f.budget,
+      popupWaitBudgetMs: () => 30 * 60_000,
+      decide: () => new Promise((r) => { f.advance(5 * 60_000); setTimeout(() => r('block'), 0); }),
+    });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(JSON.parse(h.writes[0])).toMatchObject({ continue: false });   // the block landed — five minutes in
+    // (Cursor's decision channel is the JSON; the process exit stays 0 on a block.)
+  });
+  it('the popup window is logged so a tester can read it off one line', async () => {
+    const f = fakeBudget(60_000);
+    const events: Array<{ name: string; data: unknown }> = [];
+    const logEvent = vi.fn((_l: string, name: string, data: unknown) => { events.push({ name, data }); });
+    const h = harness({ logEvent, holdBudget: f.budget, popupWaitBudgetMs: () => 123_456, decide: async () => 'allow' as const });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    const ev = events.find((e) => e.name === 'cursor_hook_popup_budget');
+    expect(ev?.data).toMatchObject({ popup_wait_ms: 123_456 });
+  });
+  it('the popup window is granted only when auto finished: an expired preparation still fails open', async () => {
+    const f = fakeBudget(60_000);
+    const names: string[] = [];
+    const logEvent = vi.fn((_l: string, name: string) => { names.push(name); });
+    const h = harness({
+      logEvent, holdBudget: f.budget,
+      popupWaitBudgetMs: () => 30 * 60_000,
+      readStdin: async () => { f.advance(60_000); return PAYLOAD; },   // preparation exhausted by stdin
+      decide: async () => 'block' as const,
+    });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+    expect(names).not.toContain('cursor_hook_popup_budget');
+  });
+});
+
 });
 
 describe('⭐ H6 — the Cursor switch is independent and defaults OFF', () => {
@@ -470,6 +515,7 @@ describe('file logging — a silent hook can never hide again', () => {
       'cursor_hook_invoked',
       'cursor_hook_payload',
       'cursor_hook_gate',
+      'cursor_hook_popup_budget', // RC77: the popup's own window, granted once auto's wait returned
       'cursor_hook_auto',
       'cursor_hook_decision',
       'cursor_hook_hold_split', // RC67: the budget split rides every gated run
