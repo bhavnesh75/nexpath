@@ -9,7 +9,9 @@
  *
  * **Exits 0 in every shipped configuration — a hook must never block or break
  * Cascade.** Amended 2026-08-10 (hook milestone H2): there is now exactly ONE
- * path that exits non-zero, and it is off by default.
+ * path that exits non-zero, and it is off by default. (RC78: that path has two
+ * call sites — the primary's block, and the in-order twin mirroring it — both
+ * behind the same switch.)
  *
  * When `NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY=1` (internal switch, never
  * persisted, never user-facing) **and** the prompt-submit decider explicitly
@@ -29,6 +31,8 @@ import { createHash } from 'node:crypto';
 import { runWindsurfHook, parsePayload, type RunResult } from '../../windsurf-hook/handler.js';
 import {
   checkAndRecordCursorInvocation,
+  markInvocationBlocked,
+  isInvocationBlocked,
   WINDSURF_INVOCATION_DIRNAME,
   WINDSURF_FALLBACK_WINDOW_MS,
 } from '../../cursor-hook/invocation-guard.js';
@@ -46,7 +50,11 @@ import { getPendingAdvisory, markAdvisoryShown } from '../../store/pending-advis
 import { isSubmitAdvisoryEnabledForHost } from './submit-flow-config.js';
 import { writeSubmitDecision, readReplacementEchoes, latestReplacementEchoAt,
 } from './submit-decision-store.js';
-import { buildStopDrivenPromptSubmitDecider } from './submit-stop-decider.js';
+import {
+  buildSupervisedPromptSubmitDecider,
+  computeLateCancelDeadlineMs,
+  type SupervisedDeciderPorts,
+} from './submit-popup-supervisor.js';
 import { createHoldBudget, computePopupWaitBudgetMs, type HoldBudget } from './submit-hold-budget.js';
 // CONSUME-ONLY. `SessionStateManager` is not Vedansi-owned (`hi0001234d` 15 /
 // `harshil480` 15) — it is called here, never modified.
@@ -383,16 +391,17 @@ export function isDuplicateWindsurfInvocation(
   event: string,
   payload: ReturnType<typeof parsePayload>,
   guard: typeof checkAndRecordCursorInvocation = checkAndRecordCursorInvocation,
-): { duplicate: boolean; key_kind: 'execution_id' | 'fallback' | 'none' } {
+): { duplicate: boolean; key_kind: 'execution_id' | 'fallback' | 'none'; key: string } {
   const execId = payload?.execution_id ?? '';
   if (execId) {
     return {
       duplicate: guard(projectRoot, event, execId, { dirName: WINDSURF_INVOCATION_DIRNAME }),
       key_kind: 'execution_id',
+      key: execId,
     };
   }
   const trajectory = payload?.trajectory_id ?? '';
-  if (!trajectory) return { duplicate: false, key_kind: 'none' };
+  if (!trajectory) return { duplicate: false, key_kind: 'none', key: '' };
   const content = event === 'pre_user_prompt'
     ? payload?.tool_info?.user_prompt ?? ''
     : payload?.tool_info?.response ?? '';
@@ -403,6 +412,7 @@ export function isDuplicateWindsurfInvocation(
       maxAgeMs: WINDSURF_FALLBACK_WINDOW_MS,
     }),
     key_kind: 'fallback',
+    key,
   };
 }
 
@@ -517,6 +527,13 @@ export interface WindsurfHookActionDeps {
   /** RC77 seam: the popup's own wait budget (defaults to computePopupWaitBudgetMs; Windsurf has no host ceiling). */
   popupWaitBudgetMs?: (ctx: { host: 'windsurf'; elapsedMs: number }) => number;
   /**
+   * RC78 seam: when the hook stops holding transparently and cancels the original
+   * itself (ms from hook start). Defaults to computeLateCancelDeadlineMs().
+   */
+  lateCancelDeadlineMs?: number;
+  /** RC78 seam: ports for the supervised decider (tests inject fake spawn / status / claim / clock). */
+  supervisedDeciderPorts?: Partial<Omit<SupervisedDeciderPorts, 'host' | 'hookStartedAt' | 'onLateCancel'>>;
+  /**
    * VED-PE-10 echo detector (see `isReplacementEcho`). Injected for tests so
    * they never open the real store; defaults to the real implementation.
    */
@@ -537,6 +554,9 @@ export interface WindsurfHookActionDeps {
   runSequenceContinuation?: (projectRoot: string, host: 'windsurf' | 'cursor') => Promise<{ ran: boolean; blocked?: boolean; deferred?: boolean }>;
   /** RC64 seam: duplicate-invocation check (duplicate ⇒ exit 0, do nothing). */
   checkDuplicateInvocation?: typeof isDuplicateWindsurfInvocation;
+  /** RC78 seams: the twin-mirror marker (write on block; read on a duplicate). */
+  markInvocationBlocked?: typeof markInvocationBlocked;
+  isInvocationBlocked?: typeof isInvocationBlocked;
   /**
    * RC67 seam: structured log sink for the hold-expiry instrumentation
    * (`windsurf_hook_hold_expired` / `windsurf_hook_hold_split`). Defaults to
@@ -629,6 +649,7 @@ export async function runWindsurfHookAction(
   opts: { project?: string },
   deps: WindsurfHookActionDeps = {},
 ): Promise<void> {
+  const hookStartedAt = Date.now(); // RC78: the late-cancel deadline counts from here
   const handle = deps.handle ?? handleWindsurfHookCli;
   const raisePopup = deps.raisePopup ?? bringPopupToFront;
   const waitForChild = deps.waitForChild ?? awaitChild;
@@ -684,11 +705,24 @@ export async function runWindsurfHookAction(
   // sequence → PE popup → advisory popup) at submit time; a selection blocks
   // and the extension injects it. The H3 advisory-only decider stays exported
   // for injected wirings and its own tests.
+  // RC78: the default decision is SUPERVISED — `stop` and its popup run in a
+  // detached process; this hook polls a status file and, if the popup is still
+  // open at the platform deadline, cancels the original itself (exit 2) instead
+  // of trusting the host to keep waiting. A quick answer takes the fast path,
+  // which is the RC77 in-process outcome on the wire. See submit-popup-supervisor.ts.
   const stopChildRef: { current: ChildProcess | null } = { current: null };
+  let lateCancelled = false;
+  let dupKey = '';
   const decidePromptSubmit = deps.decidePromptSubmit
-    ?? buildStopDrivenPromptSubmitDecider(opts, {
+    ?? buildSupervisedPromptSubmitDecider(opts, {
       host: 'windsurf',
-      onChild: (c) => { stopChildRef.current = c; },
+      hookStartedAt,
+      deadlineMs: deps.lateCancelDeadlineMs ?? computeLateCancelDeadlineMs({ env: deps.env ?? process.env }),
+      hookPid: process.pid,
+      ...(process.platform === 'win32' && process.ppid > 0 ? { hookShellPid: process.ppid } : {}),
+      logEvent: (level, name, data) => { try { (deps.logEvent ?? log)(level, name, data); } catch { /* never break the hook */ } },
+      ...(deps.supervisedDeciderPorts ?? {}),
+      onLateCancel: () => { lateCancelled = true; },
     });
 
   try {
@@ -754,8 +788,19 @@ export async function runWindsurfHookAction(
       {
         const dupCheck = (deps.checkDuplicateInvocation ?? isDuplicateWindsurfInvocation)(
           opts.project ?? process.cwd(), event, parsePayload(preReadRaw));
+        dupKey = dupCheck.key ?? '';
         if (dupCheck.duplicate) {
-          log('warn', 'windsurf_hook_duplicate_invocation', { event, key_kind: dupCheck.key_kind });
+          // RC78: Devin runs the two registrations IN ORDER, so this twin starts
+          // the instant the primary returned. If the primary blocked, block too —
+          // a 0 after a 2 must never be the answer the host settles on.
+          const mirrored = (deps.isInvocationBlocked ?? isInvocationBlocked)(
+            opts.project ?? process.cwd(), event, dupKey, { dirName: WINDSURF_INVOCATION_DIRNAME });
+          log('warn', 'windsurf_hook_duplicate_invocation', { event, key_kind: dupCheck.key_kind, mirrored_block: mirrored });
+          if (mirrored) {
+            try { process.stderr.write(WINDSURF_BLOCK_CARD_MESSAGE); } catch { /* card falls back to vendor text */ }
+            exit(2);
+            return;
+          }
           exit(0);
           return;
         }
@@ -1019,6 +1064,7 @@ export async function runWindsurfHookAction(
         auto_ms: autoMs,
         decider_ms: deciderMs,
         remaining_after_auto_ms: remainingAfterAutoMs,
+        late_cancel: lateCancelled, // RC78
       });
       // `!decided.timedOut` is likewise redundant today (a timed-out run yields
       // no value, so `value === 'block'` is already false) and equally kept as an
@@ -1033,6 +1079,9 @@ export async function runWindsurfHookAction(
         // hook whose stderr text rendered in the card). The card TRUNCATES at a
         // word boundary (~24 chars observed), so the key phrase leads and the
         // sentence degrades cleanly wherever it is cut.
+        // RC78: let the twin (which runs next, in order) mirror this block.
+        (deps.markInvocationBlocked ?? markInvocationBlocked)(
+          opts.project ?? process.cwd(), event, dupKey, { dirName: WINDSURF_INVOCATION_DIRNAME });
         try { process.stderr.write(WINDSURF_BLOCK_CARD_MESSAGE); } catch { /* card falls back to vendor text */ }
         exit(2);
         return;

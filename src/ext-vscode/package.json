@@ -157,7 +157,7 @@
     ]
   },
   "dependencies": {
-    "better-sqlite3": "^12"
+    "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",

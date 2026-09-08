@@ -736,3 +736,43 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
     expect(windsurf).toContain('turnStartedAt = autoStartedAt; // RC76');
   });
 });
+
+// ── RC78: the record names the process the host waits on ────────────────────
+describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () => {
+  it('stamps the caller-supplied pids on a block record (the detached supervisor passes the HOOK\'s)', async () => {
+    const writeDecision = vi.fn(async () => {});
+    const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+      host: 'windsurf',
+      spawnFn: (() => child) as never,
+      writeDecision: writeDecision as never,
+      mkdirFn: (() => undefined) as never,
+      readDelivererState: (() => ({ state: 'absent' })) as never,
+      logEvent: () => {},
+      ...FAKE_SWEEP_STORE,
+      hookPid: 1111,
+      hookShellPid: 2222,
+    });
+    await expect(decide('pre_user_prompt', { project: '/p' }, 'prompt')).resolves.toBe('block');
+    expect(writeDecision).toHaveBeenCalledTimes(1);
+    expect((writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({ hookPid: 1111, hookShellPid: 2222 });
+  });
+
+  it('without the ports the record still names THIS process (byte-identical to RC77 for in-process callers)', async () => {
+    const writeDecision = vi.fn(async () => {});
+    const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+      host: 'windsurf',
+      spawnFn: (() => child) as never,
+      writeDecision: writeDecision as never,
+      mkdirFn: (() => undefined) as never,
+      readDelivererState: (() => ({ state: 'absent' })) as never,
+      logEvent: () => {},
+      ...FAKE_SWEEP_STORE,
+    });
+    await decide('pre_user_prompt', { project: '/p' }, 'prompt');
+    const rec = (writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0];
+    expect(rec.hookPid).toBe(process.pid);
+    if (process.platform !== 'win32') expect('hookShellPid' in rec).toBe(false);
+  });
+});

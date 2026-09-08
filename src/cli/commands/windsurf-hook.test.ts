@@ -619,7 +619,7 @@ describe('⭐ RC64 — duplicate windsurf invocations (global + workspace both e
     expect(calls[0]!.deps.maxAgeMs).toBeUndefined(); // execution_id is unique per action — cursor default window
     expect(calls[1]!.key.startsWith('t-')).toBe(true);
     expect(calls[1]!.deps.maxAgeMs).toBe(WINDSURF_FALLBACK_WINDOW_MS);
-    expect(none).toEqual({ duplicate: false, key_kind: 'none' });
+    expect(none).toEqual({ duplicate: false, key_kind: 'none', key: '' }); // RC78: the key rides along for the twin mirror
     expect(calls).toHaveLength(2); // the keyless payload never reached the guard
   });
 

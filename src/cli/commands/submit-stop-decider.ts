@@ -233,6 +233,14 @@ export interface StopDrivenDeciderPorts {
   readDelivererState?: typeof readDelivererState;
   /** RC76 seam: the stale-row consumer (defaults to the RC71 pure function). */
   consumeStaleRows?: typeof consumeExpiredSubmitRows;
+  /**
+   * RC78: the pids stamped on the decision record. The extension defers delivery
+   * while they are alive (the host cancels the original only when THAT process
+   * exits). Default: this process (+ its shell on win32) — byte-identical for
+   * every in-process caller; the detached popup supervisor passes the HOOK's.
+   */
+  hookPid?: number;
+  hookShellPid?: number;
 }
 
 /**
@@ -443,16 +451,19 @@ export function buildStopDrivenPromptSubmitDecider(
       // remaining step; a persist failure must not block with nothing to
       // replace the prompt (A3).
       const blockIssuedAt = now();
-      await writeDecision({
-        projectRoot,
-        blockIssuedAt,
-        hookPid: process.pid,
+      // RC78: the record names the process the host waits on — this one for the
+      // in-process deciders, the hook's when the detached supervisor runs us.
+      const recordHookPid = ports.hookPid ?? process.pid;
+      const recordHookShellPid = ports.hookShellPid
         // RC30: win32 only — Cascade waits on the powershell wrapper,
         // not on this node process. Undefined elsewhere, and
         // JSON.stringify drops it, so POSIX records are unchanged.
-        ...(process.platform === 'win32' && process.ppid > 0
-          ? { hookShellPid: process.ppid }
-          : {}),
+        ?? (process.platform === 'win32' && process.ppid > 0 ? process.ppid : undefined);
+      await writeDecision({
+        projectRoot,
+        blockIssuedAt,
+        hookPid: recordHookPid,
+        ...(recordHookShellPid !== undefined ? { hookShellPid: recordHookShellPid } : {}),
         decisionId: `sd-${now()}-${Math.floor(now() % 100000)}`,
         replacementText: block.reason,
         createdAt: now(),

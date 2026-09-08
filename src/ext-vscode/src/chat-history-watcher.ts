@@ -111,6 +111,44 @@ export const defaultReadWindsurfJsonFiles: ReadWindsurfJsonFilesFn = async (
  *
  * Pure (fs + path-join injected) so it unit-tests without a real filesystem.
  */
+/**
+ * RC79 — is this failure the NATIVE MODULE refusing to load at all?
+ *
+ * ⚠ ROOT CAUSE (Windows/Cursor tester, 2026-09-08). Cursor and Windsurf ship an
+ * Electron runtime, and an editor auto-update can move that runtime to a new
+ * NODE_MODULE_VERSION (measured: the tester's Cursor moved to Electron 42 =
+ * ABI 146, while the .vsix carried prebuilds up to ABI 145). `better-sqlite3`
+ * then throws on EVERY open:
+ *
+ *   "was compiled against a different Node.js version using NODE_MODULE_VERSION
+ *    143. This version of Node.js requires NODE_MODULE_VERSION 146."
+ *
+ * That failure can NEVER recover inside the running session — no amount of
+ * retrying re-links a native module. But the watcher's polling backstop re-read
+ * every database every `pollMs`, so the identical error was raised 3-5 times
+ * every two seconds for the life of the window: hundreds of lines in the user's
+ * Output channel, and continuous wasted work on the extension host at exactly
+ * the moment the submit flow needs it to be responsive (the same session logged
+ * a 24 s `composer.focusComposer` and a 58 s delivery).
+ *
+ * So a load failure is latched instead of retried: reported ONCE with the ABI
+ * the host actually wants, then chat-history reads stand down for the session.
+ * Only these unrecoverable shapes latch — a locked, malformed, or missing
+ * database is transient and keeps today's retry behaviour exactly.
+ */
+export function isUnrecoverableNativeLoadError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes('node_module_version')                 // ABI mismatch (the measured case)
+    || m.includes('err_dlopen_failed')                 // dlopen refused the binary
+    || m.includes('was compiled against a different')  // node-gyp's wording
+    || m.includes('is not a valid win32 application')  // wrong arch on Windows
+    || m.includes('invalid elf header')                // wrong arch/platform on Linux
+    || m.includes('incompatible architecture')         // wrong arch on macOS
+    || m.includes("cannot find module 'better-sqlite3'")
+  );
+}
+
 export function resolveBundledNativeBinding(
   extRoot: string | undefined,
   abi: string,
@@ -334,6 +372,10 @@ export function createChatHistoryWatcher(
 ): ChatHistoryWatcher {
   const debounceMs = opts.debounceMs ?? 250;
   const pollMs = opts.pollMs ?? 0;
+  // RC79: set once the native module proves unloadable (see
+  // isUnrecoverableNativeLoadError). SQLite reads then stand down for the rest
+  // of the session instead of re-raising the same error on every poll tick.
+  let nativeLoadFailed = false;
   const watchFn = opts.watchFn ?? watch;
   const readItemTableFn = opts.readItemTableFn ?? defaultReadItemTable;
   const readWindsurfJsonFilesFn =
@@ -408,6 +450,21 @@ export function createChatHistoryWatcher(
 
   function reportError(err: unknown, path: string): void {
     const e = err instanceof Error ? err : new Error(String(err));
+    // RC79: an unloadable native module is permanent for this session. Say so
+    // once, in terms the user can act on, then stop reading (the poll backstop
+    // would otherwise repeat this identical error every tick, forever).
+    if (isUnrecoverableNativeLoadError(e.message)) {
+      if (!nativeLoadFailed) {
+        nativeLoadFailed = true;
+        opts.onError?.(new Error(
+          `[chat-history-watcher] chat-history capture is paused for this session: this editor's `
+          + `native module could not be loaded (it needs NODE_MODULE_VERSION ${process.versions.modules}). `
+          + `The editor updated its runtime; install a Nexpath build that ships a matching prebuild. `
+          + `Everything else — the submit popup and its delivery — is unaffected. Original error: ${e.message}`,
+        ));
+      }
+      return;
+    }
     opts.onError?.(new Error(`[chat-history-watcher] ${path}: ${e.message}`));
   }
 
@@ -434,6 +491,9 @@ export function createChatHistoryWatcher(
   }
 
   async function processSqliteTarget(target: WatchTarget): Promise<void> {
+    // RC79: the native module is unloadable — nothing here can succeed, and
+    // retrying is what flooded the host. Windsurf's JSON targets are untouched.
+    if (nativeLoadFailed) return;
     try {
       const rows = await readItemTableFn(target.path);
       const isInitialPass = !primedTargets.has(target.path);

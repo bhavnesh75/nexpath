@@ -1410,6 +1410,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     onInfo: (message) => log(`[nexpath] ${message}`),
     onSchemaUnknown: ({ path, observedSampleKeys }) => {
       log(`[nexpath] schema unknown for ${path}; sample keys: ${observedSampleKeys.slice(0, 3).join(', ')}`);
+      // RC79: an EMPTY key list is not an unrecognised schema — it is an empty
+      // database. Cursor creates transient numeric workspaceStorage folders and
+      // deletes them minutes later (RC53), and a freshly created state.vscdb has
+      // no rows yet, so there is nothing to recognise. The tester's screenshot
+      // shows exactly that popup with "Observed keys: …" and nothing before it.
+      // Keep the log line (diagnosis) and drop the alarm the user cannot act on;
+      // a real unknown schema still carries keys and still surfaces.
+      if (observedSampleKeys.length === 0) return;
       void vscode.window.showInformationMessage(
         `Nexpath: ${path} schema is not recognised. The chat-history extractors may need updating. ` +
           `Observed keys: ${observedSampleKeys.slice(0, 3).join(', ')}…`,

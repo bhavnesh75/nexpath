@@ -8,6 +8,7 @@ import {
   createChatHistoryWatcher,
   defaultReadItemTable,
   defaultReadWindsurfJsonFiles,
+  isUnrecoverableNativeLoadError,
   resolveBundledNativeBinding,
   type ReadItemTableFn,
   type ReadWindsurfJsonFilesFn,
@@ -1101,5 +1102,123 @@ describe('⭐ RC53 — watch errors after the file vanished', () => {
     for (const w of created) w.emit('error', new Error('EPERM: operation not permitted, watch'));
     expect(onInfo).toHaveBeenCalledTimes(3);
     for (const w of created) expect(w.close).toHaveBeenCalled();
+  });
+});
+
+
+// ── RC79: an unloadable native module must be reported ONCE, not every tick ──
+// The tester's Cursor auto-updated its Electron runtime (ABI 143 -> 146), so
+// better-sqlite3 could not load and the polling backstop re-raised the same
+// error 3-5 times every two seconds for the life of the window.
+const ABI_ERROR =
+  "The module '\\\\?\\c:\\Users\\Admin\\.cursor\\extensions\\nexpath.nexpath-vscode-0.1.36\\node_modules\\better-sqlite3\\build\\Release\\better_sqlite3.node'\n"
+  + 'was compiled against a different Node.js version using\n'
+  + 'NODE_MODULE_VERSION 143. This version of Node.js requires\n'
+  + 'NODE_MODULE_VERSION 146. Please try re-compiling or re-installing\n'
+  + 'the module (for instance, using `npm rebuild` or `npm install`).';
+
+describe('RC79 — unrecoverable native-module load failures latch instead of storming', () => {
+  // Local doubles: this block sits outside the main describe's beforeEach.
+  let onEvent: ReturnType<typeof vi.fn>;
+  let onError: ReturnType<typeof vi.fn>;
+  let watchFn: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    onEvent = vi.fn();
+    onError = vi.fn();
+    watchFn = vi.fn(() => {
+      const w = new EventEmitter() as EventEmitter & { close: () => void };
+      w.close = () => {};
+      return w;
+    });
+  });
+
+  it('recognises the shapes that can never recover in-session', () => {
+    expect(isUnrecoverableNativeLoadError(ABI_ERROR)).toBe(true);
+    expect(isUnrecoverableNativeLoadError('Error: ERR_DLOPEN_FAILED')).toBe(true);
+    expect(isUnrecoverableNativeLoadError('%1 is not a valid Win32 application.')).toBe(true);
+    expect(isUnrecoverableNativeLoadError('invalid ELF header')).toBe(true);
+    expect(isUnrecoverableNativeLoadError('mach-o file, but is an incompatible architecture')).toBe(true);
+    expect(isUnrecoverableNativeLoadError("Cannot find module 'better-sqlite3'")).toBe(true);
+  });
+
+  it('leaves TRANSIENT database failures alone — they must keep retrying', () => {
+    // These are the everyday ones the watcher has always recovered from; if any
+    // of them latched, a locked or mid-write database would silently stop capture.
+    expect(isUnrecoverableNativeLoadError('database is locked')).toBe(false);
+    expect(isUnrecoverableNativeLoadError('database disk image is malformed')).toBe(false);
+    expect(isUnrecoverableNativeLoadError('ENOENT: no such file or directory')).toBe(false);
+    expect(isUnrecoverableNativeLoadError('EPERM: operation not permitted')).toBe(false);
+    expect(isUnrecoverableNativeLoadError('SQLITE_BUSY')).toBe(false);
+  });
+
+  it('⭐ reports the ABI failure ONCE and stops reading, however many poll ticks pass', async () => {
+    const failing = vi.fn<ReadItemTableFn>(async () => { throw new Error(ABI_ERROR); });
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/a/state.vscdb'), cursorTarget('/b/state.vscdb')],
+      onEvent,
+      onError,
+      watchFn: watchFn as never,
+      readItemTableFn: failing,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 80)); // many poll ticks across two targets
+    w.stop();
+
+    // Exactly one error for the whole session — not one per target per tick.
+    expect(onError).toHaveBeenCalledTimes(1);
+    const msg = (onError.mock.calls[0]![0] as Error).message;
+    expect(msg).toContain('chat-history capture is paused for this session');
+    expect(msg).toContain(`NODE_MODULE_VERSION ${process.versions.modules}`);
+    expect(msg).toContain('NODE_MODULE_VERSION 146'); // the original error is preserved
+    // And it stopped trying: without the latch this would grow every tick.
+    expect(failing.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('a transient failure still reports every time and keeps reading (no regression)', async () => {
+    const flaky = vi.fn<ReadItemTableFn>(async () => { throw new Error('database is locked'); });
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/a/state.vscdb')],
+      onEvent,
+      onError,
+      watchFn: watchFn as never,
+      readItemTableFn: flaky,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 60));
+    w.stop();
+    expect(onError.mock.calls.length).toBeGreaterThan(2);   // still surfacing
+    expect(flaky.mock.calls.length).toBeGreaterThan(2);     // still retrying
+  });
+
+  it('recovers capture for Windsurf JSON targets even after a SQLite latch', async () => {
+    // The native module is only used for SQLite. Windsurf reads JSON, so a
+    // latched SQLite failure must not silence it.
+    const failing = vi.fn<ReadItemTableFn>(async () => { throw new Error(ABI_ERROR); });
+    const readWindsurfJsonFilesFn = vi.fn<ReadWindsurfJsonFilesFn>(async () => [
+      { path: '/ws/codeium/a.json', parsed: {} as never },
+    ]);
+    const decodeWindsurfFn = vi.fn(() => [
+      { prompt: 'windsurf still captured', extractorId: 'ws', sessionId: 's1' } as never,
+    ]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/a/state.vscdb'), { path: '/ws/codeium', kind: 'windsurf-dir' }],
+      onEvent,
+      onError,
+      watchFn: watchFn as never,
+      readItemTableFn: failing,
+      readWindsurfJsonFilesFn,
+      decodeWindsurfFn: decodeWindsurfFn as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 60));
+    w.stop();
+    expect(onError).toHaveBeenCalledTimes(1);                 // SQLite latched
+    expect(readWindsurfJsonFilesFn.mock.calls.length).toBeGreaterThan(1); // Windsurf unaffected
   });
 });
