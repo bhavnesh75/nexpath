@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
   isSubmitAdvisoryEnabledForHost,
@@ -69,6 +70,6 @@ describe('submit-flow-config — the config-backed switch resolver', () => {
     expect(SUBMIT_FLOW_FLAG_FILENAME).toBe('submit-flow.json');
     expect(SUBMIT_ADVISORY_ENV.cursor).toBe('NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY');
     expect(SUBMIT_ADVISORY_ENV.windsurf).toBe('NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY');
-    expect(submitFlowFlagPath('/home/u/.nexpath')).toBe('/home/u/.nexpath/submit-flow.json');
+    expect(submitFlowFlagPath('/home/u/.nexpath')).toBe(join('/home/u/.nexpath', 'submit-flow.json')); // host separator
   });
 });

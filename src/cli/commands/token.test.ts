@@ -12,7 +12,14 @@ vi.mock('../../config/NexpathTokenStore.js', () => ({
   resolveApiBaseUrl:   vi.fn(() => 'https://stub.example/v1'),
 }));
 
+// Hermetic: the real reset opens the developer's own store. Stubbed for every pin;
+// the credential-change pins below assert on the stub.
+vi.mock('./credential-session-reset.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./credential-session-reset.js')>();
+  return { ...mod, resetSessionsAfterCredentialChange: vi.fn(async () => ({ ok: true, deleted: 1 })) };
+});
 import { configSetTokenAction, configRotateTokenAction, configRemoveTokenAction } from './token.js';
+import { resetSessionsAfterCredentialChange, SESSION_RESET_DONE_LINE } from './credential-session-reset.js';
 import * as tokenStore from '../../config/NexpathTokenStore.js';
 
 function captureOutput(): { lines: string[]; print: (line: string) => void } {
@@ -196,5 +203,49 @@ describe('configRotateTokenAction', () => {
       confirmFn:  async () => true,
     });
     expect(tokenStore.storeNexpathToken).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── credential-change session reset (handoff 2026-09-06; the two token sites are ours) ──
+describe('credential-change session reset', () => {
+  beforeEach(() => { vi.mocked(resetSessionsAfterCredentialChange).mockReset().mockResolvedValue({ ok: true, deleted: 1 }); });
+
+  it('⭐ set-token: resets AFTER the token is stored and prints the done line', async () => {
+    const { lines, print } = captureOutput();
+    await configSetTokenAction({ output: print, passwordFn: async () => VALID_TOKEN });
+    expect(vi.mocked(tokenStore.storeNexpathToken)).toHaveBeenCalledTimes(1);
+    expect(resetSessionsAfterCredentialChange).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(tokenStore.storeNexpathToken).mock.invocationCallOrder[0]!)
+      .toBeLessThan(vi.mocked(resetSessionsAfterCredentialChange).mock.invocationCallOrder[0]!);
+    expect(lines[lines.length - 1]).toBe(SESSION_RESET_DONE_LINE);
+  });
+  it('set-token cancelled / empty ⇒ no credential change ⇒ no reset', async () => {
+    await configSetTokenAction({ output: () => {}, passwordFn: async () => null });
+    await configSetTokenAction({ output: () => {}, passwordFn: async () => '' });
+    expect(resetSessionsAfterCredentialChange).not.toHaveBeenCalled();
+  });
+  it('rotate-token (confirmed) resets; declined ⇒ no reset', async () => {
+    vi.mocked(tokenStore.readNexpathToken).mockResolvedValue(VALID_TOKEN);
+    await configRotateTokenAction({ output: () => {}, confirmFn: async () => true, passwordFn: async () => VALID_TOKEN });
+    expect(resetSessionsAfterCredentialChange).toHaveBeenCalledTimes(1);
+    await configRotateTokenAction({ output: () => {}, confirmFn: async () => false, passwordFn: async () => VALID_TOKEN });
+    expect(resetSessionsAfterCredentialChange).toHaveBeenCalledTimes(1);
+  });
+  it('remove-token: resets only when a token was actually removed', async () => {
+    vi.mocked(tokenStore.readNexpathToken).mockResolvedValueOnce(VALID_TOKEN);
+    await configRemoveTokenAction({ output: () => {} });
+    expect(resetSessionsAfterCredentialChange).toHaveBeenCalledTimes(1);
+    vi.mocked(tokenStore.readNexpathToken).mockResolvedValueOnce(null);
+    await configRemoveTokenAction({ output: () => {} });
+    expect(resetSessionsAfterCredentialChange).toHaveBeenCalledTimes(1);
+  });
+  it('⭐ a failed reset never fails the command: the token is reported stored, a note is printed, exit code untouched', async () => {
+    vi.mocked(resetSessionsAfterCredentialChange).mockResolvedValue({ ok: false, error: 'store locked' });
+    const { lines, print } = captureOutput();
+    const before = process.exitCode;
+    await configSetTokenAction({ output: print, passwordFn: async () => VALID_TOKEN });
+    expect(lines.some((l) => l.includes('Nexpath token stored'))).toBe(true);
+    expect(lines[lines.length - 1]).toContain('store locked');
+    expect(process.exitCode).toBe(before);
   });
 });

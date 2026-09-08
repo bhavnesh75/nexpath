@@ -41,6 +41,7 @@ import { homedir } from 'node:os';
 import { join, resolve, posix as posixPath, win32 as win32Path } from 'node:path';
 import { isWindowsBatchShim } from '../../utils/batch-shim.js';
 import { writeSubmitDecision, appendReplacementEcho, latestReplacementEchoAt } from './submit-decision-store.js';
+import { readDelivererState } from './deliverer-state.js';
 import { log } from '../../logger.js';
 // CONSUME-ONLY store calls (another member's exports), used exactly as stop.ts
 // uses them — no Layer C file is modified.
@@ -227,6 +228,8 @@ export interface StopDrivenDeciderPorts {
   closeStoreFn?: (store: unknown) => Promise<void> | void;
   /** RC51 seam: the writability probe (defaults to real mkdirSync). */
   mkdirFn?: typeof mkdirSync;
+  /** RC70 seam: the extension's deliverer heartbeat (defaults to the real reader). */
+  readDelivererState?: typeof readDelivererState;
 }
 
 /**
@@ -262,6 +265,29 @@ export function buildStopDrivenPromptSubmitDecider(
       (ports.mkdirFn ?? mkdirSync)(join(projectRoot, '.nexpath'), { recursive: true });
     } catch {
       logEvent('warn', 'submit_flow_root_unwritable', { root: projectRoot });
+      return 'allow';
+    }
+
+    // ── RC70 (F-4): is there a DELIVERER for a block? ─────────────────────
+    // A `block` cancels the user's prompt and relies on the extension's poller
+    // to inject the replacement. Nothing ever checked that poller existed: the
+    // flag file is written by hook install and never cleared, and a user who
+    // declines the chat-watch consent (setup runs regardless; the consent gate
+    // returns BEFORE the poller arms) had a blocking hook with no deliverer —
+    // "Use enhanced" cancelled the prompt for nothing. Same when the extension
+    // is disabled or crashed. The extension now writes a heartbeat while it
+    // runs; a fresh not-armed or a stale beat ⇒ no popup, allow (today's old
+    // flow — the prompt runs untouched). ABSENT ⇒ unknown (older extension
+    // without the feature) ⇒ proceed exactly as before, never silently muted.
+    const deliverer = (ports.readDelivererState ?? readDelivererState)(ports.host);
+    logEvent('info', 'submit_flow_deliverer', {
+      host: ports.host, state: deliverer.state,
+      age_ms: deliverer.ageMs ?? null, reason: deliverer.reason ?? null, pid: deliverer.pid ?? null,
+    });
+    if (deliverer.state === 'not_armed' || deliverer.state === 'stale') {
+      logEvent('warn', 'submit_flow_no_deliverer', {
+        host: ports.host, state: deliverer.state, age_ms: deliverer.ageMs ?? null, reason: deliverer.reason ?? null,
+      });
       return 'allow';
     }
 

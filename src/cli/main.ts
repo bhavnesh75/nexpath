@@ -29,6 +29,8 @@ import { envAction } from './commands/env.js';
 import { registerAutoCommand } from './commands/auto.js';
 import { registerStopCommand } from './commands/stop.js';
 import { registerRecordSignalCommand } from './commands/record-signal.js';
+import { registerSubmitExpiryConsumeCommand } from './commands/submit-expiry-consumer.js';
+import { registerCredentialStatusCommand } from './commands/credential-status.js';
 import { registerWindsurfHookCommand } from './commands/windsurf-hook.js';
 import { registerCursorHookCommand } from './commands/cursor-hook.js';
 import { registerOptimizeCommand } from './commands/optimize.js';
@@ -44,6 +46,30 @@ import {
   telemetrySyncPingAction,
 } from './commands/telemetry-sync.js';
 import { contentTemplateCreateAction, contentTemplateValidateAction } from './commands/content-template.js';
+
+/**
+ * Print a missing-terminal failure as the instruction it is, instead of the raw `uv_tty_init` stack.
+ *
+ * The `install` action has done this inline since 2026-09-04. The credential-writing commands under
+ * `config` prompt through the same library and did NOT, so `nexpath config set-api-key < /dev/null`
+ * printed a stack — and, worse, still exited 0, so a script could read it as success.
+ *
+ * ⚠️ Only `NonInteractiveTerminalError` is caught. Everything else propagates untouched, so this
+ * never converts a real fault into a friendly message about terminals.
+ */
+async function runInteractiveCommand(run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    if (err instanceof NonInteractiveTerminalError) {
+      process.stderr.write(`
+${err.message}
+`);
+      process.exit(1);
+    }
+    throw err;
+  }
+}
 
 export function createProgram(): Command {
   const program = new Command();
@@ -116,6 +142,8 @@ export function createProgram(): Command {
   registerAutoCommand(program);
   registerStopCommand(program);
   registerRecordSignalCommand(program);
+  registerSubmitExpiryConsumeCommand(program);
+  registerCredentialStatusCommand(program);
   registerWindsurfHookCommand(program);
   registerCursorHookCommand(program);
 
@@ -187,14 +215,14 @@ export function createProgram(): Command {
     .command('set-api-key')
     .description('Prompt for an OpenAI API key and store it securely (keychain → fallback file)')
     .action(async () => {
-      await configSetApiKeyAction();
+      await runInteractiveCommand(() => configSetApiKeyAction());
     });
 
   configCmd
     .command('rotate-api-key')
     .description('Replace the stored OpenAI API key (errors if no key is currently stored)')
     .action(async () => {
-      await configRotateApiKeyAction();
+      await runInteractiveCommand(() => configRotateApiKeyAction());
     });
 
   configCmd
@@ -215,14 +243,14 @@ export function createProgram(): Command {
     .command('set-token')
     .description('Prompt for a Nexpath token and store it securely (keychain → fallback file)')
     .action(async () => {
-      await configSetTokenAction();
+      await runInteractiveCommand(() => configSetTokenAction());
     });
 
   configCmd
     .command('rotate-token')
     .description('Replace the stored Nexpath token (errors if no token is currently stored)')
     .action(async () => {
-      await configRotateTokenAction();
+      await runInteractiveCommand(() => configRotateTokenAction());
     });
 
   configCmd

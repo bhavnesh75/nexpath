@@ -8,6 +8,12 @@
  * because that is what Windsurf actually acts on.
  */
 import { describe, it, expect, vi } from 'vitest';
+vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
+  // RC71 hermetic: the real spawner would launch a detached `node <argv[1]> submit-expiry-consume`
+  // from inside the test runner. The constant is kept real; only the spawn is stubbed.
+  const mod = await importOriginal<typeof import('./submit-expiry-consumer.js')>();
+  return { ...mod, spawnExpiryConsumer: vi.fn(() => ({ spawned: true, pid: 4242 })) };
+});
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

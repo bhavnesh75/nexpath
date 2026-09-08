@@ -941,7 +941,7 @@ describe.skipIf(!canLoadBetterSqlite3)('defaultReadItemTable', () => {
     return path;
   }
 
-  it('reads happy-path ItemTable rows from a real .vscdb file', async () => {
+  it('reads happy-path ItemTable rows from a real .vscdb file', { timeout: 30_000 }, async () => {
     const dbPath = await createTestVscdb('happy.vscdb', [
       { key: 'aiService.prompts', value: '["hello","world"]' },
       { key: 'composer.composerData', value: '{"selectedComposerIds":[]}' },

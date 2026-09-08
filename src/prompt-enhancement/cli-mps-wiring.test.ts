@@ -231,7 +231,10 @@ describe('MPS CLI wiring (owner ruling 2026-08-06: CLI complete, extension pendi
     // and the details field is empty again on that frame (the text moved into the body).
     const afterApply = ui.frames[ui.frames.length - 1]!;
     expect(afterApply).toContain('Additional details to incorporate:');
-    expect(afterApply).toContain('Enter applies these details · unapplied details are not sent');
+    // Issue #160: the field is empty again, so the apply hint goes with it. Advice about applying
+    // details reads as a stray instruction once there is nothing left to apply, and this frame is
+    // precisely the case the issue was raised about.
+    expect(afterApply).not.toContain('Enter applies these details · unapplied details are not sent');
   });
 
   it('a second Apply extends the ONE details block — never a duplicate heading (iMac report 2026-08-07)', async () => {
@@ -261,16 +264,37 @@ describe('MPS CLI wiring (owner ruling 2026-08-06: CLI complete, extension pendi
     }
   });
 
-  it('details helpers (PE parity, owner request 2026-08-07): apply-hint always visible; focus adds ONLY the edit-keys hint (no sub-label)', async () => {
+  it('details helpers (PE parity): apply-hint only once details exist (#160); focus adds ONLY the edit-keys hint (no sub-label)', async () => {
     const result = await preparePromptEnhancement(request(MULTI_INTENT));
     const ui = scripted([KEY.down, KEY.escape]);
     await runPromptEnhancementCliMpsFirstPopupV1({ result, interaction: ui });
-    // The apply hint is always visible; the removed 'Add extra requirement' sub-label never shows.
-    expect(ui.frames[0]).toContain('Enter applies these details · unapplied details are not sent');
+    // ── Issue #160 ──────────────────────────────────────────────────────────────────────────
+    // The apply hint used to render unconditionally (owner request 2026-08-07, PE parity). The
+    // parity still holds — both surfaces changed together — but the hint is now keyed on the
+    // field having content, because an empty field was advertising an action with nothing to
+    // act on. Neither frame here has typed any details, so neither shows it.
+    expect(ui.frames[0]).not.toContain('Enter applies these details · unapplied details are not sent');
+    expect(ui.frames[1]).not.toContain('Enter applies these details · unapplied details are not sent');
+    // The removed 'Add extra requirement' sub-label still never shows — unrelated to #160, and
+    // kept here so that removal does not quietly come back.
     expect(ui.frames[0]).not.toContain('Add extra requirement');
     expect(ui.frames[1]).not.toContain('Add extra requirement');
     // Focusing the details row (frame 1) adds the editing-keys hint as the last line of the block.
+    // Still focus-keyed, deliberately: those keys only work while the row holds focus, which is a
+    // different question from whether there is anything to apply.
     expect(ui.frames[1]).toContain('Ctrl+J new line');
+  });
+
+  it('the apply hint DOES appear as soon as details are typed (#160, the other half)', async () => {
+    const result = await preparePromptEnhancement(request(MULTI_INTENT));
+    // Move onto the details row and type — no Enter, so the text is still unapplied.
+    const ui = scripted([KEY.down, 'u', 's', 'e', ' ', 'p', 'g', KEY.escape]);
+    await runPromptEnhancementCliMpsFirstPopupV1({ result, interaction: ui });
+    const typed = ui.frames[ui.frames.length - 1]!;
+    expect(typed).toContain('use pg');
+    // This is the case the hint exists for: text is present and not yet applied, so the reader
+    // needs to be told what Enter does with it.
+    expect(typed).toContain('Enter applies these details · unapplied details are not sent');
   });
 
   it('MPS first popup: Esc declines (caller falls through to the regular PE popup)', async () => {

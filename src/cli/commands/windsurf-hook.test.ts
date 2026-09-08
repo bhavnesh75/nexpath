@@ -1,4 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
+import { SUBMIT_POPUP_MIN_REMAINING_MS } from './submit-expiry-consumer.js';
+vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
+  // RC71 hermetic: the real spawner would launch a detached `node <argv[1]> submit-expiry-consume`
+  // from inside the test runner. The constant is kept real; only the spawn is stubbed.
+  const mod = await importOriginal<typeof import('./submit-expiry-consumer.js')>();
+  return { ...mod, spawnExpiryConsumer: vi.fn(() => ({ spawned: true, pid: 4242 })) };
+});
 import { EventEmitter } from 'node:events';
 import { Command } from 'commander';
 import {
@@ -8,8 +15,7 @@ import {
   runWindsurfHookAction,
   isReplacementEcho,
   isDuplicateWindsurfInvocation,
-  WINDSURF_BLOCK_CARD_MESSAGE,
-} from './windsurf-hook.js';
+  WINDSURF_BLOCK_CARD_MESSAGE, readInjectedPromptSnapshot } from './windsurf-hook.js';
 import {
   WINDSURF_INVOCATION_DIRNAME,
   WINDSURF_FALLBACK_WINDOW_MS,
@@ -712,5 +718,262 @@ describe('⭐ RC64 — duplicate windsurf invocations (global + workspace both e
     } as never);
     expect(check).not.toHaveBeenCalled();
     expect(handle).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ⭐ RC67 — Windsurf hold expiry is LOGGED with the budget split. Before this the
+ * Windsurf hook wrote NOTHING when the hold expired (Cursor at least logged
+ * decider_timed_out) — the tester diagnosed the 76 s expiries from a MISSING line.
+ * Logging only; the decision and the exit code are unchanged (pinned below).
+ */
+describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () => {
+  const GATE_ENV = { NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY: '1' };
+  const PAYLOAD = JSON.stringify({ trajectory_id: 't-rc67', tool_info: { user_prompt: 'hello world' } });
+  const noDup = () => ({ duplicate: false, key_kind: 'none' as const });
+  const collect = () => {
+    const events: Array<{ name: string; data: Record<string, unknown> }> = [];
+    const logEvent = vi.fn((_l: string, name: string, data?: Record<string, unknown>) => { events.push({ name, data: data ?? {} }); });
+    return { events, logEvent, find: (n: string) => events.filter((e) => e.name === n) };
+  };
+  // Gated pre_user_prompt segments, in order: stdin → echo check → auto wait → decider.
+  const holdThatExpiresAt = (expireOnCall: number) => {
+    let call = 0;
+    return {
+      // RC71: `remaining` models the hold — plenty until the expiring segment,
+      // 0 after it. (A flat 0 would trip the 6.1 floor before the decider ran.)
+      remaining: () => (call >= expireOnCall ? 0 : 60_000), expired: () => call >= expireOnCall,
+      run: async <T>(work: () => Promise<T>) => {
+        call += 1;
+        if (call >= expireOnCall) return { timedOut: true as const };
+        return { timedOut: false as const, value: await work() };
+      },
+    };
+  };
+  const base = (over: Record<string, unknown>) => ({
+    env: { ...GATE_ENV }, readStdin: async () => PAYLOAD, checkDuplicateInvocation: noDup,
+    checkReplacementEcho: async () => false, handle: async () => ({ child: null } as never),
+    waitForChild: async () => {}, raisePopup: () => {}, ...over,
+  });
+
+  it('⭐ decider timeout ⇒ windsurf_hook_hold_expired{segment:decider} + hold_split{decider_timed_out} and exit 0 (fail-open)', async () => {
+    const c = collect(); const exits: number[] = [];
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, holdBudget: holdThatExpiresAt(4),
+      decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
+    }) as never);
+    const exp = c.find('windsurf_hook_hold_expired');
+    expect(exp).toHaveLength(1);
+    expect(exp[0]!.data.segment).toBe('decider');
+    expect(typeof exp[0]!.data.auto_ms).toBe('number');
+    expect(typeof exp[0]!.data.decider_ms).toBe('number');
+    const split = c.find('windsurf_hook_hold_split');
+    expect(split).toHaveLength(1);
+    expect(split[0]!.data).toMatchObject({ decision: 'allow', decider_timed_out: true });
+    expect(exits).toEqual([0]);
+  });
+
+  it('⭐ auto-wait timeout ⇒ windsurf_hook_hold_expired{segment:auto}, no split (no decision ran), exit 0', async () => {
+    const c = collect(); const exits: number[] = []; const decide = vi.fn(async () => 'block' as const);
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, holdBudget: holdThatExpiresAt(3), decidePromptSubmit: decide,
+      exit: (code: number) => { exits.push(code); },
+    }) as never);
+    const exp = c.find('windsurf_hook_hold_expired');
+    expect(exp).toHaveLength(1);
+    expect(exp[0]!.data.segment).toBe('auto');
+    expect(exp[0]!.data.decider_ms).toBeNull();
+    expect(c.find('windsurf_hook_hold_split')).toHaveLength(0);
+    expect(decide).not.toHaveBeenCalled();
+    expect(exits).toEqual([0]);
+  });
+
+  it('a normal block run ⇒ hold_split{decision:block} with numeric fields, NO hold_expired, exit 2', async () => {
+    const c = collect(); const exits: number[] = [];
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, decidePromptSubmit: async () => 'block' as const,
+      exit: (code: number) => { exits.push(code); },
+    }) as never);
+    expect(c.find('windsurf_hook_hold_expired')).toHaveLength(0);
+    const split = c.find('windsurf_hook_hold_split');
+    expect(split).toHaveLength(1);
+    expect(split[0]!.data.decision).toBe('block');
+    expect(typeof split[0]!.data.auto_ms).toBe('number');
+    expect(typeof split[0]!.data.decider_ms).toBe('number');
+    expect(typeof split[0]!.data.remaining_after_auto_ms).toBe('number');
+    expect(exits).toEqual([2]);
+  });
+
+  it('⭐ switch OFF ⇒ the sink is never called (old flow byte-identical)', async () => {
+    const c = collect();
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      env: {}, logEvent: c.logEvent, exit: () => {},
+    }) as never);
+    expect(c.logEvent).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⭐ RC71 — expiry consume (tester §4b fix 1) + the 6.1 floor, Windsurf side.
+ * On every expiry — and below the floor — a DETACHED consumer is spawned for
+ * this turn's rows, so nothing replays next turn; the hook still exits 0 at once.
+ */
+describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
+  const GATE_ENV = { NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY: '1' };
+  const PAYLOAD = JSON.stringify({ trajectory_id: 't-rc71', tool_info: { user_prompt: 'hello world' } });
+  const noDup = () => ({ duplicate: false, key_kind: 'none' as const });
+  const collect = () => {
+    const events: Array<{ level: string; name: string; data: Record<string, unknown> }> = [];
+    const logEvent = vi.fn((level: string, name: string, data?: Record<string, unknown>) => { events.push({ level, name, data: data ?? {} }); });
+    return { events, logEvent, find: (n: string) => events.filter((e) => e.name === n) };
+  };
+  // Segments in order: stdin → echo check → auto wait → decider.
+  const holdWith = (remainingAfterAuto: number, expireOnCall = Infinity) => {
+    let call = 0;
+    return {
+      remaining: () => (call >= expireOnCall ? 0 : remainingAfterAuto), expired: () => call >= expireOnCall,
+      run: async <T>(work: () => Promise<T>) => {
+        call += 1;
+        if (call >= expireOnCall) return { timedOut: true as const };
+        return { timedOut: false as const, value: await work() };
+      },
+    };
+  };
+  const base = (over: Record<string, unknown>) => ({
+    env: { ...GATE_ENV }, readStdin: async () => PAYLOAD, checkDuplicateInvocation: noDup,
+    checkReplacementEcho: async () => false, handle: async () => ({ child: null } as never),
+    waitForChild: async () => {}, raisePopup: () => {}, ...over,
+  });
+
+  it('⭐ decider expiry ⇒ consumer spawned once {reason:decider_expired, project, before≈now}, logged, exit 0', async () => {
+    const c = collect(); const exits: number[] = [];
+    const consumer = vi.fn(() => ({ spawned: true, pid: 77 }));
+    const t0 = Date.now();
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, holdBudget: holdWith(60_000, 4), spawnExpiryConsumer: consumer,
+      decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
+    }) as never);
+    expect(consumer).toHaveBeenCalledTimes(1);
+    const arg = consumer.mock.calls[0]![0] as unknown as { projectRoot: string; before: number; reason: string };
+    expect(arg.reason).toBe('decider_expired');
+    expect(arg.projectRoot).toBe('/proj');
+    expect(arg.before).toBeGreaterThanOrEqual(t0);
+    expect(arg.before).toBeLessThanOrEqual(Date.now());
+    expect(c.find('windsurf_hook_expiry_consume')).toEqual([{ level: 'info', name: 'windsurf_hook_expiry_consume',
+      data: { reason: 'decider_expired', spawned: true, pid: 77, error: null } }]);
+    expect(exits).toEqual([0]);
+  });
+
+  it('⭐ auto expiry ⇒ consumer {reason:auto_expired}; decider never consulted', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 1 })); const decide = vi.fn(async () => 'block' as const);
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: () => {}, holdBudget: holdWith(60_000, 3), spawnExpiryConsumer: consumer,
+      decidePromptSubmit: decide, exit: () => {},
+    }) as never);
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect((consumer.mock.calls[0]![0] as unknown as { reason: string }).reason).toBe('auto_expired');
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it('⭐ below the floor after auto ⇒ hold_floor logged, decider SKIPPED, consumer {reason:below_floor}, no split, exit 0', async () => {
+    const c = collect(); const exits: number[] = [];
+    const consumer = vi.fn(() => ({ spawned: true, pid: 2 })); const decide = vi.fn(async () => 'block' as const);
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS - 1), spawnExpiryConsumer: consumer,
+      decidePromptSubmit: decide, exit: (code: number) => { exits.push(code); },
+    }) as never);
+    const floor = c.find('windsurf_hook_hold_floor');
+    expect(floor).toHaveLength(1);
+    expect(floor[0]!.data).toMatchObject({ remaining_after_auto_ms: SUBMIT_POPUP_MIN_REMAINING_MS - 1, floor_ms: SUBMIT_POPUP_MIN_REMAINING_MS });
+    expect(typeof floor[0]!.data.auto_ms).toBe('number');
+    expect(decide).not.toHaveBeenCalled();
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect((consumer.mock.calls[0]![0] as unknown as { reason: string }).reason).toBe('below_floor');
+    expect(c.find('windsurf_hook_hold_expired')).toHaveLength(0);
+    expect(c.find('windsurf_hook_hold_split')).toHaveLength(0); // no decision ran (same as the auto-expiry precedent)
+    expect(exits).toEqual([0]);
+  });
+
+  it('exactly AT the floor the decider still runs and nothing is consumed', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 3 })); const decide = vi.fn(async () => 'allow' as const);
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: () => {}, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS), spawnExpiryConsumer: consumer,
+      decidePromptSubmit: decide, exit: () => {},
+    }) as never);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(consumer).not.toHaveBeenCalled();
+  });
+
+  it('a normal block run (real budget) ⇒ consumer never spawned, exit 2 unchanged', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 4 })); const exits: number[] = [];
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: () => {}, spawnExpiryConsumer: consumer,
+      decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
+    }) as never);
+    expect(consumer).not.toHaveBeenCalled();
+    expect(exits).toEqual([2]);
+  });
+
+  it('a failed consumer spawn is logged as warn and never changes the fail-open exit', async () => {
+    const c = collect(); const exits: number[] = [];
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      logEvent: c.logEvent, holdBudget: holdWith(60_000, 4),
+      spawnExpiryConsumer: () => ({ spawned: false, error: 'EACCES' }),
+      decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
+    }) as never);
+    expect(c.find('windsurf_hook_expiry_consume')[0]).toMatchObject({ level: 'warn', data: { spawned: false, error: 'EACCES' } });
+    expect(exits).toEqual([0]);
+  });
+
+  it('⭐ gated ⇒ NEXPATH_HOLD_REMAINING_MS is set (numeric) before `handle` spawns auto; switch OFF ⇒ never set, consumer never spawned', async () => {
+    const seen: Array<string | undefined> = [];
+    const env: Record<string, string> = { ...GATE_ENV };
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      env, logEvent: () => {}, handle: async () => { seen.push(env.NEXPATH_HOLD_REMAINING_MS); return { child: null } as never; },
+      decidePromptSubmit: async () => 'allow' as const, exit: () => {},
+    }) as never);
+    expect(seen).toHaveLength(1);
+    expect(Number(seen[0])).toBeGreaterThan(0);
+    const offEnv: Record<string, string> = {};
+    const consumer = vi.fn(() => ({ spawned: true, pid: 5 }));
+    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      env: offEnv, logEvent: () => {}, spawnExpiryConsumer: consumer, exit: () => {},
+    }) as never);
+    expect(offEnv.NEXPATH_HOLD_REMAINING_MS).toBeUndefined();
+    expect(offEnv.NEXPATH_AGENT).toBe('windsurf'); // the pre-existing line still runs on the old flow
+    expect(consumer).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⭐ Double-close (Bhavnesh finding 2026-09-06): the echo check must READ the
+ * session, never close it. SessionStateManager.load() folds maturity at the
+ * 30-minute boundary even for a read-only caller; auto then folds it again.
+ */
+describe('⭐ double-close — isReplacementEcho reads the session without closing it', () => {
+  const BODY = 'a genuinely long injected replacement prompt body used by the double-close pins for containment';
+  const storeWith = (stateJson: string | null) => {
+    const run = vi.fn();
+    const exec = vi.fn((_sql: string, _params: unknown[]) => (stateJson === null ? [] : [{ values: [[stateJson]] }]));
+    return { store: { db: { exec, run } } as never, run, exec };
+  };
+  const state = (over: Record<string, unknown>) => JSON.stringify({ sessionId: 's1', promptCount: 3, lastPromptAt: Date.now(), lastInjectedPrompt: BODY, ...over });
+
+  it('⭐ default reader: the persisted lastInjectedPrompt is read and NOTHING is written (no fold, no save)', async () => {
+    const { store, run, exec } = storeWith(state({}));
+    await expect(isReplacementEcho('/proj', BODY, { openStore: async () => store, closeStore: () => {} })).resolves.toBe(true);
+    expect(exec).toHaveBeenCalledWith('SELECT state_json FROM session_states WHERE project_root = ?', ['/proj']);
+    expect(run).not.toHaveBeenCalled();
+  });
+  it('past the 30-minute gap the session counts as over — same answer load() gave (fresh session, no injected prompt)', () => {
+    const { store } = storeWith(state({ lastPromptAt: Date.now() - 30 * 60 * 1000 }));
+    expect(readInjectedPromptSnapshot(store, '/proj').current.lastInjectedPrompt).toBeNull();
+    const live = storeWith(state({ lastPromptAt: Date.now() - 30 * 60 * 1000 + 5_000 }));
+    expect(readInjectedPromptSnapshot(live.store, '/proj').current.lastInjectedPrompt).toBe(BODY);
+  });
+  it('no row / corrupt JSON / non-string field ⇒ null, never a throw', () => {
+    expect(readInjectedPromptSnapshot(storeWith(null).store, '/proj').current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(storeWith('{not json').store, '/proj').current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(storeWith(state({ lastInjectedPrompt: 42 })).store, '/proj').current.lastInjectedPrompt).toBeNull();
   });
 });

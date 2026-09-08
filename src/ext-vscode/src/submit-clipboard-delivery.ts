@@ -1,4 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { darwinAppCandidates, darwinEditorIsFrontmost } from './darwin-focus.js';
+import type { EditorWindowTarget } from './editor-window-target.js';
 
 /**
  * Clipboard-fallback delivery for the submit-time advisory (hook milestone H3).
@@ -145,8 +148,16 @@ export interface SubmitKeystrokeDeps {
    * names; the app's own reported name is the one string that tracks reality.
    */
   appName?: string;
+  /**
+   * RC74: `env.appName` + `workspace.name` — identifies THIS window so win32 can focus it
+   * by handle instead of letting AppActivate pick any window of the app. Absent ⇒ the
+   * RC49/RC60 script, byte-identical.
+   */
+  windowTarget?: EditorWindowTarget;
   /** RC47: diagnostic sink for the win32 submit path (which titles failed, what held the foreground). */
   submitLog?: (message: string) => void;
+  /** F-9 seam: capture runner for the darwin frontmost read (defaults to a bounded spawnSync). */
+  runCapture?: (cmd: string, args: string[]) => string | null;
 }
 
 
@@ -263,7 +274,17 @@ export function focusedWindowIsEditor(host: 'windsurf' | 'cursor', deps: {
 } = {}): boolean {
   const platform = deps.platform ?? process.platform;
   const env = deps.env ?? process.env;
-  if (platform !== 'linux') return true; // no check possible; prior behaviour
+  // F-9 (2026-09-07): macOS gets the same "Enter only when the editor is in
+  // front" rule Linux has had since RC11 — the frontmost process name via
+  // System Events, live appName first (RC47 rule). Unreadable ⇒ false: a
+  // keystroke we cannot target must not fire; the caller reports
+  // `submit_failed` and the one-time Accessibility hint (RC16/F-3) explains.
+  if (platform === 'darwin') {
+    return darwinEditorIsFrontmost(darwinAppCandidates(deps.appName, host), {
+      runCapture: deps.runCapture ?? defaultRunCapture,
+    });
+  }
+  if (platform !== 'linux') return true; // win32: RC49 targets inside its own script
   if (!env.DISPLAY && !env.WAYLAND_DISPLAY) return false;
   const has = deps.hasCommand ?? defaultHasCommand;
   const runCapture = deps.runCapture ?? defaultRunCapture;
@@ -307,13 +328,104 @@ export function isDarwinAccessibilityDenial(err: string | null): boolean {
 export const WIN32_KEYSTROKE_TIMEOUT_MS = 20_000;
 
 /**
+ * RC70 (F-3): the one-time "press Enter yourself" hint for a `submit_failed`
+ * outcome, per platform — pure, so it can be pinned without a vscode host.
+ * Returns null when no hint applies (any other outcome, or linux, where the
+ * RC59 gate names its own reason in the log). Wording is the RC16/RC47 text the
+ * Windsurf branch has shipped since 2026-08-15/22.
+ */
+export function submitFailedHint(
+  outcome: string,
+  platform: NodeJS.Platform,
+  darwinError: string | null,
+): string | null {
+  if (outcome !== 'submit_failed') return null;
+  if (platform === 'win32') {
+    return 'Nexpath: your refined prompt is in the chat input — press Enter to send it. (Auto-send could not focus the editor window this time.)';
+  }
+  if (platform === 'darwin') {
+    return isDarwinAccessibilityDenial(darwinError)
+      ? 'Nexpath: your refined prompt is in the chat — press Enter to send it. To enable auto-send, grant Accessibility to this editor: System Settings → Privacy & Security → Accessibility.'
+      : 'Nexpath: your refined prompt is in the chat — press Enter to send it. Auto-send could not simulate the keystroke on this Mac (check System Settings → Privacy & Security → Accessibility).';
+  }
+  return null;
+}
+
+/**
  * RC65: the user32 Add-Type prelude, extracted so the activation pre-warm
  * compiles the BYTE-IDENTICAL C# source the real keystroke scripts use (the
  * cold cost being warmed is csc/.NET/Defender machine caches keyed off this
  * compile — a different source would warm nothing).
  */
-export const WIN32_USER32_ADDTYPE =
-  `Add-Type '[DllImport("user32.dll")]public static extern System.IntPtr GetForegroundWindow();[DllImport("user32.dll")]public static extern int GetWindowText(System.IntPtr h,System.Text.StringBuilder s,int n);' -Name U -Namespace W;`;
+export const WIN32_USER32_CSHARP =
+  '[DllImport("user32.dll")]public static extern System.IntPtr GetForegroundWindow();' +
+  '[DllImport("user32.dll")]public static extern int GetWindowText(System.IntPtr h,System.Text.StringBuilder s,int n);' +
+  // RC74: enumerate top-level windows and focus ONE of them. `FindWindowEx` with a null
+  // parent walks the top-level list, which avoids the `EnumWindows` callback delegate —
+  // a scriptblock-to-delegate cast is the kind of thing that behaves differently across
+  // PowerShell versions, and this script has to run on Windows PowerShell 5.1.
+  '[DllImport("user32.dll",CharSet=CharSet.Auto)]public static extern System.IntPtr FindWindowEx(System.IntPtr p,System.IntPtr c,string cls,string win);' +
+  '[DllImport("user32.dll")]public static extern bool SetForegroundWindow(System.IntPtr h);' +
+  '[DllImport("user32.dll")]public static extern bool IsWindowVisible(System.IntPtr h);';
+export const WIN32_USER32_ADDTYPE = `Add-Type '${WIN32_USER32_CSHARP}' -Name U -Namespace W;`;
+
+/**
+ * RC72 (Windows post-Enter latency, owner report 2026-09-07: "Ubuntu 3–5 s, Windows far
+ * more"). Every win32 keystroke spawned a PowerShell that COMPILED the user32 helper with
+ * Add-Type (csc.exe) — RC52 measured 8,025 ms cold / 805 ms warm PER keystroke, and one
+ * delivery needs two (paste ^v, then {ENTER}), so Windows paid 1.6 s warm to 16 s cold on
+ * top of the poll tick, where Linux's xdotool takes milliseconds. The RC65 pre-warm only
+ * warmed machine caches; every keystroke still compiled.
+ *
+ * Fix: the pre-warm compiles the SAME C# source ONCE to a per-user assembly
+ * (`%LOCALAPPDATA%\nexpath\user32-fg-<hash>.dll`; the hash is of the source, so a changed
+ * helper can never load a stale DLL). Keystroke scripts load that DLL (tens of ms) and fall
+ * back to the byte-identical inline compile when it is missing or fails to load. Same type
+ * name, same script after the prelude, same failure modes — only the compile leaves the hot
+ * path. `NXHELPER=cached|compiled` on stdout names which path ran (the submit log shows it).
+ */
+export const WIN32_HELPER_CACHE_VERSION = 'v1';
+
+/** Per-user cache location of the compiled helper; null when Windows' env gives no base dir. */
+export function win32HelperAssemblyPath(env: NodeJS.ProcessEnv = process.env): string | null {
+  const base = env.LOCALAPPDATA?.trim() || env.TEMP?.trim() || env.TMP?.trim();
+  if (!base) return null;
+  const hash = createHash('sha1').update(`${WIN32_USER32_CSHARP}|${WIN32_HELPER_CACHE_VERSION}`).digest('hex').slice(0, 8);
+  return `${base.replace(/[\\/]+$/, '')}\\nexpath\\user32-fg-${hash}.dll`;
+}
+
+const psQuote = (s: string): string => `'${s.replace(/'/g, "''")}'`;
+
+/** Prelude that makes `[W.U]` available: cached assembly first, inline compile as the fallback. */
+export function win32HelperPrelude(helperDll: string | null | undefined): string {
+  if (!helperDll) return WIN32_USER32_ADDTYPE;
+  return (
+    `$nxDll=${psQuote(helperDll)};$nxHelper='compiled';` +
+    `if(Test-Path -LiteralPath $nxDll){try{Add-Type -LiteralPath $nxDll -ErrorAction Stop;$nxHelper='cached'}catch{}};` +
+    `if($nxHelper -ne 'cached'){${WIN32_USER32_ADDTYPE}};` +
+    `Write-Output ("NXHELPER=" + $nxHelper);`
+  );
+}
+
+/** The activation pre-warm: compile the helper to the cache once (atomic rename); a present cache is left alone. */
+export function buildWin32PrewarmScript(helperDll: string | null | undefined): string {
+  if (!helperDll) return `${WIN32_USER32_ADDTYPE}exit 0`;
+  const dir = helperDll.replace(/[\\/][^\\/]*$/, '');
+  return (
+    `$nxDll=${psQuote(helperDll)};$nxDir=${psQuote(dir)};` +
+    `if(-not (Test-Path -LiteralPath $nxDll)){New-Item -ItemType Directory -Force -Path $nxDir|Out-Null;` +
+    `$nxTmp=$nxDll+'.tmp-'+$PID+'.dll';` +
+    `Add-Type '${WIN32_USER32_CSHARP}' -Name U -Namespace W -OutputAssembly $nxTmp;` +
+    `if(Test-Path -LiteralPath $nxTmp){Move-Item -LiteralPath $nxTmp -Destination $nxDll -Force}};exit 0`
+  );
+}
+
+/** Which helper path a win32 keystroke script reported on stdout (see win32HelperPrelude). */
+export function parseWin32HelperMode(stdout: string | null | undefined): 'cached' | 'compiled' | 'unknown' {
+  const line = (stdout ?? '').split('\n').map((l) => l.trim()).find((l) => l.startsWith('NXHELPER='));
+  const v = line?.slice('NXHELPER='.length);
+  return v === 'cached' || v === 'compiled' ? v : 'unknown';
+}
 
 /**
  * RC65 (Windows/Cursor marketplace tester, 2026-08-25): the FIRST win32
@@ -333,6 +445,7 @@ export function warmWin32KeystrokePath(
   logFn: (line: string) => void,
   deps: {
     platform?: NodeJS.Platform;
+    env?: NodeJS.ProcessEnv;
     now?: () => number;
     spawnFn?: (cmd: string, args: string[]) => {
       on: (ev: 'exit' | 'error', fn: (a?: unknown) => void) => unknown;
@@ -348,14 +461,15 @@ export function warmWin32KeystrokePath(
     const start = now();
     const spawnFn = deps.spawnFn ?? ((cmd: string, args: string[]) =>
       spawn(cmd, args, { stdio: 'ignore', windowsHide: true }));
-    const child = spawnFn('powershell', ['-NoProfile', '-Command', `${WIN32_USER32_ADDTYPE}exit 0`]);
+    const helperDll = win32HelperAssemblyPath(deps.env ?? process.env);
+    const child = spawnFn('powershell', ['-NoProfile', '-Command', buildWin32PrewarmScript(helperDll)]);
     // Hygiene only: a hung PowerShell is inert (stdio ignored, unref'd), but
     // don't leave one per activation lying around forever.
     const reap = setTimeout(() => { try { child.kill?.(); } catch { /* already gone */ } }, 30_000);
     if (typeof (reap as { unref?: () => void }).unref === 'function') (reap as unknown as { unref: () => void }).unref();
     child.on('exit', (code) => {
       clearTimeout(reap as Parameters<typeof clearTimeout>[0]);
-      logFn(`[nexpath] win32 keystroke pre-warm: compiler warmed in ${now() - start} ms (exit ${String(code ?? 'null')})`);
+      logFn(`[nexpath] win32 keystroke pre-warm: compiler warmed in ${now() - start} ms (exit ${String(code ?? 'null')}) — helper cache: ${helperDll ?? 'none'}`);
     });
     child.on('error', () => {
       clearTimeout(reap as Parameters<typeof clearTimeout>[0]);
@@ -384,13 +498,79 @@ export function warmWin32KeystrokePath(
  * and there the lock permits it more often, because the user has interacted
  * recently. On final failure, print the foreground title and exit 1.
  */
-export function buildWin32KeystrokeScript(titles: readonly string[], sendKeys: string): string {
+/**
+ * RC74 (Windows) — the same wrong-window defect the Linux raise had, measured there:
+ * `AppActivate('Cursor')` matches a window title by prefix, so with two editor windows
+ * open it hands back an arbitrary one, and the foreground check below accepts ANY window
+ * of the application. Both let the paste and the Enter land in a chat the user is not
+ * looking at.
+ *
+ * This block runs first: walk the top-level windows, score each title exactly as
+ * `editor-window-target.ts` scores them on Linux (same tiers, same rules), and focus the
+ * best match by handle. On success `$ok` is set and the existing candidate matching and
+ * AppActivate rounds are skipped; on ANY failure — no workspace name, no window scored,
+ * `SetForegroundWindow` refused by the foreground lock — it falls through to exactly the
+ * RC49/RC60 behaviour that ships today.
+ *
+ * ⚠ NOT EXECUTED ON WINDOWS by the author. The generated script is parse-checked and its
+ * scoring half is executed under PowerShell; the P/Invoke half is not.
+ */
+export function buildWin32WindowTargetBlock(target: EditorWindowTarget): string {
+  const app = String(target.appName ?? '').trim();
+  if (!app) return '';
+  const q = (v: string): string => `'${v.replace(/'/g, "''")}'`;
+  const ws = String(target.workspaceName ?? '').trim();
+  return (
+    `function nxScore($t,$app,$ws){` +
+    `if([string]::IsNullOrEmpty($t) -or [string]::IsNullOrEmpty($app)){return 0};` +
+    `if(-not ($t -eq $app -or $t.EndsWith(' - '+$app) -or $t.EndsWith($app))){return 0};` +
+    `if($ws){` +
+    `if($t -eq ($ws+' - '+$app)){return 100};` +
+    `if($t.EndsWith(' - '+$ws+' - '+$app)){return 90};` +
+    `if($t.Contains(' - '+$ws+' - ')){return 80};` +
+    `if($t.StartsWith($ws+' - ')){return 75};` +
+    `if($t.Contains($ws)){return 30}` +
+    `}else{` +
+    `if($t -eq $app){return 100};` +
+    `if($t.EndsWith(' - '+$app) -and (($t -split ' - ').Count -eq 2)){return 60}` +
+    `};` +
+    `return 10};` +
+    `$nxApp=${q(app)};$nxWs=${q(ws)};$nxBest=[IntPtr]::Zero;$nxTop=0;` +
+    `$nxH=[W.U]::FindWindowEx([IntPtr]::Zero,[IntPtr]::Zero,$null,$null);` +
+    `while($nxH -ne [IntPtr]::Zero){` +
+    `if([W.U]::IsWindowVisible($nxH)){` +
+    `$nxB=New-Object System.Text.StringBuilder 512;[void][W.U]::GetWindowText($nxH,$nxB,512);` +
+    `$nxS=nxScore ($nxB.ToString()) $nxApp $nxWs;` +
+    `if($nxS -gt $nxTop){$nxTop=$nxS;$nxBest=$nxH}};` +
+    `$nxH=[W.U]::FindWindowEx([IntPtr]::Zero,$nxH,$null,$null)};` +
+    `if($nxBest -ne [IntPtr]::Zero){` +
+    `if([W.U]::GetForegroundWindow() -eq $nxBest){$ok=$true}` +
+    `else{[void][W.U]::SetForegroundWindow($nxBest);Start-Sleep -Milliseconds 150;` +
+    `if([W.U]::GetForegroundWindow() -eq $nxBest){$ok=$true}}};` +
+    `Write-Output ("NXWIN=" + $nxTop);`
+  );
+}
+
+/** Which window tier the win32 script matched (see buildWin32WindowTargetBlock); -1 when absent. */
+export function parseWin32WindowScore(stdout: string | null | undefined): number {
+  const line = (stdout ?? '').split('\n').map((l) => l.trim()).find((l) => l.startsWith('NXWIN='));
+  const n = Number(line?.slice('NXWIN='.length));
+  return Number.isFinite(n) ? n : -1;
+}
+
+export function buildWin32KeystrokeScript(
+  titles: readonly string[],
+  sendKeys: string,
+  opts: { helperDll?: string | null; target?: EditorWindowTarget } = {},
+): string {
   const psTitles = titles.map((t) => `'${t.replace(/'/g, "''")}'`).join(',');
   return (
-    WIN32_USER32_ADDTYPE +
+    win32HelperPrelude(opts.helperDll) +
     `$w=New-Object -ComObject WScript.Shell;` +
     `$b=New-Object System.Text.StringBuilder 256;[void][W.U]::GetWindowText([W.U]::GetForegroundWindow(),$b,256);$fg=$b.ToString();` +
     `$ok=$false;` +
+    // RC74: focus THIS window first; everything below is the untouched fallback.
+    (opts.target ? buildWin32WindowTargetBlock(opts.target) : '') +
     // RC60 (Windows/Devin staging tester, 2026-08-24): this Devin build titles
     // windows "<folder> - Devin - <session title>" — the app name sits MID-title,
     // so suffix-only matching refused a foreground window that WAS the editor
@@ -422,7 +602,7 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
   // button and closed the user's chat.
   if (deps.host) {
     const isEditorFocused = deps.isEditorFocused ?? focusedWindowIsEditor;
-    const focusDeps = { platform, env, appName: deps.appName };
+    const focusDeps = { platform, env, appName: deps.appName, runCapture: deps.runCapture };
     if (!isEditorFocused(deps.host, focusDeps)) {
       deps.focusEditor?.();
       if (!isEditorFocused(deps.host, focusDeps)) {
@@ -486,8 +666,9 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
       // exact/prefix/suffix — "Devin Next" misses the bare product names).
       const titles = [...new Set([deps.appName?.trim(), ...hostTitles].filter((t): t is string => !!t))];
       // RC49: foreground-first — see buildWin32KeystrokeScript.
-      const ps = buildWin32KeystrokeScript(titles, '{ENTER}');
+      const ps = buildWin32KeystrokeScript(titles, '{ENTER}', { helperDll: win32HelperAssemblyPath(env), target: deps.windowTarget });
       if (deps.run) return deps.run('powershell', ['-NoProfile', '-Command', ps]);
+      const t0 = Date.now();
       // RC52 (Windows tester 2026-08-24): the FIRST submit of a session took
       // 8025 ms — the old 8000 ms timeout killed PowerShell mid Add-Type
       // (cold C# compile + Defender scan on first run); the second, warm call
@@ -496,6 +677,8 @@ export function submitKeystroke(deps: SubmitKeystrokeDeps = {}): boolean {
       const res = spawnSync('powershell', ['-NoProfile', '-Command', ps], {
         stdio: ['ignore', 'pipe', 'ignore'], timeout: WIN32_KEYSTROKE_TIMEOUT_MS, encoding: 'utf8',
       });
+      // RC72: name the helper path and the wall time — the Windows tester's log answers "was it the compile?" from one line.
+      deps.submitLog?.(`[nexpath] submit-win32: keystroke script ${Date.now() - t0} ms (helper=${parseWin32HelperMode(res.stdout)}, window=${parseWin32WindowScore(res.stdout)}, status=${res.status ?? 'null'})`);
       if (res.status === 0) return true;
       const fg = (res.stdout ?? '').split('\n').find((l) => l.startsWith('FOREGROUND=')) ?? 'FOREGROUND=<unreadable>';
       // RC52: name HOW it failed — status null + SIGTERM is the timeout kill,

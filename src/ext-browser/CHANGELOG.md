@@ -3,6 +3,26 @@
 All notable changes to the browser extension. Versions track the `version` field in
 `manifest.chrome.json` / `manifest.firefox.json`.
 
+## 0.1.55
+
+Token mode now delivers the full enhancement.
+
+### Fixed
+- **With a Nexpath token, the improved prompt is now composed by the model, the same
+  way it is with your own OpenAI key.** Since token mode arrived in 0.1.53 the check
+  that decides whether a model call is allowed only recognised OpenAI keys, so token
+  users were quietly given the template-built fallback instead — a lesser version of
+  the same panel. The check now recognises both credentials. Nothing changes in what
+  the extension sends or where; the call that was always meant to happen now happens.
+  Because it does, a popup uses more of your credit than it did in 0.1.54.
+
+### Changed
+- The Nexpath token card on the settings page now links straight to your account
+  page, where the token is shown.
+- The rule for what a valid Nexpath token looks like is now read from one shared
+  definition rather than kept as a copy in the extension, so the extension and the
+  Nexpath CLI can no longer disagree about a token the service issued.
+
 ## 0.1.54
 
 Housekeeping. Nothing changes in what the extension does or what it sends.

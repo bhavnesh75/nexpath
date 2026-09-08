@@ -22,9 +22,9 @@ function memFs() {
         if (files.has(p)) throw Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
         files.add(p); mtimes.set(p, now);
       },
-      readdirFn: () => [...files].map((p) => p.split('/').pop()!),
+      readdirFn: () => [...files].map((p) => p.split(/[\\/]/).pop()!), // either separator (Windows joins with backslashes)
       mtimeMsFn: (p: string) => mtimes.get(p) ?? [...mtimes.values()][0] ?? now,
-      removeFn: (p: string) => { for (const f of [...files]) if (f.endsWith(p.split('/').pop()!)) { files.delete(f); mtimes.delete(f); } },
+      removeFn: (p: string) => { const base = p.split(/[\\/]/).pop()!; for (const f of [...files]) if (f.endsWith(base)) { files.delete(f); mtimes.delete(f); } },
     }),
   };
 }
@@ -56,7 +56,7 @@ describe('⭐ RC50/RC56 — atomic duplicate-invocation claim', () => {
     const fs = memFs();
     checkAndRecordCursorInvocation('/p', 'e', 'old', fs.deps(1000));
     checkAndRecordCursorInvocation('/p', 'e', 'new', fs.deps(1000 + 10 * 60_000 + 1));
-    const names = [...fs.files].map((p) => p.split('/').pop()!);
+    const names = [...fs.files].map((p) => p.split(/[\\/]/).pop()!); // either separator (Windows joins with backslashes)
     expect(names).not.toContain(cursorInvocationMarkerName('e', 'old'));
     expect(names).toContain(cursorInvocationMarkerName('e', 'new'));
   });

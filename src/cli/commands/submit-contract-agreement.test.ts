@@ -77,7 +77,7 @@ describe('⭐ the two halves of the duplicated contract must AGREE', () => {
     // Divergence here means the hook writes where nobody polls - silent.
     const m = extRuntime.match(/join\((\w+),\s*'([^']+)',\s*'([^']+)'\)/);
     expect(m, 'extension path helper not found').not.toBeNull();
-    expect(submitDecisionPath('/proj')).toBe(`/proj/${m![2]}/${m![3]}`);
+    expect(submitDecisionPath('/proj')).toBe(join('/proj', m![2], m![3])); // host separator
   });
 
   it('both sides accept the same host vocabulary', () => {

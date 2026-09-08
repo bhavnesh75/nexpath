@@ -183,8 +183,9 @@ describe('idempotent removal', () => {
 
 describe('config locations (Cursor merges three; we write only two)', () => {
   it('user and project paths', () => {
-    expect(getCursorUserHooksPath('/home/u')).toBe('/home/u/.cursor/hooks.json');
-    expect(getCursorProjectHooksPath('/proj')).toBe('/proj/.cursor/hooks.json');
+    // Host separator (Windows joins with backslashes) — the convention, not the slash, is the pin.
+    expect(getCursorUserHooksPath('/home/u')).toBe(join('/home/u', '.cursor', 'hooks.json'));
+    expect(getCursorProjectHooksPath('/proj')).toBe(join('/proj', '.cursor', 'hooks.json'));
   });
 
   it('identifies our own entries by command substring, with no marker field', () => {
@@ -305,7 +306,8 @@ describe('⚠ R5 — top-level version is REQUIRED or Cursor rejects the whole f
 describe('⭐ RC25 — the hook command carries an ABSOLUTE node path (never bare `node`)', () => {
   it('defaults to process.execPath', () => {
     const cmd = buildCursorHookCommand('/cli/index.js', 'beforeSubmitPrompt');
-    expect(cmd).toBe(`${JSON.stringify(process.execPath)} ${JSON.stringify('/cli/index.js')} cursor-hook beforeSubmitPrompt`);
+    // RC29: paths are quoted VERBATIM (no JSON escaping) — on Windows process.execPath carries backslashes.
+    expect(cmd).toBe(`"${process.execPath}" "/cli/index.js" cursor-hook beforeSubmitPrompt`);
     expect(cmd.startsWith('node ')).toBe(false);
   });
 

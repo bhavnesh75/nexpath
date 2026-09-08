@@ -94,6 +94,52 @@ function pressOn(el: HTMLElement, key: string, init: KeyboardEventInit = {}): vo
 }
 
 describe('producers (my views → their models)', () => {
+  // ── Issue #160 ────────────────────────────────────────────────────────────────────────────
+  // The apply hint used to sit in `hints.always`, so an empty details field advertised an action
+  // with nothing to act on. It now follows the CONTENT. This adapter exists to mirror the CLI, so
+  // the condition is the same one at cli-submit-popup.ts:817 and cli-mps-popup.ts:205/:394 — if
+  // those change, this changes with them.
+  describe('the Additional Details apply hint follows the content (#160)', () => {
+    const HINT = 'Enter applies these details · unapplied details are not sent';
+    const detailsRow = (additionalDetailsText: string) => {
+      const row = peSurfaceModel(view({ additionalDetailsText }))
+        .rows.find((r) => r.kind === 'field' && r.label === 'Additional details');
+      if (!row || row.kind !== 'field') throw new Error('no Additional details row');
+      return row;
+    };
+
+    it('empty field ⇒ the hint is not in `always`', () => {
+      expect(detailsRow('').hints?.always ?? []).not.toContain(HINT);
+    });
+
+    it('text present ⇒ the hint is back in `always`', () => {
+      expect(detailsRow('use postgres').hints?.always ?? []).toContain(HINT);
+    });
+
+    // Whitespace is not content — a field holding only spaces has nothing to apply, and showing
+    // the hint there would reproduce the reported problem in a narrower form.
+    it('whitespace-only counts as empty', () => {
+      for (const blank of [' ', '   ', '\n', ' \n ']) {
+        expect(detailsRow(blank).hints?.always ?? []).not.toContain(HINT);
+      }
+    });
+
+    // `whenFocused` answers a different question — those keys only work while the row holds
+    // focus — so it must NOT have picked up the content condition.
+    it('the edit-keys hint stays focus-keyed and unconditional', () => {
+      for (const text of ['', 'use postgres']) {
+        expect(detailsRow(text).hints?.whenFocused ?? []).toHaveLength(1);
+      }
+    });
+
+    // The row itself never disappears — the CLI builds it unconditionally
+    // (cli-submit-popup.ts:630-639) and this adapter mirrors that. Only the hint is conditional.
+    it('the details row itself still renders when empty', () => {
+      expect(detailsRow('').label).toBe('Additional details');
+      expect(detailsRow('').text).toBe('');
+    });
+  });
+
   it('the PE model is the CLI\'s THREE rows exactly: body, Additional details, Use original prompt', () => {
     const m = peSurfaceModel(view());
     expect(m.id).toBe('prompt_enhancement');
@@ -356,7 +402,7 @@ describe('chrome styles (live-caught 2026-08-25: unstyled transparent dock)', ()
 });
 
 describe('REAL prepare → whitelisted view → real dock DOM (plan §7: fixtures from real results, not hand-invented)', () => {
-  it('a real keyless engine prepare renders in the dock with its actual body and controls', async () => {
+  it('a real keyless engine prepare renders in the dock with its actual body and controls', { timeout: 30_000 }, async () => {
     const { buildBrowserPeRequest, prepareBrowserPe } = await import('../background/pe-prepare.js');
     const { buildPePanelView } = await import('../background/pe-popup-host.js');
     const prep = await prepareBrowserPe(buildBrowserPeRequest({

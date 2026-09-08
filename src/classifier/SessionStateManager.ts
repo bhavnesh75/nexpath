@@ -12,6 +12,10 @@ import { deleteAutogenRecordsForProject } from '../store/content-templates.js';
 import { markAutogenRefresh, selectionComputed } from '../decision-session/auto-template-generator.js';
 import type { StreamBPresenceResult } from './StreamBPresenceClassifier.js';
 import { appendParamEvents, type ParamEventChannel } from '../telemetry/param-events.js';
+// Diagnostics only. Safe here: this module is CLI-side — the browser worker uses
+// `core/session-state.ts`, not this file — and the extension build swaps `src/logger.ts`
+// for its browser logger anyway (`scripts/build-ext.mjs`, `nexpath-browser-logger`).
+import { logger } from '../logger.js';
 
 /** Gap in ms after which the session resets (30 minutes per research). */
 export const SESSION_GAP_MS = 30 * 60 * 1000;
@@ -130,18 +134,49 @@ export class SessionStateManager {
   /**
    * Load or create session state for a project.
    * Resets to a new session if the last prompt was > SESSION_GAP_MS ago.
+   *
+   * `endPreviousSession` (default `true`) controls whether crossing the gap CLOSES the ended
+   * session — folding its maturity observation and recording the boundary. It exists because
+   * closing a session is a once-per-boundary event while `load()` runs more than once per
+   * command: `runAuto` loads a throwaway manager for the injected-prompt guard, then loads the
+   * real one after the historical import may have rewritten the row. Neither call persists the
+   * fresh session, so both saw the same expired row and both closed it — two graduation
+   * observations, and two boundary records, for one boundary.
+   *
+   * ⚠️ The returned STATE is identical either way: past the gap the caller gets a fresh
+   * session regardless. Only the side effects of closing the old one are suppressed, so a
+   * caller passing `false` must not be the only loader in that run or the boundary goes
+   * unrecorded.
    */
-  static load(store: Store, projectRoot: string, now = Date.now()): SessionStateManager {
+  static load(
+    store: Store,
+    projectRoot: string,
+    now = Date.now(),
+    { endPreviousSession = true }: { endPreviousSession?: boolean } = {},
+  ): SessionStateManager {
     const persisted = loadState(store, projectRoot);
     if (persisted && now - persisted.lastPromptAt < SESSION_GAP_MS) {
       return new SessionStateManager(persisted);
     }
     // New session after an inactivity gap — fold the ended session's observation
     // into the maturity graduation before resetting to the fresh session.
-    if (persisted) this.foldEndedSessionMaturity(store, persisted, now);
+    if (persisted && endPreviousSession) this.foldEndedSessionMaturity(store, persisted, now);
     // New session — restore detected_language from projects table so it survives the gap
     const fresh = newSession(projectRoot, now);
     fresh.detectedLanguage = getProject(store, projectRoot)?.detectedLanguage ?? undefined;
+    // A session boundary is where accumulated stage, history, counters and fired-event keys
+    // are dropped, and until now it left no trace at all — so a run either side of one could
+    // not be told apart from a run inside it. Reported only; the reset itself is unchanged.
+    if (persisted && endPreviousSession) {
+      logger.info('session_reset', {
+        reason:              'inactivity_gap',
+        projectRoot,
+        previousSessionId:   persisted.sessionId,
+        previousStage:       persisted.currentStage,
+        previousPromptCount: persisted.promptCount,
+        newSessionId:        fresh.sessionId,
+      });
+    }
     return new SessionStateManager(fresh);
   }
 
@@ -160,6 +195,11 @@ export class SessionStateManager {
 
     // ── Gap reset check ──────────────────────────────────────────────────────
     if (s.promptCount > 0 && now - s.lastPromptAt >= SESSION_GAP_MS) {
+      // Captured before the reset below overwrites them — the whole point of the record is
+      // what the ended session was carrying.
+      const endedSessionId   = s.sessionId;
+      const endedStage       = s.currentStage;
+      const endedPromptCount = s.promptCount;
       // A session ended (inactivity gap) within this long-lived manager — fold its
       // observation into the maturity graduation before resetting.
       SessionStateManager.foldEndedSessionMaturity(store, s, now);
@@ -172,6 +212,16 @@ export class SessionStateManager {
       // Restore detected_language from projects table — survives the inactivity gap
       fresh.detectedLanguage = getProject(store, s.projectRoot)?.detectedLanguage ?? undefined;
       Object.assign(s, fresh);
+      // Same record as the one in `load()`, for the other place a session can end: inside a
+      // manager that was already loaded. Reported only; the reset itself is unchanged.
+      logger.info('session_reset', {
+        reason:              'inactivity_gap',
+        projectRoot:         s.projectRoot,
+        previousSessionId:   endedSessionId,
+        previousStage:       endedStage,
+        previousPromptCount: endedPromptCount,
+        newSessionId:        s.sessionId,
+      });
     }
 
     const promptIndex = s.promptCount;

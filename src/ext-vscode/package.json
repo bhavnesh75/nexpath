@@ -127,6 +127,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build && npm run bundle:cli",
+    "vscode:uninstall": "node ./out/uninstall.cjs",
     "build": "node esbuild.config.mjs",
     "bundle:cli": "node scripts/bundle-cli.mjs",
     "watch": "node esbuild.config.mjs --watch",

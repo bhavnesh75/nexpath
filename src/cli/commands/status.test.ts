@@ -511,7 +511,7 @@ function makeResult(overrides: Partial<StatusResult> = {}): StatusResult {
       errorCount: 0,
     },
     config: { prompt_capture_enabled: 'true', prompt_store_max_per_project: '500', prompt_store_max_db_mb: '100' },
-    credential: { source: 'keychain', serviceBaseUrl: null },
+    credential: { source: 'keychain', serviceBaseUrl: null, lastProviderFailure: null },
     hookStats: [],
     ...overrides,
   };
@@ -910,7 +910,7 @@ describe('runStatus — credential resolution', () => {
       keySourceFn: async (root) => { seen.push(root); return 'file'; },
     });
     expect(seen).toEqual(['/explicit/project']);
-    expect(result.credential).toEqual({ source: 'file', serviceBaseUrl: null });
+    expect(result.credential).toEqual({ source: 'file', serviceBaseUrl: null, lastProviderFailure: null });
   });
 
   it('carries the service base URL only in token mode', async () => {

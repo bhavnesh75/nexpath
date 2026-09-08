@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { join } from 'node:path';
-import { runSetupFlow, buildSetupCommand, type SetupFlowDeps, type SetupState } from './setup-flow.js';
+import { runSetupFlow, buildSetupCommand, type SetupFlowDeps, type SetupState, setupDoneMessage } from './setup-flow.js';
 import { type StageResult } from './cli-stage.js';
 import { type PrereqStatus } from './prereq.js';
 import { type RunResult } from './terminal-runner.js';
@@ -293,5 +293,32 @@ describe('⭐ RC32 — a registered hook needs the STAGED cli to actually run', 
   it('a broken staged cli with NO hook registered still re-runs (path unchanged)', async () => {
     const { deps } = build({ verifyHookRegistration: () => false, verifyStagedCli: () => false });
     expect(await runSetupFlow(deps, { preferExistingCli: true })).not.toBe('already-done');
+  });
+});
+
+/** ⭐ F-8 (2026-09-05) — first-run done-message: Windows Cursor must FULLY QUIT (RC54), everyone else reloads. */
+describe('⭐ F-8 — setup done-message wording', () => {
+  it('win32 + cursor ⇒ the RC54 "Fully QUIT Cursor" wording, never "Reload"', () => {
+    const m = setupDoneMessage('cursor', 'win32');
+    expect(m).toContain('Nexpath is set up for Cursor.');
+    expect(m).toContain('Fully QUIT Cursor (all windows) and reopen it');
+    expect(m).not.toContain('Reload');
+  });
+  it('every other platform+host keeps the shipped "Reload the window" wording', () => {
+    expect(setupDoneMessage('cursor', 'linux')).toContain('Reload the window or restart your agent');
+    expect(setupDoneMessage('cursor', 'darwin')).toContain('Reload the window or restart your agent');
+    expect(setupDoneMessage('windsurf', 'win32')).toBe('Nexpath is set up for Windsurf. Reload the window or restart your agent to activate guidance.');
+    expect(setupDoneMessage(undefined, 'win32')).toBe('Nexpath is set up for this editor. Reload the window or restart your agent to activate guidance.');
+  });
+  it('the flow passes the platform seam through (win32 + NEXPATH_AGENT=cursor ⇒ quit wording in showInfo)', async () => {
+    const prev = process.env.NEXPATH_AGENT; process.env.NEXPATH_AGENT = 'cursor';
+    try {
+      const { deps, calls } = makeDeps();
+      expect(await runSetupFlow(deps, { platform: 'win32' })).toBe('done');
+      expect(calls.showInfo.mock.calls[0]![0]).toContain('Fully QUIT Cursor');
+      const linux = makeDeps();
+      expect(await runSetupFlow(linux.deps, { platform: 'linux' })).toBe('done');
+      expect(linux.calls.showInfo.mock.calls[0]![0]).toContain('Reload the window');
+    } finally { if (prev === undefined) delete process.env.NEXPATH_AGENT; else process.env.NEXPATH_AGENT = prev; }
   });
 });

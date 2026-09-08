@@ -16,6 +16,11 @@ import {
 import { allSupportedIds } from './supported-agents-by-platform.js';
 import { getKeySource, type KeySource } from '../../config/ApiKeyResolver.js';
 import { resolveApiBaseUrl } from '../../config/NexpathTokenStore.js';
+import {
+  readLastProviderFailure,
+  describeProviderFailure,
+  type LastProviderFailure,
+} from './last-provider-failure.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -49,6 +54,13 @@ export interface CredentialStatus {
   source: KeySource;
   /** The service base URL, only in token mode — it is what decides where calls go. */
   serviceBaseUrl: string | null;
+  /**
+   * The last provider failure in the log, or `null`. A credential that RESOLVES can still be
+   * refused — out of credit, revoked, rotated — and the only symptom is that guidance goes
+   * quiet, which reads like nothing happening rather than like a failure. Reported here
+   * beside the source because that is the pair a reader needs together.
+   */
+  lastProviderFailure: LastProviderFailure | null;
 }
 
 export interface StatusResult {
@@ -128,6 +140,8 @@ export interface StatusInput {
   projectRoot?: string;          // injectable for tests
   /** Injectable so a status run in a test never reads the real keychain. */
   keySourceFn?: (projectRoot: string) => Promise<KeySource>;
+  /** Injectable so a status run in a test never reads the real log file. */
+  lastProviderFailureFn?: () => LastProviderFailure | null;
 }
 
 export async function runStatus(input: StatusInput): Promise<StatusResult> {
@@ -227,6 +241,7 @@ export async function runStatus(input: StatusInput): Promise<StatusResult> {
   const credential: CredentialStatus = {
     source: credentialSource,
     serviceBaseUrl: credentialSource === 'nexpath_token' ? resolveApiBaseUrl() : null,
+    lastProviderFailure: (input.lastProviderFailureFn ?? readLastProviderFailure)(),
   };
 
   return { agents: agentStatuses, hook, store, credential, promptEnhancement, config, hookStats };
@@ -283,6 +298,23 @@ export function renderStatus(result: StatusResult): string {
   if (noCredential) {
     lines.push('  None resolves — guidance stays deterministic.');
     lines.push('  Set one: nexpath config set-api-key  |  nexpath config set-token');
+  }
+  // A resolving credential that is being REFUSED looks identical to a healthy one from
+  // here, and the symptom — guidance going quiet — reads like nothing happening. The
+  // status and code are reported as the log recorded them; nothing is concluded from
+  // them, because which code an exhausted balance returns is not settled per provider.
+  // Truthy, not `!== null`: `renderStatus` is exported and callers build results by hand.
+  // A status readout that throws because a diagnostic field was omitted is worse than one
+  // that omits the diagnostic.
+  const failure = result.credential.lastProviderFailure;
+  if (failure) {
+    lines.push(`  Last LLM error: ${failure.at}${describeProviderFailure(failure)}`);
+    // The remedy only when a credential IS resolving. With none, the lines above already
+    // say to set one, and repeating the same two commands reads as two separate problems.
+    if (!noCredential) {
+      lines.push('  If guidance has gone quiet, re-enter the credential:');
+      lines.push('    nexpath config set-api-key  |  nexpath config set-token');
+    }
   }
   lines.push('');
 

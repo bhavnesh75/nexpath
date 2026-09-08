@@ -645,13 +645,58 @@ describe('UI-1 action-row model', () => {
     const view: PromptEnhancementCliPopupViewV1 = { model: fakeRenderModel(), editedBodyText: 'BODY', additionalDetailsText: '' };
     const plain = renderPromptEnhancementPopupFrameV1(view, { focusIndex: 0, helpExpanded: false });
     expect(plain).toContain('Enter sends this prompt');
-    expect(plain).toContain('Enter applies these details · unapplied details are not sent');
+    // Issue #160: `additionalDetailsText` is '' on this view, so the apply hint is not drawn at
+    // all. Both halves of that rule have their own test below.
+    expect(plain).not.toContain('Enter applies these details · unapplied details are not sent');
     // The focused body's edit-keys + send hint share ONE line (owner request 2026-08-07).
     expect(plain).toContain('Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt');
     // In colour mode that combined hint line is LIGHT YELLOW (owner request 2026-08-07 — a
     // distinct, all-OS-visible shortcut colour).
     const colored = renderPromptEnhancementPopupFrameV1(view, { focusIndex: 0, helpExpanded: false, colorize: true });
     expect(colored).toContain(`${ESC}[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt`);
+  });
+
+  // ── Issue #160 ────────────────────────────────────────────────────────────────────────────
+  // The details hint used to render unconditionally, so an empty field advertised an action with
+  // nothing to act on. It now follows the content. Both halves are pinned: absent when empty,
+  // present as soon as there is text, and independent of focus either way.
+  describe('the Additional Details apply hint follows the content (#160)', () => {
+    const HINT = 'Enter applies these details · unapplied details are not sent';
+    const viewWith = (additionalDetailsText: string): PromptEnhancementCliPopupViewV1 =>
+      ({ model: fakeRenderModel(), editedBodyText: 'BODY', additionalDetailsText });
+
+    it('empty field ⇒ no hint, whether or not the row is focused', () => {
+      for (const focusIndex of [0, 1]) {
+        expect(renderPromptEnhancementPopupFrameV1(viewWith(''), { focusIndex, helpExpanded: false }))
+          .not.toContain(HINT);
+      }
+    });
+
+    it('text present ⇒ the hint shows, whether or not the row is focused', () => {
+      for (const focusIndex of [0, 1]) {
+        const frame = renderPromptEnhancementPopupFrameV1(viewWith('use pg'), { focusIndex, helpExpanded: false });
+        expect(frame).toContain('use pg');
+        expect(frame).toContain(HINT);
+      }
+    });
+
+    // Whitespace is not content: a field holding only spaces or a stray newline has nothing to
+    // apply, and showing the hint there would reproduce the reported problem in a narrower form.
+    it('whitespace-only is treated as empty', () => {
+      for (const blank of [' ', '   ', '\n', ' \n ']) {
+        expect(renderPromptEnhancementPopupFrameV1(viewWith(blank), { focusIndex: 1, helpExpanded: false }))
+          .not.toContain(HINT);
+      }
+    });
+
+    // The edit-keys hint answers a different question — those keys only work while the row holds
+    // focus — so it stays focus-keyed and must NOT have picked up the content condition.
+    it('the edit-keys hint is unchanged: focus-keyed, not content-keyed', () => {
+      const focusedEmpty = renderPromptEnhancementPopupFrameV1(viewWith(''), { focusIndex: 1, helpExpanded: false });
+      expect(focusedEmpty).toContain('Ctrl+J new line');
+      const unfocusedWithText = renderPromptEnhancementPopupFrameV1(viewWith('use pg'), { focusIndex: 0, helpExpanded: false });
+      expect(unfocusedWithText).not.toContain('Ctrl+J new line · Ctrl+↑/↓ move line\n');
+    });
   });
 
   it('shows "Enter sends this prompt" ONLY when the enhanced-body row is focused (owner 2026-08-19)', () => {

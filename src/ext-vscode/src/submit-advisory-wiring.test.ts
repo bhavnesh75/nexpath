@@ -107,3 +107,17 @@ describe('auto-submit is gated on having actually landed', () => {
     expect(d.submit).not.toHaveBeenCalled();
   });
 });
+
+describe('⭐ RC70 (F-3) — onOutcome reaches the poller on every host', () => {
+  it('passes the host\'s onOutcome through to createPoller (Cursor used to get none)', () => {
+    const onOutcome = vi.fn();
+    const { captured, d } = deps({ host: 'cursor', onOutcome });
+    createSubmitAdvisoryForHost(d as never);
+    expect(captured.onOutcome).toBe(onOutcome);
+  });
+  it('absent onOutcome stays absent (no behaviour invented)', () => {
+    const { captured, d } = deps({ host: 'windsurf' });
+    createSubmitAdvisoryForHost(d as never);
+    expect(captured.onOutcome).toBeUndefined();
+  });
+});

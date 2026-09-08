@@ -201,7 +201,7 @@ describe('ext-browser manifests — permission surface', () => {
   it('never ships a version below one already submitted to a store', () => {
     // Append at release time. A version that shipped can never be re-used or gone below,
     // so this list only grows.
-    const RELEASED = ['0.1.5', '0.1.51', '0.1.52', '0.1.53'];
+    const RELEASED = ['0.1.5', '0.1.51', '0.1.52', '0.1.53', '0.1.54'];
     const parse = (v: string) => v.split('.').map(Number);
     const isBelow = (a: number[], b: number[]) => {
       for (let i = 0; i < Math.max(a.length, b.length); i++) {

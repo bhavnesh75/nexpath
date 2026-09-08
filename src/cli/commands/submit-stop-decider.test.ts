@@ -67,7 +67,10 @@ function harness(stdout: string, exitCode: number | null = 0) {
   const spawnFn = vi.fn(() => child);
   const decide = buildStopDrivenPromptSubmitDecider(
     { project: '/proj' },
-    { host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: writeDecision as never, logEvent: () => {}, ...FAKE_SWEEP_STORE },
+    { host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: writeDecision as never, logEvent: () => {},
+      // RC70: hermetic — never read the developer's real ~/.nexpath heartbeats; 'absent' = today's behaviour.
+      readDelivererState: (() => ({ state: 'absent' as const })) as never,
+      ...FAKE_SWEEP_STORE },
   );
   return { decide, writeDecision, spawnFn, stdinWrites: writes };
 }
@@ -349,6 +352,7 @@ describe('⭐ RC41 — runSequenceContinuationStop', () => {
     const r = await runSequenceContinuationStop('/proj', 'cursor', {
       spawnFn: (() => { const f = fakeChild(''); writes = f.writes; return f.child; }) as never,
       ...seqStore(true), logEvent: () => {},
+      latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
       writeDecision: (async () => {}) as never,
     });
     expect(r).toEqual({ ran: true, blocked: false });
@@ -361,6 +365,7 @@ describe('⭐ RC41 — runSequenceContinuationStop', () => {
     const r = await runSequenceContinuationStop('/proj', 'windsurf', {
       spawnFn: (() => fakeChild('{"decision":"block","reason":"item two body — long enough for the echo floor to apply cleanly"}\n').child) as never,
       ...seqStore(true), logEvent: () => {},
+      latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
       writeDecision: writeDecision as never, now: () => 5_000,
     });
     expect(r).toEqual({ ran: true, blocked: true });
@@ -396,6 +401,7 @@ describe('⭐ RC42 — itemless active row is logged, behaviour unchanged', () =
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: ((lvl: string, name: string) => { warns.push([lvl, name]); }) as never,
+      latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
       writeDecision: (async () => {}) as never,
     });
     expect(r).toEqual({ ran: true, blocked: false });
@@ -409,6 +415,7 @@ describe('⭐ RC42 — itemless active row is logged, behaviour unchanged', () =
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: ((_l: string, name: string) => { warns.push(name); }) as never,
+      latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
       writeDecision: (async () => {}) as never,
     });
     expect(warns).not.toContain('sequence_continuation_row_has_no_items');
@@ -557,5 +564,72 @@ describe('⭐ RC51 — unwritable project root allows without a popup', () => {
       },
     );
     await expect(decide('e', { project: '/proj' }, 'a real prompt')).resolves.toBe('allow');
+  });
+});
+
+/**
+ * ⭐ RC70 (F-4) — no deliverer, no block. The hook cancels the prompt on `block`
+ * and relies on the extension's poller; when that poller is known to be absent
+ * (fresh not-armed beat: consent declined / gate off; or stale: extension gone)
+ * the decider must release the prompt WITHOUT a popup. Absent = unknown = today.
+ */
+describe('⭐ RC70 — the decider refuses to block without a deliverer', () => {
+  const BLOCK = JSON.stringify({ decision: 'block', reason: 'refined text' }) + '\n';
+  function withDeliverer(state: Record<string, unknown>) {
+    const child = new EventEmitter() as never as import('node:child_process').ChildProcess & { stdout: EventEmitter; stdin: { write: () => void; end: () => void } };
+    const spawnFn = vi.fn(() => {
+      queueMicrotask(() => { child.stdout.emit('data', BLOCK); child.emit('exit', 0); child.emit('close', 0); });
+      return child;
+    });
+    (child as unknown as { stdout: EventEmitter }).stdout = Object.assign(new EventEmitter(), { setEncoding: () => {} });
+    (child as unknown as { stdin: unknown }).stdin = { write: () => {}, end: () => {} };
+    const events: Array<{ name: string; data: Record<string, unknown> }> = [];
+    const writeDecision = vi.fn(async () => {});
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/proj' }, {
+      host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: writeDecision as never,
+      logEvent: ((_l: string, name: string, data?: Record<string, unknown>) => { events.push({ name, data: data ?? {} }); }) as never,
+      readDelivererState: (() => state) as never,
+      openStoreFn: (async () => { throw new Error('no store in tests'); }) as never,
+    });
+    return { decide, spawnFn, writeDecision, events };
+  }
+
+  it('⭐ fresh NOT-ARMED beat (consent declined) ⇒ allow, no stop spawned, no decision written, warn logged with the reason', async () => {
+    const h = withDeliverer({ state: 'not_armed', ageMs: 1_000, reason: 'consent_not_granted', pid: 42 });
+    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('allow');
+    expect(h.spawnFn).not.toHaveBeenCalled();
+    expect(h.writeDecision).not.toHaveBeenCalled();
+    const warn = h.events.find((e) => e.name === 'submit_flow_no_deliverer');
+    expect(warn?.data).toMatchObject({ host: 'cursor', state: 'not_armed', reason: 'consent_not_granted' });
+  });
+
+  it('⭐ STALE beat (extension gone) ⇒ allow without a popup', async () => {
+    const h = withDeliverer({ state: 'stale', ageMs: 120_000, pid: 7 });
+    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('allow');
+    expect(h.spawnFn).not.toHaveBeenCalled();
+  });
+
+  it('⭐ ARMED ⇒ proceeds to the popup and blocks exactly as before', async () => {
+    const h = withDeliverer({ state: 'armed', ageMs: 3_000, pid: 42 });
+    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('block');
+    expect(h.spawnFn).toHaveBeenCalledTimes(1);
+    expect(h.events.find((e) => e.name === 'submit_flow_deliverer')?.data).toMatchObject({ state: 'armed' });
+  });
+
+  it('⭐ ABSENT (older extension / unknown) ⇒ proceeds as before — a newer CLI never mutes an older extension', async () => {
+    const h = withDeliverer({ state: 'absent' });
+    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('block');
+    expect(h.spawnFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('the check runs AFTER the empty-prompt and root-writability gates (unchanged order)', async () => {
+    const readDelivererState = vi.fn(() => ({ state: 'not_armed' as const }));
+    const decide = buildStopDrivenPromptSubmitDecider({ project: '/proj' }, {
+      host: 'cursor', mkdirFn: (() => { throw new Error('EACCES'); }) as never, logEvent: () => {},
+      readDelivererState: readDelivererState as never,
+    });
+    expect(await decide('beforeSubmitPrompt', { project: '/proj' }, '')).toBe('allow');          // empty prompt
+    expect(await decide('beforeSubmitPrompt', { project: '/proj' }, 'x')).toBe('allow');         // unwritable root
+    expect(readDelivererState).not.toHaveBeenCalled();
   });
 });

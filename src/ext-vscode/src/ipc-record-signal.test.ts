@@ -72,3 +72,40 @@ describe('spawnRecordSignal', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * ⭐ RC69 (F-5) — a fire-and-forget spawn must not get pipes nobody drains: a
+ * child whose stderr exceeds the OS pipe buffer (NEXPATH_DEBUG=1) would block
+ * forever on its own write while holding the CLI store lock (next `auto`/`stop`
+ * pays the 8 s lock fail-open) and leave a zombie per UI action.
+ */
+describe('⭐ RC69 — spawnRecordSignal never attaches undrained pipes', () => {
+  it('⭐ spawns with stdio ignore on all three streams (nothing to read, nothing to write)', async () => {
+    const spawnFn = vi.fn(() => makeFakeChild({ exitCode: 0 }));
+    await spawnRecordSignal('pe_shown', { spawnFn: spawnFn as never });
+    const opts = (spawnFn.mock.calls[0] as unknown[])[2] as { stdio?: unknown; cwd?: unknown; shell?: unknown };
+    expect(opts.stdio).toEqual(['ignore', 'ignore', 'ignore']);
+    expect(opts.cwd).toBeDefined();                       // the rest of buildSpawnOptions is untouched
+    expect(opts.shell).toBe(process.platform === 'win32');
+  });
+
+  it('still resolves when the child exposes no stdin at all (the real shape under stdio ignore)', async () => {
+    const child = makeFakeChild({ exitCode: 0 });
+    (child as unknown as { stdin: unknown }).stdin = null;
+    const spawnFn = vi.fn(() => child);
+    await expect(spawnRecordSignal('pe_shown', { spawnFn: spawnFn as never })).resolves.toBeUndefined();
+  });
+});
+
+describe('⭐ RC70 (F-1) — the true timestamp travels as --at', () => {
+  it('appends --at <epochMs> when `at` is given (deferred signals keep their real time)', async () => {
+    const spawnFn = vi.fn(() => makeFakeChild({ exitCode: 0 }));
+    await spawnRecordSignal('pe_shown', { spawnFn: spawnFn as never, at: 1_788_000_000_123.7 });
+    expect(spawnFn).toHaveBeenCalledWith('nexpath', ['record-signal', '--kind', 'pe_shown', '--at', '1788000000124'], expect.any(Object));
+  });
+  it('omits --at when not given (unchanged argv)', async () => {
+    const spawnFn = vi.fn(() => makeFakeChild({ exitCode: 0 }));
+    await spawnRecordSignal('pe_close', { spawnFn: spawnFn as never });
+    expect((spawnFn.mock.calls[0] as unknown[])[1]).toEqual(['record-signal', '--kind', 'pe_close']);
+  });
+});

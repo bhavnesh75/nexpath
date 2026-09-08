@@ -315,7 +315,10 @@ describe('⭐ BACKWARD COMPAT — switch OFF must construct nothing (structural 
     // chatInputInject skips all of it, so wiring that here would fail on real
     // Cursor for the exact reason already recorded in this milestone (a wrong
     // Cursor verdict that had to be withdrawn).
-    expect(src).toMatch(/buildSubmitAdvisory\(\s*'cursor',[\s\S]{0,200}?cursorInject,?\s*\)/);
+    // RC70 (F-3) appends the outcome hook AFTER the injector; the injector
+    // itself is still cursorInject and nothing else may sit in that slot.
+    expect(src).toMatch(/buildSubmitAdvisory\(\s*'cursor',[\s\S]{0,200}?cursorInject,?\s*(?:onCursorOutcome,?\s*)?\)/);
+    expect(src).not.toMatch(/buildSubmitAdvisory\(\s*'cursor',[\s\S]{0,200}?chatInputInject/);
   });
 
   it('⭐ the shipping per-host injector shape is preserved', () => {

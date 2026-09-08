@@ -811,10 +811,21 @@ export function renderPromptEnhancementPopupFrameV1(
       // An empty field renders blank (§8.5). Sending the body ignores unapplied details.
       // Details block order stays as-is (owner: "additional details is fine"): content ->
       // "Enter applies these details …" -> Ctrl+J edit-keys (when focused).
+      //
+      // ── Issue #160: the apply hint follows the content, not the row ──────────────────────
+      // It used to render unconditionally, so an empty field showed advice about applying
+      // details that do not exist. It now appears only once there is something to apply —
+      // the same shape the enhanced-body row already uses for its send hint just above, where
+      // a hint that cannot act on anything is not shown.
+      //
+      // Deliberately keyed on the CONTENT and not on focus: the reader needs to know Enter
+      // applies what they have typed at the moment they have typed it, whether or not the row
+      // still holds focus. The edit-keys hint below stays focus-keyed, which is a different
+      // question — those keys only work while the row is focused.
       recordCaret('additional_details');
       const details = view.additionalDetailsText ? publicText(view.additionalDetailsText) : '';
       for (const detailLine of details.split('\n')) lines.push(contentLine(detailLine));
-      lines.push(hint(PROMPT_ENHANCEMENT_CLI_DETAILS_HINT_V1));
+      if (view.additionalDetailsText.trim()) lines.push(hint(PROMPT_ENHANCEMENT_CLI_DETAILS_HINT_V1));
       if (focused) lines.push(hint(PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1));
     }
 

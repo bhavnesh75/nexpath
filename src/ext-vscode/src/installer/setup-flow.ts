@@ -85,6 +85,24 @@ export interface SetupFlowOptions {
    * per-IDE offer.
    */
   preferExistingCli?: boolean;
+  /** F-8 seam: the platform the done-message is worded for (defaults to the real one). */
+  platform?: NodeJS.Platform;
+}
+
+/**
+ * F-8 (2026-09-05): the first-run done-message told every user to "Reload the
+ * window" — but RC54 measured that Windows Cursor loads hooks ONLY at startup,
+ * so on that platform+host a reload leaves this instance with zero hooks and
+ * every submit silently gets no popup (the tester prompted for 5 minutes
+ * against exactly that). The self-heal path already says so; the first-run
+ * path now says the same thing, on the one platform+host where it is measured.
+ */
+export function setupDoneMessage(agent: string | undefined, platform: NodeJS.Platform): string {
+  const agentLabel = agent === 'cursor' ? 'Cursor' : agent === 'windsurf' ? 'Windsurf' : 'this editor';
+  const activate = platform === 'win32' && agent === 'cursor'
+    ? 'Fully QUIT Cursor (all windows) and reopen it to activate guidance — Cursor loads hooks only at startup, so popups cannot appear until then.'
+    : 'Reload the window or restart your agent to activate guidance.';
+  return `Nexpath is set up for ${agentLabel}. ${activate}`;
 }
 
 export async function runSetupFlow(
@@ -187,14 +205,7 @@ export async function runSetupFlow(
   if (result.ok && (opts.preferExistingCli || deps.verifyStagedCli(staged.cliEntry))) {
     await deps.setState({ done: true, version: staged.version });
     if (!opts.preferExistingCli && staged.shimPath) deps.applyNexpathBin(staged.shimPath);
-    const agentLabel =
-      process.env.NEXPATH_AGENT === 'cursor' ? 'Cursor'
-      : process.env.NEXPATH_AGENT === 'windsurf' ? 'Windsurf'
-      : 'this editor';
-    deps.showInfo(
-      `Nexpath is set up for ${agentLabel}. ` +
-        'Reload the window or restart your agent to activate guidance.',
-    );
+    deps.showInfo(setupDoneMessage(process.env.NEXPATH_AGENT, opts.platform ?? process.platform));
     return 'done';
   }
   if (result.ok) {

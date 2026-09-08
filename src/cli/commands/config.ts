@@ -1,5 +1,13 @@
 import { password, confirm, isCancel } from '@clack/prompts';
+import {
+  NonInteractiveTerminalError,
+  withInteractiveTerminal,
+} from './interactive-terminal.js';
 import { openStore, closeStore, DEFAULT_DB_PATH, getConfig, setConfig, deleteConfig } from '../../store/index.js';
+// Imported from its own module rather than through the store barrel: `store/index.ts` is not this
+// side's file (harshil480 9 · Ashish 5 · hi0001234d 2 · bhavnesh75 1), and re-exporting through it
+// bought nothing — `install.ts` already imports this directly.
+import { expireSessionsForCredentialChange } from '../../store/session-reset.js';
 import { ENV_PROBE_ENABLED_KEY, purgeAllEnvFacts } from '../../store/env-facts.js';
 import {
   ConfigValidationError,
@@ -72,23 +80,56 @@ export async function configUnsetAction(key: string, dbPath = DEFAULT_DB_PATH): 
 export type ApiKeyPasswordFn = () => Promise<string | null>;
 export type ApiKeyConfirmFn  = () => Promise<boolean>;
 
-const defaultApiKeyPasswordFn: ApiKeyPasswordFn = async () => {
-  const input = await password({
-    message:  'OpenAI API Key:',
-    validate: (value) => {
-      if (!isValidApiKey(value)) return 'Invalid OpenAI API key format (expected sk-...)';
-      return undefined;
-    },
-  });
+/**
+ * What to say when there is no terminal to prompt on.
+ *
+ * These commands exist to WRITE a credential, so `--yes` is not an answer the way it is for
+ * `install` — there is nothing to fall back to. The honest advice is that the resolver reads the
+ * environment first, so a caller that cannot prompt does not need this command at all.
+ */
+const apiKeyTtyAdvice = (command: string): string => [
+  `nexpath config ${command} needs an interactive terminal, but stdin or stdout is redirected.`,
+  '',
+  'Run it directly in a terminal:',
+  `  nexpath config ${command}`,
+  '',
+  'If you cannot use a terminal, you do not need this command: nexpath reads',
+  'OPENAI_API_KEY from the environment or a project .env before it looks at the',
+  'keychain or the stored file. Setting it there is enough.',
+].join('\n');
+
+// Named per command, because the advice tells the user what to re-run and naming the wrong
+// command is worse than naming none.
+const makeApiKeyPasswordFn = (command: string): ApiKeyPasswordFn => async () => {
+  // ⛔ @clack needs a real TTY and dies with a raw ERR_TTY_INIT_FAILED stack before any of our code
+  // runs. `install` has wrapped this since 2026-09-04; these commands did not, and the shape they
+  // were copied into (token.ts) inherited the gap. Only the TTY failure is translated — every other
+  // error is rethrown untouched, so a real bug never becomes a friendly message about terminals.
+  const input = await withInteractiveTerminal(
+    () => password({
+      message:  'OpenAI API Key:',
+      validate: (value) => {
+        if (!isValidApiKey(value)) return 'Invalid OpenAI API key format (expected sk-...)';
+        return undefined;
+      },
+    }) as Promise<unknown>,
+    () => new NonInteractiveTerminalError(apiKeyTtyAdvice(command)),
+  );
   if (isCancel(input)) return null;
   return String(input);
 };
 
+const defaultApiKeyPasswordFn = makeApiKeyPasswordFn('set-api-key');
+const rotateApiKeyPasswordFn  = makeApiKeyPasswordFn('rotate-api-key');
+
 const defaultRotateConfirmFn: ApiKeyConfirmFn = async () => {
-  const answer = await confirm({
-    message:      'Overwrite the existing API key?',
-    initialValue: false,
-  });
+  const answer = await withInteractiveTerminal(
+    () => confirm({
+      message:      'Overwrite the existing API key?',
+      initialValue: false,
+    }) as Promise<unknown>,
+    () => new NonInteractiveTerminalError(apiKeyTtyAdvice('rotate-api-key')),
+  );
   return !isCancel(answer) && answer === true;
 };
 
@@ -101,6 +142,29 @@ export interface ConfigApiKeyOpts {
 
 const defaultPrint = (line: string): void => { console.log(line); };
 
+/**
+ * End every live session, because the credential just changed.
+ *
+ * ⛔ SWALLOWS ITS OWN FAILURE, deliberately. Storing or removing a credential is what the user
+ * asked for; clearing the session is hygiene that rides along. If the store cannot be opened —
+ * a concurrent hook holding the lock is the realistic case — the credential still saved, and
+ * saying otherwise would be a lie about the thing the user actually cares about. The next
+ * thirty idle minutes end the session anyway.
+ */
+async function expireSessionsBestEffort(dbPath: string = DEFAULT_DB_PATH): Promise<void> {
+  let store: Awaited<ReturnType<typeof openStore>> | null = null;
+  try {
+    store = await openStore(dbPath);
+    expireSessionsForCredentialChange(store);
+  } catch {
+    /* hygiene only — never fail the credential command over it */
+  } finally {
+    if (store) {
+      try { closeStore(store); } catch { /* ignore */ }
+    }
+  }
+}
+
 export async function configSetApiKeyAction(opts: ConfigApiKeyOpts = {}): Promise<void> {
   const print       = opts.output      ?? defaultPrint;
   const passwordFn  = opts.passwordFn  ?? defaultApiKeyPasswordFn;
@@ -111,11 +175,20 @@ export async function configSetApiKeyAction(opts: ConfigApiKeyOpts = {}): Promis
   }
   const result = await storeApiKey(key);
   print(`✓ API key stored in ${result.source}`);
+
+  // The credential just changed, so the session that ran under the old one is over. Ending it
+  // here is what stops a stage the local classifier wrote during an outage from outliving the
+  // credential that caused it — replacing the key does not reconsider the session on its own.
+  //
+  // ⛔ BEST-EFFORT, and that is the whole point of the wrapper: storing the credential is the
+  // user's intent, clearing a session is hygiene. A locked database must not turn a saved key
+  // into a failed command.
+  await expireSessionsBestEffort();
 }
 
 export async function configRotateApiKeyAction(opts: ConfigApiKeyOpts = {}): Promise<void> {
   const print       = opts.output      ?? defaultPrint;
-  const passwordFn  = opts.passwordFn  ?? defaultApiKeyPasswordFn;
+  const passwordFn  = opts.passwordFn  ?? rotateApiKeyPasswordFn;
   const confirmFn   = opts.confirmFn   ?? defaultRotateConfirmFn;
   const projectRoot = opts.projectRoot ?? process.cwd();
 
@@ -150,6 +223,10 @@ export async function configRotateApiKeyAction(opts: ConfigApiKeyOpts = {}): Pro
   }
   const result = await storeApiKey(key);
   print(`✓ API key rotated; new key stored in ${result.source} (was in ${currentSource})`);
+
+  // Same reason as `set-api-key` above: the credential changed, so the session that ran under
+  // the old one is over. Best-effort — a locked database must not fail the command.
+  await expireSessionsBestEffort();
 }
 
 export async function configShowKeySourceAction(opts: ConfigApiKeyOpts = {}): Promise<void> {
@@ -178,4 +255,8 @@ export async function configRemoveApiKeyAction(opts: ConfigApiKeyOpts = {}): Pro
   } else {
     print(`✓ API key removed (was in ${sourceBefore}).`);
   }
+
+  // Removal is a credential change too — arguably the sharpest one, since what follows
+  // runs with no key at all and every classification degrades. Best-effort, as above.
+  await expireSessionsBestEffort();
 }

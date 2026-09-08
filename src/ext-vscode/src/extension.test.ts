@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // vi.hoisted lets the mocks declared here be referenced from the vi.mock
@@ -32,6 +34,9 @@ const {
   mockCreateAdvisoryPoller,
   mockOnDidChangeWorkspaceFolders,
   mockArmIfPending,
+  mockStartDelivererHeartbeat,
+  mockHeartbeatStop,
+  mockConsumeTombstone,
 } = vi.hoisted(() => ({
   mockShowOnboarding: vi.fn(),
   mockRegisterWebviewViewProvider: vi.fn(),
@@ -64,12 +69,17 @@ const {
   mockCreateAdvisoryPoller: vi.fn(),
   mockOnDidChangeWorkspaceFolders: vi.fn(() => ({ dispose: vi.fn() })),
   mockArmIfPending: vi.fn(),
+  // RC70: the deliverer heartbeat is mocked so activate() never writes to the developer's real ~/.nexpath.
+  mockHeartbeatStop: vi.fn(),
+  mockStartDelivererHeartbeat: vi.fn(() => ({ beat: vi.fn(), stop: mockHeartbeatStop })),
+  mockConsumeTombstone: vi.fn(async () => ({ reset: false, editor: 'cursor' })),
 }));
 
 vi.mock('vscode', () => ({
   window: {
     registerWebviewViewProvider: mockRegisterWebviewViewProvider,
     showInformationMessage: mockShowInformationMessage,
+    showWarningMessage: vi.fn(),
     createOutputChannel: vi.fn(() => ({
       appendLine: vi.fn(),
       dispose: vi.fn(),
@@ -167,8 +177,31 @@ vi.mock('./ipc.js', () => ({
   spawnAuto: vi.fn(),
   spawnStop: vi.fn(),
   spawnRecordSignal: vi.fn(() => Promise.resolve()),
+  // No-credential notice: null = "no answer" ⇒ nothing shown in every existing pin.
+  spawnCredentialStatus: vi.fn(() => Promise.resolve(null)),
 }));
-import { spawnRecordSignal } from './ipc.js';
+import { spawnRecordSignal, spawnCredentialStatus } from './ipc.js';
+// Hermetic: the deferred setup offer (`setTimeout(…, 0)` in activate) runs the REAL
+// installer glue — CLI staging probes, spawnSync — once a test yields to the event loop.
+// Earlier pins never yielded, so it never fired; the notice pins do. Stub only the two
+// entry points activate() calls; everything else in the module stays real.
+// Hermetic on Windows: activate() pre-warms the win32 keystroke path (RC65) by spawning a real
+// PowerShell compile — 4-7 s and a Defender scan per activation on a Windows test host. Only that
+// export is stubbed; everything else in the module stays real.
+vi.mock('./submit-clipboard-delivery.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./submit-clipboard-delivery.js')>();
+  return { ...mod, warmWin32KeystrokePath: vi.fn(() => false) };
+});
+// Uninstall-UX layer 2: the activation reset reads ~/.nexpath for a tombstone; stub it so no
+// pin touches the developer's real home, and pin the wiring below.
+vi.mock('./fresh-install.js', () => ({ consumeUninstallTombstone: mockConsumeTombstone }));
+vi.mock('./installer/vscode-glue.js', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('./installer/vscode-glue.js')>();
+  return { ...mod, offerSetupIfNeeded: vi.fn(async () => {}), runSetupCommand: vi.fn(async () => 'done') };
+});
+vi.mock('./deliverer-heartbeat.js', () => ({
+  startDelivererHeartbeat: mockStartDelivererHeartbeat,
+}));
 vi.mock('./advisory-fallback.js', () => ({
   createAdvisoryFallback: vi.fn(() => ({
     armIfPending: mockArmIfPending,
@@ -189,7 +222,7 @@ vi.mock('./pe-poller.js', () => ({
   },
 }));
 
-import { activate, deactivate, getViewProvider, getPeViewProvider } from './extension.js';
+import { activate, deactivate, getViewProvider, getPeViewProvider, SUBMIT_FLOW_SIGNAL_DEFER_MS } from './extension.js';
 import * as vscodeApi from 'vscode';
 
 interface FakeContext {
@@ -283,6 +316,55 @@ describe('activate', () => {
     expect(mockRegisterWebviewViewProvider).toHaveBeenCalledTimes(2);
     expect(mockRegisterWebviewViewProvider).toHaveBeenCalledWith('nexpath.status', expect.anything());
     expect(mockRegisterWebviewViewProvider).toHaveBeenCalledWith('nexpath.promptEnhancement', expect.anything());
+  });
+
+  describe('⭐ RC70 (F-4) — deliverer heartbeat', () => {
+    const hbArgs = () => mockStartDelivererHeartbeat.mock.calls[0]![0] as { host: string; isArmed: () => boolean; reason: () => string };
+
+    it('⭐ starts on Cursor even when consent is DENIED — not armed, reason consent_not_granted', async () => {
+      mockStartDelivererHeartbeat.mockClear();
+      mockShowOnboarding.mockResolvedValueOnce(undefined);
+      mockDetectHost.mockReturnValueOnce('cursor');
+      await activate(makeCtx(false) as never); // returns at the consent gate — the heartbeat is above it
+      expect(mockStartDelivererHeartbeat).toHaveBeenCalledTimes(1);
+      expect(hbArgs().host).toBe('cursor');
+      expect(hbArgs().isArmed()).toBe(false);
+      expect(hbArgs().reason()).toBe('consent_not_granted');
+    });
+
+    it('starts on Windsurf too; never on plain VS Code', async () => {
+      mockStartDelivererHeartbeat.mockClear();
+      mockShowOnboarding.mockResolvedValueOnce(undefined);
+      mockDetectHost.mockReturnValueOnce('windsurf');
+      await activate(makeCtx(false) as never);
+      expect(hbArgs().host).toBe('windsurf');
+      mockStartDelivererHeartbeat.mockClear();
+      mockShowOnboarding.mockResolvedValueOnce(undefined);
+      mockDetectHost.mockReturnValueOnce('vscode-generic');
+      await activate(makeCtx(true) as never);
+      expect(mockStartDelivererHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('⭐ reports armed once the submit flow arms (switch ON)', async () => {
+      process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY = '1';
+      try {
+        mockStartDelivererHeartbeat.mockClear();
+        mockShowOnboarding.mockResolvedValueOnce(undefined);
+        mockDetectHost.mockReturnValueOnce('cursor');
+        await activate(makeCtx(true) as never);
+        expect(hbArgs().isArmed()).toBe(true);
+        expect(hbArgs().reason()).toBe('armed');
+      } finally { delete process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY; }
+    });
+
+    it('⭐ deactivate() writes the final not-armed beat', async () => {
+      mockStartDelivererHeartbeat.mockClear(); mockHeartbeatStop.mockClear();
+      mockShowOnboarding.mockResolvedValueOnce(undefined);
+      mockDetectHost.mockReturnValueOnce('cursor');
+      await activate(makeCtx(true) as never);
+      deactivate();
+      expect(mockHeartbeatStop).toHaveBeenCalledWith('deactivated');
+    });
   });
 
   describe('PE onMessage wiring (P6)', () => {
@@ -408,13 +490,18 @@ describe('activate', () => {
     });
 
     it('onPublish records pe_shown for the PE popup (Windsurf-poller parity)', async () => {
-      vi.mocked(spawnRecordSignal).mockClear();
-      mockShowOnboarding.mockResolvedValueOnce(undefined);
-      mockDetectHost.mockReturnValueOnce('windsurf');
-      await activate(makeCtx(true) as never);
-      capturedDeps().onPublish?.({ currentBodyId: 'body-1', bodyRevision: 3 });
-      const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
-      expect(peShownCalls).toHaveLength(1);
+      // RC70: pin the OLD flow explicitly — on a developer machine the shipped
+      // flag file would arm the submit surface and the signal is then DEFERRED.
+      process.env.NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY = '0';
+      try {
+        vi.mocked(spawnRecordSignal).mockClear();
+        mockShowOnboarding.mockResolvedValueOnce(undefined);
+        mockDetectHost.mockReturnValueOnce('windsurf');
+        await activate(makeCtx(true) as never);
+        capturedDeps().onPublish?.({ currentBodyId: 'body-1', bodyRevision: 3 });
+        const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
+        expect(peShownCalls).toHaveLength(1);
+      } finally { delete process.env.NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY; }
     });
 
     it('onPublish never crashes when given a null payload (malformed row) and records nothing', async () => {
@@ -748,30 +835,61 @@ describe('activate', () => {
     });
 
     it('checkPeOrigin: records pe_shown once when the PE popup is published', async () => {
-      vi.mocked(spawnRecordSignal).mockClear();
-      mockIsPeOriginTurn.mockResolvedValueOnce(true);
-      mockReadPendingPromptEnhancement.mockResolvedValueOnce({
-        id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
-        status: 'pending', createdAt: 100, requestJson: '{}', resultJson: validResultJson,
-      });
-      await activateWithWatcher();
-      await pipelineDeps().checkPeOrigin!(makeEvent());
-      const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
-      expect(peShownCalls).toHaveLength(1);
+      process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY = '0'; // RC70: old flow ⇒ immediate (see the windsurf pin)
+      try {
+        vi.mocked(spawnRecordSignal).mockClear();
+        mockIsPeOriginTurn.mockResolvedValueOnce(true);
+        mockReadPendingPromptEnhancement.mockResolvedValueOnce({
+          id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
+          status: 'pending', createdAt: 100, requestJson: '{}', resultJson: validResultJson,
+        });
+        await activateWithWatcher();
+        await pipelineDeps().checkPeOrigin!(makeEvent());
+        const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
+        expect(peShownCalls).toHaveLength(1);
+      } finally { delete process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY; }
     });
 
     it('checkPeOrigin: does NOT record pe_shown twice for the same createdAt (re-publish guard)', async () => {
-      vi.mocked(spawnRecordSignal).mockClear();
-      mockIsPeOriginTurn.mockResolvedValue(true);
-      mockReadPendingPromptEnhancement.mockResolvedValue({
-        id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
-        status: 'pending', createdAt: 500, requestJson: '{}', resultJson: validResultJson,
-      });
-      await activateWithWatcher();
-      await pipelineDeps().checkPeOrigin!(makeEvent()); // publishes → records pe_shown
-      await pipelineDeps().checkPeOrigin!(makeEvent()); // same createdAt → no second record
-      const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
-      expect(peShownCalls).toHaveLength(1);
+      process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY = '0'; // RC70: old flow ⇒ immediate
+      try {
+        vi.mocked(spawnRecordSignal).mockClear();
+        mockIsPeOriginTurn.mockResolvedValue(true);
+        mockReadPendingPromptEnhancement.mockResolvedValue({
+          id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
+          status: 'pending', createdAt: 500, requestJson: '{}', resultJson: validResultJson,
+        });
+        await activateWithWatcher();
+        await pipelineDeps().checkPeOrigin!(makeEvent()); // publishes → records pe_shown
+        await pipelineDeps().checkPeOrigin!(makeEvent()); // same createdAt → no second record
+        const peShownCalls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
+        expect(peShownCalls).toHaveLength(1);
+      } finally { delete process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY; }
+    });
+
+    it('⭐ RC70 (F-1): under the submit switch pe_shown is DEFERRED past the hold cap and carries its true time (--at)', async () => {
+      // The CLI popup host holds the store lock for the whole human wait; a
+      // spawn here landed inside that window (Experiment B2). Deferred by the
+      // hold's own cap, with the real timestamp — never lost, never intruding.
+      process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY = '1';
+      try {
+        vi.mocked(spawnRecordSignal).mockClear();
+        mockIsPeOriginTurn.mockResolvedValueOnce(true);
+        mockReadPendingPromptEnhancement.mockResolvedValueOnce({
+          id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
+          status: 'pending', createdAt: 900, requestJson: '{}', resultJson: validResultJson,
+        });
+        await activateWithWatcher(); // real timers: activation's own scheduling is not under test
+        vi.useFakeTimers(); // only the defer timer created below is faked
+        const before = Date.now();
+        await pipelineDeps().checkPeOrigin!(makeEvent());
+        expect(vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown')).toHaveLength(0);
+        await vi.advanceTimersByTimeAsync(SUBMIT_FLOW_SIGNAL_DEFER_MS);
+        const calls = vi.mocked(spawnRecordSignal).mock.calls.filter((c) => c[0] === 'pe_shown');
+        expect(calls).toHaveLength(1);
+        expect((calls[0]![1] as { at?: number }).at).toBeGreaterThanOrEqual(before);
+        expect((calls[0]![1] as { cwd?: string }).cwd).toBeDefined();
+      } finally { vi.useRealTimers(); delete process.env.NEXPATH_CURSOR_PROMPTSUBMIT_ADVISORY; }
     });
 
     it('checkPeOrigin: ACKs not_counted_as_shown (never render_failure) when the pending row vanished before it could be read', async () => {
@@ -1526,5 +1644,89 @@ describe('deactivate', () => {
     expect(mockPePollerStart).toHaveBeenCalledOnce();
     deactivate();
     expect(mockPePollerStop).toHaveBeenCalledOnce();
+  });
+});
+
+/** No-credential notice (2026-09-07) — wired after the deferred setup offer; fail-quiet on no answer. */
+describe('no-credential notice wiring', () => {
+  // makeCtx's globalState has no `update`; the notice stamps through it, so give the
+  // context a real (spied) update that writes back into the same store `get` reads.
+  const ctxWithUpdate = (consent: boolean) => {
+    const base = makeCtx(consent) as unknown as { globalState: { get: (k: string) => unknown } & Record<string, unknown> };
+    const stored = new Map<string, unknown>();
+    const get = base.globalState.get.bind(base.globalState);
+    base.globalState.get = ((k: string) => (stored.has(k) ? stored.get(k) : get(k))) as never;
+    const update = vi.fn(async (k: string, v: unknown) => { stored.set(k, v); });
+    base.globalState.update = update;
+    return { ctx: base, update };
+  };
+  const notices = () => mockShowInformationMessage.mock.calls.map((c) => String(c[0])).filter((m) => m.includes('no LLM credential'));
+  // Every earlier activate() in this file queued its deferred setTimeout(0) block and never
+  // yielded to the event loop; drain those (they answer null ⇒ no notice) before arming ours.
+  const drain = () => new Promise((r) => setTimeout(r, 30));
+
+  it('⭐ CLI answers {configured:false} ⇒ one information message naming set-api-key/set-token, stamped in globalState', async () => {
+    await drain();
+    vi.mocked(spawnCredentialStatus).mockReset().mockResolvedValue(null);
+    vi.mocked(spawnCredentialStatus).mockResolvedValueOnce({ source: 'none', configured: false });
+    mockShowInformationMessage.mockReset();
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    const { ctx, update } = ctxWithUpdate(true);
+    await activate(ctx as never);
+    await new Promise((r) => setTimeout(r, 30)); // the check is deferred behind the setup offer
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain('nexpath config set-api-key');
+    expect(notices()[0]).toContain('nexpath config set-token');
+    expect(update).toHaveBeenCalledWith('nexpath.credentialNoticeAt', expect.any(Number));
+    vi.mocked(spawnCredentialStatus).mockReset().mockResolvedValue(null);
+  });
+
+  it('no answer from the CLI (null) ⇒ no notice', async () => {
+    await drain();
+    vi.mocked(spawnCredentialStatus).mockReset().mockResolvedValue(null);
+    mockShowInformationMessage.mockReset();
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    const { ctx } = ctxWithUpdate(true);
+    await activate(ctx as never);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(notices()).toHaveLength(0);
+  });
+});
+
+/** Uninstall-UX layer 2 — activation consumes the uninstall tombstone before anything reads the mementos. */
+describe('fresh-install reset wiring', () => {
+  it('⭐ runs first thing in activate with the extension path, the home nexpath dir and a memento-clearing port', async () => {
+    mockConsumeTombstone.mockClear();
+    mockShowOnboarding.mockResolvedValueOnce(undefined);
+    mockDetectHost.mockReturnValueOnce('cursor');
+    const ctx = makeCtx(true) as unknown as Record<string, unknown>;
+    ctx.extensionPath = '/home/u/.cursor/extensions/nexpath.nexpath-vscode-0.1.36-linux-x64';
+    await activate(ctx as never);
+    expect(mockConsumeTombstone).toHaveBeenCalledTimes(1);
+    const arg = mockConsumeTombstone.mock.calls[0]![0] as { extensionPath: string; nexpathHome: string; clearKey: (k: string) => unknown };
+    expect(arg.extensionPath).toBe('/home/u/.cursor/extensions/nexpath.nexpath-vscode-0.1.36-linux-x64');
+    expect(arg.nexpathHome.replace(/\\/g, '/')).toMatch(/\/\.nexpath$/);
+    expect(typeof arg.clearKey).toBe('function');
+    expect((arg as { host?: string }).host).toBe('cursor');
+  });
+});
+
+/** ⭐ RC73 — activation wires the window target through every raise and keystroke call. */
+describe('RC73 window targeting is wired, not just available', () => {
+  it('⭐ every raise passes a windowTarget, and the win32 titles are workspace-qualified', () => {
+    const src = readFileSync(fileURLToPath(new URL('./extension.ts', import.meta.url)), 'utf8');
+    const raises = src.match(/raise(?:AppWindow|WindsurfWindow)\(/g) ?? [];
+    const targeted = src.match(/windowTarget: editorWindowTarget\(\)/g) ?? [];
+    expect(raises.length).toBe(7);
+    // RC74: the same target now reaches the win32 and macOS keystroke paths too, so every
+    // raise, paste and submit call site names this window.
+    expect((src.match(/win32Titles: \[vscode\.env\.appName/g) ?? []).length).toBe(4);
+    expect((src.match(/pasteKeystroke\(\{/g) ?? []).length).toBe(4);
+    expect((src.match(/submitKeystroke\(\{/g) ?? []).length).toBe(3);
+    expect(targeted.length).toBe(7 + 4 + 3);   // raises + pastes + submits, none left blind
+    expect(src).toContain('function editorWindowTarget(): EditorWindowTarget');
+    expect(src).toContain('appName: vscode.env.appName, workspaceName: vscode.workspace.name');
   });
 });
