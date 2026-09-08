@@ -360,6 +360,17 @@ export function buildStopDrivenPromptSubmitDecider(
         // stdout is PIPED — the block line is the decision channel. stderr is
         // ignored: popup hosts write cues there ("Please select an action…").
         stdio: ['pipe', 'pipe', 'ignore'],
+        // ⚠ RC80 (Windows/Devin tester, 2026-09-08): "a blank black window appears
+        // and closes by itself in seconds". That window is THIS process's console.
+        // Since RC78 `stop` is spawned by the DETACHED popup supervisor, which is
+        // created with DETACHED_PROCESS and therefore has no console of its own; on
+        // Windows a console-subsystem child of a console-less parent gets a BRAND NEW
+        // console, and it renders empty because our stdout is piped and stderr
+        // ignored. Before RC78 `stop` inherited the hook's console, so nothing
+        // appeared. Hide it, exactly as the RC71 detached consumer already does. The
+        // popup itself is unaffected: it is created by its own `cmd /c start`, which
+        // allocates its own visible console. Ignored on POSIX.
+        windowsHide: true,
         // RC35: hand `stop` the hook env PLUS any GUI-session vars the host
         // stripped (see enrichSpawnEnvFromSessionSnapshot) — the popup cannot
         // render without them, and Windsurf's hook spawns arrive without a
@@ -640,6 +651,8 @@ export async function runSequenceContinuationStop(
     child = spawnFn(cmd, [...prefix, 'stop'], {
       cwd: projectRoot,
       stdio: ['pipe', 'pipe', 'ignore'],
+      // RC80: same phantom-console fix as the submit decider above.
+      windowsHide: true,
       // Same enrichment as the submit decider — the continuation popup needs
       // the GUI session the host may have stripped from the hook env (RC35).
       env: ensureNodeDirOnPath(enrichSpawnEnvFromSessionSnapshot(process.env)),

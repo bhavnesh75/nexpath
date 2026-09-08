@@ -1,6 +1,27 @@
 # Changelog
 
-## 0.1.36 — 2026-09-07
+## 0.1.36 — 2026-09-08
+
+- Chat-history capture survives an editor update. Cursor and Windsurf ship their own
+  runtime, and when they upgraded it the bundled database reader could no longer load,
+  so capture stopped and the Output panel filled with a repeating
+  "NODE_MODULE_VERSION" error every couple of seconds. The reader is now built on a
+  runtime-independent interface, so the same build works on current and future editor
+  versions.
+- That same repeating failure was re-copying every chat database every two seconds,
+  which slowed the editor down: on one machine a submit-time selection took nearly a
+  minute to reach the chat. If the reader ever cannot load, it now reports once and
+  stands down instead of retrying, and the submit popup and its delivery are unaffected.
+- On an editor too old to run the reader safely, capture is skipped with a single
+  explanatory line rather than risking a crash.
+- Windsurf and Devin: your original prompt is no longer released while the popup is
+  still open. If you take your time, the prompt is held and cancelled on your behalf,
+  and whichever option you then choose is sent: the strengthened prompt, or your
+  original text unchanged.
+- The "schema is not recognised" notice no longer appears for an empty database, which
+  the editor creates and removes routinely.
+
+## 0.1.36 (earlier notes) — 2026-09-07
 
 - Windsurf (Devin) and Cursor: a submit-time popup left unanswered until the hold expires
   now closes on Linux and macOS too (it could previously stay open and keep the local

@@ -9,6 +9,8 @@ import {
   defaultReadItemTable,
   defaultReadWindsurfJsonFiles,
   isUnrecoverableNativeLoadError,
+  nativeSqliteUnsupportedReason,
+  NATIVE_SQLITE_MIN_NODE_MAJOR,
   resolveBundledNativeBinding,
   type ReadItemTableFn,
   type ReadWindsurfJsonFilesFn,
@@ -1220,5 +1222,171 @@ describe('RC79 — unrecoverable native-module load failures latch instead of st
     w.stop();
     expect(onError).toHaveBeenCalledTimes(1);                 // SQLite latched
     expect(readWindsurfJsonFilesFn.mock.calls.length).toBeGreaterThan(1); // Windsurf unaffected
+  });
+});
+
+
+// ── RC79b: never open a database on a runtime that would segfault ────────────
+// better-sqlite3 13 is Node-API (which is what fixes the ABI class) but needs
+// Node >= 22: on Node 20.19 it SEGFAULTS on open (measured: exit 139). A
+// segfault kills the extension host and cannot be caught, so the readers ask
+// first. Electron 34 is the only generation that bundles Node 20.
+describe('RC79b — the Node-runtime guard for the native SQLite reader', () => {
+  it('flags the runtimes that would crash, and clears the ones that would not', () => {
+    expect(nativeSqliteUnsupportedReason('20.18.1')).toContain('needs Node');   // Electron 34
+    expect(nativeSqliteUnsupportedReason('18.20.0')).not.toBeNull();
+    expect(nativeSqliteUnsupportedReason('22.14.0')).toBeNull();                // Electron 35-39
+    expect(nativeSqliteUnsupportedReason('24.15.0')).toBeNull();                // Electron 40-43
+    expect(NATIVE_SQLITE_MIN_NODE_MAJOR).toBe(22);
+  });
+
+  it('treats an unreadable version as SUPPORTED — a guess must not disable capture', () => {
+    expect(nativeSqliteUnsupportedReason(undefined)).toBeNull();
+    expect(nativeSqliteUnsupportedReason('')).toBeNull();
+    expect(nativeSqliteUnsupportedReason('not-a-version')).toBeNull();
+  });
+
+  it('names the runtime so the user can act, without leaking a stack', () => {
+    const reason = nativeSqliteUnsupportedReason('20.18.1')!;
+    expect(reason).toContain('20.18.1');
+    expect(reason).toContain('Update the editor');
+  });
+
+  it('⭐ the guard latches through the SAME path as a load failure (one report, then silence)', () => {
+    // Wiring proof: whatever the guard says must be recognised as unrecoverable,
+    // otherwise it would be retried on every poll tick and re-stage copies.
+    expect(isUnrecoverableNativeLoadError(nativeSqliteUnsupportedReason('20.18.1')!)).toBe(true);
+  });
+});
+
+
+// ── RC80: stop re-reading a database whose bytes have not changed ────────────
+// Measured cause of "cancelling takes so long" on Windows: every 2 s, per
+// database, the watcher copied ~50 MB and full-scanned 6,903 rows / 42.5 MB
+// SYNCHRONOUSLY, starving the extension host (a 2 s decision poll landed 29.6 s
+// late; a 400 ms timer measured 6114 ms). Emissions are de-duplicated, so those
+// re-reads emitted nothing: skipping them is equivalent, not a behaviour change.
+describe('RC80 — the unchanged-content gate', () => {
+  let onEvent: ReturnType<typeof vi.fn>;
+  let onError: ReturnType<typeof vi.fn>;
+  let watchFn: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    onEvent = vi.fn();
+    onError = vi.fn();
+    watchFn = vi.fn(() => {
+      const w = new EventEmitter() as EventEmitter & { close: () => void };
+      w.close = () => {};
+      return w;
+    });
+  });
+
+  /** A mutable fake filesystem: only the WAL moves, exactly like live SQLite. */
+  function fakeStat(state: { wal: number }) {
+    return (p: string) => {
+      if (p.endsWith('-wal')) return { size: state.wal, mtimeMs: state.wal };
+      if (p.endsWith('-shm')) return { size: 32, mtimeMs: 1 };
+      return { size: 51_000_000, mtimeMs: 1 };
+    };
+  }
+
+  it('⭐ reads once, then stops re-reading while nothing changes', async () => {
+    const state = { wal: 100 };
+    const read = vi.fn<ReadItemTableFn>(async () => [{ key: 'k', value: 'v' }]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb')],
+      onEvent, onError,
+      watchFn: watchFn as never,
+      readItemTableFn: read,
+      statSyncFn: fakeStat(state) as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 60)); // ~12 poll ticks
+    w.stop();
+    // Without the gate this would be one full 50 MB read per tick.
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-reads as soon as the WAL actually changes, so capture is never missed', async () => {
+    const state = { wal: 100 };
+    const read = vi.fn<ReadItemTableFn>(async () => [{ key: 'k', value: 'v' }]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb')],
+      onEvent, onError,
+      watchFn: watchFn as never,
+      readItemTableFn: read,
+      statSyncFn: fakeStat(state) as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 30));
+    expect(read).toHaveBeenCalledTimes(1);
+    state.wal = 200;                       // SQLite wrote a new prompt
+    await new Promise((r) => setTimeout(r, 30));
+    w.stop();
+    expect(read).toHaveBeenCalledTimes(2); // the change was picked up
+  });
+
+  it('a FAILED read is never recorded, so it retries instead of latching silently', async () => {
+    const state = { wal: 100 };
+    const read = vi.fn<ReadItemTableFn>(async () => { throw new Error('database is locked'); });
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb')],
+      onEvent, onError,
+      watchFn: watchFn as never,
+      readItemTableFn: read,
+      statSyncFn: fakeStat(state) as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 50));
+    w.stop();
+    expect(read.mock.calls.length).toBeGreaterThan(2);
+  });
+
+  it('falls back to today\'s behaviour when the files cannot be stat\'d', async () => {
+    // Every stat throws (the shape every pre-existing test runs under, since
+    // their paths do not exist). The gate must never engage on a null signature.
+    const read = vi.fn<ReadItemTableFn>(async () => [{ key: 'k', value: 'v' }]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb')],
+      onEvent, onError,
+      watchFn: watchFn as never,
+      readItemTableFn: read,
+      statSyncFn: (() => { throw new Error('ENOENT'); }) as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 40));
+    w.stop();
+    expect(read.mock.calls.length).toBeGreaterThan(2); // unchanged from before
+  });
+
+  it('still emits a genuinely new prompt after a change (capture is intact)', async () => {
+    const state = { wal: 100 };
+    let rows: ItemTableRow[] = [];
+    const read = vi.fn<ReadItemTableFn>(async () => rows);
+    const extractor = makeExtractor('test', [ev('a brand new prompt', 's-new', '/p/state.vscdb')]);
+    const w = createChatHistoryWatcher({
+      targets: [cursorTarget('/p/state.vscdb', extractor)],
+      onEvent, onError,
+      watchFn: watchFn as never,
+      readItemTableFn: read,
+      statSyncFn: fakeStat(state) as never,
+      debounceMs: 1,
+      pollMs: 5,
+    });
+    w.start();
+    await new Promise((r) => setTimeout(r, 25));  // prime pass on empty rows
+    rows = [{ key: 'k1', value: 'a brand new prompt' }];
+    state.wal = 300;                              // and the file changed
+    await new Promise((r) => setTimeout(r, 30));
+    w.stop();
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent.mock.calls[0]![0].prompt).toBe('a brand new prompt');
   });
 });
