@@ -118,7 +118,18 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
       kind: 'field',
       label: 'Additional details',
       text: view.additionalDetailsText,
-      hints: { always: [DETAILS_HINT], whenFocused: [EDIT_KEYS_HINT] },
+      // Issue #160: the apply hint follows the CONTENT, not the row. An empty field was
+      // advertising an action with nothing to act on. Matches the three CLI render sites
+      // (`cli-submit-popup.ts:817`, `cli-mps-popup.ts:205` and `:394`) — this adapter exists to
+      // mirror the CLI, so the condition is deliberately identical, `.trim()` included: a field
+      // holding only spaces has nothing to apply either.
+      //
+      // `whenFocused` is untouched. The edit-keys answer a different question — they only work
+      // while the row holds focus — so that hint stays focus-keyed, exactly as in the CLI.
+      hints: {
+        ...((view.additionalDetailsText ?? '').trim() ? { always: [DETAILS_HINT] } : {}),
+        whenFocused: [EDIT_KEYS_HINT],
+      },
       blankBefore: true,
       maxLines: 5, // the CLI windows the details field at 5 rows (:1335)
       ...(locked || !detailsAvailable ? { readOnly: true } : {}),

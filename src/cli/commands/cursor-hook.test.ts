@@ -6,6 +6,12 @@
  * Windsurf exit-2 convention here would silently fail to block.
  */
 import { describe, it, expect, vi, afterAll } from 'vitest';
+vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
+  // RC71 hermetic: the real spawner would launch a detached `node <argv[1]> submit-expiry-consume`
+  // from inside the test runner. The constant is kept real; only the spawn is stubbed.
+  const mod = await importOriginal<typeof import('./submit-expiry-consumer.js')>();
+  return { ...mod, spawnExpiryConsumer: vi.fn(() => ({ spawned: true, pid: 4242 })) };
+});
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +21,7 @@ import {
   rehydrateGuiEnvFromParent, GUI_ENV_KEYS,
 } from './cursor-hook.js';
 import { createHoldBudget } from './submit-hold-budget.js';
+import { SUBMIT_POPUP_MIN_REMAINING_MS } from './submit-expiry-consumer.js';
 
 const PAYLOAD = JSON.stringify({
   prompt: 'hello',
@@ -163,6 +170,7 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     const f = fakeBudget();
     const h = harness({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77: the popup's own window — explicit, so this pin is host-independent
       decide: () => new Promise(() => { f.advance(60_000); }),   // never settles
     });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
@@ -176,14 +184,16 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     const f = fakeBudget();
     const h = harness({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77
       decide: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }),
     });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
     expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
   });
 
-  it('the budget is SHARED — a slow stdin read leaves less for the decision', async () => {
-    // Per-segment timeouts would sum and could exceed the cap.
+  it('the PREPARATION budget is SHARED — a slow stdin read exhausts it and no popup is granted', async () => {
+    // Per-segment timeouts would sum and could exceed the cap. RC77 grants the popup its
+    // own window ONLY when the preparation finished; an exhausted preparation stays exhausted.
     const f = fakeBudget(60_000);
     const h = harness({
       holdBudget: f.budget,
@@ -195,6 +205,48 @@ describe('⭐ R2 — self-enforced hold: Cursor orphans timed-out hooks, so it w
     expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
     expect(h.exits).toEqual([0]);
   });
+
+/**
+ * ⭐ RC77 — the popup waits for the human. Devin/Windows tester, 2026-09-08: the popup
+ * vanished at the shared 75 s while they were still reading, and the held prompt ran.
+ */
+describe('⭐ RC77 — the popup outlives the preparation budget', () => {
+  it('⭐ preparation 60 s, popup window 30 min: a decision taken after 5 minutes is still a decision', async () => {
+    const f = fakeBudget(60_000);
+    const h = harness({
+      holdBudget: f.budget,
+      popupWaitBudgetMs: () => 30 * 60_000,
+      decide: () => new Promise((r) => { f.advance(5 * 60_000); setTimeout(() => r('block'), 0); }),
+    });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(JSON.parse(h.writes[0])).toMatchObject({ continue: false });   // the block landed — five minutes in
+    // (Cursor's decision channel is the JSON; the process exit stays 0 on a block.)
+  });
+  it('the popup window is logged so a tester can read it off one line', async () => {
+    const f = fakeBudget(60_000);
+    const events: Array<{ name: string; data: unknown }> = [];
+    const logEvent = vi.fn((_l: string, name: string, data: unknown) => { events.push({ name, data }); });
+    const h = harness({ logEvent, holdBudget: f.budget, popupWaitBudgetMs: () => 123_456, decide: async () => 'allow' as const });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    const ev = events.find((e) => e.name === 'cursor_hook_popup_budget');
+    expect(ev?.data).toMatchObject({ popup_wait_ms: 123_456 });
+  });
+  it('the popup window is granted only when auto finished: an expired preparation still fails open', async () => {
+    const f = fakeBudget(60_000);
+    const names: string[] = [];
+    const logEvent = vi.fn((_l: string, name: string) => { names.push(name); });
+    const h = harness({
+      logEvent, holdBudget: f.budget,
+      popupWaitBudgetMs: () => 30 * 60_000,
+      readStdin: async () => { f.advance(60_000); return PAYLOAD; },   // preparation exhausted by stdin
+      decide: async () => 'block' as const,
+    });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+    expect(names).not.toContain('cursor_hook_popup_budget');
+  });
+});
+
 });
 
 describe('⭐ H6 — the Cursor switch is independent and defaults OFF', () => {
@@ -463,8 +515,10 @@ describe('file logging — a silent hook can never hide again', () => {
       'cursor_hook_invoked',
       'cursor_hook_payload',
       'cursor_hook_gate',
+      'cursor_hook_popup_budget', // RC77: the popup's own window, granted once auto's wait returned
       'cursor_hook_auto',
       'cursor_hook_decision',
+      'cursor_hook_hold_split', // RC67: the budget split rides every gated run
       'cursor_hook_response',
     ]);
   });
@@ -715,5 +769,209 @@ describe('⭐ RC50 — duplicate invocation short-circuits', () => {
     const h = harness({ decide, checkDuplicateInvocation: () => false });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
     expect(decide).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ⭐ RC67 — hold expiry is LOGGED with the budget split (tester report
+ * 2026-09-03: the popup's death could only be inferred from a MISSING
+ * `submit_stop_decider_done`). New event names only; nothing decides differently.
+ */
+describe('⭐ RC67 — hold expiry logged with the budget split (cursor)', () => {
+  function fakeBudget(totalMs = 60_000) {
+    let t = 0;
+    const timers: Array<{ at: number; fn: () => void }> = [];
+    const budget = createHoldBudget({
+      totalMs, now: () => t,
+      setTimeoutFn: (fn, ms) => { const e = { at: t + ms, fn }; timers.push(e); return e; },
+      clearTimeoutFn: (h) => { const i = timers.indexOf(h as never); if (i >= 0) timers.splice(i, 1); },
+    });
+    return { budget, advance(ms: number) { t += ms; for (const e of [...timers]) if (e.at <= t) { timers.splice(timers.indexOf(e), 1); e.fn(); } } };
+  }
+  const collect = () => {
+    const events: Array<{ name: string; data: Record<string, unknown> }> = [];
+    const logEvent = vi.fn((_l: string, name: string, data?: Record<string, unknown>) => { events.push({ name, data: data ?? {} }); });
+    return { events, logEvent, find: (n: string) => events.filter((e) => e.name === n) };
+  };
+
+  it('⭐ decider timeout ⇒ cursor_hook_hold_expired{segment:decider} with numeric auto_ms/decider_ms, then hold_split(decider_timed_out)', async () => {
+    const f = fakeBudget();
+    const c = collect();
+    const h = harness({ logEvent: c.logEvent, holdBudget: f.budget,
+      decide: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }) });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    const exp = c.find('cursor_hook_hold_expired');
+    expect(exp).toHaveLength(1);
+    expect(exp[0]!.data.segment).toBe('decider');
+    expect(typeof exp[0]!.data.auto_ms).toBe('number');
+    expect(typeof exp[0]!.data.decider_ms).toBe('number');
+    expect(exp[0]!.data.remaining_ms).toBe(0);
+    const split = c.find('cursor_hook_hold_split');
+    expect(split).toHaveLength(1);
+    expect(split[0]!.data).toMatchObject({ decision: 'allow', decider_timed_out: true });
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true }); // still fail-open
+  });
+
+  it('⭐ auto-await timeout ⇒ cursor_hook_hold_expired{segment:auto}, no decision, no split', async () => {
+    const c = collect();
+    let call = 0;
+    const fakeHold = {
+      remaining: () => 0, expired: () => call > 1,
+      run: async <T>(work: () => Promise<T>) => {
+        call += 1;
+        if (call === 1) return { timedOut: false as const, value: await work() }; // stdin
+        if (call === 2) return { timedOut: false as const, value: await work() }; // echo check
+        return { timedOut: true as const };                                        // auto await → expired
+      },
+    };
+    const h = harness({ logEvent: c.logEvent, holdBudget: fakeHold as never,
+      spawnAutoFn: () => ({ kill: () => {} }) as never, waitForChild: async () => {}, decide: async () => 'block' as const });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    const exp = c.find('cursor_hook_hold_expired');
+    expect(exp.map((e) => e.data.segment)).toEqual(['auto', 'decider']); // auto expired; the refused decider segment is reported too
+    expect(exp[0]!.data.decider_ms).toBeNull();
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+  });
+
+  it('a normal block run ⇒ hold_split{decision:block} with numeric auto_ms & decider_ms and NO hold_expired', async () => {
+    const c = collect();
+    const h = harness({ logEvent: c.logEvent, decide: async () => 'block' as const });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(c.find('cursor_hook_hold_expired')).toHaveLength(0);
+    const split = c.find('cursor_hook_hold_split');
+    expect(split).toHaveLength(1);
+    expect(split[0]!.data.decision).toBe('block');
+    expect(split[0]!.data.decider_timed_out).toBe(false);
+    expect(typeof split[0]!.data.auto_ms).toBe('number');
+    expect(typeof split[0]!.data.decider_ms).toBe('number');
+    expect(typeof split[0]!.data.remaining_after_auto_ms).toBe('number');
+  });
+
+  it('⭐ switch OFF ⇒ no hold_* events (old flow byte-identical)', async () => {
+    const c = collect();
+    const h = harness({ logEvent: c.logEvent, env: { [CURSOR_PROMPTSUBMIT_ADVISORY_ENV]: '0' } });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(c.events.filter((e) => e.name.startsWith('cursor_hook_hold_')).length).toBe(0);
+  });
+});
+
+/**
+ * ⭐ RC71 — expiry consume (tester §4b fix 1) + the 6.1 floor, Cursor side.
+ * Mirrors the Windsurf pins; Cursor answers `continue:true` on every one of these.
+ */
+describe('⭐ RC71 — cursor expiry consume + 6.1 floor', () => {
+  function fakeBudget(totalMs = 60_000) {
+    let t = 0;
+    const timers: Array<{ at: number; fn: () => void }> = [];
+    const budget = createHoldBudget({
+      totalMs, now: () => t,
+      setTimeoutFn: (fn, ms) => { const e = { at: t + ms, fn }; timers.push(e); return e; },
+      clearTimeoutFn: (h) => { const i = timers.indexOf(h as never); if (i >= 0) timers.splice(i, 1); },
+    });
+    return { budget, advance(ms: number) { t += ms; for (const e of [...timers]) if (e.at <= t) { timers.splice(timers.indexOf(e), 1); e.fn(); } } };
+  }
+  const collect = () => {
+    const events: Array<{ level: string; name: string; data: Record<string, unknown> }> = [];
+    const logEvent = vi.fn((level: string, name: string, data?: Record<string, unknown>) => { events.push({ level, name, data: data ?? {} }); });
+    return { events, logEvent, find: (n: string) => events.filter((e) => e.name === n) };
+  };
+  // Segments in order: stdin → echo check → auto wait → decider.
+  const holdWith = (remainingAfterAuto: number) => ({
+    remaining: () => remainingAfterAuto, expired: () => false,
+    run: async <T>(work: () => Promise<T>) => ({ timedOut: false as const, value: await work() }),
+  });
+  const fakeChild = () => ({ kill: () => {} }) as never;
+
+  it('⭐ decider expiry ⇒ consumer spawned once {reason:decider_expired, project=/proj}, continue:true', async () => {
+    const f = fakeBudget(); const c = collect();
+    const consumer = vi.fn(() => ({ spawned: true, pid: 77 }));
+    const t0 = Date.now();
+    const h = harness({ logEvent: c.logEvent, holdBudget: f.budget, spawnExpiryConsumer: consumer,
+      spawnAutoFn: fakeChild, waitForChild: async () => {},
+      decide: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }) });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(consumer).toHaveBeenCalledTimes(1);
+    const arg = consumer.mock.calls[0]![0] as unknown as { projectRoot: string; before: number; reason: string };
+    expect(arg).toMatchObject({ reason: 'decider_expired', projectRoot: '/proj' });
+    expect(arg.before).toBeGreaterThanOrEqual(t0);
+    expect(c.find('cursor_hook_expiry_consume')).toEqual([{ level: 'info', name: 'cursor_hook_expiry_consume',
+      data: { reason: 'decider_expired', spawned: true, pid: 77, error: null } }]);
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+  });
+
+  it('⭐ auto expiry ⇒ consumer ONCE {reason:auto_expired} — the refused decider segment does not consume again', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 1 })); const decide = vi.fn(async () => 'block' as const);
+    let call = 0;
+    const fakeHold = {
+      remaining: () => 0, expired: () => call > 1,
+      run: async <T>(work: () => Promise<T>) => {
+        call += 1;
+        if (call <= 2) return { timedOut: false as const, value: await work() }; // stdin, echo check
+        return { timedOut: true as const };                                       // auto → expired; decider refused
+      },
+    };
+    const h = harness({ logEvent: () => {}, holdBudget: fakeHold as never, spawnExpiryConsumer: consumer,
+      spawnAutoFn: fakeChild, waitForChild: async () => {}, decide });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect((consumer.mock.calls[0]![0] as unknown as { reason: string }).reason).toBe('auto_expired');
+    expect(decide).not.toHaveBeenCalled();
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+  });
+
+  it('⭐ below the floor after auto ⇒ hold_floor logged, decider SKIPPED, consumer {below_floor}, decision allow, split decider_ms null', async () => {
+    const c = collect(); const consumer = vi.fn(() => ({ spawned: true, pid: 2 })); const decide = vi.fn(async () => 'block' as const);
+    const raisePopup = vi.fn();
+    const h = harness({ logEvent: c.logEvent, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS - 1) as never,
+      spawnExpiryConsumer: consumer, spawnAutoFn: fakeChild, waitForChild: async () => {}, decide, raisePopup });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    const floor = c.find('cursor_hook_hold_floor');
+    expect(floor).toHaveLength(1);
+    expect(floor[0]!.data).toMatchObject({ remaining_after_auto_ms: SUBMIT_POPUP_MIN_REMAINING_MS - 1, floor_ms: SUBMIT_POPUP_MIN_REMAINING_MS });
+    expect(decide).not.toHaveBeenCalled();
+    expect(raisePopup).not.toHaveBeenCalled(); // no popup to raise
+    expect(consumer).toHaveBeenCalledTimes(1);
+    expect((consumer.mock.calls[0]![0] as unknown as { reason: string }).reason).toBe('below_floor');
+    expect(c.find('cursor_hook_hold_expired')).toHaveLength(0);
+    expect(c.find('cursor_hook_decision')[0]!.data).toMatchObject({ decision: 'allow', decider_timed_out: false });
+    expect(c.find('cursor_hook_hold_split')[0]!.data).toMatchObject({ decision: 'allow', decider_ms: null });
+    expect(JSON.parse(h.writes[0])).toEqual({ continue: true });
+  });
+
+  it('exactly AT the floor the decider still runs and nothing is consumed', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 3 })); const decide = vi.fn(async () => 'allow' as const);
+    const h = harness({ logEvent: () => {}, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS) as never,
+      spawnExpiryConsumer: consumer, spawnAutoFn: fakeChild, waitForChild: async () => {}, decide });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(consumer).not.toHaveBeenCalled();
+  });
+
+  it('a normal block run (real budget) ⇒ consumer never spawned, continue:false unchanged', async () => {
+    const consumer = vi.fn(() => ({ spawned: true, pid: 4 }));
+    const h = harness({ logEvent: () => {}, spawnExpiryConsumer: consumer, spawnAutoFn: fakeChild,
+      waitForChild: async () => {}, decide: async () => 'block' as const });
+    await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+    expect(consumer).not.toHaveBeenCalled();
+    expect(JSON.parse(h.writes[0]).continue).toBe(false);
+  });
+
+  it('⭐ NEXPATH_HOLD_REMAINING_MS is set (numeric) for the auto spawn only and restored after; switch OFF ⇒ nothing spawned, nothing set', async () => {
+    const prev = process.env.NEXPATH_HOLD_REMAINING_MS; delete process.env.NEXPATH_HOLD_REMAINING_MS;
+    try {
+      const seen: Array<string | undefined> = [];
+      const h = harness({ logEvent: () => {}, spawnAutoFn: () => { seen.push(process.env.NEXPATH_HOLD_REMAINING_MS); return fakeChild(); },
+        waitForChild: async () => {}, decide: async () => 'allow' as const });
+      await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
+      expect(seen).toHaveLength(1);
+      expect(Number(seen[0])).toBeGreaterThan(0);
+      expect(process.env.NEXPATH_HOLD_REMAINING_MS).toBeUndefined(); // restored
+      const spawnAuto = vi.fn(); const consumer = vi.fn(() => ({ spawned: true, pid: 5 }));
+      const off = harness({ logEvent: () => {}, env: { [CURSOR_PROMPTSUBMIT_ADVISORY_ENV]: '0' }, spawnAutoFn: spawnAuto, spawnExpiryConsumer: consumer });
+      await runCursorHookAction('beforeSubmitPrompt', off.deps as never);
+      expect(spawnAuto).not.toHaveBeenCalled();
+      expect(consumer).not.toHaveBeenCalled();
+      expect(process.env.NEXPATH_HOLD_REMAINING_MS).toBeUndefined();
+    } finally { if (prev !== undefined) process.env.NEXPATH_HOLD_REMAINING_MS = prev; }
   });
 });

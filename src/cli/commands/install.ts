@@ -8,6 +8,8 @@ import pc from 'picocolors';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { isConfigSet, setConfig, getConfig } from '../../store/config.js';
 import { setInstalledAtIfMissing } from '../../store/feedback-signals.js';
+import { expireSessionsForCredentialChange } from '../../store/session-reset.js';
+import { NonInteractiveTerminalError, withInteractiveTerminal } from './interactive-terminal.js';
 import { flushIfTelemetryOn } from '../../telemetry/lifecycle-flush.js';
 import {
   VALID_ROLES,
@@ -431,56 +433,15 @@ export function getKeychainName(platform: NodeJS.Platform = process.platform): s
  * picker uses, so the explanatory block can sit beneath the options where a
  * plain `select` would have no room for it.
  */
-/**
- * `nexpath install` is interactive: every prompt it shows needs a real terminal
- * to draw on and read keys from. Run with stdin or stdout redirected — a pipe,
- * a CI step, `< /dev/null` — the prompt library cannot attach to a TTY and dies
- * with a raw `ERR_TTY_INIT_FAILED: uv_tty_init returned EBADF` and a stack
- * trace, which says nothing about what the user should do instead.
- *
- * ⚠️ This WRAPS the failure rather than predicting it. A pre-flight
- * `process.stdin.isTTY` check would be the obvious shape, but it would decide
- * on this code's behalf that a terminal is unusable, and any redirection combo
- * that happens to work today would start being refused. Nothing that works now
- * can reach this: it only re-describes a call that already threw.
- */
-export class NonInteractiveTerminalError extends Error {
-  constructor() {
-    super(
-      [
-        'nexpath install needs an interactive terminal, but stdin or stdout is redirected.',
-        '',
-        'Run it directly in a terminal:',
-        '  nexpath install',
-        '',
-        'For an unattended install, use --yes — it stores a credential already in',
-        'the environment or keychain, and prompts for nothing:',
-        '  nexpath install --yes',
-      ].join('\n'),
-    );
-    this.name = 'NonInteractiveTerminalError';
-  }
-}
-
-/** True for the TTY-attachment failure above, and nothing else. */
-function isTtyInitFailure(err: unknown): boolean {
-  const code = (err as { code?: unknown } | null)?.code;
-  return code === 'ERR_TTY_INIT_FAILED';
-}
-
-/**
- * Run an interactive prompt, translating a TTY-attachment failure into an
- * explanation. Any other error is rethrown untouched — this must never turn a
- * real bug into a friendly message about terminals.
- */
-async function withInteractiveTerminal<T>(run: () => Promise<T>): Promise<T> {
-  try {
-    return await run();
-  } catch (err) {
-    if (isTtyInitFailure(err)) throw new NonInteractiveTerminalError();
-    throw err;
-  }
-}
+// ── Interactive-terminal failures ────────────────────────────────────────────
+// The mechanism moved to `interactive-terminal.ts` so `token.ts` can reach it
+// without importing this module's whole graph (Vedansi, 2026-09-07: `config
+// set-token` dies with a raw ERR_TTY_INIT_FAILED on a non-TTY stdin).
+//
+// `NonInteractiveTerminalError` is RE-EXPORTED, not moved out of reach: `main.ts`
+// imports it from here and the `instanceof` check at its install action depends
+// on there being exactly one class. Re-exporting keeps that one class.
+export { NonInteractiveTerminalError } from './interactive-terminal.js';
 
 const defaultCredentialChoicePrompt = async (): Promise<CredentialChoice | null> => {
   const p = new SelectPrompt<{ value: string; label: string }>({
@@ -679,6 +640,11 @@ export async function installAction(
   setInstalledAtIfMissing(store);
 
   let apiKeySource:  InstallSummary['apiKey']['source'] = 'skipped';
+  // Whether a credential was actually WRITTEN this run. `apiKeySource` cannot answer that:
+  // 'kept' and a `--yes` run that found an existing credential both leave it set to something
+  // truthy while nothing changed, and ending a live session because the user re-ran install
+  // without touching their key would cost them their history for no reason.
+  let credentialStored = false;
   let telemetryEnabled = false;
 
   try {
@@ -705,14 +671,17 @@ export async function installAction(
       if (result.kind === 'new_key') {
         const stored = await storeApiKeyFn(result.value);
         apiKeySource = stored.source;
+        credentialStored = true;
         console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else if (result.kind === 'nexpath_token') {
         const stored = await storeNexpathToken(result.value);
         apiKeySource = 'nexpath_token';
+        credentialStored = true;
         console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else if (result.kind === 'use_env') {
         const stored = await storeApiKeyFn(envKey);
         apiKeySource = stored.source;
+        credentialStored = true;
         console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else if (result.kind === 'keep_existing') {
         apiKeySource = 'kept';
@@ -746,6 +715,7 @@ export async function installAction(
       if (envKey !== '' && isValidApiKey(envKey)) {
         const stored = await storeApiKeyFn(envKey);
         apiKeySource = stored.source;
+        credentialStored = true;
         console.log(`✓ Stored in ${stored.source === 'keychain' ? keychainName : 'fallback file (~/.nexpath/config.json)'}`);
       } else {
         const storedSource = await keySourceFn(process.cwd());
@@ -756,6 +726,22 @@ export async function installAction(
         if (storedSource === 'nexpath_token')  apiKeySource = 'nexpath_token';
         else if (storedSource === 'none')      apiKeySource = 'skipped';
         else                                   apiKeySource = 'kept';
+      }
+    }
+
+    // A credential was written, so the session that ran under the previous one is over —
+    // the same reason `config set-api-key` ends it. Only when something was actually stored:
+    // a re-run that keeps an existing key changes nothing and must not cost the user their
+    // accumulated session.
+    //
+    // ⛔ Best-effort, like every other side task on this path. `store` is already open here,
+    // so this is one statement — but a failure must not abort an install that has already
+    // saved the credential.
+    if (credentialStored) {
+      try {
+        expireSessionsForCredentialChange(store);
+      } catch {
+        /* hygiene only — never fail the install over it */
       }
     }
 

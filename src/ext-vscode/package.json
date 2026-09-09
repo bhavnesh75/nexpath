@@ -127,6 +127,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run build && npm run bundle:cli",
+    "vscode:uninstall": "node ./out/uninstall.cjs",
     "build": "node esbuild.config.mjs",
     "bundle:cli": "node scripts/bundle-cli.mjs",
     "watch": "node esbuild.config.mjs --watch",
@@ -156,7 +157,7 @@
     ]
   },
   "dependencies": {
-    "better-sqlite3": "^12"
+    "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.2",

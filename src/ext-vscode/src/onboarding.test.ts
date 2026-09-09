@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
   Uri: { parse: mockUriParse },
 }));
 
-import { showOnboardingIfNeeded } from './onboarding.js';
+import { showOnboardingIfNeeded, macFullDiskAccessMessage } from './onboarding.js';
 
 interface FakeContext {
   globalState: {
@@ -121,5 +121,35 @@ describe('showOnboardingIfNeeded', () => {
     });
     await showOnboardingIfNeeded(ctx as never, 'darwin');
     expect(mockShowInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+/** ⭐ F-10 (2026-09-05) — the macOS Full Disk Access notice names the REAL host, never a hardcoded "Cursor". */
+describe('⭐ F-10 — host-aware macOS Full Disk Access notice', () => {
+  beforeEach(() => { mockShowInformationMessage.mockReset(); mockOpenExternal.mockReset(); });
+
+  it('names the live appName in both places and never says Cursor for a Windsurf host', async () => {
+    mockShowInformationMessage.mockResolvedValueOnce('Later');
+    const ctx = makeContext({ 'nexpath.consentGranted': true });
+    await showOnboardingIfNeeded(ctx as never, 'darwin', 'Windsurf');
+    const msg = mockShowInformationMessage.mock.calls[0]![0] as string;
+    expect(msg).toContain('Windsurf needs Full Disk Access');
+    expect(msg).toContain('enable Windsurf.');
+    expect(msg).not.toContain('Cursor');
+  });
+
+  it('Cursor stays Cursor; a rebranded name is used verbatim; a missing name falls back to "your editor"', () => {
+    expect(macFullDiskAccessMessage('Cursor')).toContain('Cursor needs Full Disk Access');
+    expect(macFullDiskAccessMessage(' Devin ')).toContain('enable Devin.');
+    expect(macFullDiskAccessMessage(undefined)).toContain('your editor needs Full Disk Access');
+    expect(macFullDiskAccessMessage('')).toContain('enable your editor.');
+  });
+
+  it('the vscode-provided default is used when no name is passed (mock has none ⇒ fallback), and the notice is still one-shot', async () => {
+    mockShowInformationMessage.mockResolvedValueOnce('Later');
+    const ctx = makeContext({ 'nexpath.consentGranted': true });
+    await showOnboardingIfNeeded(ctx as never, 'darwin');
+    expect(mockShowInformationMessage.mock.calls[0]![0]).toContain('your editor');
+    expect(ctx.globalState.update).toHaveBeenCalledWith('nexpath.fdaNoticeShown', true);
   });
 });

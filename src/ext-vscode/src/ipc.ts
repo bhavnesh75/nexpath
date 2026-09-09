@@ -74,6 +74,12 @@ export interface IpcOptions {
    * Injected in tests.
    */
   recoverSelection?: (cwd: string) => Promise<string | null>;
+  /**
+   * RC70 (F-1): the occurred-at timestamp for `record-signal` (`--at`). The
+   * extension DEFERS content-free signals past the submit-hold window (so the
+   * spawn never races the popup host's store lock) and records the TRUE time.
+   */
+  at?: number;
 }
 
 export class NexpathBinaryNotFoundError extends Error {
@@ -339,14 +345,73 @@ export function spawnRecordSignal(kind: string, opts: IpcOptions = {}): Promise<
       const bin = resolveBinaryPath(opts);
       const args = ['record-signal', '--kind', kind];
       if (opts.dbPath) args.push('--db', opts.dbPath);
+      if (typeof opts.at === 'number' && Number.isFinite(opts.at)) args.push('--at', String(Math.round(opts.at)));
       const spawner = opts.spawnFn ?? spawn;
       const safe = shellSafeSpawnTokens(bin, args);
-      const child = spawner(safe.bin, safe.args, buildSpawnOptions(opts));
+      // RC69 (F-5): a fire-and-forget child must NOT get pipes nobody drains.
+      // With the default `['pipe','pipe','pipe']` this spawn never attached a
+      // stdout/stderr reader, so a child that logs more than the OS pipe buffer
+      // (NEXPATH_DEBUG=1 — the very setting testers are told to use — routes
+      // verbose logging to stderr) blocks on its own write forever, and it
+      // blocks while HOLDING the CLI store lock: the next `auto`/`stop` then
+      // pays the 8 s lock fail-open, plus a zombie process per UI action.
+      // `record-signal` reads no stdin and its output is never consumed, so
+      // 'ignore' on all three is exactly what this spawn needs and nothing more.
+      const child = spawner(safe.bin, safe.args, { ...buildSpawnOptions(opts), stdio: ['ignore', 'ignore', 'ignore'] });
       child.on('error', () => resolve());   // missing binary / spawn failure — swallow
       child.on('close', () => resolve());    // any exit code — swallow (fire-and-forget)
-      child.stdin?.end();                    // record-signal reads no stdin
     } catch {
       resolve();                             // never throw into the caller
+    }
+  });
+}
+
+/** Shape of one `nexpath credential-status` JSON line (see the CLI command). */
+export interface CredentialStatusResult {
+  source: string;
+  configured: boolean;
+}
+
+/** Bound on the credential probe — the keychain layer can prompt or stall. */
+export const CREDENTIAL_STATUS_TIMEOUT_MS = 8_000;
+
+/**
+ * Spawn `nexpath credential-status` (read-only: no store, no lock) and parse
+ * its one JSON line. Resolves `null` on ANY failure — missing binary, non-zero
+ * exit, timeout, unparsable output — so the caller can only ever act on a
+ * positive "nothing resolves" answer, never on an absence of answer.
+ */
+export function spawnCredentialStatus(opts: IpcOptions = {}): Promise<CredentialStatusResult | null> {
+  return new Promise<CredentialStatusResult | null>((resolve) => {
+    let done = false;
+    const finish = (value: CredentialStatusResult | null): void => { if (!done) { done = true; resolve(value); } };
+    try {
+      const bin = resolveBinaryPath(opts);
+      const spawner = opts.spawnFn ?? spawn;
+      const safe = shellSafeSpawnTokens(bin, ['credential-status']);
+      const child = spawner(safe.bin, safe.args, { ...buildSpawnOptions(opts), stdio: ['ignore', 'pipe', 'ignore'] });
+      let stdout = '';
+      const timer = setTimeout(() => { try { child.kill(); } catch { /* already gone */ } finish(null); }, CREDENTIAL_STATUS_TIMEOUT_MS);
+      if (typeof timer.unref === 'function') timer.unref();
+      child.on('error', () => { clearTimeout(timer); finish(null); });
+      child.stdout?.on('data', (chunk: Buffer) => { stdout = appendCapped(stdout, chunk.toString()); });
+      child.on('close', (code: number | null) => {
+        clearTimeout(timer);
+        if (code !== 0) { finish(null); return; }
+        try {
+          const line = stdout.trim().split('\n').pop() ?? '';
+          const p = JSON.parse(line) as { source?: unknown; configured?: unknown };
+          if (p && typeof p.source === 'string' && typeof p.configured === 'boolean') {
+            finish({ source: p.source, configured: p.configured });
+          } else {
+            finish(null);
+          }
+        } catch {
+          finish(null);
+        }
+      });
+    } catch {
+      finish(null);
     }
   });
 }

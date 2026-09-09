@@ -82,7 +82,8 @@ describe('tfidf-model generated table', () => {
     }
 
     expect(existsSync(GENERATED_PATH)).toBe(true);
-    const actual = readFileSync(GENERATED_PATH, 'utf8');
+    // Windows checkouts with core.autocrlf rewrite the committed file to CRLF; the table, not the EOL, is the pin.
+    const actual = readFileSync(GENERATED_PATH, 'utf8').replace(/\r\n/g, '\n');
     expect(actual).toBe(expected);
   });
 });

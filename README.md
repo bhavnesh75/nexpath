@@ -203,6 +203,13 @@ nexpath store delete -y
 
 ## Troubleshooting
 
+### No Popup, Or A Suggestion That Looks Wrong?
+
+Run `nexpath status`. It reports which credential is in effect and the last LLM call that
+failed — for example a key that has run out of credit, been revoked, or been replaced. When a
+call fails Nexpath falls back to local detection and goes quiet, which looks like nothing
+happening rather than like an error.
+
 ### Where Is My API Key Stored?
 
 | Platform | Default location | Inspect with |

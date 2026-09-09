@@ -8,6 +8,12 @@
  * because that is what Windsurf actually acts on.
  */
 import { describe, it, expect, vi } from 'vitest';
+vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
+  // RC71 hermetic: the real spawner would launch a detached `node <argv[1]> submit-expiry-consume`
+  // from inside the test runner. The constant is kept real; only the spawn is stubbed.
+  const mod = await importOriginal<typeof import('./submit-expiry-consumer.js')>();
+  return { ...mod, spawnExpiryConsumer: vi.fn(() => ({ spawned: true, pid: 4242 })) };
+});
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -129,6 +135,9 @@ describe('H4 — every named failure mode releases the prompt unmodified (A3)', 
     const f = fakeBudget(60_000);
     const exits = await run({
       holdBudget: f.budget,
+      // RC77: the popup has its OWN window now (30 min by default); make it explicit here so
+      // this pin keeps its arithmetic — "no decision within the popup window ⇒ released".
+      popupWaitBudgetMs: () => 60_000,
       decidePromptSubmit: () => new Promise(() => { f.advance(60_000); }), // never resolves
     });
     expect(exits).not.toContain(2);
@@ -141,6 +150,7 @@ describe('H4 — every named failure mode releases the prompt unmodified (A3)', 
     const f = fakeBudget(60_000);
     const exits = await run({
       holdBudget: f.budget,
+      popupWaitBudgetMs: () => 60_000,   // RC77: explicit popup window (see above)
       decidePromptSubmit: () => new Promise((r) => { f.advance(60_000); setTimeout(() => r('block'), 0); }),
     });
     expect(exits).not.toContain(2);

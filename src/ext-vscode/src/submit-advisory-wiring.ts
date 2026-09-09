@@ -40,6 +40,7 @@ export interface SubmitAdvisoryWiringDeps {
     onInject: (text: string) => Promise<boolean>;
     onSubmit: () => Promise<boolean>;
     onTiming?: (t: unknown) => void;
+    onOutcome?: (outcome: string) => void;
   }) => SubmitHookPoller;
   readPendingDecision: (root: string, expectedHost: SubmitAdvisoryHost) => Promise<unknown>;
   /** Direct, command-based injection for this host — the PRIMARY path. */
@@ -58,6 +59,13 @@ export interface SubmitAdvisoryWiringDeps {
     log: (m: string) => void;
   }) => Promise<{ outcome: string; landed: boolean }>;
   onTiming?: (t: unknown) => void;
+  /**
+   * RC70 (F-3): delivery-outcome sink. The Windsurf branch always had one (the
+   * outcome log line + the RC16 darwin / RC47 win32 "press Enter yourself"
+   * hints); this host-agnostic wiring dropped it, so on Cursor a failed
+   * auto-send left the refined text in the composer with no log and no guidance.
+   */
+  onOutcome?: (outcome: string) => void;
 }
 
 /**
@@ -96,5 +104,6 @@ export function createSubmitAdvisoryForHost(
     // user has not pasted yet, so Enter would submit a stale composer.
     onSubmit: async () => (lastDeliveryLanded ? deps.submit() : false),
     onTiming: deps.onTiming,
+    onOutcome: deps.onOutcome,
   });
 }

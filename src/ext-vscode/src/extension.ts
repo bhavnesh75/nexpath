@@ -2,7 +2,10 @@ import * as vscode from 'vscode';
 
 /** Injected by esbuild at build time (RC24). `unknown` when built outside git. */
 declare const __NEXPATH_BUILD__: string;
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { consumeUninstallTombstone } from './fresh-install.js';
 import { createHash } from 'node:crypto';
 import { toSafeErrorRecord } from './diagnostics.js';
 import { CONSENT_KEY, showOnboardingIfNeeded } from './onboarding.js';
@@ -24,7 +27,8 @@ import { createInjectedRecordStore } from './injected-record.js';
 import { injectPeBody, injectPeBodyWithFallback, resolvePeVisibleSurfaceAckState } from './pe-delivery.js';
 import { createPePoller, type PePoller } from './pe-poller.js';
 import { createSubmitHookPoller, type SubmitHookPoller } from './submit-hook-poller.js';
-import { createSubmitClipboardDelivery, submitKeystroke, lastDarwinSubmitError, isDarwinAccessibilityDenial, scheduleWindsurfQueueFlush, warmWin32KeystrokePath } from './submit-clipboard-delivery.js';
+import { createSubmitClipboardDelivery, submitKeystroke, lastDarwinSubmitError, isDarwinAccessibilityDenial, scheduleWindsurfQueueFlush, warmWin32KeystrokePath, submitFailedHint } from './submit-clipboard-delivery.js';
+import { startDelivererHeartbeat, type DelivererHeartbeat } from './deliverer-heartbeat.js';
 import {
   isWindsurfSubmitAdvisoryEnabled,
   isCursorSubmitAdvisoryEnabled,
@@ -58,13 +62,15 @@ import {
   type ChatHistoryWatcher,
 } from './chat-history-watcher.js';
 import { createChatEventHandler } from './chat-pipeline.js';
-import { spawnAuto, spawnStop, spawnRecordSignal } from './ipc.js';
+import { spawnAuto, spawnStop, spawnRecordSignal, spawnCredentialStatus } from './ipc.js';
+import { maybeShowCredentialNotice, CREDENTIAL_NOTICE_KEY } from './credential-notice.js';
 import { peEventTypeToSignalKind } from './pe-signal-map.js';
 import { resolveWorkspaceFromDbPath, canonicalizeCwd } from './resolve-db-workspace.js';
 import { createAdvisoryFallback, type AdvisoryFallback } from './advisory-fallback.js';
 import { createAdvisoryPoller, type AdvisoryPoller } from './advisory-poller.js';
 import { readLatestAdvisoryMeta, readInjectedPrompt } from './advisory-store-reader.js';
 import { raiseWindsurfWindow, raiseAppWindow, pasteKeystroke } from './windsurf-autopaste.js';
+import type { EditorWindowTarget } from './editor-window-target.js';
 import {
   injectViaCascadeAction,
   SEND_CHAT_ACTION_COMMAND,
@@ -140,6 +146,18 @@ export const CURSOR_CHAT_FOCUS_COMMANDS_V1: readonly string[] = [
 ];
 
 let submitPoller: SubmitHookPoller | undefined;
+/** RC70 (F-4): the deliverer heartbeat the CLI decider reads before it blocks. */
+let delivererHeartbeat: DelivererHeartbeat | undefined;
+/**
+ * RC70 (F-1): while the submit surface is active, content-free signals are
+ * deferred by the hold budget's own cap (MAX_HOLD_BUDGET_MS = 90 s). The CLI
+ * popup host holds the store lock for the whole human wait, and every other
+ * opener deletes that lock after 30 s and proceeds (measured, Experiment B2,
+ * 2026-09-05) — the host's close-write then reverts them. The `pe_shown` spawn
+ * fired exactly inside that window (the watcher captures the held prompt while
+ * the popup is open). Deferred signals carry their TRUE time via `--at`.
+ */
+export const SUBMIT_FLOW_SIGNAL_DEFER_MS = 90_000;
 let peLastPublishedCreatedAt = -Infinity;
 /** PE-scoped typed-origin echo guard (P8). Fresh per activation, matching `watcher`. */
 let peInjectedRecordStore: ReturnType<typeof createInjectedRecordStore> | undefined;
@@ -186,6 +204,24 @@ function fingerprint(value: string): string {
  * regression. When the E2E lands, Windsurf can adopt this and the duplication
  * goes away.
  */
+/**
+ * RC73 — WHICH window of this editor the delivery must aim at.
+ *
+ * ⚠ LIVE ROOT CAUSE (owner report, Ubuntu/Cursor, 2026-09-07). With two Cursor windows
+ * open, `wmctrl -lx` showed `"nexpath - Cursor"` and `"Cursor"`; the raise was by WM_CLASS,
+ * which activates the FIRST match — always `"nexpath - Cursor"`. The window whose extension
+ * host had claimed the decision was the OTHER one, so it focused its own composer while the
+ * OS focus sat on the project window, and the Ctrl+V + Enter went into a chat the user was
+ * not looking at ("old cursor opened automatically … i did not see any inject back").
+ *
+ * `env.appName` + `workspace.name` name this host's own window in the WM listing, so the
+ * raise can activate that one window id. A folder-less window (the one in the report) is
+ * titled exactly the app name, which is why it must be passed even when undefined.
+ */
+function editorWindowTarget(): EditorWindowTarget {
+  return { appName: vscode.env.appName, workspaceName: vscode.workspace.name };
+}
+
 function buildSubmitAdvisory(
   host: 'windsurf' | 'cursor',
   enabled: boolean,
@@ -203,16 +239,18 @@ function buildSubmitAdvisory(
    * this milestone.
    */
   injectDirect: (text: string) => Promise<boolean>,
+  /** RC70 (F-3): delivery-outcome sink (outcome log + platform hints), as the Windsurf branch has. */
+  onOutcome?: (outcome: string) => void,
 ): SubmitHookPoller | null {
   if (!enabled) return null;
   const delivery = createSubmitClipboardDelivery({
     writeClipboard: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
     // Reuse the shipped raiser — Linux/X11 only by design; elsewhere it returns
     // false and the paste still proceeds.
-    focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host]),
-    pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, host === 'cursor' ? 'Cursor' : 'Devin', 'Windsurf'] }),
+    focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host], { windowTarget: editorWindowTarget() }),
+    pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, host === 'cursor' ? 'Cursor' : 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => log(`[nexpath] submit-clipboard: paste REFUSED — ${r}; nothing typed`) }),
     // RC11: Enter only when THIS editor is focused (one raise retry inside).
-    submitKeystroke: () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host]), appName: vscode.env.appName, submitLog: log }),
+    submitKeystroke: () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), host === 'windsurf' ? 'devin' : 'cursor', host], { windowTarget: editorWindowTarget() }), appName: vscode.env.appName, windowTarget: editorWindowTarget(), submitLog: log }),
     log,
   });
   return createSubmitAdvisoryForHost({
@@ -234,6 +272,7 @@ function buildSubmitAdvisory(
     log,
     deliver: (text, d) => deliverSubmitReplacement(text, d as never) as never,
     onTiming: (t) => log(`[nexpath] submit handoff: ${JSON.stringify(t)}`),
+    onOutcome,
   });
 }
 
@@ -263,6 +302,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   //    first thing to check when a host shows up as vscode-generic unexpectedly.
   const host = detectHost();
   log(`[nexpath] host=${host} (appName=${JSON.stringify(vscode.env.appName)}, uriScheme=${JSON.stringify(vscode.env.uriScheme)})`);
+  // Uninstall-UX layer 2: if this editor uninstalled us earlier, the vscode:uninstall
+  // hook left a tombstone — clear the setup/consent mementos (globalState survives an
+  // uninstall) so Allow + Setup run again like a first install. Fail-quiet.
+  try {
+    await consumeUninstallTombstone({
+      extensionPath: context.extensionPath,
+      host,
+      nexpathHome: join(homedir(), '.nexpath'),
+      exists: (p) => existsSync(p),
+      remove: (p) => rmSync(p, { force: true }),
+      clearKey: (key) => context.globalState.update(key, undefined),
+      log,
+    });
+  } catch (err) {
+    log(`[nexpath] fresh-install check failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // RC35: persist the GUI session env for the CLI popup host — Windsurf strips
   // it from hook spawns (measured 2026-08-21); the decider fills only MISSING
@@ -296,6 +351,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // RC16: one-time darwin auto-send permission hint (per activation).
   let darwinSubmitHintShown = false;
   let win32SubmitHintShown = false;
+  // RC75: a paste REFUSED because another window was in front. Nothing was typed — that is
+  // the point — so the user must be told where the text is. One warning per session; every
+  // refusal is logged with the window that was in front (never the text).
+  let pasteRefusedHintShown = false;
+  const onPasteRefused = (where: string, reason: string): void => {
+    log(`[nexpath] ${where}: paste REFUSED — ${reason}; nothing typed, the refined prompt is on the clipboard`);
+    if (pasteRefusedHintShown) return;
+    pasteRefusedHintShown = true;
+    void vscode.window.showWarningMessage(
+      'Nexpath: your refined prompt was not pasted because another window was in front. It is on your clipboard — click into the chat, paste it, and press Enter.',
+    );
+  };
   // RC19 (Windows tester, 2026-08-17): a disarmed submit flow used to log
   // NOTHING — the ENABLED line was simply absent, so diagnosing meant
   // guessing. Say WHY, once per distinct reason (the RC15 re-check ticks
@@ -305,6 +372,37 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     if (reason === lastGateReason) return;
     lastGateReason = reason;
     log(`[nexpath] submit-time advisory NOT armed (${h}): ${reason}`);
+  };
+
+  // ── RC70 (F-4): deliverer heartbeat — REGARDLESS of consent ──────────────
+  // The CLI hook cancels a prompt on `block` and relies on this extension's
+  // poller to inject the replacement. Until now nothing told the hook whether
+  // that poller existed: a user who declined the chat-watch consent (setup runs
+  // regardless; the consent gate below returns BEFORE the poller arms) had a
+  // blocking hook with no deliverer — "Use enhanced" cancelled the prompt for
+  // nothing. The heartbeat says, every 10 s, whether THIS window delivers for
+  // this host and why not; the decider reads it before it blocks. Started here,
+  // above the consent gate, on purpose.
+  if (host === 'cursor' || host === 'windsurf') {
+    delivererHeartbeat?.stop('reactivated');
+    delivererHeartbeat = startDelivererHeartbeat({
+      host,
+      isArmed: () => submitSurface.active,
+      reason: () => submitSurface.active
+        ? 'armed'
+        : context.globalState.get<boolean>(CONSENT_KEY) !== true
+          ? 'consent_not_granted'
+          : (lastGateReason ?? 'not_armed_yet'),
+    });
+    context.subscriptions.push({ dispose: () => { delivererHeartbeat?.stop('disposed'); delivererHeartbeat = undefined; } });
+  }
+  // ── RC70 (F-1): one place every content-free signal goes through ─────────
+  // Old flow (surface inactive): spawned immediately, exactly as before.
+  const recordSignal = (kind: string, cwd: string): void => {
+    if (!submitSurface.active) { void spawnRecordSignal(kind, { cwd }); return; }
+    const at = Date.now();
+    const t = setTimeout(() => { void spawnRecordSignal(kind, { cwd, at }); }, SUBMIT_FLOW_SIGNAL_DEFER_MS);
+    if (typeof (t as { unref?: () => void }).unref === 'function') (t as unknown as { unref: () => void }).unref();
   };
 
   // 1b. CLI auto-installer (additive). The extension drives the nexpath CLI via
@@ -327,6 +425,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       .then(() => { armSubmitFlowLate?.('post-setup-offer'); })
       .catch((err) =>
         log(`[nexpath] CLI setup offer failed: ${err instanceof Error ? err.message : String(err)}`),
+      )
+      // No-credential notice (2026-09-07): after the setup offer has had its
+      // turn, ask the CLI which credential layer resolves and say so ONCE if
+      // none does — the state in which every submit-time turn silently does
+      // nothing. Fail-quiet: no CLI / no answer ⇒ no notice.
+      .then(() => maybeShowCredentialNotice({
+        queryStatus: () => spawnCredentialStatus({ cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd() }),
+        show: (message) => { void vscode.window.showInformationMessage(message); },
+        getLastShownAt: () => context.globalState.get<number>(CREDENTIAL_NOTICE_KEY),
+        setLastShownAt: (at) => context.globalState.update(CREDENTIAL_NOTICE_KEY, at),
+        log,
+      }))
+      .catch((err) =>
+        log(`[nexpath] credential check failed: ${err instanceof Error ? err.message : String(err)}`),
       );
   }, 0);
   // RC15: bounded re-check — covers `nexpath install` run manually in a
@@ -368,7 +480,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // FALLBACK — older builds without `sendChatActionMessage`: clipboard + focus
     // the panel (same `openChatPanel` action when present) + simulate paste.
     await vscode.env.clipboard.writeText(text); // for the paste AND as the last-ditch fallback
-    raiseWindsurfWindow();
+    raiseWindsurfWindow({ windowTarget: editorWindowTarget() });
     await new Promise((r) => setTimeout(r, 150));
     let focused = false;
     try {
@@ -376,7 +488,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       focused = true;
     } catch { /* command absent on this build — paste into whatever has focus */ }
     await new Promise((r) => setTimeout(r, focused ? 400 : 250));
-    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'] });
+    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('windsurf inject (fallback)', r) });
     log(`[nexpath] windsurf inject (fallback) → ${ok ? `auto-pasted into Cascade (${focused ? 'openChatPanel → ' : ''}Ctrl+V)` : 'no keystroke tool; left on clipboard'}`);
     return ok;
   };
@@ -408,7 +520,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const t0 = Date.now();
     await vscode.env.clipboard.writeText(text);
     const tClip = Date.now();
-    raiseAppWindow('cursor');
+    raiseAppWindow('cursor', { windowTarget: editorWindowTarget() });
     await new Promise((r) => setTimeout(r, 150));
     let focused = false;
     let focusedVia = '';
@@ -430,7 +542,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     const tFocus = Date.now();
     await new Promise((r) => setTimeout(r, focused ? 400 : 250));
     const tSettle = Date.now();
-    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Cursor'] });
+    const ok = pasteKeystroke({ win32Titles: [vscode.env.appName, 'Cursor'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('cursor inject', r) });
     const tPaste = Date.now();
     log(`[nexpath] cursor inject → ${ok ? `auto-pasted into existing chat (${focused ? focusedVia + ' → ' : ''}Ctrl+V)` : 'no keystroke tool found; left on clipboard'}`);
     log(`[nexpath] cursor inject timing: clipboard=${tClip - t0}ms focus=${tFocus - tClip}ms(${focusedVia || 'none'}) settle=${tSettle - tFocus}ms paste=${tPaste - tSettle}ms total=${tPaste - t0}ms`);
@@ -510,7 +622,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const projectCwd = canonicalizeCwd(
           vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd(),
         );
-        void spawnRecordSignal(signalKind, { cwd: projectCwd });
+        recordSignal(signalKind, projectCwd);
       }
       // P7 (PEH-7): gate the one event type that actually attempts
       // delivery today. No real insertion exists yet (P8/P9) — logging the
@@ -589,8 +701,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // in the webview — the same signal the CLI records for its own popup. Fire-
     // and-forget; `projectRoot` is already the canonicalized project the advisory
     // belongs to (armed from `cwdForEvent`).
-    recordAdvisoryShown: (projectRoot) =>
-      void spawnRecordSignal('advisory_fired', { cwd: projectRoot }),
+    recordAdvisoryShown: (projectRoot) => recordSignal('advisory_fired', projectRoot),
     statusBar: {
       show: (text, tooltip) => {
         statusBarItem.text = text;
@@ -778,9 +889,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         // Windsurf too. The poller dedups by createdAt (its own `handledAt`), so
         // onPublish fires once per distinct PE — no extra guard needed here.
         // Fire-and-forget; only the kind is sent, no body text.
-        void spawnRecordSignal('pe_shown', {
-          cwd: canonicalizeCwd(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()),
-        });
+        recordSignal('pe_shown', canonicalizeCwd(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd()));
       },
       onOutcome: (outcome) => log(`[nexpath] windsurf PE poller insert outcome: ${outcome}`),
     });
@@ -816,11 +925,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         writeClipboard: (text) => Promise.resolve(vscode.env.clipboard.writeText(text)),
         // Reuse the shipped raiser — Linux/X11 only by design; on other OSes it
         // returns false and the paste still proceeds (see the module's notes).
-        focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']),
-        pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'] }),
+        focus: async () => raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf'], { windowTarget: editorWindowTarget() }),
+        pasteKeystroke: () => pasteKeystroke({ win32Titles: [vscode.env.appName, 'Devin', 'Windsurf'], windowTarget: editorWindowTarget(), refused: (r) => onPasteRefused('submit-clipboard', r) }),
         // RC11: Enter only when Windsurf itself is focused — a blind Enter
         // pressed the Welcome view's "Start session" and closed the chat.
-        submitKeystroke: () => submitKeystroke({ host: 'windsurf', focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']), appName: vscode.env.appName, submitLog: log }),
+        submitKeystroke: () => submitKeystroke({ host: 'windsurf', focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf'], { windowTarget: editorWindowTarget() }), appName: vscode.env.appName, windowTarget: editorWindowTarget(), submitLog: log }),
         log: (m) => log(m),
       });
 
@@ -897,7 +1006,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           // "1 queued message" that only a further Enter sends — tap once.
           if (outcome === 'delivered' && host === 'windsurf') {
             scheduleWindsurfQueueFlush(
-              () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf']), appName: vscode.env.appName, submitLog: log }),
+              () => submitKeystroke({ host, focusEditor: () => void raiseAppWindow([vscode.env.appName.toLowerCase(), 'devin', 'windsurf'], { windowTarget: editorWindowTarget() }), appName: vscode.env.appName, windowTarget: editorWindowTarget(), submitLog: log }),
               log,
             );
           }
@@ -964,7 +1073,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
       submitFlowArmed = true;
       submitSurface.active = true;
-      submitPoller = buildSubmitAdvisory('cursor', true, croots, log, cursorInject) ?? undefined;
+      // RC70 (F-3): the outcome sink Cursor never had — the outcome log line and
+      // the one-time RC16 (darwin Accessibility) / RC47 (win32 focus) hints,
+      // same flags as the Windsurf branch. No queue flush: Cursor has no queue.
+      const onCursorOutcome = (outcome: string): void => {
+        log(`[nexpath] submit delivery outcome: ${outcome}`);
+        if (outcome !== 'submit_failed') return;
+        if (process.platform === 'win32' && win32SubmitHintShown) return;
+        if (process.platform === 'darwin' && darwinSubmitHintShown) return;
+        const hint = submitFailedHint(outcome, process.platform, lastDarwinSubmitError);
+        if (!hint) return;
+        if (process.platform === 'win32') win32SubmitHintShown = true;
+        if (process.platform === 'darwin') {
+          darwinSubmitHintShown = true;
+          log(`[nexpath] darwin submit keystroke failed${lastDarwinSubmitError ? ` (${lastDarwinSubmitError})` : ''}`);
+        }
+        void vscode.window.showWarningMessage(hint);
+      };
+      submitPoller = buildSubmitAdvisory('cursor', true, croots, log, cursorInject, onCursorOutcome) ?? undefined;
       if (!submitPoller) return false;
       submitPoller.start();
       context.subscriptions.push({ dispose: () => submitPoller?.stop() });
@@ -1174,7 +1300,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               // (strictly-new createdAt), so a same-createdAt re-publish does not
               // double-count. Fire-and-forget; only the kind is sent, no body text.
               if (isNewPeShow) {
-                void spawnRecordSignal('pe_shown', { cwd: projectRoot });
+                recordSignal('pe_shown', projectRoot);
               }
             } else {
               log(`[nexpath] PE publish suppressed: a newer turn's payload is already visible (createdAt ${pending.createdAt} < ${peLastPublishedCreatedAt})`);
@@ -1284,6 +1410,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     onInfo: (message) => log(`[nexpath] ${message}`),
     onSchemaUnknown: ({ path, observedSampleKeys }) => {
       log(`[nexpath] schema unknown for ${path}; sample keys: ${observedSampleKeys.slice(0, 3).join(', ')}`);
+      // RC79: an EMPTY key list is not an unrecognised schema — it is an empty
+      // database. Cursor creates transient numeric workspaceStorage folders and
+      // deletes them minutes later (RC53), and a freshly created state.vscdb has
+      // no rows yet, so there is nothing to recognise. The tester's screenshot
+      // shows exactly that popup with "Observed keys: …" and nothing before it.
+      // Keep the log line (diagnosis) and drop the alarm the user cannot act on;
+      // a real unknown schema still carries keys and still surfaces.
+      if (observedSampleKeys.length === 0) return;
       void vscode.window.showInformationMessage(
         `Nexpath: ${path} schema is not recognised. The chat-history extractors may need updating. ` +
           `Observed keys: ${observedSampleKeys.slice(0, 3).join(', ')}…`,
@@ -1322,6 +1456,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   log('[nexpath] extension deactivated');
+  // RC70 (F-4): a final not-armed beat — the decider must not block on a window that is going away.
+  delivererHeartbeat?.stop('deactivated');
+  delivererHeartbeat = undefined;
   watcher?.stop();
   watcher = undefined;
   advisoryPoller?.stop();

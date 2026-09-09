@@ -195,14 +195,16 @@ export function renderPromptEnhancementMpsFirstPopupFrameV1(
   if (focusIndex === 0) lines.push(mpsEditKeysHintV1(c, bodyRender.hiddenBelow));
   lines.push('');
 
-  // Additional details — interactive row 1. The apply hint is always visible; moving onto the row
-  // adds the editing keys as the LAST line. The "Add extra requirement" sub-label was removed
-  // (owner request 2026-08-07) so the body can show more lines — PE parity.
+  // Additional details — interactive row 1. The apply hint shows once there is something to
+  // apply (issue #160); moving onto the row adds the editing keys as the LAST line. The
+  // "Add extra requirement" sub-label was removed (owner request 2026-08-07) so the body can
+  // show more lines — PE parity, which is also why this hint's condition matches
+  // cli-submit-popup.ts exactly. If one changes, change both.
   const detailsLabel = PROMPT_ENHANCEMENT_MPS_CLI_ADDITIONAL_DETAILS_LABEL_V1;
   lines.push(radioRow(1, detailsLabel));
   recordCaret('additional_details');
   for (const detailLine of publicText(model.additionalDetails.text).split('\n')) lines.push(contentLine(detailLine));
-  lines.push(c ? `      ${c.lightYellow}${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}${c.reset}` : `      ${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}`);
+  if (model.additionalDetails.text.trim()) lines.push(c ? `      ${c.lightYellow}${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}${c.reset}` : `      ${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}`);
   if (focusIndex === 1) lines.push(editKeysHint());
   lines.push('');
 
@@ -386,12 +388,13 @@ export function renderPromptEnhancementMpsContinuationFrameV1(
   }
 
   // Additional details — interactive row 1. Same PE-parity helpers as the first popup: apply hint
-  // always visible, editing keys as the LAST line when focused; no "Add extra requirement" label.
+  // once there is something to apply (issue #160), editing keys as the LAST line when focused;
+  // no "Add extra requirement" label.
   const detailsLabel = PROMPT_ENHANCEMENT_MPS_CLI_ADDITIONAL_DETAILS_LABEL_V1;
   lines.push(radioRow(1, detailsLabel));
   recordCaret('additional_details');
   for (const detailLine of publicText(model.additionalDetails.text).split('\n')) lines.push(contentLine(detailLine));
-  lines.push(c ? `      ${c.lightYellow}${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}${c.reset}` : `      ${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}`);
+  if (model.additionalDetails.text.trim()) lines.push(c ? `      ${c.lightYellow}${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}${c.reset}` : `      ${PROMPT_ENHANCEMENT_MPS_CLI_DETAILS_HINT_V1}`);
   if (focusIndex === 1) lines.push(editKeysHint());
   lines.push('');
 

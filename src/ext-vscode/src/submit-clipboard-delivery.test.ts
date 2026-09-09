@@ -23,6 +23,15 @@ import {
   scheduleWindsurfQueueFlush,
   warmWin32KeystrokePath,
   WIN32_USER32_ADDTYPE,
+  WIN32_USER32_CSHARP,
+  buildWin32WindowTargetBlock,
+  parseWin32WindowScore,
+  parseWin32WindowCount,
+  win32HelperAssemblyPath,
+  win32HelperPrelude,
+  buildWin32PrewarmScript,
+  parseWin32HelperMode,
+  submitFailedHint,
 } from './submit-clipboard-delivery.js';
 
 function deliveryHarness(over: Partial<SubmitClipboardDeliveryDeps> = {}) {
@@ -439,7 +448,8 @@ describe('⭐ RC47 — win32 AppActivate candidates + retry', () => {
     // The builder embeds the candidate list twice (foreground check + activate
     // rounds) — a deduped single candidate appears exactly 2×; a duplicated
     // candidate would appear 4×.
-    expect(ps.match(/'Cursor'/g)?.length).toBe(2);
+    // one per candidate list: foreground check, AppActivate rounds, and (RC75) the final gate before SendKeys
+    expect(ps.match(/'Cursor'/g)?.length).toBe(3);
   });
 });
 
@@ -605,7 +615,8 @@ describe('⭐ RC65 — warmWin32KeystrokePath', () => {
     expect(spawns).toHaveLength(1);
     expect(spawns[0]!.cmd).toBe('powershell');
     const script = spawns[0]!.args.join(' ');
-    expect(script).toContain(WIN32_USER32_ADDTYPE);
+    // RC72: the pre-warm compiles the byte-identical C# source (to the cache when the env names one).
+    expect(script).toContain(WIN32_USER32_CSHARP);
     expect(script).toContain('exit 0');
     expect(script).not.toContain('SendKeys');
     expect(script).not.toContain('AppActivate');
@@ -643,5 +654,304 @@ describe('⭐ RC65 — warmWin32KeystrokePath', () => {
     expect(warmWin32KeystrokePath(() => {}, {
       platform: 'win32', spawnFn: () => { throw new Error('EPERM'); },
     })).toBe(false);
+  });
+});
+
+/** ⭐ RC70 (F-3) — the one-time "press Enter yourself" hint, pure and per platform (Cursor never had it). */
+describe('⭐ RC70 — submitFailedHint', () => {
+  it('win32 ⇒ the RC47 focus hint; darwin ⇒ RC16 Accessibility wording when the error says so, generic otherwise', () => {
+    expect(submitFailedHint('submit_failed', 'win32', null)).toContain('could not focus the editor window');
+    expect(submitFailedHint('submit_failed', 'darwin', 'not allowed assistive access')).toContain('grant Accessibility');
+    expect(submitFailedHint('submit_failed', 'darwin', null)).toContain('could not simulate the keystroke on this Mac');
+  });
+  it('linux ⇒ null (the RC59 gate names its own reason); any other outcome ⇒ null', () => {
+    expect(submitFailedHint('submit_failed', 'linux', null)).toBeNull();
+    expect(submitFailedHint('delivered', 'win32', null)).toBeNull();
+    expect(submitFailedHint('inject_failed', 'darwin', null)).toBeNull();
+  });
+});
+
+/** ⭐ F-9 (2026-09-07) — macOS gets the RC11 rule: Enter only when the editor is frontmost (System Events). */
+describe('⭐ F-9 — darwin frontmost gate on the submit keystroke', () => {
+  const DARWIN_FRONT = 'tell application "System Events" to get name of first application process whose frontmost is true';
+
+  it('focusedWindowIsEditor(darwin): true when the frontmost process is the live appName or the product name; false otherwise or unreadable', () => {
+    const seen: string[] = [];
+    const cap = (name: string | null) => (cmd: string, args: string[]) => { seen.push(cmd + ' ' + args[1]); return name; };
+    expect(focusedWindowIsEditor('cursor', { platform: 'darwin', appName: 'Cursor', runCapture: cap('Cursor') })).toBe(true);
+    expect(seen[0]).toBe('osascript ' + DARWIN_FRONT);
+    expect(focusedWindowIsEditor('windsurf', { platform: 'darwin', appName: 'Devin Next', runCapture: cap('Devin Next') })).toBe(true);
+    expect(focusedWindowIsEditor('windsurf', { platform: 'darwin', runCapture: cap('Windsurf') })).toBe(true);
+    expect(focusedWindowIsEditor('cursor', { platform: 'darwin', appName: 'Cursor', runCapture: cap('Terminal') })).toBe(false);
+    expect(focusedWindowIsEditor('cursor', { platform: 'darwin', appName: 'Cursor', runCapture: cap(null) })).toBe(false);
+  });
+
+  it('⭐ editor frontmost ⇒ Enter (key code 36) fires exactly as before', () => {
+    const run = vi.fn().mockReturnValue(true);
+    expect(submitKeystroke({ isPopupFocused: () => false, platform: 'darwin', host: 'cursor', appName: 'Cursor',
+      runCapture: () => 'Cursor', run })).toBe(true);
+    expect(String(run.mock.calls[0][1])).toContain('key code 36');
+  });
+
+  it('⭐ something else frontmost ⇒ one raise, recheck, NO blind Enter, submit_failed with a log line', () => {
+    const run = vi.fn().mockReturnValue(true); const focusEditor = vi.fn(); const logs: string[] = [];
+    expect(submitKeystroke({ isPopupFocused: () => false, platform: 'darwin', host: 'windsurf', appName: 'Windsurf',
+      runCapture: () => 'Terminal', run, focusEditor, submitLog: (m) => { logs.push(m); } })).toBe(false);
+    expect(focusEditor).toHaveBeenCalledTimes(1);
+    expect(run).not.toHaveBeenCalled();
+    expect(logs.join('\n')).toContain('editor not focused after raise');
+  });
+
+  it('the raise retry works: frontmost flips to the editor after focusEditor ⇒ Enter fires', () => {
+    let front = 'Finder';
+    const run = vi.fn().mockReturnValue(true);
+    expect(submitKeystroke({ isPopupFocused: () => false, platform: 'darwin', host: 'cursor', appName: 'Cursor',
+      runCapture: () => front, run, focusEditor: () => { front = 'Cursor'; } })).toBe(true);
+    expect(String(run.mock.calls[0][1])).toContain('key code 36');
+  });
+
+  it('no host (pre-RC11 callers) ⇒ darwin behaviour unchanged: Enter fires without any frontmost read', () => {
+    const run = vi.fn().mockReturnValue(true); const runCapture = vi.fn(() => 'Terminal');
+    expect(submitKeystroke({ isPopupFocused: () => false, platform: 'darwin', run, runCapture })).toBe(true);
+    expect(runCapture).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * ⭐ RC72 — Windows post-Enter latency: the user32 helper is compiled ONCE to a per-user
+ * assembly by the pre-warm; keystroke scripts load it and fall back to the byte-identical
+ * inline compile. Without a cache path every script is byte-identical to RC49–RC65.
+ */
+describe('⭐ RC72 — cached win32 helper assembly', () => {
+  const env = { LOCALAPPDATA: 'C:\\Users\\SALVI GAURAV\\AppData\\Local' };
+  it('cache path: LOCALAPPDATA first, TEMP/TMP fallback, null without any; hash of the C# source', () => {
+    const p = win32HelperAssemblyPath(env)!;
+    expect(p.startsWith('C:\\Users\\SALVI GAURAV\\AppData\\Local\\nexpath\\user32-fg-')).toBe(true);
+    expect(p).toMatch(/user32-fg-[0-9a-f]{8}\.dll$/);
+    expect(win32HelperAssemblyPath({ TEMP: 'D:\\t\\' })).toBe(`D:\\t\\nexpath\\${p.split('\\').pop()}`);
+    expect(win32HelperAssemblyPath({})).toBeNull();
+    expect(win32HelperAssemblyPath({ LOCALAPPDATA: '  ' })).toBeNull();
+  });
+  it('⭐ prelude: try the cached DLL, then the byte-identical inline compile; reports which ran', () => {
+    const pre = win32HelperPrelude('C:\\x\\u.dll');
+    expect(pre).toContain("$nxDll='C:\\x\\u.dll'");
+    expect(pre).toContain('Add-Type -LiteralPath $nxDll -ErrorAction Stop');
+    expect(pre.indexOf('Add-Type -LiteralPath')).toBeLessThan(pre.indexOf(WIN32_USER32_ADDTYPE));
+    expect(pre).toContain(`if($nxHelper -ne 'cached'){${WIN32_USER32_ADDTYPE}}`);
+    expect(pre).toContain('Write-Output ("NXHELPER=" + $nxHelper)');
+    expect(win32HelperPrelude(null)).toBe(WIN32_USER32_ADDTYPE);
+    expect(win32HelperPrelude(undefined)).toBe(WIN32_USER32_ADDTYPE);
+  });
+  it('⭐ keystroke scripts: with a cache path the prelude leads and the RC49/60 body is unchanged; without one, byte-identical to before', () => {
+    const cached = buildWin32KeystrokeScript(['Devin'], '{ENTER}', { helperDll: 'C:\\x\\u.dll' });
+    const plain = buildWin32KeystrokeScript(['Devin'], '{ENTER}');
+    expect(cached.startsWith(win32HelperPrelude('C:\\x\\u.dll'))).toBe(true);
+    expect(cached.slice(win32HelperPrelude('C:\\x\\u.dll').length)).toBe(plain.slice(WIN32_USER32_ADDTYPE.length));
+    expect(plain.startsWith(WIN32_USER32_ADDTYPE)).toBe(true);
+    expect(buildWin32KeystrokeScript(['Devin'], '{ENTER}', { helperDll: null })).toBe(plain);
+  });
+  it('⭐ pre-warm script: compiles the same source to a temp name and renames atomically; a present cache is left alone; no keys', () => {
+    const ps = buildWin32PrewarmScript('C:\\x\\u.dll');
+    expect(ps).toContain("if(-not (Test-Path -LiteralPath $nxDll))");
+    expect(ps).toContain(`Add-Type '${WIN32_USER32_CSHARP}' -Name U -Namespace W -OutputAssembly $nxTmp`);
+    expect(ps).toContain("$nxTmp=$nxDll+'.tmp-'+$PID+'.dll'");
+    expect(ps).toContain('Move-Item -LiteralPath $nxTmp -Destination $nxDll -Force');
+    expect(ps).toContain("$nxDir='C:\\x'");
+    expect(ps.endsWith('exit 0')).toBe(true);
+    expect(ps).not.toContain('SendKeys');
+    expect(buildWin32PrewarmScript(null)).toBe(`${WIN32_USER32_ADDTYPE}exit 0`);
+  });
+  it('pre-warm wiring: with a Windows env the spawned script targets the cache; without one it is the RC65 script', () => {
+    const spawns: string[][] = [];
+    const child = { on: () => undefined, unref: () => undefined, kill: () => undefined };
+    warmWin32KeystrokePath(() => {}, { platform: 'win32', env, spawnFn: (_c, a) => { spawns.push(a); return child; } });
+    expect(spawns[0]!.join(' ')).toContain('-OutputAssembly');
+    expect(spawns[0]!.join(' ')).toContain('SALVI GAURAV');
+    warmWin32KeystrokePath(() => {}, { platform: 'win32', env: {}, spawnFn: (_c, a) => { spawns.push(a); return child; } });
+    expect(spawns[1]!.join(' ')).toBe(`-NoProfile -Command ${WIN32_USER32_ADDTYPE}exit 0`);
+  });
+  it('submit on win32 passes the cache path into the script (run seam), paste too', () => {
+    const calls: string[] = [];
+    submitKeystroke({ platform: 'win32', env, host: 'cursor', isPopupFocused: () => false, run: (_c, a) => { calls.push(a.join(' ')); return true; } });
+    expect(calls[0]).toContain("$nxDll='C:\\Users\\SALVI GAURAV\\AppData\\Local\\nexpath\\user32-fg-");
+    expect(calls[0]).toContain('SendKeys("{ENTER}")');
+  });
+  it('parseWin32HelperMode reads the marker and tolerates noise', () => {
+    expect(parseWin32HelperMode('NXHELPER=cached\r\n')).toBe('cached');
+    expect(parseWin32HelperMode('junk\nNXHELPER=compiled\nFOREGROUND=x')).toBe('compiled');
+    expect(parseWin32HelperMode('')).toBe('unknown');
+    expect(parseWin32HelperMode(null)).toBe('unknown');
+  });
+});
+
+/**
+ * ⭐ RC74 (Windows) — focus THIS window, not any window of the app.
+ *
+ * `AppActivate` matches a title by prefix and hands back an arbitrary match, and the
+ * foreground check accepted any window of the application — the same wrong-window defect
+ * that was measured on Linux. The block below walks the top-level windows and focuses the
+ * best-scoring one by handle, with the whole RC49/RC60 path kept as the fallback.
+ *
+ * ⚠ Script shape only. The generated script parses under PowerShell and its `nxScore`
+ * half was executed there (11/11 against the Linux scorer); the P/Invoke half was not run.
+ */
+describe('⭐ RC74 — win32 window targeting', () => {
+  const target = { appName: 'Cursor', workspaceName: 'nexpath' };
+
+  it('⭐ the C# helper gained exactly the calls the walk needs, and keeps the ones it had', () => {
+    for (const fn of ['GetForegroundWindow', 'GetWindowText', 'FindWindowEx', 'SetForegroundWindow', 'IsWindowVisible',
+      'GetWindowThreadProcessId', 'GetCurrentThreadId', 'AttachThreadInput', 'BringWindowToTop', 'ShowWindow', 'IsIconic']) {
+      expect(WIN32_USER32_CSHARP).toContain(fn);
+    }
+    expect(WIN32_USER32_CSHARP).not.toContain('EnumWindows');   // no scriptblock→delegate cast on PS 5.1
+  });
+
+  it('⭐ scores titles with the SAME tiers as the Linux ranking', () => {
+    const ps = buildWin32WindowTargetBlock(target);
+    expect(ps).toContain("if($t -eq ($ws+' - '+$app)){return 100}");
+    expect(ps).toContain("if($t.StartsWith($ws+' - '+$app+' - ')){return 95}");     // RC74a: Devin mid-title
+    expect(ps).toContain("if($t.EndsWith(' - '+$ws+' - '+$app)){return 90}");
+    expect(ps).toContain("if($t.Contains(' - '+$ws+' - '+$app+' - ')){return 85}");
+    expect(ps).toContain("if($t.StartsWith($app+' - ')){return 70}");
+    expect(ps).toContain("if($t.Contains(' - '+$ws+' - ')){return 80}");
+    expect(ps).toContain("if($t.StartsWith($ws+' - ')){return 75}");
+    expect(ps).toContain("if($t.Contains($ws)){return 30}");
+    expect(ps).toContain("if($t -eq $app){return 100}");
+    expect(ps).toContain("(($t -split ' - ').Count -eq 2)){return 60}");
+    // A window of another application is never a candidate, exactly as on Linux.
+    expect(ps).toContain("if(-not ($t -eq $app -or $t.EndsWith(' - '+$app) -or $t.EndsWith($app) -or $t.StartsWith($app+' - ') -or $t.Contains(' - '+$app+' - '))){return 0}");
+  });
+
+  it('⭐ walks the top-level windows, skips invisible ones, and focuses by handle', () => {
+    const ps = buildWin32WindowTargetBlock(target);
+    expect(ps).toContain('FindWindowEx([IntPtr]::Zero,[IntPtr]::Zero,$null,$null)');
+    expect(ps).toContain('FindWindowEx([IntPtr]::Zero,$nxH,$null,$null)');   // iterate, no callback
+    expect(ps).toContain('IsWindowVisible($nxH)');
+    // Already foreground ⇒ do not touch focus at all.
+    expect(ps).toContain('if([W.U]::GetForegroundWindow() -eq $nxBest){$ok=$true}');
+    expect(ps).toContain('SetForegroundWindow($nxBest)');
+    // …and the focus is verified, so a refused SetForegroundWindow falls through.
+    expect(ps.lastIndexOf('GetForegroundWindow() -eq $nxBest')).toBeGreaterThan(ps.indexOf('SetForegroundWindow($nxBest)'));
+    expect(ps).toContain('Write-Output ("NXWIN=" + $nxTop + "/" + $nxSeen)');
+  });
+
+  it('⭐ RC74a: takes focus from another application the standard way, and only when not already foreground', () => {
+    const ps = buildWin32WindowTargetBlock(target);
+    const at = (needle: string) => { const i = ps.indexOf(needle); expect(i, needle).toBeGreaterThan(-1); return i; };
+    const already = at('if([W.U]::GetForegroundWindow() -eq $nxBest){$ok=$true}');
+    const restore = at('if([W.U]::IsIconic($nxBest)){[void][W.U]::ShowWindow($nxBest,9)}');
+    const attach  = at('AttachThreadInput($nxT2,$nxT1,$true)');
+    const top     = at('BringWindowToTop($nxBest)');
+    const fg      = at('SetForegroundWindow($nxBest)');
+    const detach  = at('AttachThreadInput($nxT2,$nxT1,$false)');
+    const verify  = ps.lastIndexOf('GetForegroundWindow() -eq $nxBest');
+    expect(already).toBeLessThan(restore);
+    expect(restore).toBeLessThan(attach);
+    expect(attach).toBeLessThan(top);
+    expect(top).toBeLessThan(fg);
+    expect(fg).toBeLessThan(detach);
+    expect(detach).toBeLessThan(verify);
+    expect(ps).toContain('$nxAtt=(($nxT1 -ne 0) -and ($nxT1 -ne $nxT2))');   // never our own thread, never thread 0
+  });
+
+  it('⭐ the app name and workspace are PowerShell-escaped; no app name ⇒ no block at all', () => {
+    expect(buildWin32WindowTargetBlock({ appName: "O'Brien's Editor", workspaceName: "my'repo" }))
+      .toContain("$nxApp='O''Brien''s Editor';$nxWs='my''repo';");
+    expect(buildWin32WindowTargetBlock({})).toBe('');
+    expect(buildWin32WindowTargetBlock({ appName: '   ' })).toBe('');
+    expect(buildWin32WindowTargetBlock({ appName: 'Cursor' })).toContain("$nxWs='';");  // folder-less still walks
+  });
+
+  it('⭐ the block runs BEFORE the candidate matching, and the RC49/RC60 fallback is untouched', () => {
+    const withT = buildWin32KeystrokeScript(['Cursor'], '{ENTER}', { target });
+    const without = buildWin32KeystrokeScript(['Cursor'], '{ENTER}');
+    expect(withT.indexOf('$nxBest')).toBeLessThan(withT.indexOf('AppActivate'));
+    expect(withT.indexOf('$ok=$false;')).toBeLessThan(withT.indexOf('nxScore'));
+    // Removing the block yields the shipped script character for character.
+    expect(withT.replace(buildWin32WindowTargetBlock(target), '')).toBe(without);
+    for (const keep of ['foreach($r in 1..2)', 'AppActivate($t)', 'Write-Output ("FOREGROUND=" + $fg)', 'SendKeys("{ENTER}")']) {
+      expect(withT).toContain(keep);
+    }
+  });
+
+  it('⭐ submit passes the target through; without one the script is the shipped shape', () => {
+    const calls: string[] = [];
+    submitKeystroke({ platform: 'win32', env: {}, host: 'cursor', isPopupFocused: () => false,
+      appName: 'Cursor', windowTarget: target, run: (_c, a) => { calls.push(a.join(' ')); return true; } });
+    expect(calls[0]).toContain('$nxApp=');
+    calls.length = 0;
+    submitKeystroke({ platform: 'win32', env: {}, host: 'cursor', isPopupFocused: () => false,
+      appName: 'Cursor', run: (_c, a) => { calls.push(a.join(' ')); return true; } });
+    expect(calls[0]).not.toContain('$nxApp=');
+  });
+
+  it('parseWin32WindowScore / parseWin32WindowCount read the tier/count marker and tolerate noise', () => {
+    expect(parseWin32WindowScore('NXHELPER=cached\nNXWIN=95/2\n')).toBe(95);
+    expect(parseWin32WindowCount('NXHELPER=cached\nNXWIN=95/2\n')).toBe(2);
+    expect(parseWin32WindowScore('NXWIN=0/0')).toBe(0);
+    expect(parseWin32WindowCount('NXWIN=0/0')).toBe(0);
+    expect(parseWin32WindowScore('NXWIN=100')).toBe(100);   // the single-number form still reads
+    expect(parseWin32WindowScore('nothing')).toBe(-1);
+    expect(parseWin32WindowCount(null)).toBe(-1);
+  });
+});
+
+/**
+ * ⭐ RC75 — the FINAL GATE: nothing is typed unless the window in front, in the instant
+ * before SendKeys / xdotool, is this host's window. Windows tester's log: a 15 s delivery,
+ * the user switched to another application in that gap, and the paste and the Enter
+ * followed the focus into it.
+ */
+describe('⭐ RC75 — final gate before SendKeys (win32 script)', () => {
+  const target = { appName: 'Cursor', workspaceName: 'nexpath' };
+  it('⭐ re-reads the foreground AFTER activation and refuses anything else; no sleep before SendKeys', () => {
+    const ps = buildWin32KeystrokeScript(['Cursor'], '{ENTER}', { target });
+    const exitOld = ps.indexOf('Write-Output ("FOREGROUND=" + $fg);exit 1');
+    const gate = ps.indexOf('$nxNow=[W.U]::GetForegroundWindow()');
+    const refuse = ps.indexOf('(changed before send)');
+    const send = ps.indexOf('SendKeys("{ENTER}")');
+    expect(exitOld).toBeGreaterThan(-1);
+    expect(gate).toBeGreaterThan(exitOld);
+    expect(refuse).toBeGreaterThan(gate);
+    expect(send).toBeGreaterThan(refuse);
+    expect(ps.slice(gate, send)).not.toContain('Start-Sleep');
+    expect(ps.slice(refuse, send)).toContain('exit 1');
+  });
+  it('⭐ with the window identified, the foreground HANDLE must be that window (another window of the same editor is refused)', () => {
+    const ps = buildWin32KeystrokeScript(['Cursor'], '^v', { target });
+    expect(ps).toContain('if($nxBest -ne [IntPtr]::Zero){if($nxNow -eq $nxBest){$ok2=$true}}');
+    expect(ps.indexOf('$ok=$false;$nxBest=[IntPtr]::Zero;')).toBeLessThan(ps.indexOf('nxScore'));  // initialised BEFORE the optional block
+  });
+  it('without a target the gate applies the shipped candidate rule to the CURRENT title', () => {
+    const ps = buildWin32KeystrokeScript(['Devin', 'Windsurf'], '{ENTER}');
+    expect(ps).toContain('$ok=$false;$nxBest=[IntPtr]::Zero;');
+    expect(ps).not.toContain('nxScore');
+    expect(ps).toContain("else{foreach($t in @('Devin','Windsurf')){if($fg2 -eq $t -or $fg2.EndsWith($t) -or $fg2.StartsWith($t + ' - ') -or $fg2.Contains(' - ' + $t + ' - ')){$ok2=$true;break}}}");
+  });
+});
+
+describe('⭐ RC75 — Linux submit: with the window named, Enter goes to THAT window only', () => {
+  const base = {
+    platform: 'linux' as const, env: { DISPLAY: ':0' }, host: 'cursor' as const, appName: 'Cursor',
+    isPopupFocused: () => false, isEditorFocused: () => true, hasCommand: () => true,
+    windowTarget: { appName: 'Cursor', workspaceName: 'nexpath' },
+  };
+  it('⭐ a second window of the same editor in front ⇒ refused, logged, nothing typed', () => {
+    const logs: string[] = []; const run = vi.fn(() => true);
+    expect(submitKeystroke({ ...base, run, runCapture: () => 'other - Cursor', submitLog: (m) => logs.push(m) })).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+    expect(logs.join(' ')).toContain('refused');
+    expect(logs.join(' ')).toContain('"other - Cursor"');
+  });
+  it('our window in front ⇒ Enter is sent', () => {
+    const run = vi.fn(() => true);
+    expect(submitKeystroke({ ...base, run, runCapture: () => 'extension.ts - nexpath - Cursor' })).toBe(true);
+    expect(run).toHaveBeenCalledWith('xdotool', ['key', '--clearmodifiers', 'Return']);
+  });
+  it('no xdotool ⇒ RC11\'s own rule, unchanged; no windowTarget ⇒ unchanged', () => {
+    const run = vi.fn(() => true);
+    expect(submitKeystroke({ ...base, hasCommand: (c) => c !== 'xdotool' && c === 'wtype', run, runCapture: () => 'WhatsApp' })).toBe(true);
+    const run2 = vi.fn(() => true);
+    expect(submitKeystroke({ ...base, windowTarget: undefined, run: run2, runCapture: () => 'WhatsApp' })).toBe(true);
   });
 });

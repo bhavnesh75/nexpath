@@ -56,7 +56,13 @@ import { setSubmitFlowFlag } from '../cli/commands/submit-flow-config.js';
  * us while we are legitimately holding a prompt (`R3`), and well under anything a
  * user would call hung.
  */
-export const CURSOR_HOOK_TIMEOUT_SECONDS = 120;
+/**
+ * RC77: 1900 s (Cursor multiplies by 1000 — the unit is SECONDS, spike-verified, and a value
+ * of 180000 was accepted). The popup segment may now wait up to 30 minutes for the human
+ * (DEFAULT_POPUP_WAIT_MS); this registration must sit ABOVE that so our own expiry, not
+ * Cursor's fail-open-and-orphan, is what ends a forgotten popup. Was 120 s.
+ */
+export const CURSOR_HOOK_TIMEOUT_SECONDS = 1900;
 
 /**
  * The REQUIRED top-level `version` of `.cursor/hooks.json` (`R5`).
@@ -164,6 +170,27 @@ export function isNexpathCursorHook(entry: CursorHookEntry): boolean {
 }
 
 /** Build one entry, with the explicit seconds timeout (`R3`/`R4`). */
+/**
+ * RC77: the `timeout` (seconds) currently registered for OUR beforeSubmitPrompt entry, or
+ * null when the file, the event or our entry is absent/unreadable. The hook reads this at
+ * run time so its popup wait never exceeds what THIS machine registered — an install that
+ * still carries the old 120 s keeps a safe window until setup re-registers it.
+ */
+export function readRegisteredCursorHookTimeoutSec(filePath: string): number | null {
+  try {
+    const data = readJsonSafe(filePath);
+    const hooks = data.hooks;
+    if (!hooks || typeof hooks !== 'object') return null;
+    const entries = (hooks as Record<string, unknown>).beforeSubmitPrompt;
+    if (!Array.isArray(entries)) return null;
+    const ours = entries.find((e) => isNexpathCursorHook(e as CursorHookEntry)) as CursorHookEntry | undefined;
+    const t = ours?.timeout;
+    return typeof t === 'number' && Number.isFinite(t) && t > 0 ? t : null;
+  } catch {
+    return null;
+  }
+}
+
 export function buildCursorHookEntry(
   cliPath: string,
   event: CursorHookEvent,

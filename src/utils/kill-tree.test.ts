@@ -45,3 +45,103 @@ describe('⭐ RC62 — killProcessTree', () => {
     expect(kill).toHaveBeenCalled();
   });
 });
+
+/**
+ * ⭐ RC68 — the reap reaches the popup HOST on Linux/macOS, where it lives
+ * outside stop's process tree (gnome-terminal-server / Terminal.app). Measured
+ * live (Experiment A): the RC62 tree kill left the host alive and the window
+ * open. The host is found through the launcher's temp-dir marker in the tree's
+ * argv, killed FIRST (so the terminal closes itself), then the tree is reaped
+ * as before, then the temp dir (prompt content) is removed.
+ */
+import { extractPopupHostMarkers, POPUP_HOST_SETTLE_MS } from './kill-tree.js';
+
+describe('⭐ RC68 — killProcessTree reaches the out-of-tree popup host', () => {
+  const MARKER = 'nexpath-pe-popup-host-38f154e9-6ae3-4240-a85a-2d6b179a1354';
+  const HOST_ARGV = `/usr/bin/node /x/dist/cli/index.js prompt-enhancement-popup-host --input-file /tmp/${MARKER}/input.json --result-file /tmp/${MARKER}/result.json --db /home/u/.nexpath/prompt-store.db`;
+  const GT_ARGV = `/usr/bin/gnome-terminal.real --wait --title=Nexpath -- ${HOST_ARGV}`;
+
+  it('extractPopupHostMarkers: unique markers only; none ⇒ []', () => {
+    expect(extractPopupHostMarkers(GT_ARGV)).toEqual([MARKER]);
+    expect(extractPopupHostMarkers('node index.js stop')).toEqual([]);
+    expect(extractPopupHostMarkers(`sh '/var/folders/zz/T/${MARKER}/launch.sh'; exit`)).toEqual([MARKER]); // macOS AppleScript argv
+  });
+
+  it('⭐ linux: host (out of tree) is killed FIRST, then settle, then the tree children-first, then the child; temp dir removed', () => {
+    const order: string[] = [];
+    const { child, kill } = fakeChild(100);
+    (kill as ReturnType<typeof vi.fn>).mockImplementation(() => { order.push('child.kill'); });
+    killProcessTree(child, {
+      platform: 'linux',
+      runSync: (_c, a) => {                         // pgrep -P walk: 100 → 200 (gnome-terminal client) → 300 (.real)
+        if (a[0] === '-P' && a[1] === '100') return { stdout: '200\n' };
+        if (a[0] === '-P' && a[1] === '200') return { stdout: '300\n' };
+        return { stdout: '' };
+      },
+      readArgvFn: (pid) => (pid === 200 || pid === 300 ? GT_ARGV
+        : pid === 9999 ? HOST_ARGV
+        : pid === 7777 ? `tail -f /tmp/${MARKER}/result.json`   // bystander: marker but NOT the host command
+        : 'node index.js stop'),
+      findByMarkerFn: (m) => (m === MARKER ? [200, 300, 9999, 7777] : []), // 9999 = the host under gnome-terminal-server
+      killFn: (pid) => order.push(`kill:${pid}`),
+      sleepFn: (ms) => order.push(`sleep:${ms}`),
+      removeDirFn: (p) => order.push(`rm:${p}`),
+      tmpDir: '/tmp',
+    });
+    expect(order).toEqual([
+      'kill:9999',                       // host first — in-tree matches (200/300) are NOT double-killed here; bystander 7777 untouched
+      `sleep:${POPUP_HOST_SETTLE_MS}`,   // the terminal gets to close itself
+      'kill:300', 'kill:200',            // RC62 reap, children before parent
+      'child.kill',
+      `rm:/tmp/${MARKER}`,               // prompt-content temp dir gone
+    ]);
+  });
+
+  it('⭐ no marker anywhere ⇒ byte-identical RC62 behaviour (no pgrep -f, no sleep, no rm)', () => {
+    const order: string[] = [];
+    const findByMarkerFn = vi.fn(() => [] as number[]);
+    const { child, kill } = fakeChild(100);
+    (kill as ReturnType<typeof vi.fn>).mockImplementation(() => { order.push('child.kill'); });
+    killProcessTree(child, {
+      platform: 'linux',
+      runSync: (_c, a) => (a[0] === '-P' && a[1] === '100' ? { stdout: '200\n' } : { stdout: '' }),
+      readArgvFn: () => 'node /x/dist/cli/index.js stop',
+      findByMarkerFn,
+      killFn: (pid) => order.push(`kill:${pid}`),
+      sleepFn: () => order.push('sleep'),
+      removeDirFn: () => order.push('rm'),
+    });
+    expect(findByMarkerFn).not.toHaveBeenCalled();
+    expect(order).toEqual(['kill:200', 'child.kill']);
+  });
+
+  it('argv/pgrep failures never stop the reap (fail-open)', () => {
+    const order: string[] = [];
+    const { child, kill } = fakeChild(100);
+    (kill as ReturnType<typeof vi.fn>).mockImplementation(() => { order.push('child.kill'); });
+    killProcessTree(child, {
+      platform: 'linux',
+      runSync: (_c, a) => (a[0] === '-P' && a[1] === '100' ? { stdout: '200\n' } : { stdout: '' }),
+      readArgvFn: () => { throw new Error('ps missing'); },
+      findByMarkerFn: () => { throw new Error('pgrep missing'); },
+      killFn: (pid) => order.push(`kill:${pid}`),
+      sleepFn: () => order.push('sleep'),
+      removeDirFn: () => order.push('rm'),
+    });
+    expect(order).toEqual(['kill:200', 'child.kill']);
+  });
+
+  it('own pid is never killed even if it matches the marker', () => {
+    const killed: number[] = [];
+    const { child } = fakeChild(100);
+    killProcessTree(child, {
+      platform: 'linux',
+      runSync: () => ({ stdout: '' }),
+      readArgvFn: (pid) => (pid === 100 ? GT_ARGV : HOST_ARGV),
+      findByMarkerFn: () => [process.pid, 4242],
+      killFn: (pid) => killed.push(pid),
+      sleepFn: () => {}, removeDirFn: () => {},
+    });
+    expect(killed).toEqual([4242]);
+  });
+});

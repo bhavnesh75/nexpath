@@ -23,16 +23,32 @@ const FDA_NOTICE_KEY = 'nexpath.fdaNoticeShown';
 const FDA_URI =
   'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles';
 
+/**
+ * F-10 (2026-09-05): the notice used to hardcode "Cursor" — Windsurf/Devin and
+ * plain VS Code users on macOS were told to grant Full Disk Access to an app
+ * they may not even have. The live `vscode.env.appName` is the one string that
+ * tracks the real host (the same rule RC47/RC59 use for window titles).
+ */
+export function macFullDiskAccessMessage(appName: string | undefined): string {
+  const app = (appName ?? '').trim() || 'your editor';
+  return (
+    `On macOS, ${app} needs Full Disk Access to allow Nexpath to read your ` +
+    'chat history. Open System Settings → Privacy & Security → ' +
+    `Full Disk Access and enable ${app}.`
+  );
+}
+
 export async function showOnboardingIfNeeded(
   context: vscode.ExtensionContext,
   platform: NodeJS.Platform = process.platform,
+  appName: string | undefined = vscode.env.appName,
 ): Promise<void> {
   if (context.globalState.get<boolean>(CONSENT_KEY) === undefined) {
     await runFirstLaunchConsent(context);
   }
 
   if (platform === 'darwin' && !context.globalState.get<boolean>(FDA_NOTICE_KEY)) {
-    await showMacOSFullDiskAccessGuidance(context);
+    await showMacOSFullDiskAccessGuidance(context, appName);
   }
 }
 
@@ -52,11 +68,10 @@ async function runFirstLaunchConsent(
 
 async function showMacOSFullDiskAccessGuidance(
   context: vscode.ExtensionContext,
+  appName: string | undefined,
 ): Promise<void> {
   const choice = await vscode.window.showInformationMessage(
-    'On macOS, Cursor needs Full Disk Access to allow Nexpath to read your ' +
-      "chat history. Open System Settings → Privacy & Security → " +
-      'Full Disk Access and enable Cursor.',
+    macFullDiskAccessMessage(appName),
     'Open System Settings',
     'Later',
   );

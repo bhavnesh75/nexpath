@@ -96,10 +96,16 @@ describe('R6 — user_email PII must never reach a log or a record', () => {
 describe('R5 — the exit-0 contract inversion must stay gated', () => {
   it('the ONLY non-zero exit is reachable behind the switch', () => {
     const c = code(read('../../cli/commands/windsurf-hook.ts'));
-    const exits = c.split('\n').filter((l) => /exit\(\s*[1-9]/.test(l));
-    // Exactly one non-zero exit path, and it is the documented block.
-    expect(exits).toHaveLength(1);
-    expect(exits[0]).toMatch(/exit\(2\)/);
+    const lines = c.split('\n');
+    const exits = lines.map((l, idx) => [l, idx] as const).filter(([l]) => /exit\(\s*[1-9]/.test(l));
+    // RC78: two call sites, one gated path — the primary's block and the in-order
+    // twin mirroring it (both `exit(2)`, both below the switch gate). With the
+    // switch OFF neither line is reachable: the gate is the first thing on the leg.
+    expect(exits).toHaveLength(2);
+    for (const [l] of exits) expect(l).toMatch(/exit\(2\)/);
+    const gate = lines.findIndex((l) => /isSubmitAdvisoryEnabledForHost\('windsurf'/.test(l));
+    expect(gate).toBeGreaterThan(0);
+    for (const [, idx] of exits) expect(idx).toBeGreaterThan(gate);
   });
 });
 

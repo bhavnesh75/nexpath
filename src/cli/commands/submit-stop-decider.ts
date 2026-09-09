@@ -41,6 +41,8 @@ import { homedir } from 'node:os';
 import { join, resolve, posix as posixPath, win32 as win32Path } from 'node:path';
 import { isWindowsBatchShim } from '../../utils/batch-shim.js';
 import { writeSubmitDecision, appendReplacementEcho, latestReplacementEchoAt } from './submit-decision-store.js';
+import { readDelivererState } from './deliverer-state.js';
+import { consumeExpiredSubmitRows } from './submit-expiry-consumer.js';
 import { log } from '../../logger.js';
 // CONSUME-ONLY store calls (another member's exports), used exactly as stop.ts
 // uses them — no Layer C file is modified.
@@ -227,16 +229,70 @@ export interface StopDrivenDeciderPorts {
   closeStoreFn?: (store: unknown) => Promise<void> | void;
   /** RC51 seam: the writability probe (defaults to real mkdirSync). */
   mkdirFn?: typeof mkdirSync;
+  /** RC70 seam: the extension's deliverer heartbeat (defaults to the real reader). */
+  readDelivererState?: typeof readDelivererState;
+  /** RC76 seam: the stale-row consumer (defaults to the RC71 pure function). */
+  consumeStaleRows?: typeof consumeExpiredSubmitRows;
+  /**
+   * RC78: the pids stamped on the decision record. The extension defers delivery
+   * while they are alive (the host cancels the original only when THAT process
+   * exits). Default: this process (+ its shell on win32) — byte-identical for
+   * every in-process caller; the detached popup supervisor passes the HOOK's.
+   */
+  hookPid?: number;
+  hookShellPid?: number;
 }
 
 /**
  * Build a decider with the SAME call shape as `buildDefaultPromptSubmitDecider`
  * so both hooks swap their default without touching their decision plumbing.
  */
+/**
+ * RC76 — a previous prompt's suggestion must never be the popup for this one.
+ *
+ * ⚠ ROOT CAUSE (tester report, 2026-09-08: "the popup on the 4th prompt showed the 3rd
+ * prompt's content"). `auto` writes ONE pending prompt-enhancement row per project and
+ * `stop` pops the newest `pending` row for the project + session — with no check that the
+ * row was produced for THIS prompt. `auto` only writes a row when the prompt is worth a
+ * popup, and never clears an older one when it is not. So whenever a turn leaves its row
+ * pending — the deliverer was not armed and the decider returned before `stop` ran, `stop`
+ * crashed, the popup could not be rendered (`not_shown`) — the very next prompt that gets
+ * no row of its own pops the OLD row, and the user sees the previous prompt's suggestion.
+ *
+ * The RC71 consumer already marks rows "shown" up to a timestamp. Here it runs in the
+ * instant before `stop` is spawned with the boundary "anything created before this turn's
+ * `auto` started" — a row this turn's `auto` wrote is newer than that and survives; every
+ * leftover from an earlier turn is consumed. Fail-open: a store problem is logged and `stop`
+ * runs exactly as before. No boundary (older callers, tests) ⇒ byte-identical behaviour.
+ */
+async function consumeRowsFromEarlierTurns(
+  ports: Pick<StopDrivenDeciderPorts, 'openStoreFn' | 'closeStoreFn' | 'consumeStaleRows'>,
+  projectRoot: string,
+  turnStartedAt: number | undefined,
+  logEvent: typeof log,
+): Promise<void> {
+  if (!(typeof turnStartedAt === 'number' && turnStartedAt > 0)) return;
+  const before = turnStartedAt - 1;
+  let store: unknown = null;
+  try {
+    store = await (ports.openStoreFn ?? openStore)(undefined as never);
+    const counts = (ports.consumeStaleRows ?? consumeExpiredSubmitRows)(store, { projectRoot, before });
+    if (counts.advisories > 0 || counts.promptEnhancements > 0) {
+      logEvent('warn', 'submit_stop_decider_stale_rows_consumed', {
+        advisories: counts.advisories, prompt_enhancements: counts.promptEnhancements, before,
+      });
+    }
+  } catch (err) {
+    logEvent('warn', 'submit_stop_decider_stale_sweep_failed', { message: (err as Error)?.message ?? 'unknown' });
+  } finally {
+    if (store) { try { await (ports.closeStoreFn ?? closeStore)(store as never); } catch { /* fail-open */ } }
+  }
+}
+
 export function buildStopDrivenPromptSubmitDecider(
   opts: { project?: string },
   ports: StopDrivenDeciderPorts,
-): (event: string, o: { project?: string }, promptText?: string) => Promise<'allow' | 'block'> {
+): (event: string, o: { project?: string; turnStartedAt?: number }, promptText?: string) => Promise<'allow' | 'block'> {
   const spawnFn = ports.spawnFn ?? spawn;
   const writeDecision = ports.writeDecision ?? writeSubmitDecision;
   const now = ports.now ?? (() => Date.now());
@@ -265,6 +321,36 @@ export function buildStopDrivenPromptSubmitDecider(
       return 'allow';
     }
 
+    // ── RC70 (F-4): is there a DELIVERER for a block? ─────────────────────
+    // A `block` cancels the user's prompt and relies on the extension's poller
+    // to inject the replacement. Nothing ever checked that poller existed: the
+    // flag file is written by hook install and never cleared, and a user who
+    // declines the chat-watch consent (setup runs regardless; the consent gate
+    // returns BEFORE the poller arms) had a blocking hook with no deliverer —
+    // "Use enhanced" cancelled the prompt for nothing. Same when the extension
+    // is disabled or crashed. The extension now writes a heartbeat while it
+    // runs; a fresh not-armed or a stale beat ⇒ no popup, allow (today's old
+    // flow — the prompt runs untouched). ABSENT ⇒ unknown (older extension
+    // without the feature) ⇒ proceed exactly as before, never silently muted.
+    const deliverer = (ports.readDelivererState ?? readDelivererState)(ports.host);
+    logEvent('info', 'submit_flow_deliverer', {
+      host: ports.host, state: deliverer.state,
+      age_ms: deliverer.ageMs ?? null, reason: deliverer.reason ?? null, pid: deliverer.pid ?? null,
+    });
+    if (deliverer.state === 'not_armed' || deliverer.state === 'stale') {
+      logEvent('warn', 'submit_flow_no_deliverer', {
+        host: ports.host, state: deliverer.state, age_ms: deliverer.ageMs ?? null, reason: deliverer.reason ?? null,
+      });
+      return 'allow';
+    }
+
+    // RC76: nothing from an earlier turn may be what `stop` pops. Guarded so that WITHOUT a
+    // boundary this path stays synchronous up to the spawn exactly as it was — an
+    // unconditional `await` here yielded once and the existing pins caught it (their fake
+    // child emits `exit` in a microtask queued before the decider runs).
+    if (typeof o.turnStartedAt === 'number' && o.turnStartedAt > 0) {
+      await consumeRowsFromEarlierTurns(ports, projectRoot, o.turnStartedAt, logEvent);
+    }
     let child: ChildProcess | null = null;
     let stdout = '';
     try {
@@ -274,6 +360,17 @@ export function buildStopDrivenPromptSubmitDecider(
         // stdout is PIPED — the block line is the decision channel. stderr is
         // ignored: popup hosts write cues there ("Please select an action…").
         stdio: ['pipe', 'pipe', 'ignore'],
+        // ⚠ RC80 (Windows/Devin tester, 2026-09-08): "a blank black window appears
+        // and closes by itself in seconds". That window is THIS process's console.
+        // Since RC78 `stop` is spawned by the DETACHED popup supervisor, which is
+        // created with DETACHED_PROCESS and therefore has no console of its own; on
+        // Windows a console-subsystem child of a console-less parent gets a BRAND NEW
+        // console, and it renders empty because our stdout is piped and stderr
+        // ignored. Before RC78 `stop` inherited the hook's console, so nothing
+        // appeared. Hide it, exactly as the RC71 detached consumer already does. The
+        // popup itself is unaffected: it is created by its own `cmd /c start`, which
+        // allocates its own visible console. Ignored on POSIX.
+        windowsHide: true,
         // RC35: hand `stop` the hook env PLUS any GUI-session vars the host
         // stripped (see enrichSpawnEnvFromSessionSnapshot) — the popup cannot
         // render without them, and Windsurf's hook spawns arrive without a
@@ -365,16 +462,19 @@ export function buildStopDrivenPromptSubmitDecider(
       // remaining step; a persist failure must not block with nothing to
       // replace the prompt (A3).
       const blockIssuedAt = now();
-      await writeDecision({
-        projectRoot,
-        blockIssuedAt,
-        hookPid: process.pid,
+      // RC78: the record names the process the host waits on — this one for the
+      // in-process deciders, the hook's when the detached supervisor runs us.
+      const recordHookPid = ports.hookPid ?? process.pid;
+      const recordHookShellPid = ports.hookShellPid
         // RC30: win32 only — Cascade waits on the powershell wrapper,
         // not on this node process. Undefined elsewhere, and
         // JSON.stringify drops it, so POSIX records are unchanged.
-        ...(process.platform === 'win32' && process.ppid > 0
-          ? { hookShellPid: process.ppid }
-          : {}),
+        ?? (process.platform === 'win32' && process.ppid > 0 ? process.ppid : undefined);
+      await writeDecision({
+        projectRoot,
+        blockIssuedAt,
+        hookPid: recordHookPid,
+        ...(recordHookShellPid !== undefined ? { hookShellPid: recordHookShellPid } : {}),
         decisionId: `sd-${now()}-${Math.floor(now() % 100000)}`,
         replacementText: block.reason,
         createdAt: now(),
@@ -551,6 +651,8 @@ export async function runSequenceContinuationStop(
     child = spawnFn(cmd, [...prefix, 'stop'], {
       cwd: projectRoot,
       stdio: ['pipe', 'pipe', 'ignore'],
+      // RC80: same phantom-console fix as the submit decider above.
+      windowsHide: true,
       // Same enrichment as the submit decider — the continuation popup needs
       // the GUI session the host may have stripped from the hook env (RC35).
       env: ensureNodeDirOnPath(enrichSpawnEnvFromSessionSnapshot(process.env)),

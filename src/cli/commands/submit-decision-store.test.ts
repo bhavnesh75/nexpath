@@ -8,6 +8,7 @@
  * side is edited alone, these fail — instead of the handoff silently breaking at
  * runtime, which is far more expensive to diagnose.
  */
+import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import {
   writeSubmitDecision,
@@ -48,7 +49,7 @@ const INPUT = {
 describe('cross-package contract — must match the extension side exactly', () => {
   it('pins the path convention', () => {
     // Mirror of `submitDecisionPath` in src/ext-vscode/src/submit-advisory-runtime.ts.
-    expect(submitDecisionPath('/proj')).toBe('/proj/.nexpath/submit-decision.json');
+    expect(submitDecisionPath('/proj')).toBe(join('/proj', '.nexpath', 'submit-decision.json')); // host separator
   });
 
   it('pins the schema version', () => {
@@ -116,7 +117,7 @@ describe('atomic write — the extension polls and must never see a torn file', 
   it('creates the .nexpath directory first', async () => {
     const h = harness();
     await writeSubmitDecision(INPUT, h.deps);
-    expect(h.mkdirs[0]).toBe('/proj/.nexpath');
+    expect(h.mkdirs[0]).toBe(join('/proj', '.nexpath'));
   });
 });
 

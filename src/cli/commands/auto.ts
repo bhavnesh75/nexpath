@@ -31,6 +31,7 @@ import { getProject, upsertProject } from '../../store/projects.js';
 import { getRecentPrompts } from '../../store/prompts.js';
 import { importHistoricalPrompts } from '../../store/historical-import.js';
 import { classifyUserProfileLLM, MIN_PROFILE_PROMPTS } from '../../core/classifier/LLMProfileClassifier.js';
+import { isUsableLlmCredential } from '../../config/credential-shape.js';
 import { isProfileStale } from '../../classifier/UserProfileClassifier.js';
 import { OpenAILLMAdapter } from '../adapters/llm.adapter.js';
 import { loggerAdapter } from '../adapters/log.adapter.js';
@@ -1045,7 +1046,13 @@ export async function runAuto(
   // The field is always cleared (match or no match) so a cancelled injection cannot
   // leave stale state that silently skips the next genuine user prompt.
   {
-    const guardMgr = SessionStateManager.load(store, input.projectRoot);
+    // ⛔ `endPreviousSession: false` — this manager is a throwaway used only to read and clear
+    // the injected-prompt field, and it is discarded at the end of this block. Closing the
+    // ended session here would do it a SECOND time a few lines later, when the real manager
+    // loads: two maturity graduation observations and two boundary records for one boundary.
+    // The state this returns is unchanged by the flag; only the closing side effects are left
+    // to the real load below.
+    const guardMgr = SessionStateManager.load(store, input.projectRoot, Date.now(), { endPreviousSession: false });
     const injectedText = guardMgr.current.lastInjectedPrompt ?? null;
     if (injectedText !== null) {
       guardMgr.clearInjectedPrompt(store);
@@ -1133,16 +1140,40 @@ export async function runAuto(
 
   // ── 2. LLM profile classification — runs before the stage classifier so the classifier
   //       calibrates on the freshly-computed profile ──────────────────────────────
+  // ⛔ THE CREDENTIAL GATE IS LOAD-BEARING — without it this line CRASHED the hook.
+  //
+  // `openai` is undefined on the production hook path, so `OpenAILLMAdapter` falls back to
+  // `new OpenAI()` (llm.adapter.ts:14), and the SDK throws when no key resolves. That killed
+  // `nexpath auto` with exit 1 in ~260 ms — on the THIRD prompt of every session, because
+  // MIN_PROFILE_PROMPTS is 4 and this tests `>= MIN_PROFILE_PROMPTS - 1`. Nothing was captured and
+  // the user was told nothing. Reported by Vedansi with four reproductions, 2026-09-07.
+  //
+  // The comment below used to claim offline paths "don't require an API key". True of the lazy
+  // CONSTRUCTION, false of this branch, which reaches the call. It has been corrected.
+  //
+  // Reading `process.env` is correct here and is NOT env-only: `autoAction` calls
+  // `resolveOpenAIKey()` (auto.ts, before `runAuto` is invoked), which promotes the winner of the
+  // 4-layer chain — env → project .env → OS keychain → 0600 file — into `process.env`. A keychain
+  // user is unaffected. Same predicate the composer uses at facade.ts:222 and :334, and
+  // `isUsableLlmCredential` deliberately accepts a Nexpath token as well as an `sk-` key.
+  //
+  // `openai !== undefined` short-circuits first, and that is not a convenience for tests: an
+  // INJECTED client needs no credential of its own, so gating it on the env var would disable a
+  // perfectly working caller. Two existing auto.test.ts cases inject a stub and no key — they
+  // caught this when the gate was credential-only, which is exactly what they are there for.
+  //
+  // With no usable credential the profile simply is not recomputed — the same degrade the stage
+  // classifier already performs, and every consumer of `profile` already handles null.
   if (isProfileStale(mgr.current.profile, mgr.current.promptCount) &&
-      mgr.current.promptHistory.length >= MIN_PROFILE_PROMPTS - 1) {
+      mgr.current.promptHistory.length >= MIN_PROFILE_PROMPTS - 1 &&
+      (openai !== undefined || isUsableLlmCredential(process.env['OPENAI_API_KEY'] ?? ''))) {
     const updatedProfile = await classifyUserProfileLLM(
       mgr.current.promptHistory as import('../../core/classifier/types.js').PromptRecord[],
       mgr.current.promptCount,
       mgr.current.profile,
-      // Adapters — wired to core port interfaces. Constructed lazily here (not at
-      // runAuto entry): the OpenAI SDK is only instantiated when profile
-      // classification actually runs, so offline paths that never reach an LLM
-      // call don't require an API key.
+      // Adapters — wired to core port interfaces. Constructed lazily here (not at runAuto entry):
+      // the OpenAI SDK is only instantiated when profile classification actually runs. The branch
+      // above guarantees a usable credential by the time we get here.
       new OpenAILLMAdapter(openai),
       loggerAdapter,
     );
@@ -1246,6 +1277,29 @@ export async function runAuto(
   mgr.processPrompt(store, input.promptText, classification, Date.now(),
     freqConfig.minStageChangeConfidence, streamBOverrides);
   logger.debug('after_process', { stage: mgr.current.currentStage, stageConfidence: mgr.current.stageConfidence });
+
+  // A degraded classification is the local keyword/TF-IDF guess, produced because the
+  // model was unreachable — and `processPrompt` above persists whatever stage it
+  // proposes. When that guess MOVES the stage, the move outlives the outage: the
+  // credential is fixed, the model returns, and the session is still sitting where a
+  // keyword left it, shaping every later prompt.
+  //
+  // ⚠️ CHANGES NOTHING. It reports a move that already happened, from two values that
+  // already exist either side of the call above. It exists because the move was
+  // previously unreadable: `stage_classified` reports `degraded`, `after_process`
+  // reports the resulting stage, and nothing tied the first to the second — a reader had
+  // to hold both lines together and know the confidence gate to infer it.
+  //
+  // `warn` rather than `debug` so it is visible at the default level: the next occurrence
+  // should be one grep, not a reconstruction.
+  if (stageResult.degraded && prevStage !== mgr.current.currentStage) {
+    logger.warn('stage_changed_by_degraded_classifier', {
+      projectRoot: input.projectRoot,
+      from:        prevStage,
+      to:          mgr.current.currentStage,
+      confidence:  classification.confidence,
+    });
+  }
 
   // Corroborate practice claims against the agent's ACTUAL behaviour: read the
   // transcript entries appended since the previous hook and credit verified

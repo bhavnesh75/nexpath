@@ -59,4 +59,7 @@ if (watch) {
 } else {
   await build(config);
   console.log('[esbuild] built out/extension.cjs');
+  // The vscode:uninstall hook — a standalone node script, no vscode API, no externals.
+  await build({ ...config, entryPoints: ['src/uninstall-hook.ts'], outfile: 'out/uninstall.cjs', external: [], sourcemap: false });
+  console.log('[esbuild] built out/uninstall.cjs');
 }

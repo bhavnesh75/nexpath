@@ -2,12 +2,17 @@
 
 **Stop. Think. Prompt better.**
 
-Nexpath is an AI developer tool that works as a behaviour-guidance layer for vibe coders — it
-reviews a prompt **as you send it** and, when it's risky, offers a stronger version *before* it
-reaches your agent, so you stay aligned with specs, tests, and architecture decisions without
-breaking your flow.
+Nexpath is a **quality-engineering layer for vibe coding**. It reads the prompt you are about to
+send to your AI coding agent and, when the moment matters, strengthens it *before* it reaches the
+agent — catching the vague spec, the skipped test and the rushed deploy that turn AI-generated
+code into a mess. Your original stays visible. Nothing is sent without your choice.
+
+Built for indie hackers, technical founders and developers who want **code quality without giving
+up the speed of AI-powered development**.
 
 **Built for:** Replit · Lovable · Bolt — fully supported & end-to-end tested.
+
+▶ **Watch it work** — [prompt enhancement in action](https://youtu.be/pNejtPA5DPU).
 
 ---
 
@@ -31,8 +36,17 @@ decide in time, your prompt goes through as-is. Never enforcing, never in the wa
 
 Vibe coding with AI agents lets you ship features in minutes — but that speed often means skipped
 spec reviews, forgotten regression checks, and missing tests. Not because you're careless, but
-because momentum takes over. Nexpath is the **developer-productivity** layer that complements your AI
-workflow without slowing it down.
+because momentum takes over.
+
+Most defects in AI-generated code are not typos the agent made. They are things nobody asked for:
+an **untested edge case**, a **specification gap** the agent filled with a guess, an
+**architectural decision** taken by default. Each one is a **silent bug** waiting to ship, or
+**unmaintainable code** waiting to pile up — and each is cheapest to fix at exactly one moment:
+before the prompt is sent. That is the moment Nexpath works in.
+
+Nexpath is the **developer-productivity** layer that complements your AI workflow without slowing
+it down. Nexpath does not interrupt every prompt: it stays quiet through the early part of a
+session and speaks up where a skipped step actually costs you something.
 
 ---
 
@@ -41,8 +55,8 @@ workflow without slowing it down.
 | AI Coding Agent | Status |
 |---|---|
 | **Replit** | ✅ Fully supported · end-to-end tested |
-| **Bolt** | ✅ Fully supported · end-to-end tested |
 | **Lovable** | ✅ Fully supported · end-to-end tested |
+| **Bolt** | ✅ Fully supported · end-to-end tested |
 
 ---
 
@@ -50,6 +64,10 @@ workflow without slowing it down.
 
 - **Submit-time review** — when a prompt is risky, Nexpath holds it and offers a stronger version
   before it reaches the agent. You choose which one to send; a held prompt is never lost.
+- **Catches what nobody asked for** — the edge case that would ship untested, the specification
+  gap the agent would fill with a guess, the architectural choice being made by default.
+- **Flags the step you were about to skip** — the test, the spec cross-check, the pre-deploy
+  review — at the moment it is still cheap.
 - **3-level easier options** — can't take the full recommendation? Nexpath offers progressively simpler alternatives before logging the skip.
 - **Send it straight to your agent** — accept a suggestion and Nexpath delivers it into the chat for you, or use your original prompt with one click.
 - **Adapts to your style** — calibrates its tone and depth to how you prompt.

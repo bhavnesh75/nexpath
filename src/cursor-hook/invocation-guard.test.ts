@@ -22,9 +22,9 @@ function memFs() {
         if (files.has(p)) throw Object.assign(new Error('EEXIST'), { code: 'EEXIST' });
         files.add(p); mtimes.set(p, now);
       },
-      readdirFn: () => [...files].map((p) => p.split('/').pop()!),
+      readdirFn: () => [...files].map((p) => p.split(/[\\/]/).pop()!), // either separator (Windows joins with backslashes)
       mtimeMsFn: (p: string) => mtimes.get(p) ?? [...mtimes.values()][0] ?? now,
-      removeFn: (p: string) => { for (const f of [...files]) if (f.endsWith(p.split('/').pop()!)) { files.delete(f); mtimes.delete(f); } },
+      removeFn: (p: string) => { const base = p.split(/[\\/]/).pop()!; for (const f of [...files]) if (f.endsWith(base)) { files.delete(f); mtimes.delete(f); } },
     }),
   };
 }
@@ -56,7 +56,7 @@ describe('⭐ RC50/RC56 — atomic duplicate-invocation claim', () => {
     const fs = memFs();
     checkAndRecordCursorInvocation('/p', 'e', 'old', fs.deps(1000));
     checkAndRecordCursorInvocation('/p', 'e', 'new', fs.deps(1000 + 10 * 60_000 + 1));
-    const names = [...fs.files].map((p) => p.split('/').pop()!);
+    const names = [...fs.files].map((p) => p.split(/[\\/]/).pop()!); // either separator (Windows joins with backslashes)
     expect(names).not.toContain(cursorInvocationMarkerName('e', 'old'));
     expect(names).toContain(cursorInvocationMarkerName('e', 'new'));
   });
@@ -105,5 +105,36 @@ describe('⭐ RC64 — custom dir + honest claim window', () => {
     expect(checkAndRecordCursorInvocation('/p', 'pre', 'k', {
       ...fs.deps(50_000), maxAgeMs: 10, removeFn: () => {},
     })).toBe(true);
+  });
+});
+
+// ── RC78: the twin mirrors a block ───────────────────────────────────────────
+import { markInvocationBlocked, isInvocationBlocked, invocationBlockedMarkerPath } from './invocation-guard.js';
+import { mkdtempSync as _mkdtemp, existsSync as _exists, utimesSync as _utimes, writeFileSync as _write } from 'node:fs';
+import { tmpdir as _tmpdir } from 'node:os';
+import { join as _join } from 'node:path';
+
+describe('RC78 — blocked marker for the in-order twin', () => {
+  it('the primary marks, the twin sees it while fresh, and a stale marker is ignored', () => {
+    const root = _mkdtemp(_join(_tmpdir(), 'nexpath-rc78-guard-'));
+    expect(isInvocationBlocked(root, 'pre_user_prompt', 'exec-1', { dirName: 'w' })).toBe(false);
+    expect(markInvocationBlocked(root, 'pre_user_prompt', 'exec-1', { dirName: 'w' })).toBe(true);
+    const p = invocationBlockedMarkerPath(root, 'pre_user_prompt', 'exec-1', 'w');
+    expect(_exists(p)).toBe(true);
+    expect(isInvocationBlocked(root, 'pre_user_prompt', 'exec-1', { dirName: 'w' })).toBe(true);
+    expect(isInvocationBlocked(root, 'pre_user_prompt', 'exec-2', { dirName: 'w' })).toBe(false); // another action
+    expect(isInvocationBlocked(root, 'post_cascade_response', 'exec-1', { dirName: 'w' })).toBe(false); // another event
+    const past = (Date.now() - 11 * 60_000) / 1000;
+    _utimes(p, past, past);
+    expect(isInvocationBlocked(root, 'pre_user_prompt', 'exec-1', { dirName: 'w' })).toBe(false); // outside the window
+  });
+
+  it('an empty key marks nothing and matches nothing; failures never throw', () => {
+    expect(markInvocationBlocked('/nonexistent-root-for-rc78', 'pre_user_prompt', '', {})).toBe(false);
+    expect(isInvocationBlocked('/nonexistent-root-for-rc78', 'pre_user_prompt', '', {})).toBe(false);
+    // A regular file where a directory must go: mkdir fails at once (ENOTDIR), and the helper reports it.
+    const blocked = _mkdtemp(_join(_tmpdir(), 'nexpath-rc78-guard-'));
+    _write(_join(blocked, '.nexpath'), 'not a directory');
+    expect(markInvocationBlocked(blocked, 'pre_user_prompt', 'k', {})).toBe(false);
   });
 });

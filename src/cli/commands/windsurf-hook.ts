@@ -9,7 +9,9 @@
  *
  * **Exits 0 in every shipped configuration — a hook must never block or break
  * Cascade.** Amended 2026-08-10 (hook milestone H2): there is now exactly ONE
- * path that exits non-zero, and it is off by default.
+ * path that exits non-zero, and it is off by default. (RC78: that path has two
+ * call sites — the primary's block, and the in-order twin mirroring it — both
+ * behind the same switch.)
  *
  * When `NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY=1` (internal switch, never
  * persisted, never user-facing) **and** the prompt-submit decider explicitly
@@ -29,6 +31,8 @@ import { createHash } from 'node:crypto';
 import { runWindsurfHook, parsePayload, type RunResult } from '../../windsurf-hook/handler.js';
 import {
   checkAndRecordCursorInvocation,
+  markInvocationBlocked,
+  isInvocationBlocked,
   WINDSURF_INVOCATION_DIRNAME,
   WINDSURF_FALLBACK_WINDOW_MS,
 } from '../../cursor-hook/invocation-guard.js';
@@ -41,15 +45,22 @@ import {
 import { openStore, closeStore } from '../../store/db.js';
 import { log } from '../../logger.js';
 import { killProcessTree } from '../../utils/kill-tree.js';
+import { spawnExpiryConsumer, SUBMIT_POPUP_MIN_REMAINING_MS } from './submit-expiry-consumer.js';
 import { getPendingAdvisory, markAdvisoryShown } from '../../store/pending-advisories.js';
 import { isSubmitAdvisoryEnabledForHost } from './submit-flow-config.js';
 import { writeSubmitDecision, readReplacementEchoes, latestReplacementEchoAt,
 } from './submit-decision-store.js';
-import { buildStopDrivenPromptSubmitDecider } from './submit-stop-decider.js';
-import { createHoldBudget, type HoldBudget } from './submit-hold-budget.js';
+import {
+  buildSupervisedPromptSubmitDecider,
+  computeLateCancelDeadlineMs,
+  type SupervisedDeciderPorts,
+} from './submit-popup-supervisor.js';
+import { createHoldBudget, computePopupWaitBudgetMs, type HoldBudget } from './submit-hold-budget.js';
 // CONSUME-ONLY. `SessionStateManager` is not Vedansi-owned (`hi0001234d` 15 /
 // `harshil480` 15) — it is called here, never modified.
 import { SessionStateManager } from '../../classifier/SessionStateManager.js';
+// The boundary constant only — read for the read-only echo snapshot below (consume-only).
+import { SESSION_GAP_MS } from '../../classifier/SessionStateManager.js';
 import { bringPopupToFront } from '../../windsurf-hook/foreground.js';
 
 /**
@@ -178,7 +189,7 @@ export function buildDefaultPromptSubmitDecider(
     openStore?: (db?: string) => Promise<unknown>;
     closeStore?: (store: unknown) => Promise<void> | void;
   } = {},
-): (event: string, o: { project?: string }, promptText?: string) => Promise<WindsurfPromptSubmitDecision> {
+): (event: string, o: { project?: string; turnStartedAt?: number }, promptText?: string) => Promise<WindsurfPromptSubmitDecision> {
   const now = ports.now ?? (() => Date.now());
   const openStoreFn = ports.openStore ?? openStore;
   const closeStoreFn = ports.closeStore ?? closeStore;
@@ -380,16 +391,17 @@ export function isDuplicateWindsurfInvocation(
   event: string,
   payload: ReturnType<typeof parsePayload>,
   guard: typeof checkAndRecordCursorInvocation = checkAndRecordCursorInvocation,
-): { duplicate: boolean; key_kind: 'execution_id' | 'fallback' | 'none' } {
+): { duplicate: boolean; key_kind: 'execution_id' | 'fallback' | 'none'; key: string } {
   const execId = payload?.execution_id ?? '';
   if (execId) {
     return {
       duplicate: guard(projectRoot, event, execId, { dirName: WINDSURF_INVOCATION_DIRNAME }),
       key_kind: 'execution_id',
+      key: execId,
     };
   }
   const trajectory = payload?.trajectory_id ?? '';
-  if (!trajectory) return { duplicate: false, key_kind: 'none' };
+  if (!trajectory) return { duplicate: false, key_kind: 'none', key: '' };
   const content = event === 'pre_user_prompt'
     ? payload?.tool_info?.user_prompt ?? ''
     : payload?.tool_info?.response ?? '';
@@ -400,7 +412,47 @@ export function isDuplicateWindsurfInvocation(
       maxAgeMs: WINDSURF_FALLBACK_WINDOW_MS,
     }),
     key_kind: 'fallback',
+    key,
   };
+}
+
+/**
+ * Read-only view of the persisted session for the echo check.
+ *
+ * Double-close (Bhavnesh finding 2026-09-06, measured with a spy on
+ * updateProjectMaturity): this check used `SessionStateManager.load()`, which
+ * — for a caller that reads ONE field and persists nothing — still folds the
+ * ended session's maturity when it crosses the 30-minute gap. The `auto` the
+ * hook spawns next then folds the same boundary again: two graduation
+ * observations for one boundary, where GRADUATION_STABILITY is three. Live on
+ * ordinary Cursor and Windsurf use, not behind the switch.
+ *
+ * This reads the row directly and persists NOTHING. The boundary rule is the
+ * one `load()` applies (`now - lastPromptAt < SESSION_GAP_MS`): past the gap
+ * the session is over and a fresh one has no injected prompt, so the echo
+ * answer is identical to before — only the side effect is gone.
+ *
+ * Follow-up: once `SessionStateManager.load()` gains `endPreviousSession`
+ * (Bhavnesh e39fa867, pending Hiren's sign-off), this can become
+ * `load(store, root, now, { endPreviousSession: false })` — the owner's API.
+ */
+export function readInjectedPromptSnapshot(
+  store: unknown,
+  projectRoot: string,
+  now: number = Date.now(),
+): { current: { lastInjectedPrompt: string | null } } {
+  const none = { current: { lastInjectedPrompt: null } };
+  const db = (store as { db: { exec: (sql: string, params: unknown[]) => Array<{ values: unknown[][] }> } }).db;
+  const rows = db.exec('SELECT state_json FROM session_states WHERE project_root = ?', [projectRoot]);
+  const raw = rows[0]?.values[0]?.[0];
+  if (typeof raw !== 'string') return none;
+  try {
+    const s = JSON.parse(raw) as { lastPromptAt?: unknown; lastInjectedPrompt?: unknown };
+    if (typeof s.lastPromptAt === 'number' && now - s.lastPromptAt >= SESSION_GAP_MS) return none;
+    return { current: { lastInjectedPrompt: typeof s.lastInjectedPrompt === 'string' ? s.lastInjectedPrompt : null } };
+  } catch {
+    return none;
+  }
 }
 
 export async function isReplacementEcho(
@@ -415,8 +467,8 @@ export async function isReplacementEcho(
   if (!projectRoot || promptText.trim() === '') return false;
   const openStoreFn = ports.openStore ?? openStore;
   const closeStoreFn = ports.closeStore ?? closeStore;
-  const loadState = ports.loadState
-    ?? ((s: unknown, p: string) => SessionStateManager.load(s as never, p));
+  // NOT SessionStateManager.load() — see readInjectedPromptSnapshot (double-close).
+  const loadState = ports.loadState ?? readInjectedPromptSnapshot;
   let store: unknown = null;
   try {
     store = await openStoreFn(undefined as never);
@@ -472,6 +524,15 @@ export interface WindsurfHookActionDeps {
   readFlagFile?: (path: string) => string | null;
   /** H4: injectable hold budget. Defaults to the plan's 60-90s self-enforced cap. */
   holdBudget?: HoldBudget;
+  /** RC77 seam: the popup's own wait budget (defaults to computePopupWaitBudgetMs; Windsurf has no host ceiling). */
+  popupWaitBudgetMs?: (ctx: { host: 'windsurf'; elapsedMs: number }) => number;
+  /**
+   * RC78 seam: when the hook stops holding transparently and cancels the original
+   * itself (ms from hook start). Defaults to computeLateCancelDeadlineMs().
+   */
+  lateCancelDeadlineMs?: number;
+  /** RC78 seam: ports for the supervised decider (tests inject fake spawn / status / claim / clock). */
+  supervisedDeciderPorts?: Partial<Omit<SupervisedDeciderPorts, 'host' | 'hookStartedAt' | 'onLateCancel'>>;
   /**
    * VED-PE-10 echo detector (see `isReplacementEcho`). Injected for tests so
    * they never open the real store; defaults to the real implementation.
@@ -486,13 +547,27 @@ export interface WindsurfHookActionDeps {
    * switch is on. Defaults to `'allow'` so H2 alone is behaviour-neutral; H3
    * replaces it with the real popup-backed decision.
    */
-  decidePromptSubmit?: (event: string, opts: { project?: string }, promptText: string) => Promise<WindsurfPromptSubmitDecision>;
+  decidePromptSubmit?: (event: string, opts: { project?: string; turnStartedAt?: number }, promptText: string) => Promise<WindsurfPromptSubmitDecision>;
   /** OWNER RULING 2026-08-12: consume the session's pending advisories before `stop` runs (switch on only). */
   suppressOldAdvisorySurface?: (projectRoot: string, sessionId: string) => Promise<number>;
   /** RC41 seam: injected in tests; defaults to the real continuation runner. */
   runSequenceContinuation?: (projectRoot: string, host: 'windsurf' | 'cursor') => Promise<{ ran: boolean; blocked?: boolean; deferred?: boolean }>;
   /** RC64 seam: duplicate-invocation check (duplicate ⇒ exit 0, do nothing). */
   checkDuplicateInvocation?: typeof isDuplicateWindsurfInvocation;
+  /** RC78 seams: the twin-mirror marker (write on block; read on a duplicate). */
+  markInvocationBlocked?: typeof markInvocationBlocked;
+  isInvocationBlocked?: typeof isInvocationBlocked;
+  /**
+   * RC67 seam: structured log sink for the hold-expiry instrumentation
+   * (`windsurf_hook_hold_expired` / `windsurf_hook_hold_split`). Defaults to
+   * the real logger; injected in tests so the budget split can be pinned.
+   */
+  logEvent?: typeof log;
+  /**
+   * RC71 seam: the detached expiry / floor consumer (submit-expiry-consumer.ts).
+   * Defaults to the real spawner; injected in tests so nothing is spawned.
+   */
+  spawnExpiryConsumer?: typeof spawnExpiryConsumer;
   /**
    * Bound on the POST-leg stdin read. Separate from `stdinTimeoutMs` (the PRE
    * leg, which holds the user's prompt and must stay tight): nothing is held on
@@ -574,6 +649,7 @@ export async function runWindsurfHookAction(
   opts: { project?: string },
   deps: WindsurfHookActionDeps = {},
 ): Promise<void> {
+  const hookStartedAt = Date.now(); // RC78: the late-cancel deadline counts from here
   const handle = deps.handle ?? handleWindsurfHookCli;
   const raisePopup = deps.raisePopup ?? bringPopupToFront;
   const waitForChild = deps.waitForChild ?? awaitChild;
@@ -581,6 +657,29 @@ export async function runWindsurfHookAction(
   const env = deps.env ?? process.env;
   const readStdin = deps.readStdin ?? defaultReadStdin;
   const stdinTimeoutMs = deps.stdinTimeoutMs ?? 2_000;
+  // RC67 (tester report 2026-09-03: "popup dies before the user can act").
+  // The hold used to expire with NO log line at all — the diagnosis had to be
+  // reconstructed from a MISSING `submit_stop_decider_done`. Every gated turn
+  // now reports the budget split (auto_ms / decider_ms / remaining after auto),
+  // and every expiry names the segment that was running. Logging only: never
+  // changes a decision, never runs on the switch-OFF path.
+  const logEvent: typeof log = (level, name, data) => {
+    try { (deps.logEvent ?? log)(level, name, data); } catch { /* logging must never break the hook */ }
+  };
+  let autoMs: number | null = null;
+  let remainingAfterAutoMs: number | null = null;
+  // RC71 (tester §4b): the rows `auto` built THIS turn must not survive an
+  // expiry (or a below-floor skip) to replay on the next turn. Detached so the
+  // prompt is released now; the consumer waits for a possibly-stale lock on
+  // its own time. `before` = this instant, so a re-submit's rows are never touched.
+  const consumeThisTurn = (reason: 'auto_expired' | 'decider_expired' | 'below_floor'): void => {
+    const r = (deps.spawnExpiryConsumer ?? spawnExpiryConsumer)({
+      projectRoot: opts.project ?? process.cwd(), before: Date.now(), reason,
+    });
+    logEvent(r.spawned ? 'info' : 'warn', 'windsurf_hook_expiry_consume', {
+      reason, spawned: r.spawned, pid: r.pid ?? null, error: r.error ?? null,
+    });
+  };
   // Holds the stdin buffer when the gated path consumed it, so `handle` can replay
   // it instead of reading an already-drained pipe. Null ⇒ nothing was read.
   let preReadRaw: string | null = null;
@@ -589,6 +688,9 @@ export async function runWindsurfHookAction(
   let hold: HoldBudget | null = null;
   let decideAfterAuto = false;
   let pendingPromptText = '';
+  // RC76: when THIS turn's `auto` started — passed to the decider so a pending row from an
+  // earlier turn is consumed before `stop` runs (see consumeRowsFromEarlierTurns).
+  let turnStartedAt = 0;
   // Default decider (H3). Constructed unconditionally, but this only BUILDS a
   // closure — `openStore` lives inside it and runs solely on the gated call below
   // (`isWindsurfPromptSubmitAdvisoryEnabled`). So with the switch off no Store is
@@ -603,11 +705,24 @@ export async function runWindsurfHookAction(
   // sequence → PE popup → advisory popup) at submit time; a selection blocks
   // and the extension injects it. The H3 advisory-only decider stays exported
   // for injected wirings and its own tests.
+  // RC78: the default decision is SUPERVISED — `stop` and its popup run in a
+  // detached process; this hook polls a status file and, if the popup is still
+  // open at the platform deadline, cancels the original itself (exit 2) instead
+  // of trusting the host to keep waiting. A quick answer takes the fast path,
+  // which is the RC77 in-process outcome on the wire. See submit-popup-supervisor.ts.
   const stopChildRef: { current: ChildProcess | null } = { current: null };
+  let lateCancelled = false;
+  let dupKey = '';
   const decidePromptSubmit = deps.decidePromptSubmit
-    ?? buildStopDrivenPromptSubmitDecider(opts, {
+    ?? buildSupervisedPromptSubmitDecider(opts, {
       host: 'windsurf',
-      onChild: (c) => { stopChildRef.current = c; },
+      hookStartedAt,
+      deadlineMs: deps.lateCancelDeadlineMs ?? computeLateCancelDeadlineMs({ env: deps.env ?? process.env }),
+      hookPid: process.pid,
+      ...(process.platform === 'win32' && process.ppid > 0 ? { hookShellPid: process.ppid } : {}),
+      logEvent: (level, name, data) => { try { (deps.logEvent ?? log)(level, name, data); } catch { /* never break the hook */ } },
+      ...(deps.supervisedDeciderPorts ?? {}),
+      onLateCancel: () => { lateCancelled = true; },
     });
 
   try {
@@ -673,8 +788,19 @@ export async function runWindsurfHookAction(
       {
         const dupCheck = (deps.checkDuplicateInvocation ?? isDuplicateWindsurfInvocation)(
           opts.project ?? process.cwd(), event, parsePayload(preReadRaw));
+        dupKey = dupCheck.key ?? '';
         if (dupCheck.duplicate) {
-          log('warn', 'windsurf_hook_duplicate_invocation', { event, key_kind: dupCheck.key_kind });
+          // RC78: Devin runs the two registrations IN ORDER, so this twin starts
+          // the instant the primary returned. If the primary blocked, block too —
+          // a 0 after a 2 must never be the answer the host settles on.
+          const mirrored = (deps.isInvocationBlocked ?? isInvocationBlocked)(
+            opts.project ?? process.cwd(), event, dupKey, { dirName: WINDSURF_INVOCATION_DIRNAME });
+          log('warn', 'windsurf_hook_duplicate_invocation', { event, key_kind: dupCheck.key_kind, mirrored_block: mirrored });
+          if (mirrored) {
+            try { process.stderr.write(WINDSURF_BLOCK_CARD_MESSAGE); } catch { /* card falls back to vendor text */ }
+            exit(2);
+            return;
+          }
           exit(0);
           return;
         }
@@ -824,9 +950,15 @@ export async function runWindsurfHookAction(
     // `nexpath stop` child inherits process.env (see windsurf-hook/spawn.ts
     // baseOpts), so setting it here makes the Windsurf popup say "Windsurf".
     env.NEXPATH_AGENT = 'windsurf';
+    // RC71 (F-14): tell `auto` how much of the hold is left — an additive env
+    // the engine may honour for its LLM timeouts (nothing reads it yet).
+    // Gated only: with the switch off there is no hold and nothing is set.
+    if (hold) env.NEXPATH_HOLD_REMAINING_MS = String(hold.remaining());
     // Call shape is IDENTICAL to before when nothing was pre-read, so the
     // switch-off path passes exactly two arguments as it always has. Only the
     // gated path adds the replay dep.
+    const autoStartedAt = Date.now();
+    turnStartedAt = autoStartedAt; // RC76
     const result = preReadRaw === null
       ? await handle(event, opts)
       : await handle(event, opts, { readStdin: async () => preReadRaw as string });
@@ -845,7 +977,24 @@ export async function runWindsurfHookAction(
     // shared budget rather than awaitChild's own 600s default.
     if (hold) {
       const waited = await hold.run(() => waitForChild(result.child));
+      autoMs = Date.now() - autoStartedAt;
+      // RC77: the popup waits on a HUMAN — grant it its own window once the preparation
+      // has actually finished; an exhausted preparation stays exhausted (shared budget for
+      // stdin + auto untouched). Windsurf/Devin never kill a hook (spike-measured), so the
+      // cap alone applies.
+      if (!waited.timedOut && decideAfterAuto) {
+        const popupWaitMs = (deps.popupWaitBudgetMs ?? ((ctx) => computePopupWaitBudgetMs({ ...ctx, env: deps.env ?? process.env })))({ host: 'windsurf', elapsedMs: hold.elapsed?.() ?? 0 });
+        hold.extendFor?.(popupWaitMs);
+        logEvent('info', 'windsurf_hook_popup_budget', { popup_wait_ms: popupWaitMs, auto_ms: autoMs });
+      }
+      remainingAfterAutoMs = hold.remaining();
       if (waited.timedOut) {
+        // RC67: the FIRST log line the expiry path ever had. `auto` ate the
+        // whole hold (LLM classification + PE generation) — the popup never
+        // opened. See F-14 (classifier retries / 45 s composer timeout).
+        logEvent('warn', 'windsurf_hook_hold_expired', {
+          segment: 'auto', auto_ms: autoMs, decider_ms: null, remaining_ms: 0,
+        });
         // Fail-open (A3): release the prompt unmodified. Do NOT decide - the
         // classification this turn depends on never landed.
         //
@@ -859,6 +1008,17 @@ export async function runWindsurfHookAction(
         // No orphan may survive the hold (plan acceptance). The child is
         // detached from our lifetime explicitly rather than left running.
         killProcessTree(result.child); // RC62: take the popup terminal too
+        consumeThisTurn('auto_expired'); // RC71: whatever auto persisted must not replay
+      } else if (decideAfterAuto && remainingAfterAutoMs < SUBMIT_POPUP_MIN_REMAINING_MS) {
+        // RC71 (6.1 floor): the popup waits on a HUMAN; with this little hold
+        // left it is certain to be killed mid-read — strictly worse than no
+        // popup (A3). Skip the decider, consume this turn's rows, release the
+        // prompt: the turn behaves exactly like today's "no advisory".
+        logEvent('warn', 'windsurf_hook_hold_floor', {
+          auto_ms: autoMs, remaining_after_auto_ms: remainingAfterAutoMs, floor_ms: SUBMIT_POPUP_MIN_REMAINING_MS,
+        });
+        decideAfterAuto = false;
+        consumeThisTurn('below_floor');
       }
     } else {
       await waitForChild(result.child);
@@ -879,14 +1039,33 @@ export async function runWindsurfHookAction(
       // The popup waits for a HUMAN, so this segment is inherently unbounded and
       // is the plan's "no decision before the hold expires" failure mode. It gets
       // only what the earlier segments left.
+      const deciderStartedAt = Date.now();
       const decided = hold
-        ? await hold.run(() => decidePromptSubmit(event, opts, pendingPromptText))
-        : { timedOut: false, value: await decidePromptSubmit(event, opts, pendingPromptText).catch(() => 'allow' as const) };
+        ? await hold.run(() => decidePromptSubmit(event, { ...opts, turnStartedAt }, pendingPromptText))
+        : { timedOut: false, value: await decidePromptSubmit(event, { ...opts, turnStartedAt }, pendingPromptText).catch(() => 'allow' as const) };
+      const deciderMs = Date.now() - deciderStartedAt;
       if (decided.timedOut) {
+        // RC67: name the expiry. Before this the only evidence a popup had been
+        // killed was a MISSING `submit_stop_decider_done` line.
+        logEvent('warn', 'windsurf_hook_hold_expired', {
+          segment: 'decider', auto_ms: autoMs, decider_ms: deciderMs, remaining_ms: 0,
+        });
         // Hold exhausted while stop's popup waited — reap it so no popup
         // process outlives the hook (mirrors the auto orphan-kill above).
         killProcessTree(stopChildRef.current); // RC62: take the popup terminal too
+        consumeThisTurn('decider_expired'); // RC71: the popup's rows must not replay next turn
       }
+      // RC67: the budget split on EVERY gated turn — how much of the hold auto
+      // consumed and how long the popup had — so a slow turn is readable from
+      // one line instead of subtracting timestamps across four.
+      logEvent('info', 'windsurf_hook_hold_split', {
+        decision: !decided.timedOut && decided.value === 'block' ? 'block' : 'allow',
+        decider_timed_out: decided.timedOut === true,
+        auto_ms: autoMs,
+        decider_ms: deciderMs,
+        remaining_after_auto_ms: remainingAfterAutoMs,
+        late_cancel: lateCancelled, // RC78
+      });
       // `!decided.timedOut` is likewise redundant today (a timed-out run yields
       // no value, so `value === 'block'` is already false) and equally kept as an
       // explicit statement of the rule: a timeout is never a decision.
@@ -900,6 +1079,9 @@ export async function runWindsurfHookAction(
         // hook whose stderr text rendered in the card). The card TRUNCATES at a
         // word boundary (~24 chars observed), so the key phrase leads and the
         // sentence degrades cleanly wherever it is cut.
+        // RC78: let the twin (which runs next, in order) mirror this block.
+        (deps.markInvocationBlocked ?? markInvocationBlocked)(
+          opts.project ?? process.cwd(), event, dupKey, { dirName: WINDSURF_INVOCATION_DIRNAME });
         try { process.stderr.write(WINDSURF_BLOCK_CARD_MESSAGE); } catch { /* card falls back to vendor text */ }
         exit(2);
         return;

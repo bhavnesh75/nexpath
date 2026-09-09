@@ -44,8 +44,35 @@ console.log(`[bundle-cli] repo root: ${repoRoot}`);
 // 1. Ensure root deps (CI installs only src/ext-vscode), then build the CLI.
 if (!existsSync(join(repoRoot, 'node_modules'))) {
   console.log('[bundle-cli] installing root deps...');
-  const installCmd = existsSync(join(repoRoot, 'package-lock.json')) ? 'npm ci' : 'npm install';
-  execSync(installCmd, { cwd: repoRoot, stdio: 'inherit' });
+  // ⚠ RC81 (publish run #14, 2026-09-09, all five Package jobs red). The root
+  // package-lock.json was missing on main (removed by 3f765f8e), so this fell back
+  // to `npm install`, which died on this dependency tree with npm's opaque
+  // "Cannot read properties of null (reading 'edgesOut')". That surfaced only as
+  // "npm failed with exit code 1" inside the .vsix packaging step, which is a very
+  // long way from the real cause. Say the real cause out loud instead: a missing
+  // root lockfile is a repository problem, not a packaging problem.
+  const hasRootLock = existsSync(join(repoRoot, 'package-lock.json'));
+  if (!hasRootLock) {
+    console.error(
+      `[bundle-cli] WARNING: no package-lock.json at the repo root (${repoRoot}).\n`
+      + '[bundle-cli] Falling back to `npm install`, which is NOT reproducible and is\n'
+      + '[bundle-cli] known to fail on this tree. If the install below dies with\n'
+      + "[bundle-cli] \"Cannot read properties of null (reading 'edgesOut')\", the fix is to\n"
+      + '[bundle-cli] restore the root package-lock.json — not to change the packager.',
+    );
+  }
+  try {
+    execSync(hasRootLock ? 'npm ci' : 'npm install', { cwd: repoRoot, stdio: 'inherit' });
+  } catch (err) {
+    if (!hasRootLock) {
+      throw new Error(
+        '[bundle-cli] root dependency install failed and there is NO package-lock.json at '
+        + `${repoRoot}. Restore it (git checkout <ref> -- package-lock.json) and re-run; `
+        + 'the packager and the .vsix are not at fault.',
+      );
+    }
+    throw err;
+  }
 }
 console.log('[bundle-cli] building root CLI (tsc)...');
 execSync('npm run build', { cwd: repoRoot, stdio: 'inherit' });

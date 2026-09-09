@@ -13,6 +13,7 @@
  * check is testable without a real key.
  */
 import OpenAI from 'openai';
+import { nexpathClientHeaders } from '../config/nexpath-client-headers.js';
 
 export type PromptEnhancementProviderApiAvailabilityReasonV1 =
   | 'provider_api_available'
@@ -32,7 +33,15 @@ export interface PromptEnhancementProviderApiAvailabilityV1 {
  * importing this module has no provider side effect.
  */
 export function checkPromptEnhancementProviderApiAvailabilityV1(
-  constructClient: () => unknown = () => new OpenAI(),
+  // Token attribution (`X-Nexpath-Client` / `X-Nexpath-Surface`) rides on every provider client this
+  // package builds. Carried here for ONE reason: this construction exists to mirror the batch
+  // composer's, and a mirror that differs is not one — if the two constructions ever diverge, this
+  // check stops answering the question it claims to answer.
+  //
+  // ⚠️ It buys nothing at runtime, and that is expected. Nothing is sent from here: the client is
+  // constructed to see whether construction throws, and is then dropped without a request. The
+  // headers matter on the sites that actually call.
+  constructClient: () => unknown = () => new OpenAI({ defaultHeaders: nexpathClientHeaders() }),
 ): PromptEnhancementProviderApiAvailabilityV1 {
   try {
     constructClient();
