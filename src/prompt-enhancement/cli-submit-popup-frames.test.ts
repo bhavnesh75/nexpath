@@ -48,6 +48,11 @@ import {
 // own prompt, with no risk words and no placeholders. The route-rescue path is
 // stubbed for the same reason — with a (fake) key present neither may reach a
 // real client.
+/** The sentence the mocked composer drafts, shared with the premise that checks for it. */
+const DRAFTED_SENTENCE = vi.hoisted(
+  () => 'Keep the existing behaviour of the payment gateway client and cover it with a test.',
+);
+
 vi.mock('./llm-composer.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('./llm-composer.js')>();
   return {
@@ -71,7 +76,7 @@ vi.mock('./llm-composer.js', async (importOriginal) => {
           outputId: 'llm-out-frames-snapshot',
           sectionDrafts: plans.map((plan) => ({
             sectionId: plan.sectionId,
-            bodyText: 'Keep the existing behaviour of the payment gateway client and cover it with a test.',
+            bodyText: DRAFTED_SENTENCE,
             sourceFactIds: [plan.structuredContentPartRefs[0]!],
           })),
           composerClaims: plans.map((plan) => `claim:${plan.structuredContentPartRefs[0]!}`),
@@ -322,6 +327,11 @@ describe('prompt-enhancement submit popup frames', () => {
     it('premise: each body is its floor plus the two extras the cap allows', () => {
       expect(medium.currentBody.sections.length).toBe((medium.floorSectionCount ?? 0) + 2);
       expect(largest.currentBody.sections.length).toBe((largest.floorSectionCount ?? 0) + 2);
+      // The floor for this prompt is three, so the capped body is five. Pinned as an
+      // absolute as well: were the floor to move, the relation above would still hold
+      // while the fixture quietly became a different body.
+      expect(medium.floorSectionCount).toBe(3);
+      expect(medium.currentBody.sections).toHaveLength(5);
     });
 
     it('premise: exactly one section of the largest body carries the confirmation', () => {
@@ -332,10 +342,19 @@ describe('prompt-enhancement submit popup frames', () => {
     });
 
     it('premise: every drawn section but the verbatim one carries its drafted sentence', () => {
-      for (const section of medium.currentBody.sections) {
-        if (section.sectionKind === 'original_request_or_goal') continue;
-        expect(section.bodyText.length).toBeGreaterThan(0);
+      for (const result of [medium, largest]) {
+        for (const section of result.currentBody.sections) {
+          if (section.sectionKind === 'original_request_or_goal') continue;
+          expect(section.bodyText).toContain(DRAFTED_SENTENCE);
+        }
       }
+      // The section carrying the confirmation keeps its drafted sentence AND the
+      // code-inserted one, so the two are checked apart rather than assumed together.
+      const carrying = largest.currentBody.sections.find(
+        (section) => section.confirmationRequired && section.confirmationPresent,
+      );
+      expect(carrying?.bodyText).toContain(DRAFTED_SENTENCE);
+      expect(carrying?.bodyText).toContain('go-ahead confirmation');
     });
 
     it('draws the medium body, colour off', () => {

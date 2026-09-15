@@ -216,8 +216,12 @@ function withAppliedDetails(bodyText: string): string {
  * Removes one whole section from a composed body: its title line through the blank
  * line before the next title — exactly what a user selecting those lines would cut.
  */
-function cutSection(result: PromptEnhancementPrepareResultV1, title: string): string {
-  const body = result.currentBody.text;
+function cutSection(
+  result: PromptEnhancementPrepareResultV1,
+  title: string,
+  bodyOverride?: string,
+): string {
+  const body = bodyOverride ?? result.currentBody.text;
   const titles = result.currentBody.sections.map((section) => `${section.title}:`);
   const start = body.indexOf(`${title}:`);
   if (start < 0) throw new Error(`section not found in body: ${title}`);
@@ -323,6 +327,61 @@ describe('what the submit popup sends', () => {
       expect(outcome.diagnostics).toEqual([]);
       expect(outcome).toMatchSnapshot();
     });
+
+    it('sends the confirmation-carrying body unchanged when nothing is edited', async () => {
+      const outcome = await leaveWith(confirmationRequest, confirmation, [{ type: 'use_current' }]);
+      expect(outcome.state).toBe('selected_current');
+      expect(outcome.bodyText).toBe(confirmation.currentBody.text);
+      expect(outcome.bodyText).toContain(CONFIRMATION_FRAGMENT);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the confirmation-carrying body with a line added by hand', async () => {
+      const outcome = await leaveWith(confirmationRequest, confirmation, [
+        { type: 'edit_body', text: `${confirmation.currentBody.text}\n${APPENDED_LINE}` },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).toContain(APPENDED_LINE);
+      expect(outcome.bodyText).toContain(CONFIRMATION_FRAGMENT);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the confirmation-carrying body without an ordinary section deleted by hand', async () => {
+      const removed = firstOrdinarySection(confirmation);
+      const outcome = await leaveWith(confirmationRequest, confirmation, [
+        { type: 'edit_body', text: cutSection(confirmation, removed) },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).not.toContain(`${removed}:`);
+      // Cutting an ordinary section leaves the confirmation where it was.
+      expect(outcome.bodyText).toContain(CONFIRMATION_FRAGMENT);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the merged body with a line added by hand after the details were applied', async () => {
+      const merged = withAppliedDetails(small.currentBody.text);
+      const outcome = await leaveWith(smallRequest, small, [
+        { type: 'edit_body', text: `${merged}\n${APPENDED_LINE}` },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).toContain(DETAILS_HEADING);
+      expect(outcome.bodyText).toContain(APPENDED_LINE);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the merged body without a section deleted by hand after the details were applied', async () => {
+      const merged = withAppliedDetails(small.currentBody.text);
+      const removed = firstOrdinarySection(small);
+      const outcome = await leaveWith(smallRequest, small, [
+        { type: 'edit_body', text: cutSection(small, removed, merged) },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).not.toContain(`${removed}:`);
+      // The applied details sit after the last section, so a cut above leaves them intact.
+      expect(outcome.bodyText).toContain(DETAILS_HEADING);
+      expect(outcome.bodyText).toContain(DETAILS_TEXT);
+      expect(outcome).toMatchSnapshot();
+    });
   });
 
   describe('bodies composed with a key', () => {
@@ -375,6 +434,34 @@ describe('what the submit popup sends', () => {
       expect(outcome.state).toBe('selected_current');
       expect(outcome.bodyText).not.toContain(CONFIRMATION_FRAGMENT);
       expect(outcome.diagnostics).toEqual([]);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the largest body unchanged when nothing is edited', async () => {
+      const outcome = await leaveWith(largestRequest, largest, [{ type: 'use_current' }]);
+      expect(outcome.state).toBe('selected_current');
+      expect(outcome.bodyText).toBe(largest.currentBody.text);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the largest body with a line added by hand', async () => {
+      const outcome = await leaveWith(largestRequest, largest, [
+        { type: 'edit_body', text: `${largest.currentBody.text}\n${APPENDED_LINE}` },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).toContain(APPENDED_LINE);
+      expect(outcome.bodyText).toContain(CONFIRMATION_FRAGMENT);
+      expect(outcome).toMatchSnapshot();
+    });
+
+    it('sends the largest body without an ordinary section deleted by hand', async () => {
+      const removed = firstOrdinarySection(largest);
+      const outcome = await leaveWith(largestRequest, largest, [
+        { type: 'edit_body', text: cutSection(largest, removed) },
+        { type: 'use_current' },
+      ]);
+      expect(outcome.bodyText).not.toContain(`${removed}:`);
+      expect(outcome.bodyText).toContain(CONFIRMATION_FRAGMENT);
       expect(outcome).toMatchSnapshot();
     });
   });
