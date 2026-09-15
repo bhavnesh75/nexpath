@@ -1,0 +1,135 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`submit popup key handling, row by row > records every key on every row of the main view 1`] = `
+"editor_heading       Up                 cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Down               cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Enter              cmd=use_current            focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Escape             cmd=close                  focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Space              cmd=-                      focus=0 help=shut body=changed bodyCur=458 details="" detailsCur=0
+editor_heading       Ctrl+J             cmd=-                      focus=0 help=shut body=changed bodyCur=458 details="" detailsCur=0
+editor_heading       Ctrl+Up (1;5A)     cmd=-                      focus=0 help=shut body=same bodyCur=385 details="" detailsCur=0
+editor_heading       Ctrl+Down (1;5B)   cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Ctrl+Up (5A)       cmd=-                      focus=0 help=shut body=same bodyCur=385 details="" detailsCur=0
+editor_heading       Ctrl+Down (5B)     cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Cmd+Up (1;9A)      cmd=-                      focus=0 help=shut body=same bodyCur=385 details="" detailsCur=0
+editor_heading       Cmd+Down (1;9B)    cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Option+Up (1;3A)   cmd=-                      focus=0 help=shut body=same bodyCur=385 details="" detailsCur=0
+editor_heading       Option+Down (1;3B) cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Esc-prefixed Up    cmd=-                      focus=0 help=shut body=same bodyCur=385 details="" detailsCur=0
+editor_heading       Esc-prefixed Down  cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Left               cmd=-                      focus=0 help=shut body=same bodyCur=456 details="" detailsCur=0
+editor_heading       Right              cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Backspace (7f)     cmd=-                      focus=0 help=shut body=changed bodyCur=456 details="" detailsCur=0
+editor_heading       Backspace (08)     cmd=-                      focus=0 help=shut body=changed bodyCur=456 details="" detailsCur=0
+editor_heading       Delete             cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading       Letter a           cmd=-                      focus=0 help=shut body=changed bodyCur=458 details="" detailsCur=0
+editor_heading       Digit 2            cmd=-                      focus=0 help=shut body=changed bodyCur=458 details="" detailsCur=0
+editor_heading       Ctrl+X             cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Up                 cmd=-                      focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Down               cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Enter              cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Escape             cmd=close                  focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Space              cmd=-                      focus=1 help=shut body=same bodyCur=457 details=" " detailsCur=1
+additional_details   Ctrl+J             cmd=-                      focus=1 help=shut body=same bodyCur=457 details="\\n" detailsCur=1
+additional_details   Ctrl+Up (1;5A)     cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Ctrl+Down (1;5B)   cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Ctrl+Up (5A)       cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Ctrl+Down (5B)     cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Cmd+Up (1;9A)      cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Cmd+Down (1;9B)    cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Option+Up (1;3A)   cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Option+Down (1;3B) cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Esc-prefixed Up    cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Esc-prefixed Down  cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Left               cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Right              cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Backspace (7f)     cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Backspace (08)     cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Delete             cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+additional_details   Letter a           cmd=-                      focus=1 help=shut body=same bodyCur=457 details="a" detailsCur=1
+additional_details   Digit 2            cmd=-                      focus=1 help=shut body=same bodyCur=457 details="2" detailsCur=1
+additional_details   Ctrl+X             cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Up                 cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Down               cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Enter              cmd=use_original           focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Escape             cmd=close                  focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Space              cmd=-                      focus=2 help=open body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+J             cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+Up (1;5A)     cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+Down (1;5B)   cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+Up (5A)       cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+Down (5B)     cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Cmd+Up (1;9A)      cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Cmd+Down (1;9B)    cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Option+Up (1;3A)   cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Option+Down (1;3B) cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Esc-prefixed Up    cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Esc-prefixed Down  cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Left               cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Right              cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Backspace (7f)     cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Backspace (08)     cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Delete             cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Letter a           cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Digit 2            cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0
+use_original         Ctrl+X             cmd=-                      focus=2 help=shut body=same bodyCur=457 details="" detailsCur=0"
+`;
+
+exports[`submit popup key handling, row by row > records every key on every row of the refinement view 1`] = `
+"editor_heading       Up                 cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Down               cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Enter              cmd=use_current            focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Escape             cmd=close                  focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Space              cmd=-                      focus=0 help=shut body=changed bodyCur=545 details="" detailsCur=0
+editor_heading       Ctrl+J             cmd=-                      focus=0 help=shut body=changed bodyCur=545 details="" detailsCur=0
+editor_heading       Ctrl+Up (1;5A)     cmd=-                      focus=0 help=shut body=same bodyCur=472 details="" detailsCur=0
+editor_heading       Ctrl+Down (1;5B)   cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Ctrl+Up (5A)       cmd=-                      focus=0 help=shut body=same bodyCur=472 details="" detailsCur=0
+editor_heading       Ctrl+Down (5B)     cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Cmd+Up (1;9A)      cmd=-                      focus=0 help=shut body=same bodyCur=472 details="" detailsCur=0
+editor_heading       Cmd+Down (1;9B)    cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Option+Up (1;3A)   cmd=-                      focus=0 help=shut body=same bodyCur=472 details="" detailsCur=0
+editor_heading       Option+Down (1;3B) cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Esc-prefixed Up    cmd=-                      focus=0 help=shut body=same bodyCur=472 details="" detailsCur=0
+editor_heading       Esc-prefixed Down  cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Left               cmd=-                      focus=0 help=shut body=same bodyCur=543 details="" detailsCur=0
+editor_heading       Right              cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Backspace (7f)     cmd=-                      focus=0 help=shut body=changed bodyCur=543 details="" detailsCur=0
+editor_heading       Backspace (08)     cmd=-                      focus=0 help=shut body=changed bodyCur=543 details="" detailsCur=0
+editor_heading       Delete             cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+editor_heading       Letter a           cmd=-                      focus=0 help=shut body=changed bodyCur=545 details="" detailsCur=0
+editor_heading       Digit 2            cmd=-                      focus=0 help=shut body=changed bodyCur=545 details="" detailsCur=0
+editor_heading       Ctrl+X             cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Up                 cmd=-                      focus=0 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Down               cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Enter              cmd=go_back                focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Escape             cmd=close                  focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Space              cmd=-                      focus=1 help=open body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+J             cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+Up (1;5A)     cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+Down (1;5B)   cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+Up (5A)       cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+Down (5B)     cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Cmd+Up (1;9A)      cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Cmd+Down (1;9B)    cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Option+Up (1;3A)   cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Option+Down (1;3B) cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Esc-prefixed Up    cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Esc-prefixed Down  cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Left               cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Right              cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Backspace (7f)     cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Backspace (08)     cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Delete             cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Letter a           cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Digit 2            cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0
+go_back              Ctrl+X             cmd=-                      focus=1 help=shut body=same bodyCur=544 details="" detailsCur=0"
+`;
+
+exports[`submit popup key handling, row by row > records what Enter does in each body state 1`] = `
+"editor_heading/clean Enter              cmd=use_current            focus=0 help=shut body=same bodyCur=457 details="" detailsCur=0
+editor_heading/edited Enter              cmd=edit_body+use_current  focus=0 help=shut body=same bodyCur=462 details="" detailsCur=0
+editor_heading/blank Enter              cmd=-                      focus=0 help=shut body=same bodyCur=0 details="" detailsCur=0
+additional_details/typed Enter              cmd=edit_body              focus=0 help=shut body=changed bodyCur=498 details="" detailsCur=0
+additional_details/empty Enter              cmd=-                      focus=1 help=shut body=same bodyCur=457 details="" detailsCur=0"
+`;

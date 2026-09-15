@@ -1,0 +1,168 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`what the submit popup sends > bodies composed with a key > sends the body unchanged when nothing is edited 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Context and constraints:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Approach and steps:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+What done looks like:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Best practices and standards:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed with a key > sends the body without a section the user deleted by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Approach and steps:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+What done looks like:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Best practices and standards:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed with a key > sends the edited body when a line is added by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Context and constraints:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Approach and steps:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+What done looks like:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Best practices and standards:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+Also keep the existing timeout unchanged.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed with a key > still sends the body when the confirmation-carrying section is deleted by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Fix the failing payment test, the test failure blocks ci, and explain the verification. also drop a shadow under the submit button.
+
+Test command output:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Fixture and mock context:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Reproduction and evidence:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+Best practices and standards:
+- Keep the existing behaviour of the payment gateway client and cover it with a test.
+
+",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed without a key > sends the body unchanged when nothing is edited 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Context and constraints:
+- Carry forward relevant constraints, limits, environment facts, and user instructions that affect the work.
+
+Best practices and standards:
+- The current source signal reports stage as task_breakdown → implementation.
+- Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed without a key > sends the body with applied details merged in 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Context and constraints:
+- Carry forward relevant constraints, limits, environment facts, and user instructions that affect the work.
+
+Best practices and standards:
+- The current source signal reports stage as task_breakdown → implementation.
+- Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.
+
+Additional details to incorporate:
+Keep the retry count at five.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed without a key > sends the body without a section the user deleted by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Best practices and standards:
+- The current source signal reports stage as task_breakdown → implementation.
+- Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed without a key > sends the edited body when a line is added by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Add a retry with exponential backoff to the payment gateway client.
+
+Context and constraints:
+- Carry forward relevant constraints, limits, environment facts, and user instructions that affect the work.
+
+Best practices and standards:
+- The current source signal reports stage as task_breakdown → implementation.
+- Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.
+Also keep the existing timeout unchanged.",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
+
+exports[`what the submit popup sends > bodies composed without a key > still sends the body when the confirmation-carrying section is deleted by hand 1`] = `
+{
+  "bodyText": "My original request (verbatim):
+Fix the failing payment test, the test failure blocks ci, and explain the verification. also drop a shadow under the submit button.
+
+Test command output:
+- Cover Test command output for this request with concrete, source-backed specifics — state what is required, how to implement it, and how to verify it.
+
+Best practices and standards:
+- The current source signal reports stage as task_breakdown → implementation.
+- Treat what your recent practice shows as a working constraint, and turn it into direct implementation guidance.
+
+",
+  "diagnostics": [],
+  "state": "selected_current",
+}
+`;
