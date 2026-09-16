@@ -6,7 +6,7 @@
  * scrolled, when its edges are scroll markers — and about the bytes the renderer
  * emits for a number with colour on, colour off, and marks forced plain.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPromptEnhancementCliInteractionStateV1,
   renderPromptEnhancementPopupFrameV1,
@@ -170,6 +170,45 @@ describe('how the renderer draws a number', () => {
       { focusIndex: 0, helpExpanded: false, colorize: false, caretOut, bodyLineSuffixes: suffixes },
     );
     expect(frame).toContain('Context and constraints:    #2');
+  });
+});
+
+describe('the NO_COLOR rule, as the shell applies it', () => {
+  // The shell reads the flag as `Boolean(process.env['NO_COLOR'])` at the frame call and
+  // passes it as `plainMarks`. The shell itself opens a real console and cannot run here,
+  // so the read is exercised the way the shell performs it, against the same renderer:
+  // any non-empty value means plain marks, an unset or empty variable means dim ones.
+  const suffixes = wholeSuffixes(TEXT, SECTIONS, 72);
+  const saved = process.env['NO_COLOR'];
+  const plainMarksNow = (): boolean => Boolean(process.env['NO_COLOR']);
+  afterEach(() => {
+    if (saved === undefined) delete process.env['NO_COLOR'];
+    else process.env['NO_COLOR'] = saved;
+  });
+
+  it('unset: the marks are dim', () => {
+    delete process.env['NO_COLOR'];
+    const { frame } = frameWith({ colorize: true, bodyLineSuffixes: suffixes, plainMarks: plainMarksNow() });
+    expect(frame).toContain(`Context and constraints:    ${ESC}[2m#2${ESC}[0m`);
+  });
+
+  it('set to any non-empty value: the marks are plain, and only the marks change', () => {
+    delete process.env['NO_COLOR'];
+    const dim = frameWith({ colorize: true, bodyLineSuffixes: suffixes, plainMarks: plainMarksNow() });
+    for (const value of ['1', 'true', 'anything']) {
+      process.env['NO_COLOR'] = value;
+      const { frame } = frameWith({ colorize: true, bodyLineSuffixes: suffixes, plainMarks: plainMarksNow() });
+      expect(frame).toContain('Context and constraints:    #2');
+      expect(frame).not.toContain(`${ESC}[2m#2`);
+      // The rest of the popup keeps its colour: the flag governs the new marks only.
+      expect(frame.replace(/    #\d+/g, '')).toBe(dim.frame.replace(new RegExp(`    ${ESC}\\[2m#\\d+${ESC}\\[0m`, 'g'), ''));
+    }
+  });
+
+  it('set but empty: treated as unset — the marks stay dim', () => {
+    process.env['NO_COLOR'] = '';
+    const { frame } = frameWith({ colorize: true, bodyLineSuffixes: suffixes, plainMarks: plainMarksNow() });
+    expect(frame).toContain(`${ESC}[2m#2${ESC}[0m`);
   });
 });
 
