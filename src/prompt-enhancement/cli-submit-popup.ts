@@ -42,6 +42,8 @@ import {
   type PromptEnhancementEditorFieldV1,
   type PromptEnhancementMultilineEditorStateV1,
 } from './multiline-editor.js';
+import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
+import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
 import type { PromptActionSignalKind } from '../store/feedback-signals.js';
 
 export type PromptEnhancementCliPopupCommandV1 =
@@ -81,6 +83,12 @@ export interface PromptEnhancementCliPopupViewV1 {
   publicNotice?: string;
   /** True when the current result is a directional refinement (adds the Go back row). */
   refinement?: boolean;
+  /**
+   * The composed sections in body order — each title and the text it was composed with —
+   * so the shell can number them on screen. Optional and display-only: a consumer that
+   * ignores it sees exactly the view it saw before.
+   */
+  sections?: readonly PromptEnhancementSectionMapInputV1[];
 }
 
 export interface PromptEnhancementCliPopupInteractionV1 {
@@ -260,7 +268,14 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
 
   try {
     for (;;) {
-      const command = await interaction.next({ model, editedBodyText, additionalDetailsText, publicNotice, refinement: inRefinement });
+      const command = await interaction.next({
+        model,
+        editedBodyText,
+        additionalDetailsText,
+        publicNotice,
+        refinement: inRefinement,
+        sections: currentResult.currentBody.sections.map((section) => ({ title: section.title, bodyText: section.bodyText })),
+      });
       publicNotice = undefined;
 
       // NF Plan B (B-2): record the user's action (content-free kind + timestamp) at the moment it is
@@ -690,6 +705,14 @@ export interface PromptEnhancementCliFrameStateV1 {
   caret?: { field: PromptEnhancementEditorFieldV1; visualRow: number; visualColumn: number };
   /** Mutable sink the renderer fills with the caret's 1-based screen position (see `caret`). */
   caretOut?: { row: number; col: number };
+  /**
+   * One entry per body row as displayed: the section number to draw after that row, or
+   * `undefined` for none. Display-only — the row's text is drawn exactly as without it.
+   * Absent for the probe frame, so the chrome measurement is unchanged.
+   */
+  bodyLineSuffixes?: readonly (number | undefined)[];
+  /** Draw the suffixes without any styling, whatever `colorize` says (the `NO_COLOR` rule). */
+  plainMarks?: boolean;
 }
 
 /** ANSI styles for the live popup's old-popup radio look (§8.1). */
@@ -801,7 +824,18 @@ export function renderPromptEnhancementPopupFrameV1(
     const editable = row.kind === 'editor_heading' || row.kind === 'additional_details';
     if (row.kind === 'editor_heading') {
       recordCaret('enhanced_body');
-      for (const bodyLine of publicText(view.editedBodyText).split('\n')) lines.push(contentLine(bodyLine));
+      // A section's number, when the shell supplies one for this row, follows the row's text
+      // after four spaces: dim when colour is on, plain when it is off or the marks are plain.
+      // The row's own text is drawn exactly as it is without the number.
+      const suffixFor = (index: number): string => {
+        const number = frameState.bodyLineSuffixes?.[index];
+        if (number === undefined) return '';
+        const mark = `#${number}`;
+        return c && !frameState.plainMarks ? `    ${c.dim}${mark}${c.reset}` : `    ${mark}`;
+      };
+      publicText(view.editedBodyText).split('\n').forEach((bodyLine, index) => {
+        lines.push(contentLine(bodyLine) + suffixFor(index));
+      });
       // Body block: the "Enter sends this prompt" hint shows ONLY when this row (Use enhanced prompt) is
       // focused — otherwise it is misleading, because Enter acts on whichever row IS focused, not on the
       // enhanced body (owner 2026-08-19). When focused, the edit-keys and the send hint share ONE line.
@@ -1408,6 +1442,21 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     const bodyBuffer = current.editor.buffers.enhanced_body;
     const bodyWindow = windowPromptEnhancementFieldForDisplayWithStartV1(bodyBuffer, editorWidth, measuredBodyRows);
     const bodyDisplay = bodyWindow.text;
+    // Each section's number, placed on the display row that carries its title, from the
+    // same window the display used. The window replaced a row with a scroll marker only
+    // when it marks that edge; those rows carry no number. Display-only: the buffer,
+    // the caret and everything the popup sends are untouched.
+    const bodyDisplayLines = bodyDisplay.split('\n');
+    const bodyLineSuffixes = view.sections === undefined ? undefined : buildPromptEnhancementSectionNumberSuffixesV1({
+      text: bodyBuffer.text,
+      sections: view.sections,
+      fieldWidth: editorWidth,
+      windowStart: bodyWindow.start,
+      windowRows: bodyDisplayLines.length,
+      markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
+      markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
+    });
+    const plainMarks = Boolean(process.env['NO_COLOR']);
     // Caret row is window-relative, derived from the SAME window the display used (its `start`),
     // not the raw buffer scroll. If it still falls outside the shown lines, leave the caret unset
     // so the cursor is hidden rather than placed on a wrong row.
@@ -1425,7 +1474,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     const caretOut = { row: -1, col: -1 };
     const frame = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: bodyDisplay, additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut },
+      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, plainMarks },
     );
     paint(frame);
 
