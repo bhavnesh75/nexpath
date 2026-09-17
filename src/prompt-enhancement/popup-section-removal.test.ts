@@ -198,6 +198,44 @@ describe('what the cut leaves alone, and where it puts the cursor', () => {
     expect(result.editor.identity).toEqual(before.identity);
   });
 
+  it('brings the window back to the cursor when the body was scrolled away from it', () => {
+    // A body short enough to fit the viewport can never show this: the window sits at
+    // the top whatever the cut does. So the case needs a body long enough to scroll,
+    // and a window scrolled far from where the cut will land.
+    const long: PromptEnhancementSectionMapInputV1[] = Array.from({ length: 8 }, (_, index) => ({
+      title: `Section ${index + 1}`,
+      bodyText: Array.from({ length: 6 }, (_, line) => `- line ${line + 1} of section ${index + 1}`).join('\n'),
+    }));
+    const base = buildPromptEnhancementMultilineEditorStateV1({
+      identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1 },
+      enhancedBodyText: compose(long),
+      fieldWidth: FIELD_WIDTH,
+      viewportRows: 6,
+      focusedField: 'enhanced_body',
+    });
+    const scrolledAway = {
+      ...base,
+      buffers: { ...base.buffers, enhanced_body: { ...base.buffers.enhanced_body, scrollVisualRow: 40 } },
+    };
+    expect(compose(long).split('\n').length).toBeGreaterThan(6 * 6);
+
+    // Cutting the first section puts the cursor at the top, so the window follows it there.
+    const first = removePromptEnhancementSectionV1(scrolledAway, long, 1);
+    expect(first.outcome).toBe('removed');
+    expect(first.editor.buffers.enhanced_body.cursor).toBe(0);
+    expect(first.editor.buffers.enhanced_body.scrollVisualRow).toBe(0);
+
+    // Cutting the last section puts the cursor at the new end, and the window follows it
+    // there instead — far from where it started, and inside the shortened body.
+    const last = removePromptEnhancementSectionV1(scrolledAway, long, long.length);
+    const buffer = last.editor.buffers.enhanced_body;
+    const lineCount = buffer.text.split('\n').length;
+    expect(last.outcome).toBe('removed');
+    expect(buffer.cursor).toBe(buffer.text.length);
+    expect(buffer.scrollVisualRow).toBeLessThanOrEqual(lineCount - 1);
+    expect(buffer.scrollVisualRow + 6).toBeGreaterThanOrEqual(lineCount);
+  });
+
   it("leaves the body buffer's own focused flag as it was", () => {
     for (const focusedField of ['enhanced_body', 'additional_details'] as const) {
       const before = editorWith(text, { focusedField });
