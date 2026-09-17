@@ -103,6 +103,26 @@ export function removePromptEnhancementSectionV1(
   };
 }
 
+/**
+ * The one sentence a refused removal shows. Every refusal shows it — a number that names no
+ * section, a body that cannot be edited, and a cut that would leave nothing behind all read the
+ * same to the user, who only needs to know the section did not go.
+ */
+export const PROMPT_ENHANCEMENT_SECTION_REMOVAL_NOTICE_V1 = 'this section not found' as const;
+
+/**
+ * What to say about an outcome, or nothing at all.
+ *
+ * A completed removal is silent: the section is gone from the body, and that is the whole of the
+ * feedback. Kept beside the removal itself, and pure, so what the popup says is tested without a
+ * popup.
+ */
+export function promptEnhancementSectionRemovalNoticeV1(
+  outcome: PromptEnhancementSectionRemovalOutcomeV1,
+): string | undefined {
+  return outcome === 'removed' ? undefined : PROMPT_ENHANCEMENT_SECTION_REMOVAL_NOTICE_V1;
+}
+
 /** What the chord guard decided about one key. */
 export interface PromptEnhancementSectionRemovalChordV1 {
   /** The arming flag after this key. */

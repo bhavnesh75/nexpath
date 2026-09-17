@@ -39,7 +39,7 @@ exports[`the recorded frames, numbered > confirmation-carrying body, colour off 
 │      ask me for go-ahead confirmation, and before you ask, confirm the actua
 │     l state at ground level by reading the real source. Do not assume, and d
 │     o not rely on what you did earlier in this session.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -88,7 +88,7 @@ exports[`the recorded frames, numbered > confirmation-carrying body, colour on >
 \\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
 \\e[36m│\\e[0m     l state at ground level by reading the real source. Do not assume, and d
 \\e[36m│\\e[0m     o not rely on what you did earlier in this session.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -142,7 +142,7 @@ exports[`the recorded frames, numbered > largest body, colour off > is recorded 
 │      ask me for go-ahead confirmation, and before you ask, confirm the actua
 │     l state at ground level by reading the real source. Do not assume, and d
 │     o not rely on what you did earlier in this session.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -196,7 +196,7 @@ exports[`the recorded frames, numbered > largest body, colour on > is recorded 1
 \\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
 \\e[36m│\\e[0m     l state at ground level by reading the real source. Do not assume, and d
 \\e[36m│\\e[0m     o not rely on what you did earlier in this session.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -228,7 +228,7 @@ exports[`the recorded frames, numbered > largest body, windowed at 80 x 24 > is 
 │     e verification. also drop a shadow under the submit button.
 │     
 │     ↓ 22 more lines below · the whole prompt is included
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -272,7 +272,7 @@ exports[`the recorded frames, numbered > medium body, colour off > is recorded 1
 │     Best practices and standards:    #5
 │     - Keep the existing behaviour of the payment gateway client and cover it
 │      with a test.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -316,7 +316,7 @@ exports[`the recorded frames, numbered > medium body, colour on > is recorded 1`
 \\e[36m│\\e[0m     Best practices and standards:    \\e[2m#5\\e[0m
 \\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
 \\e[36m│\\e[0m      with a test.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -360,7 +360,7 @@ exports[`the recorded frames, numbered > refinement view, colour off > is record
 │     Best practices and standards:    #5
 │     - Keep the existing behaviour of the payment gateway client and cover it
 │      with a test.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ ← Go back
 │
@@ -402,7 +402,7 @@ exports[`the recorded frames, numbered > refinement view, colour on > is recorde
 \\e[36m│\\e[0m     Best practices and standards:    \\e[2m#5\\e[0m
 \\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
 \\e[36m│\\e[0m      with a test.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2m← Go back\\e[0m
 \\e[36m│\\e[0m
@@ -438,7 +438,7 @@ exports[`the recorded frames, numbered > small body, colour off > is recorded 1`
 │     tion.
 │     - Treat what your recent practice shows as a working constraint, and tur
 │     n it into direct implementation guidance.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -476,7 +476,7 @@ exports[`the recorded frames, numbered > small body, colour on > is recorded 1`]
 \\e[36m│\\e[0m     tion.
 \\e[36m│\\e[0m     - Treat what your recent practice shows as a working constraint, and tur
 \\e[36m│\\e[0m     n it into direct implementation guidance.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     

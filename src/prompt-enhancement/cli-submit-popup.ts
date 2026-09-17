@@ -45,6 +45,7 @@ import {
 import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
 import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
 import {
+  promptEnhancementSectionRemovalNoticeV1,
   removePromptEnhancementSectionV1,
   stepPromptEnhancementSectionRemovalChordV1,
   type PromptEnhancementSectionRemovalOutcomeV1,
@@ -94,6 +95,12 @@ export interface PromptEnhancementCliPopupViewV1 {
   editedBodyText: string;
   additionalDetailsText: string;
   publicNotice?: string;
+  /**
+   * True when {@link publicNotice} should survive exactly one repaint. Today's notices carry no
+   * flag and behave as they always have — they stay until the next command. A removal's refusal
+   * sets this, so the next keystroke clears it without the user having to do anything.
+   */
+  publicNoticeTransient?: boolean;
   /** True when the current result is a directional refinement (adds the Go back row). */
   refinement?: boolean;
   /**
@@ -269,6 +276,8 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   let editedBodyText = model.body.text;
   let additionalDetailsText = '';
   let publicNotice: string | undefined;
+  // Set beside publicNotice for a notice that should last one repaint (a refused removal).
+  let publicNoticeTransient = false;
   // Refinement (directional-action) tracking so "Go back" can restore the main state.
   let inRefinement = false;
   let savedMain: { result: PromptEnhancementPrepareResultV1; body: string } | null = null;
@@ -291,10 +300,12 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
         editedBodyText,
         additionalDetailsText,
         publicNotice,
+        publicNoticeTransient,
         refinement: inRefinement,
         sections: currentResult.currentBody.sections.map((section) => ({ title: section.title, bodyText: section.bodyText })),
       });
       publicNotice = undefined;
+      publicNoticeTransient = false;
 
       // NF Plan B (B-2): record the user's action (content-free kind + timestamp) at the moment it is
       // issued — one event per mapped action, regardless of outcome. Observation-only; the send happens
@@ -331,6 +342,14 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
         // draws from that buffer; this loop's own copy catches up at the next commit.
         // Nothing is reported: a removal is not an engine action, and a refusal is not
         // a failure of one.
+        //
+        // A refusal says so once. A completed removal says nothing — the section is gone
+        // from the body, which is the whole of the feedback.
+        const notice = promptEnhancementSectionRemovalNoticeV1(command.outcome);
+        if (notice) {
+          publicNotice = notice;
+          publicNoticeTransient = true;
+        }
         continue;
       }
       if (command.type === 'use_current') {
@@ -555,6 +574,24 @@ const PROMPT_ENHANCEMENT_CLI_DETAILS_HINT_V1 = 'Enter applies these details · u
 const PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1 = process.platform === 'darwin'
   ? 'Cmd+J new line · Cmd+↑/↓ move line'
   : 'Ctrl+J new line · Ctrl+↑/↓ move line';
+/**
+ * Removing a section: the shortcut, shown with the other editing keys on the focused body row.
+ *
+ * Nine characters on purpose. The line is 68 columns without it, the docked popup window never
+ * narrows below 80, and " · " plus nine more characters is what still fits on one row there —
+ * longer text wraps, and the frame then takes a row the chrome probe did not measure.
+ *
+ * ⚠️ macOS keeps Ctrl+X, unlike the editing keys just above, which switch to their Cmd names:
+ * the prefix is a control byte, not a Cmd chord. This constant is the one place that decides it,
+ * on every platform — if the key or its wording ever moves, it moves here.
+ */
+const PROMPT_ENHANCEMENT_CLI_REMOVE_SECTION_HINT_V1 = 'Ctrl+X #N' as const;
+/**
+ * What the same line says once the prefix is pressed: the question the digit answers. It replaces
+ * the whole hint line rather than joining it, so the frame keeps its line count either way and
+ * nothing below it moves.
+ */
+const PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_HINT_V1 = 'Remove which section? 1–9' as const;
 
 /** Left indent applied to every wrapped line of editable content (body / details). */
 export const PROMPT_ENHANCEMENT_CLI_CONTENT_INDENT_V1 = 6 as const;
@@ -738,6 +775,12 @@ export interface PromptEnhancementCliFrameStateV1 {
   bodyLineSuffixes?: readonly (number | undefined)[];
   /** Draw the suffixes without any styling, whatever `colorize` says (the `NO_COLOR` rule). */
   plainMarks?: boolean;
+  /**
+   * True while the removal chord is armed, so the focused body row asks which section instead of
+   * listing its keys. Passed to the chrome probe as well as the drawn frame — the measurement has
+   * to see the same line the user does, even though both are one line.
+   */
+  sectionRemovalArmed?: boolean;
 }
 
 /** ANSI styles for the live popup's old-popup radio look (§8.1). */
@@ -864,7 +907,15 @@ export function renderPromptEnhancementPopupFrameV1(
       // Body block: the "Enter sends this prompt" hint shows ONLY when this row (Use enhanced prompt) is
       // focused — otherwise it is misleading, because Enter acts on whichever row IS focused, not on the
       // enhanced body (owner 2026-08-19). When focused, the edit-keys and the send hint share ONE line.
-      if (focused) lines.push(hint(`${PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_BODY_HINT_V1}`));
+      //
+      // The removal shortcut sits between them: it is an editing key like the two before it, while
+      // Enter is the terminal action. While the chord is armed the whole line becomes the question
+      // the digit answers — one line either way, so the caret's row and the body's height do not move.
+      if (focused) {
+        lines.push(hint(frameState.sectionRemovalArmed === true
+          ? PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_HINT_V1
+          : `${PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_REMOVE_SECTION_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_BODY_HINT_V1}`));
+      }
     } else if (row.kind === 'additional_details') {
       // UI-8: no "Apply" button — pressing Enter on this row applies the details.
       // An empty field renders blank (§8.5). Sending the body ignores unapplied details.
@@ -1485,7 +1536,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     // resized to match, so cursor-keeping and the display agree.
     const probeChrome = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: 'x', additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: false },
+      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: false, sectionRemovalArmed: current.sectionRemovalArmed },
     ).split('\n').length - 1;
     const measuredBodyRows = Math.max(4, (output.rows ?? 24) - 1 - probeChrome);
     if (current === state) {
@@ -1529,7 +1580,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     const caretOut = { row: -1, col: -1 };
     const frame = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: bodyDisplay, additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, plainMarks },
+      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, plainMarks, sectionRemovalArmed: current.sectionRemovalArmed },
     );
     paint(frame);
 
@@ -1607,6 +1658,14 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
         firstRenderAcknowledged = true;
       }
 
+      // One repaint, and no more: a transient notice is drawn by the render above and is gone from
+      // every render after it, including the one a terminal resize triggers — `render` keeps the
+      // view it was last handed, so the notice cannot come back. A notice with no flag is today's,
+      // and is handed on unchanged: it stays until the next command.
+      const afterFirstPaint = view.publicNoticeTransient
+        ? { ...view, publicNotice: undefined }
+        : view;
+
       for (;;) {
         const raw = await readKey();
         if (raw === CTRL_C) return { type: 'close' };
@@ -1623,7 +1682,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
           }
           return queue.shift()!;
         }
-        render(view, state);
+        render(afterFirstPaint, state);
       }
     },
     close() {

@@ -66,10 +66,17 @@ const CLI_EDIT_KEYS_HINT =
     ? 'Cmd+J new line · Cmd+↑/↓ move line'
     : 'Ctrl+J new line · Ctrl+↑/↓ move line';
 
+// 3. THE REMOVAL SHORTCUT IS ADDED. Ctrl+X is not bound in the panel — the browser draws its own
+//    affordance later — so the CLI's body-row hint carries one part the panel's never will. It is
+//    inserted into the body row's line ONLY, identified by the send hint it also carries: the panel
+//    shows the edit keys on the details row too, where the CLI shows no shortcut.
+const CLI_BODY_HINT_WITH_REMOVAL = `${CLI_EDIT_KEYS_HINT} · Ctrl+X #N · Enter sends this prompt`;
+
 function ours(model: SurfaceModel, focusIndex: number): string[] {
   return domLines(renderSurface(document, model, { focusIndex }))
     .map((l) => l.trim())
-    .map((l) => l.split(EDIT_KEYS_HINT).join(CLI_EDIT_KEYS_HINT));
+    .map((l) => l.split(EDIT_KEYS_HINT).join(CLI_EDIT_KEYS_HINT))
+    .map((l) => l.split(`${CLI_EDIT_KEYS_HINT} · Enter sends this prompt`).join(CLI_BODY_HINT_WITH_REMOVAL));
 }
 
 function labelsOf(model: SurfaceModel, focusIndex = 0): string[] {

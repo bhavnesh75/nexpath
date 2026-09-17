@@ -22,7 +22,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 │     e verification. also drop a shadow under the submit button.
 │     
 │     ↓ 22 more lines below · the whole prompt is included
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -87,7 +87,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 │      ask me for go-ahead confirmation, and before you ask, confirm the actua
 │     l state at ground level by reading the real source. Do not assume, and d
 │     o not rely on what you did earlier in this session.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -141,7 +141,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 \\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
 \\e[36m│\\e[0m     l state at ground level by reading the real source. Do not assume, and d
 \\e[36m│\\e[0m     o not rely on what you did earlier in this session.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -195,7 +195,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 │     Best practices and standards:
 │     - Keep the existing behaviour of the payment gateway client and cover it
 │      with a test.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -239,7 +239,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 \\e[36m│\\e[0m     Best practices and standards:
 \\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
 \\e[36m│\\e[0m      with a test.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -283,7 +283,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 │     Best practices and standards:
 │     - Keep the existing behaviour of the payment gateway client and cover it
 │      with a test.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ ← Go back
 │
@@ -325,7 +325,7 @@ exports[`prompt-enhancement submit popup frames > with a key, the wording path a
 \\e[36m│\\e[0m     Best practices and standards:
 \\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
 \\e[36m│\\e[0m      with a test.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2m← Go back\\e[0m
 \\e[36m│\\e[0m
@@ -381,7 +381,7 @@ exports[`prompt-enhancement submit popup frames > without a key, the body is the
 │      ask me for go-ahead confirmation, and before you ask, confirm the actua
 │     l state at ground level by reading the real source. Do not assume, and d
 │     o not rely on what you did earlier in this session.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -430,7 +430,7 @@ exports[`prompt-enhancement submit popup frames > without a key, the body is the
 \\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
 \\e[36m│\\e[0m     l state at ground level by reading the real source. Do not assume, and d
 \\e[36m│\\e[0m     o not rely on what you did earlier in this session.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -476,7 +476,7 @@ exports[`prompt-enhancement submit popup frames > without a key, the body is the
 │     tion.
 │     - Treat what your recent practice shows as a working constraint, and tur
 │     n it into direct implementation guidance.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -514,7 +514,7 @@ exports[`prompt-enhancement submit popup frames > without a key, the body is the
 \\e[36m│\\e[0m     tion.
 \\e[36m│\\e[0m     - Treat what your recent practice shows as a working constraint, and tur
 \\e[36m│\\e[0m     n it into direct implementation guidance.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     
@@ -552,7 +552,7 @@ exports[`prompt-enhancement submit popup frames on macOS > names the Mac keys in
 │     tion.
 │     - Treat what your recent practice shows as a working constraint, and tur
 │     n it into direct implementation guidance.
-│     Cmd+J new line · Cmd+↑/↓ move line · Enter sends this prompt
+│     Cmd+J new line · Cmd+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -593,7 +593,7 @@ exports[`prompt-enhancement submit popup frames with applied details > draws the
 │     
 │     Additional details to incorporate:
 │     Keep the retry count at five.
-│     Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
 │
 │ ○ Additional details
 │     
@@ -634,7 +634,7 @@ exports[`prompt-enhancement submit popup frames with applied details > draws the
 \\e[36m│\\e[0m     
 \\e[36m│\\e[0m     Additional details to incorporate:
 \\e[36m│\\e[0m     Keep the retry count at five.
-\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
 \\e[36m│\\e[0m     

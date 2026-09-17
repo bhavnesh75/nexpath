@@ -649,11 +649,11 @@ describe('UI-1 action-row model', () => {
     // all. Both halves of that rule have their own test below.
     expect(plain).not.toContain('Enter applies these details · unapplied details are not sent');
     // The focused body's edit-keys + send hint share ONE line (owner request 2026-08-07).
-    expect(plain).toContain('Ctrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt');
+    expect(plain).toContain('Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt');
     // In colour mode that combined hint line is LIGHT YELLOW (owner request 2026-08-07 — a
     // distinct, all-OS-visible shortcut colour).
     const colored = renderPromptEnhancementPopupFrameV1(view, { focusIndex: 0, helpExpanded: false, colorize: true });
-    expect(colored).toContain(`${ESC}[93mCtrl+J new line · Ctrl+↑/↓ move line · Enter sends this prompt`);
+    expect(colored).toContain(`${ESC}[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt`);
   });
 
   // ── Issue #160 ────────────────────────────────────────────────────────────────────────────
