@@ -11,10 +11,15 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildPromptEnhancementCliActionRowsV1,
   buildPromptEnhancementCliFeedbackStateV1,
+  buildPromptEnhancementCliInteractionStateV1,
+  decodePromptEnhancementCliKeyV1,
+  reducePromptEnhancementCliInteractionV1,
   renderPromptEnhancementCliFeedbackFrameV1,
   renderPromptEnhancementPopupFrameV1,
   type PromptEnhancementCliPopupViewV1,
 } from './cli-submit-popup.js';
+import { SECTION_REMOVAL_PREFIX_KEY_V1 } from './popup-section-removal.js';
+import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
 import type { PromptEnhancementPopupRenderModelV1 } from './popup-render-model.js';
 
 const EDIT_KEYS = 'Ctrl+J new line · Ctrl+↑/↓ move line';
@@ -131,6 +136,47 @@ describe('the shortcut line', () => {
     // of shortcut is what fits; this fails if the wording grows.
     expect(line!.length).toBeLessThanOrEqual(80);
     expect(REMOVE).toHaveLength(9);
+  });
+
+  it('draws the line the reducer actually asks for — armed, then back again', () => {
+    // The two halves are each pinned elsewhere: the reducer's flag by the key table, the drawn
+    // line by the tests above, which hand the flag in as a literal. Nothing joined them, so a
+    // renderer reading a different flag than the reducer writes would have passed both. This
+    // walks the flag from one to the other.
+    const sections: PromptEnhancementSectionMapInputV1[] = [
+      { title: 'My original request (verbatim)', bodyText: 'Add a retry to the client.' },
+      { title: 'Context and constraints', bodyText: '- Keep the timeout unchanged.' },
+    ];
+    const text = sections.map((s) => `${s.title}:\n${s.bodyText}`).join('\n\n');
+    const rows = buildPromptEnhancementCliActionRowsV1(m, {});
+    const opened = buildPromptEnhancementCliInteractionStateV1({
+      model: m,
+      editedBodyText: text,
+      additionalDetailsText: '',
+      fieldWidth: 72,
+      viewportRows: 10,
+    });
+    const drawnFor = (armed: boolean | undefined): string =>
+      renderPromptEnhancementPopupFrameV1(view(m), { focusIndex: opened.focusIndex, helpExpanded: false, sectionRemovalArmed: armed });
+    const press = (state: typeof opened, raw: string) =>
+      reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw), sections);
+
+    // The popup opens on the body row, disarmed: the shortcut is offered.
+    expect(opened.focusIndex).toBe(rowIndex(m, 'editor_heading'));
+    expect(opened.sectionRemovalArmed).toBeFalsy();
+    expect(drawnFor(opened.sectionRemovalArmed)).toContain(REMOVE);
+
+    // The prefix arms it, and the line the reducer's own flag produces is the question.
+    const armed = press(opened, SECTION_REMOVAL_PREFIX_KEY_V1);
+    expect(armed.state.sectionRemovalArmed).toBe(true);
+    expect(drawnFor(armed.state.sectionRemovalArmed)).toContain(ARMED);
+
+    // Any key that is not a digit disarms, and the shortcut line comes back.
+    const disarmed = press(armed.state, 'a');
+    expect(disarmed.state.sectionRemovalArmed).toBe(false);
+    const back = drawnFor(disarmed.state.sectionRemovalArmed);
+    expect(back).toContain(REMOVE);
+    expect(back).not.toContain(ARMED);
   });
 
   it('keeps the removal key as Ctrl+X on macOS, where the editing keys become Cmd', async () => {
