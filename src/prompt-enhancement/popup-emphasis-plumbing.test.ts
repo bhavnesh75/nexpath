@@ -263,10 +263,29 @@ describe('the phrases across the spawn', () => {
     expect(child.emphasisPhrases).toBeUndefined();
   });
 
-  it('drops a phrases value that is not an array instead of refusing the payload', async () => {
+  it('holds the payload to the same shape the store does, and drops what fails it', async () => {
+    // The parent only ever sends what the store already parsed, so these cannot arise in the live
+    // flow — the point is that the two roads agree on what a phrase list is, rather than one road
+    // forwarding something the other would have refused.
     const parsed = JSON.parse(await payloadWrittenByParent()) as Record<string, unknown>;
-    const child = await phrasesSeenByChild(JSON.stringify({ ...parsed, emphasisPhrases: 'not an array' }));
-    expect(child.ran).toBe(true);
-    expect(child.emphasisPhrases).toBeUndefined();
+    const refused: readonly unknown[] = [
+      'not an array',
+      {},
+      [{}],
+      [{ text: 1 }],
+      [1, 2, 3],
+      [null],
+    ];
+
+    for (const value of refused) {
+      const child = await phrasesSeenByChild(JSON.stringify({ ...parsed, emphasisPhrases: value }));
+      // Dropped, never refused: the popup still opens, exactly as it does for a corrupt column.
+      expect(child.ran, JSON.stringify(value)).toBe(true);
+      expect(child.emphasisPhrases, JSON.stringify(value)).toBeUndefined();
+    }
+
+    // And a well-formed list still arrives whole.
+    const good = await phrasesSeenByChild(JSON.stringify({ ...parsed, emphasisPhrases: PHRASES }));
+    expect(good.emphasisPhrases).toEqual(PHRASES);
   });
 });

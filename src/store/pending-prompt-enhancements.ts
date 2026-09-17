@@ -173,6 +173,23 @@ function parsePlannerPromptDirectives(raw: unknown): readonly PromptEnhancementS
 }
 
 /**
+ * True when an already-parsed value is a well-formed phrase list: an array whose every entry is an
+ * object with a string `text`. A light structural guard, like the planner one — the phrase is what
+ * gets re-found on the live buffer, so a list that cannot name one is worth nothing.
+ *
+ * Exported because the phrases reach the popup by two roads — this row, and the payload the spawned
+ * window host reads — and the two must agree on what a phrase list is. One definition, both callers.
+ */
+export function isPromptEnhancementEmphasisPhraseListV1(
+  value: unknown,
+): value is readonly PromptEnhancementEmphasisPhraseV1[] {
+  return Array.isArray(value) && value.every(
+    (phrase) => phrase !== null && typeof phrase === 'object'
+      && typeof (phrase as { text?: unknown }).text === 'string',
+  );
+}
+
+/**
  * Parse the carried bold phrases, fail-OPEN to undefined: NULL (old rows, or a prepare that produced
  * none), non-JSON, a value that is not an array, or any entry without a string `text` all read back
  * as undefined — the popup then draws plain text. A corrupt value here must never hide the popup, so
@@ -187,12 +204,7 @@ function parseEmphasisPhrases(raw: unknown): readonly PromptEnhancementEmphasisP
   } catch {
     return undefined;
   }
-  if (!Array.isArray(parsed)) return undefined;
-  const wellFormed = parsed.every(
-    (phrase) => phrase !== null && typeof phrase === 'object'
-      && typeof (phrase as { text?: unknown }).text === 'string',
-  );
-  return wellFormed ? (parsed as readonly PromptEnhancementEmphasisPhraseV1[]) : undefined;
+  return isPromptEnhancementEmphasisPhraseListV1(parsed) ? parsed : undefined;
 }
 
 /**

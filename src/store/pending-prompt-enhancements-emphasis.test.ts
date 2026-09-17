@@ -12,9 +12,9 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openStore, type Store } from './db.js';
-import { applyIncrementalMigrations } from './schema.js';
+import { applyIncrementalMigrations, runMigrations } from './schema.js';
 import {
   getPendingPromptEnhancement,
   upsertPendingPromptEnhancement,
@@ -123,6 +123,27 @@ async function validPayload(projectRoot: string): Promise<{
   return { request: prepared, result: await preparePromptEnhancement(prepared) };
 }
 
+/** The table's column names, as the migrations leave them. */
+function columnsOf(store: Store): readonly string[] {
+  return (store.db.exec('PRAGMA table_info(pending_prompt_enhancements)')[0]?.values ?? [])
+    .map((row) => row[1] as string);
+}
+
+/**
+ * Reshape the table the way a database written before the column would be shaped: rebuild it from
+ * the columns that existed then, which drops the new one and keeps every row.
+ */
+function dropTheColumn(store: Store): void {
+  store.db.run(`
+    CREATE TABLE pending_prompt_enhancements_old AS
+      SELECT id, project_root, session_id, prompt_count, status, created_at,
+             request_json, result_json, planner_items_json, planner_prompt_directives_json
+      FROM pending_prompt_enhancements;
+    DROP TABLE pending_prompt_enhancements;
+    ALTER TABLE pending_prompt_enhancements_old RENAME TO pending_prompt_enhancements;
+  `);
+}
+
 /** The raw stored cell, so NULL and '[]' can be told apart at the column itself. */
 function rawColumn(store: Store, projectRoot: string): unknown {
   const rows = store.db.exec(
@@ -137,9 +158,7 @@ describe('the pending row and its bold-phrase column', () => {
   beforeEach(async () => { store = await openStore(':memory:'); });
 
   it('exists on a fresh database, straight out of openStore', () => {
-    const columns = (store.db.exec('PRAGMA table_info(pending_prompt_enhancements)')[0]?.values ?? [])
-      .map((row) => row[1] as string);
-    expect(columns).toContain('emphasis_phrases_json');
+    expect(columnsOf(store)).toContain('emphasis_phrases_json');
   });
 
   it('round-trips a phrase list through upsert → get, unchanged', async () => {
@@ -187,25 +206,12 @@ describe('the pending row and its bold-phrase column', () => {
     const { request, result } = await validPayload(root);
     upsertPendingPromptEnhancement(store, { projectRoot: root, sessionId: 's', promptCount: 4, request, result });
 
-    // Simulate a database written by a build that predates the column: rebuild the table from the
-    // columns that existed then, which drops the new one and keeps every row.
-    store.db.run(`
-      CREATE TABLE pending_prompt_enhancements_old AS
-        SELECT id, project_root, session_id, prompt_count, status, created_at,
-               request_json, result_json, planner_items_json, planner_prompt_directives_json
-        FROM pending_prompt_enhancements;
-      DROP TABLE pending_prompt_enhancements;
-      ALTER TABLE pending_prompt_enhancements_old RENAME TO pending_prompt_enhancements;
-    `);
-    const before = (store.db.exec('PRAGMA table_info(pending_prompt_enhancements)')[0]?.values ?? [])
-      .map((row) => row[1] as string);
-    expect(before).not.toContain('emphasis_phrases_json');
+    dropTheColumn(store);
+    expect(columnsOf(store)).not.toContain('emphasis_phrases_json');
 
     applyIncrementalMigrations(store.db);
 
-    const after = (store.db.exec('PRAGMA table_info(pending_prompt_enhancements)')[0]?.values ?? [])
-      .map((row) => row[1] as string);
-    expect(after).toContain('emphasis_phrases_json');
+    expect(columnsOf(store)).toContain('emphasis_phrases_json');
     // The pre-migration row survives whole, and reads back with no phrases.
     const loaded = getPendingPromptEnhancement(store, root);
     expect(loaded).not.toBeNull();
@@ -269,10 +275,24 @@ describe('the pending row and its bold-phrase column', () => {
     expect(source).toContain('parseEmphasisPhrases(row[10])');
   });
 
-  it('carries the phrases in both additive migration lists, so the CLI migration adds it too', () => {
-    const schema = readFileSync(fileURLToPath(new URL('./schema.ts', import.meta.url)), 'utf8');
-    const occurrences = schema.split("addIfMissing('pending_prompt_enhancements', 'emphasis_phrases_json', 'TEXT');").length - 1;
-    // One in the silent startup pass, one in the console-output twin the CLI runs.
-    expect(occurrences).toBe(2);
+  it('is added by the CLI migration too, not only by the silent startup pass', async () => {
+    // The additive list exists twice: the pass openStore runs on every start, and the
+    // console-output twin `nexpath db migrate` runs. A column in one and not the other is the
+    // drift this asserts against — so it runs the CLI twin itself rather than reading its source.
+    const root = '/test/emphasis-cli-migration';
+    const { request, result } = await validPayload(root);
+    upsertPendingPromptEnhancement(store, { projectRoot: root, sessionId: 's', promptCount: 1, request, result });
+    dropTheColumn(store);
+    expect(columnsOf(store)).not.toContain('emphasis_phrases_json');
+
+    // runMigrations reports every column it checks; the report is not what is under test.
+    const quiet = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try { runMigrations(store.db); } finally { quiet.mockRestore(); }
+
+    expect(columnsOf(store)).toContain('emphasis_phrases_json');
+    // And the row it migrated still reads, with no phrases.
+    const loaded = getPendingPromptEnhancement(store, root);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.emphasisPhrases).toBeUndefined();
   });
 });

@@ -25,7 +25,10 @@ import {
   type PromptEnhancementCliMpsContinuationOutcomeV1,
 } from '../../prompt-enhancement/cli-mps-continuation-run.js';
 import { recordPromptEnhancementCliFeedbackV1 } from './auto.js';
-import type { PromptEnhancementEmphasisPhraseV1 } from '../../store/pending-prompt-enhancements.js';
+import {
+  isPromptEnhancementEmphasisPhraseListV1,
+  type PromptEnhancementEmphasisPhraseV1,
+} from '../../store/pending-prompt-enhancements.js';
 import { logger } from '../../logger.js';
 
 const POPUP_HOST_PROTOCOL_VERSION_V1 = 1;
@@ -126,10 +129,11 @@ function asInput(value: unknown): PromptEnhancementPopupHostInputV1 | undefined 
     protocolVersion: POPUP_HOST_PROTOCOL_VERSION_V1,
     request: input.request,
     result: input.result,
-    // Additive and optional: an absent or non-array value is simply dropped, exactly as a payload
-    // written before this field existed behaves. It never makes an input invalid.
-    ...(Array.isArray(input.emphasisPhrases)
-      ? { emphasisPhrases: input.emphasisPhrases as readonly PromptEnhancementEmphasisPhraseV1[] }
+    // Additive and optional, and held to the SAME shape the store holds it to, so a phrase list is
+    // the same thing on both roads to the popup. Absent or malformed is simply dropped, exactly as a
+    // payload written before this field existed behaves — it never makes an input invalid.
+    ...(isPromptEnhancementEmphasisPhraseListV1(input.emphasisPhrases)
+      ? { emphasisPhrases: input.emphasisPhrases }
       : {}),
   };
 }
