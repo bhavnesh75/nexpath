@@ -946,6 +946,7 @@ export function registerStopCommand(program: import('commander').Command): void 
           popup = await runPromptEnhancementCliSubmitPopupV1({
             request: pending.request,
             result: pending.result,
+            emphasisPhrases: pending.emphasisPhrases,
             feedbackSink: (event) => recordPromptEnhancementCliFeedbackV1(store, payload.cwd, event, pending.request),
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the
             // feedback-consent flush (store-backed sink; in-process popup on the Stop hook).
@@ -987,6 +988,7 @@ export function registerStopCommand(program: import('commander').Command): void 
               capability,
               request: pending.request,
               result: pending.result,
+              emphasisPhrases: pending.emphasisPhrases,
               cliEntryPath: process.argv[1] ?? '',
               dbPath: opts.db,
             }),

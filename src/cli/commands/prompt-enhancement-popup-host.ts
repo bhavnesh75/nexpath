@@ -25,6 +25,7 @@ import {
   type PromptEnhancementCliMpsContinuationOutcomeV1,
 } from '../../prompt-enhancement/cli-mps-continuation-run.js';
 import { recordPromptEnhancementCliFeedbackV1 } from './auto.js';
+import type { PromptEnhancementEmphasisPhraseV1 } from '../../store/pending-prompt-enhancements.js';
 import { logger } from '../../logger.js';
 
 const POPUP_HOST_PROTOCOL_VERSION_V1 = 1;
@@ -33,6 +34,12 @@ export interface PromptEnhancementPopupHostInputV1 {
   protocolVersion: typeof POPUP_HOST_PROTOCOL_VERSION_V1;
   request: unknown;
   result: unknown;
+  /**
+   * The popup's bold phrases, carried across the spawn so a window host renders what the in-process
+   * popup would. Optional in both directions: a payload written without it stays valid, so the
+   * protocol version does not move for it.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }
 
 export interface PromptEnhancementPopupHostOutputV1 {
@@ -119,12 +126,18 @@ function asInput(value: unknown): PromptEnhancementPopupHostInputV1 | undefined 
     protocolVersion: POPUP_HOST_PROTOCOL_VERSION_V1,
     request: input.request,
     result: input.result,
+    // Additive and optional: an absent or non-array value is simply dropped, exactly as a payload
+    // written before this field existed behaves. It never makes an input invalid.
+    ...(Array.isArray(input.emphasisPhrases)
+      ? { emphasisPhrases: input.emphasisPhrases as readonly PromptEnhancementEmphasisPhraseV1[] }
+      : {}),
   };
 }
 
 function validatedInput(value: unknown): {
   request: PromptEnhancementPrepareRequestV1;
   result: PromptEnhancementPrepareResultV1;
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 } | undefined {
   const input = asInput(value);
   if (!input) return undefined;
@@ -134,7 +147,7 @@ function validatedInput(value: unknown): {
   const request = input.request as PromptEnhancementPrepareRequestV1;
   const result = input.result as PromptEnhancementPrepareResultV1;
   if (request.requestId !== result.requestId || request.projectRoot !== result.projectRoot) return undefined;
-  return { request, result };
+  return { request, result, ...(input.emphasisPhrases ? { emphasisPhrases: input.emphasisPhrases } : {}) };
 }
 
 /**
@@ -254,6 +267,7 @@ export async function runPromptEnhancementPopupHostCommandV1(
               input.request,
             ),
             costObservabilitySink: (result) => emitPromptEnhancementCostObservabilityV1(result, 'popup_action', logger),
+            emphasisPhrases: input.emphasisPhrases,
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the
             // feedback-consent flush. Store-backed sink (this child process owns the store).
             actionSignalSink: (kind, occurredAt) => dependencies.recordActionSignal(store!, input.request.projectRoot, kind, occurredAt),

@@ -50,6 +50,7 @@ import {
   type PromptEnhancementSectionRemovalOutcomeV1,
 } from './popup-section-removal.js';
 import type { PromptActionSignalKind } from '../store/feedback-signals.js';
+import type { PromptEnhancementEmphasisPhraseV1 } from '../store/pending-prompt-enhancements.js';
 
 export type PromptEnhancementCliPopupCommandV1 =
   | { type: 'use_current' }
@@ -245,6 +246,11 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
    */
   actionSignalSink?: (kind: PromptActionSignalKind, occurredAt: number) => void;
   onFirstRender?: () => void;
+  /**
+   * The phrases this popup would render in bold, carried from the pending row. Accepted and typed
+   * today, drawn by nothing: the frame is byte-identical whether it is absent, empty or filled.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }): Promise<PromptEnhancementCliPopupResultV1> {
   let currentResult = input.result;
   let rendered = buildPromptEnhancementPopupRenderModelV1({

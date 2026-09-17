@@ -29,6 +29,7 @@ import type {
   PromptEnhancementMpsContinuationHostInputV1,
   PromptEnhancementMpsContinuationHostOutputV1,
 } from './commands/prompt-enhancement-popup-host.js';
+import type { PromptEnhancementEmphasisPhraseV1 } from '../store/pending-prompt-enhancements.js';
 import {
   isPromptEnhancementCliMpsContinuationOutcomeV1,
   type PromptEnhancementCliMpsContinuationOutcomeV1,
@@ -698,6 +699,8 @@ export async function runPromptEnhancementCliPopupHostLaunchV1(input: {
   cliEntryPath: string;
   dbPath: string;
   nodePath?: string;
+  /** Carried through to the child unchanged; absent on a caller that has none. */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }, overrides: Partial<PromptEnhancementCliPopupHostLaunchDependenciesV1> = {}): Promise<PromptEnhancementCliPopupHostLaunchResultV1> {
   if (input.capability.state === 'unavailable') {
     return { state: 'host_unavailable', reasonCode: input.capability.reasonCode };
@@ -767,6 +770,7 @@ export async function runPromptEnhancementCliPopupHostLaunchV1(input: {
       protocolVersion: PROMPT_ENHANCEMENT_POPUP_HOST_PROTOCOL_VERSION_V1,
       request: input.request,
       result: input.result,
+      ...(input.emphasisPhrases ? { emphasisPhrases: input.emphasisPhrases } : {}),
     };
     dependencies.writeInputFile(inputFile, childInput);
     const geometry = await dependencies.detectPopupGeometry();
