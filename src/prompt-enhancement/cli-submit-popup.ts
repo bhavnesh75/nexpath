@@ -44,6 +44,11 @@ import {
 } from './multiline-editor.js';
 import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
 import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
+import {
+  removePromptEnhancementSectionV1,
+  stepPromptEnhancementSectionRemovalChordV1,
+  type PromptEnhancementSectionRemovalOutcomeV1,
+} from './popup-section-removal.js';
 import type { PromptActionSignalKind } from '../store/feedback-signals.js';
 
 export type PromptEnhancementCliPopupCommandV1 =
@@ -57,7 +62,14 @@ export type PromptEnhancementCliPopupCommandV1 =
   | { type: 'feedback_suggested'; category: 'not_relevant_enough' | 'too_much_or_too_long' }
   | { type: 'feedback_other'; text: string }
   | { type: 'go_back' }
-  | { type: 'close' };
+  | { type: 'close' }
+  /**
+   * One section was removed from the body — or an attempt was refused, which the
+   * outcome names. The body buffer has already changed; this reports what happened.
+   * `sectionIndex` is the removed section's place in the view's sections, absent for
+   * the applied-details block and for every refusal.
+   */
+  | { type: 'remove_section'; outcome: PromptEnhancementSectionRemovalOutcomeV1; sectionIndex?: number };
 
 /**
  * NF Plan B (B-2): content-free action telemetry — maps a popup command to its per-action signal kind.
@@ -306,6 +318,13 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
       if (command.type === 'edit_body') {
         if (model.body.editable && command.text.trim().length > 0) editedBodyText = command.text;
         else reportActionFailure('edit_body', 'rejected_empty_or_uneditable');
+        continue;
+      }
+      if (command.type === 'remove_section') {
+        // The body buffer already changed where the key was handled, and the shell
+        // draws from that buffer; this loop's own copy catches up at the next commit.
+        // Nothing is reported: a removal is not an engine action, and a refusal is not
+        // a failure of one.
         continue;
       }
       if (command.type === 'use_current') {
@@ -967,6 +986,11 @@ export interface PromptEnhancementCliInteractionStateV1 {
   focusIndex: number;
   helpExpanded: boolean;
   editor: PromptEnhancementMultilineEditorStateV1;
+  /**
+   * True between the removal chord's prefix key and the key that follows it. Absent
+   * means disarmed, so a state built without it behaves exactly as before.
+   */
+  sectionRemovalArmed?: boolean;
 }
 
 function editableFieldForRow(row: PromptEnhancementCliActionRowV1 | undefined): PromptEnhancementEditorFieldV1 | null {
@@ -1031,9 +1055,34 @@ export function reducePromptEnhancementCliInteractionV1(
   state: PromptEnhancementCliInteractionStateV1,
   rows: readonly PromptEnhancementCliActionRowV1[],
   key: PromptEnhancementCliKeyV1,
+  sections?: readonly PromptEnhancementSectionMapInputV1[],
 ): { state: PromptEnhancementCliInteractionStateV1; commands: readonly PromptEnhancementCliPopupCommandV1[] } {
   const focusedRow = rows[state.focusIndex];
   const field = editableFieldForRow(focusedRow);
+
+  // The removal chord is decided before any other branch looks at the key, so every
+  // key kind passes it: the prefix arms, a digit after it is used, and anything else
+  // disarms and goes on to mean exactly what it means without the chord. The chord
+  // acts on the body whatever row has focus, and moves focus nowhere.
+  const chord = stepPromptEnhancementSectionRemovalChordV1(state.sectionRemovalArmed === true, key);
+  if (chord.consumed) {
+    // The prefix arms and stops here. A digit after it removes the section it names,
+    // and reports what happened — including a refusal, which leaves the body untouched.
+    if (chord.sectionNumber === undefined) {
+      return { state: { ...state, sectionRemovalArmed: true }, commands: [] };
+    }
+    const removal = removePromptEnhancementSectionV1(state.editor, sections ?? [], chord.sectionNumber);
+    return {
+      state: { ...state, sectionRemovalArmed: false, editor: removal.editor },
+      commands: [{
+        type: 'remove_section',
+        outcome: removal.outcome,
+        ...(removal.sectionIndex === undefined ? {} : { sectionIndex: removal.sectionIndex }),
+      }],
+    };
+  }
+  // Any other key disarms and falls through to mean exactly what it means today.
+  if (state.sectionRemovalArmed === true) state = { ...state, sectionRemovalArmed: false };
 
   if (key.kind === 'up' || key.kind === 'down') {
     const nextIndex = key.kind === 'up'
@@ -1555,7 +1604,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
       for (;;) {
         const raw = await readKey();
         if (raw === CTRL_C) return { type: 'close' };
-        const stepped = reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw));
+        const stepped = reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw), view.sections);
         state = stepped.state;
         if (stepped.commands.length > 0) {
           const only = stepped.commands.length === 1 ? stepped.commands[0] : undefined;
