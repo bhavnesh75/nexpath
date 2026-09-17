@@ -37,7 +37,7 @@ function editorWith(
   overrides: { detailsText?: string; locked?: boolean; focusedField?: 'enhanced_body' | 'additional_details' | null } = {},
 ): PromptEnhancementMultilineEditorStateV1 {
   return buildPromptEnhancementMultilineEditorStateV1({
-    identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1 },
+    identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1, validationDecisionId: 'v' },
     enhancedBodyText: bodyText,
     additionalDetailsText: overrides.detailsText ?? '',
     fieldWidth: FIELD_WIDTH,
@@ -207,7 +207,7 @@ describe('what the cut leaves alone, and where it puts the cursor', () => {
       bodyText: Array.from({ length: 6 }, (_, line) => `- line ${line + 1} of section ${index + 1}`).join('\n'),
     }));
     const base = buildPromptEnhancementMultilineEditorStateV1({
-      identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1 },
+      identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1, validationDecisionId: 'v' },
       enhancedBodyText: compose(long),
       fieldWidth: FIELD_WIDTH,
       viewportRows: 6,
