@@ -231,7 +231,15 @@ const RISK_PATTERNS: readonly [PromptEnhancementSensitiveActionRiskKind, RegExp]
   ['agent_mode_or_permission_boundary', /\b(?:execute\s+mode|read[-\s]?only|make\s+changes|without\s+asking|do\s+not\s+ask|bina\s+puche|execute\s+karo)\b|(?:बिना\s*पूछे|पूछे\s*बिना|एग्जीक्यूट\s*मोड|रीड\s*ओनली|પૂછ્યા\s*વગર|એક્ઝિક્યુટ\s*મોડ|રીડ\s*ઓનલી)/i],
 ];
 
-const EXECUTION_VERB = /\b(?:run|execute|deploy|delete|remove|migrate|install|force[-\s]?push|publish|post|notify|write|modify|apply|rotate|increase|truncate|drop|karo|kar\s+do|chalao|hatao|mitao|lagao)\b|(?:करो|कर\s*दो|चलाओ|हटाओ|मिटाओ|लिखो|बदलो|કરો|કરી\s*દો|ચલાવો|કાઢી\s*નાખો|મિટાવો|લખો|બદલો)/i;
+/**
+ * Exported for the popup's emphasis consumer, which marks the instruction a body gives the agent
+ * and needs the same verb list this module already judges by — two lists would drift, and the one
+ * that drifted would be the one nobody was testing.
+ *
+ * ⚠️ **Visibility only.** The pattern is unchanged, and the consumer's own test pins its source
+ * character for character so an edit here cannot pass silently.
+ */
+export const EXECUTION_VERB = /\b(?:run|execute|deploy|delete|remove|migrate|install|force[-\s]?push|publish|post|notify|write|modify|apply|rotate|increase|truncate|drop|karo|kar\s+do|chalao|hatao|mitao|lagao)\b|(?:करो|कर\s*दो|चलाओ|हटाओ|मिटाओ|लिखो|बदलो|કરો|કરી\s*દો|ચલાવો|કાઢી\s*નાખો|મિટાવો|લખો|બદલો)/i;
 const PLANNING_VERB = /\b(?:plan|review|compare|check|prepare|assess|evaluate|draft|discuss|list|yojana|suchi|jaanch|janch)\b|(?:योजना|समीक्षा|तुलना|जांच|जाँच|तैयार|सूची|યોજના|સમીક્ષા|તુલના|તપાસ|તૈયાર|યાદી)/i;
 /**
  * The frames a developer uses to ASK ABOUT an action rather than order it.
@@ -867,7 +875,12 @@ function authorityModeFor(text: string): PromptEnhancementAuthorityMode {
  * Deliberately tiny: only wording with no benign reading. This is the floor that sentence scoping
  * below can never soften.
  */
-const ALWAYS_ESCALATE_PATTERN = /\b(?:force[-\s]?push|rm\s+-rf|drop\s+table|truncate|reset\s+--hard|rewrite\s+history)\b/i;
+/**
+ * Exported with {@link EXECUTION_VERB}, and for the same reason: the emphasis consumer treats these
+ * shapes as instructions on sight, exactly as this module does. **Visibility only** — the pattern is
+ * unchanged and is pinned character for character by the consumer's test.
+ */
+export const ALWAYS_ESCALATE_PATTERN = /\b(?:force[-\s]?push|rm\s+-rf|drop\s+table|truncate|reset\s+--hard|rewrite\s+history)\b/i;
 
 /**
  * Split generated wording into the units an execution verb and a risk term must SHARE to count as an
