@@ -6,13 +6,41 @@
  * "is the corpus the same set the gate uses" and "does the filter still drop what it was measured
  * to drop".
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { filterFloorExtractForConsumersV1 } from './preservation-floors.js';
+
 import {
   buildPromptEnhancementEmphasisCorpusV1,
   collectPromptEnhancementEmphasisUserTermsV1,
   extractPromptEnhancementExpectationValuesV1,
 } from './emphasis-sources.js';
+
+/**
+ * The matcher table as it stood when this consumer was written. Bold reads these extracts and must
+ * never be the reason one of them changed — a floor answers a safety question, and a display
+ * feature has no business moving it.
+ */
+const FLOOR_MATCHERS_DIGEST = '282fcb3d4e3d81918c2c76665d2b94df1e69680b55efc2ea4261476887e76f07';
+
+/**
+ * The table's text, from its declaration to the close that follows its LAST entry.
+ *
+ * ⚠️ Not a lazy `[\s\S]*?\n\];` — an entry's own array literal ends with `];` too, and that regex
+ * stopped at the first one and hashed 17 of the 18 floors. A pin that silently covers part of what
+ * it claims to cover is worse than no pin.
+ */
+function floorMatcherTable(): string {
+  const source = readFileSync(fileURLToPath(new URL('./preservation-floors.ts', import.meta.url)), 'utf8');
+  const start = source.indexOf('const FLOOR_MATCHERS');
+  const lastEntry = source.lastIndexOf("floorId: '");
+  const end = source.indexOf('\n];', lastEntry);
+  expect(start, 'the matcher table').toBeGreaterThanOrEqual(0);
+  expect(end, 'the table’s close').toBeGreaterThan(start);
+  return source.slice(start, end + 3);
+}
 
 describe('the filter both consumers share', () => {
   it('drops a command head followed by one plain word, and keeps a real target', () => {
@@ -32,7 +60,17 @@ describe('the filter both consumers share', () => {
     expect(items.every((item) => !item.toLowerCase().startsWith('do not'))).toBe(true);
   });
 
-  it('is stable on a fixed text — the pin that says the shared matchers did not move (P18)', () => {
+  it('leaves the shared matchers byte for byte as they were (P18)', () => {
+    // The behavioural pin below can only catch a change that shows on ONE fixed text. This reads
+    // the matcher table itself, so an edit to any of the eighteen fails here whether or not that
+    // text happens to notice — which is what "byte-untouched" has to mean to be worth saying.
+    const table = floorMatcherTable();
+    // Counted first: a failure then says the table was cut short rather than only that a hash moved.
+    expect((table.match(/floorId: '/g) ?? []).length).toBe(18);
+    expect(createHash('sha256').update(table).digest('hex')).toBe(FLOOR_MATCHERS_DIGEST);
+  });
+
+  it('is stable on a fixed text — the behavioural half of the same pin', () => {
     const items = filterFloorExtractForConsumersV1(
       'Fix the failing test in src/api/upload.ts, see issue #412, then run npm test.',
     );

@@ -129,9 +129,31 @@ describe('class 1 — the instruction the body gives', () => {
     expect(found).toEqual([]);
   });
 
-  it('is off entirely when the body was not cleared to propose the action', () => {
-    const found = one("I'll deploy the payment client.", grounded, { clearanceVerdict: 'not_proposed' });
+  it('is off in a section the body was not cleared to propose the action in', () => {
+    const found = one("I'll deploy the payment client.", { ...grounded, clearanceVerdict: 'not_proposed' });
     expect(found.some((candidate) => candidate.emphasisClass === 1)).toBe(false);
+  });
+
+  it('is off THERE only — a section with no verdict still marks its instruction', () => {
+    // The rule is scoped to the risky kinds, so a verdict on one section must not silence another.
+    const found = classify({
+      originalPromptText: 'deploy the payment client',
+      sections: [
+        {
+          sectionKind: 'risk_safety_or_confirmation',
+          sectionText: "I'll deploy the payment client.",
+          groundedFactValues: ['the payment client'],
+          clearanceVerdict: 'not_proposed',
+        },
+        {
+          sectionKind: 'verification_or_test_plan',
+          sectionText: "I'll review the payment client.",
+          groundedFactValues: ['the payment client'],
+        },
+      ],
+    });
+    expect(pairs(found.filter((candidate) => candidate.emphasisClass === 1)))
+      .toEqual([[1, 'review the payment client']]);
   });
 
   it('is off when the body is not English, and the other classes stay on', () => {

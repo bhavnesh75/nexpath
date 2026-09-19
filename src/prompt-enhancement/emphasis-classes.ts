@@ -44,6 +44,15 @@ export interface PromptEnhancementEmphasisSectionInputV1 {
   groundedFactValues?: readonly string[];
   sourceFactIds?: readonly string[];
   sourceIds?: readonly string[];
+  /**
+   * The clearance verdict, for a section whose lines carry one of the risky kinds. `not_proposed`
+   * means the body was not cleared to propose that action, so class 1 is off **here**.
+   *
+   * ⚠️ Per section on purpose. The rule is scoped to the risky kinds, and which lines carry one is
+   * decided where the risk is classified — not here. A caller that knows a section is not risky
+   * leaves this unset, and an absent verdict never suppresses anything.
+   */
+  clearanceVerdict?: string;
 }
 
 export interface PromptEnhancementEmphasisInputV1 {
@@ -57,8 +66,6 @@ export interface PromptEnhancementEmphasisInputV1 {
   detectedLanguageSelfReport?: string;
   /** The resolved name inside the confirmation sentence, when one was inserted. */
   sensitiveActionName?: string;
-  /** `not_proposed` means the body was not cleared to propose the action — so class 1 is off. */
-  clearanceVerdict?: string;
 }
 
 /** The two sections whose text is never marked, whatever it contains. */
@@ -182,7 +189,6 @@ function indexOfWord(line: string, word: string): number {
 
 /** Is this body English enough for the class-1 grammar to apply? */
 function classOneApplies(input: PromptEnhancementEmphasisInputV1): boolean {
-  if (input.clearanceVerdict === 'not_proposed') return false;
   const language = input.detectedLanguageSelfReport?.trim().toLowerCase();
   if (language === undefined || language.length === 0) return true;
   return language === 'en' || language.startsWith('en-');
@@ -300,6 +306,11 @@ export function classifyPromptEnhancementEmphasisCandidatesV1(
       ...(section.sourceIds ? { sourceIds: section.sourceIds } : {}),
     });
 
+    // A section the body was not cleared to propose an action in marks no instruction. The rule is
+    // scoped to the risky kinds, and which lines carry one is decided where the risk is classified
+    // — so an unset verdict never suppresses anything here.
+    const classOneHere = classOneOn && section.clearanceVerdict !== 'not_proposed';
+
     for (const term of userTerms) keep({ text: term, emphasisClass: 2 });
     for (const safety of safetyLinesOf(section.sectionText, input.sensitiveActionName)) keep(safety);
     // The confirmation's second unit — a boundary, and the one place a fixed span is claimed
@@ -311,7 +322,7 @@ export function classifyPromptEnhancementEmphasisCandidatesV1(
     // The line scan never sees what the pipeline wrote itself — those spans have their own marks.
     for (const line of maskInsertedText(section.sectionText, input.sensitiveActionName).split('\n')) {
       if (line.trim().length === 0) continue;
-      if (classOneOn) for (const action of classOneOfLine(line, userTerms)) keep(action);
+      if (classOneHere) for (const action of classOneOfLine(line, userTerms)) keep(action);
       for (const bound of boundaryAndConditionOfLine(line)) keep(bound);
     }
   }
