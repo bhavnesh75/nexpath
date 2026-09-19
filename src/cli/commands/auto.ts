@@ -40,7 +40,8 @@ import { stripBom, headBytesHex } from '../../utils/strip-bom.js';
 import type { LogLevel } from '../../logger.js';
 import { writeHookStats } from '../../store/hook-stats.js';
 import { upsertPendingAdvisory } from '../../store/pending-advisories.js';
-import { upsertPendingPromptEnhancement, type PendingPromptEnhancement } from '../../store/pending-prompt-enhancements.js';
+import { upsertPendingPromptEnhancement, type PendingPromptEnhancement, type PromptEnhancementEmphasisPhraseV1 } from '../../store/pending-prompt-enhancements.js';
+import { buildPromptEnhancementEmphasisPhrasesV1 } from '../../prompt-enhancement/emphasis-locate.js';
 import {
   preparePromptEnhancementStopBridgeDelivery,
   type PromptEnhancementDeliveryRequestV1,
@@ -1002,6 +1003,36 @@ export function createPromptEnhancementCliHostConsumerV1(
  * @param openai   Optional OpenAI client (injectable for testing)
  * @returns AutoOutcome — what the pipeline decided and did
  */
+/**
+ * The phrases this prepared body may show in bold.
+ *
+ * One derivation for both store sites: the row is written in two branches of runAuto and only
+ * one runs per prepare, but they must never derive the list differently — the popup reads
+ * whichever row was written, and a difference between them would be invisible until it showed
+ * on screen.
+ *
+ * Read-only. It runs after the body is final, so it cannot change a byte of what the agent
+ * receives; it only says which of those bytes the popup may draw louder.
+ */
+function emphasisPhrasesForPreparedBodyV1(
+  result: PromptEnhancementPrepareResultV1,
+  request: PromptEnhancementPrepareRequestV1,
+): readonly PromptEnhancementEmphasisPhraseV1[] {
+  return buildPromptEnhancementEmphasisPhrasesV1({
+    originalPromptText: result.currentBody.originalPromptText,
+    sections: result.currentBody.sections.map((section) => ({
+      sectionKind: section.sectionKind,
+      bodyText: section.bodyText,
+      ...(section.groundedFactValues ? { groundedFactValues: section.groundedFactValues } : {}),
+      ...(section.sourceFactIds ? { sourceFactIds: section.sourceFactIds } : {}),
+      ...(section.sourceIds ? { sourceIds: section.sourceIds } : {}),
+    })),
+    ...(request.reviewMomentContext.detectedLanguage
+      ? { detectedLanguage: request.reviewMomentContext.detectedLanguage }
+      : {}),
+  });
+}
+
 export async function runAuto(
   input:   AutoInput,
   store:   Store,
@@ -1459,6 +1490,8 @@ export async function runAuto(
         // prepares → NULL columns.
         plannerItems: capturedPlannerItems,
         plannerPromptDirectives: capturedPlannerPromptDirectives,
+        // Display only: the popup may draw these louder, and the agent never sees the difference.
+        emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, request),
       });
       const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
       logger.debug('pending_prompt_enhancement_stored', {
@@ -1717,6 +1750,8 @@ export async function runAuto(
       // prepares → NULL columns.
       plannerItems: capturedPlannerItems,
       plannerPromptDirectives: capturedPlannerPromptDirectives,
+      // Display only: the popup may draw these louder, and the agent never sees the difference.
+      emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, peIntegration.request),
     });
     const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
     logger.debug('pending_prompt_enhancement_stored', {
