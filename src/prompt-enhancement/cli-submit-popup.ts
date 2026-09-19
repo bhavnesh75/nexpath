@@ -45,6 +45,10 @@ import {
 import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
 import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
 import {
+  buildPromptEnhancementEmphasisSpansV1,
+  type PromptEnhancementEmphasisSpanV1,
+} from './popup-emphasis-overlay.js';
+import {
   promptEnhancementSectionRemovalNoticeV1,
   removePromptEnhancementSectionV1,
   stepPromptEnhancementSectionRemovalChordV1,
@@ -108,7 +112,22 @@ export interface PromptEnhancementCliPopupViewV1 {
    * so the shell can number them on screen. Optional and display-only: a consumer that
    * ignores it sees exactly the view it saw before.
    */
-  sections?: readonly PromptEnhancementSectionMapInputV1[];
+  sections?: readonly PromptEnhancementCliPopupSectionV1[];
+  /**
+   * The phrases this frame draws in bold, as the pending row carries them. Optional and
+   * display-only in the same way: with none supplied the frame is byte-identical to the one
+   * drawn before the field existed, and the text the popup sends is never touched either way.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
+}
+
+/**
+ * A composed section as the view carries it: what the section map needs to place the numbers,
+ * plus the kind, which the emphasis overlay needs to leave the two never-marked sections alone.
+ * The kind is optional so a caller that only wants numbering is unchanged.
+ */
+export interface PromptEnhancementCliPopupSectionV1 extends PromptEnhancementSectionMapInputV1 {
+  sectionKind?: string;
 }
 
 export interface PromptEnhancementCliPopupInteractionV1 {
@@ -302,7 +321,12 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
         publicNotice,
         publicNoticeTransient,
         refinement: inRefinement,
-        sections: currentResult.currentBody.sections.map((section) => ({ title: section.title, bodyText: section.bodyText })),
+        sections: currentResult.currentBody.sections.map((section) => ({
+          title: section.title,
+          bodyText: section.bodyText,
+          sectionKind: section.sectionKind,
+        })),
+        ...(input.emphasisPhrases ? { emphasisPhrases: input.emphasisPhrases } : {}),
       });
       publicNotice = undefined;
       publicNoticeTransient = false;
@@ -773,6 +797,13 @@ export interface PromptEnhancementCliFrameStateV1 {
    * Absent for the probe frame, so the chrome measurement is unchanged.
    */
   bodyLineSuffixes?: readonly (number | undefined)[];
+  /**
+   * One entry per body row as displayed: the column ranges of that row to draw in bold, or an
+   * empty list for a row with nothing marked. Display-only in the strictest sense — the bytes
+   * added are SGR and nothing else, so the row's text, its width and the caret are unchanged.
+   * Absent for the probe frame, so the chrome measurement is unchanged.
+   */
+  bodyLineSpans?: readonly (readonly PromptEnhancementEmphasisSpanV1[])[];
   /** Draw the suffixes without any styling, whatever `colorize` says (the `NO_COLOR` rule). */
   plainMarks?: boolean;
   /**
@@ -884,11 +915,32 @@ export function renderPromptEnhancementPopupFrameV1(
     // Shortcut/action hints (Ctrl+J · Enter sends · Enter applies) — LIGHT YELLOW (owner request
     // 2026-08-07): a distinct, clearly-visible colour on every OS.
     const hint = (text: string) => (c ? `    ${c.lightYellow}${text}${c.reset}` : `    ${text}`);
+    // The emphasised stretches of one body row, wrapped in the popup's own bold. Applied here,
+    // after publicText and inside the row's own text, so the attribute opened on a row is always
+    // closed on that same row — every line is erased to its end after it is written, and an open
+    // attribute would bleed into the next one. Nothing else about the row changes: no character is
+    // added, removed or moved, which is why the caret and the row's width are unaffected.
+    // Columns are clamped to the line so a row can never be drawn short.
+    const emphasise = (line: string, spans: readonly PromptEnhancementEmphasisSpanV1[]): string => {
+      if (!c || frameState.plainMarks === true || spans.length === 0) return line;
+      let out = '';
+      let at = 0;
+      for (const span of spans) {
+        const start = Math.max(at, Math.min(span.startColumn, line.length));
+        const end = Math.max(start, Math.min(span.endColumn, line.length));
+        if (end === start) continue;
+        out += line.slice(at, start) + c.bold + line.slice(start, end) + c.reset;
+        at = end;
+      }
+      return out + line.slice(at);
+    };
     // A field content line: real prompt text renders plain; a scroll indicator ("↑/↓ N more
     // lines …") renders in plain gray — the "normal" dim (owner request 2026-08-07: the light
     // yellow hints already provide the distinction, so the marker needs no extra darkening).
-    const contentLine = (line: string) =>
-      c && isPromptEnhancementScrollMarkerLineV1(line) ? `    ${c.gray}${line}${c.reset}` : `    ${line}`;
+    // A scroll indicator carries no emphasis either: it is the window's own text, not the
+    // buffer's, and the plain line is what decides that — before any SGR is added to it.
+    const contentLine = (line: string, spans: readonly PromptEnhancementEmphasisSpanV1[] = []) =>
+      c && isPromptEnhancementScrollMarkerLineV1(line) ? `    ${c.gray}${line}${c.reset}` : `    ${emphasise(line, spans)}`;
     const editable = row.kind === 'editor_heading' || row.kind === 'additional_details';
     if (row.kind === 'editor_heading') {
       recordCaret('enhanced_body');
@@ -902,7 +954,7 @@ export function renderPromptEnhancementPopupFrameV1(
         return c && !frameState.plainMarks ? `    ${c.dim}${mark}${c.reset}` : `    ${mark}`;
       };
       publicText(view.editedBodyText).split('\n').forEach((bodyLine, index) => {
-        lines.push(contentLine(bodyLine) + suffixFor(index));
+        lines.push(contentLine(bodyLine, frameState.bodyLineSpans?.[index] ?? []) + suffixFor(index));
       });
       // Body block: the "Enter sends this prompt" hint shows ONLY when this row (Use enhanced prompt) is
       // focused — otherwise it is misleading, because Enter acts on whichever row IS focused, not on the
@@ -1562,6 +1614,22 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
       markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
       markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
     });
+    // Each emphasised phrase found again on the LIVE buffer and mapped to the rows on screen,
+    // from the same window the display and the numbers used. Re-found every frame on purpose: the
+    // phrases are stored without offsets, so a phrase the user has just edited away is not found
+    // and not drawn, rather than drawn somewhere it no longer is.
+    const bodyLineSpans = view.sections === undefined || view.emphasisPhrases === undefined
+      ? undefined
+      : buildPromptEnhancementEmphasisSpansV1({
+        text: bodyBuffer.text,
+        sections: view.sections,
+        phrases: view.emphasisPhrases,
+        fieldWidth: editorWidth,
+        windowStart: bodyWindow.start,
+        windowRows: bodyDisplayLines.length,
+        markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
+        markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
+      });
     const plainMarks = Boolean(process.env['NO_COLOR']);
     // Caret row is window-relative, derived from the SAME window the display used (its `start`),
     // not the raw buffer scroll. If it still falls outside the shown lines, leave the caret unset
@@ -1580,7 +1648,7 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     const caretOut = { row: -1, col: -1 };
     const frame = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: bodyDisplay, additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, plainMarks, sectionRemovalArmed: current.sectionRemovalArmed },
+      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, bodyLineSpans, plainMarks, sectionRemovalArmed: current.sectionRemovalArmed },
     );
     paint(frame);
 

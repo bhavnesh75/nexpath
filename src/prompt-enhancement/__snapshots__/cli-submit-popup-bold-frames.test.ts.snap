@@ -1,0 +1,303 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the recorded frames, emphasised > confirmation-carrying body, colour off > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 58,
+    "row": 33,
+  },
+  "frame": "│ ◆ NEXPATH CLI · Prompt enhancement
+│ ──────────────────────────────────
+│
+│ Bug hunt.
+│ Your original request remains visible.
+│ This body was prepared by Nexpath.
+│ Nexpath does not send automatically.
+│ Grounded guidance is attached.
+│ Shown because this touches a sensitive action — ask for go-ahead before doing it.
+│
+│ ● Use enhanced prompt
+│     My original request (verbatim):    #1
+│     Fix the failing payment test, the test failure blocks ci, and explain th
+│     e verification. also drop a shadow under the submit button.
+│     
+│     Test command output:    #2
+│     - Cover Test command output for this request with concrete, source-backe
+│     d specifics — state what is required, how to implement it, and how to ve
+│     rify it.
+│     
+│     Best practices and standards:    #3
+│     - The current source signal reports stage as task_breakdown → implementa
+│     tion.
+│     - Treat what your recent practice shows as a working constraint, and tur
+│     n it into direct implementation guidance.
+│     
+│     Risk, safety and confirmation:    #4
+│     - Name risky or irreversible actions, ask for required confirmation, and
+│      include rollback or recovery checks.
+│     - Still, before you do this destructive file or codebase change you must
+│      ask me for go-ahead confirmation, and before you ask, confirm the actua
+│     l state at ground level by reading the real source. Do not assume, and d
+│     o not rely on what you did earlier in this session.
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
+│
+│ ○ Additional details
+│     
+│ ○ Use original prompt
+│
+│ ↑↓ move · Esc cancel",
+}
+`;
+
+exports[`the recorded frames, emphasised > confirmation-carrying body, colour on > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 58,
+    "row": 33,
+  },
+  "frame": "\\e[36m│\\e[0m \\e[36m\\e[1m◆ NEXPATH CLI · Prompt enhancement\\e[0m
+\\e[36m│\\e[0m \\e[2m──────────────────────────────────\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[1mBug hunt.\\e[0m
+\\e[36m│\\e[0m Your original request remains visible.
+\\e[36m│\\e[0m This body was prepared by Nexpath.
+\\e[36m│\\e[0m Nexpath does not send automatically.
+\\e[36m│\\e[0m Grounded guidance is attached.
+\\e[36m│\\e[0m \\e[90mShown because this touches a sensitive action — ask for go-ahead before doing it.\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[32m●\\e[0m \\e[1mUse enhanced prompt\\e[0m
+\\e[36m│\\e[0m     My original request (verbatim):    \\e[2m#1\\e[0m
+\\e[36m│\\e[0m     Fix the failing payment test, the test failure blocks ci, and explain th
+\\e[36m│\\e[0m     e verification. also drop a shadow under the submit button.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Test command output:    \\e[2m#2\\e[0m
+\\e[36m│\\e[0m     - Cover Test command output for this request with concrete, source-backe
+\\e[36m│\\e[0m     d specifics — state what is required, how to implement it, and how to ve
+\\e[36m│\\e[0m     rify it.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Best practices and standards:    \\e[2m#3\\e[0m
+\\e[36m│\\e[0m     - The current source signal reports stage as task_breakdown → implementa
+\\e[36m│\\e[0m     tion.
+\\e[36m│\\e[0m     - Treat what your recent practice shows as a working constraint, and tur
+\\e[36m│\\e[0m     n it into direct implementation guidance.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Risk, safety and confirmation:    \\e[2m#4\\e[0m
+\\e[36m│\\e[0m     - Name risky or irreversible actions, ask for required confirmation, and
+\\e[36m│\\e[0m      include rollback or recovery checks.
+\\e[36m│\\e[0m     - Still, before you do this \\e[1mdestructive file or codebase change\\e[0m you must
+\\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
+\\e[36m│\\e[0m     l state at ground level by reading the real source. \\e[1mDo not assume\\e[0m, and d
+\\e[36m│\\e[0m     o not rely on what you did earlier in this session.
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mUse original prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[2m↑↓ move · Esc cancel\\e[0m",
+}
+`;
+
+exports[`the recorded frames, emphasised > largest body, colour on > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 58,
+    "row": 38,
+  },
+  "frame": "\\e[36m│\\e[0m \\e[36m\\e[1m◆ NEXPATH CLI · Prompt enhancement\\e[0m
+\\e[36m│\\e[0m \\e[2m──────────────────────────────────\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[1mBug hunt.\\e[0m
+\\e[36m│\\e[0m Your original request remains visible.
+\\e[36m│\\e[0m This body was prepared by Nexpath.
+\\e[36m│\\e[0m Nexpath does not send automatically.
+\\e[36m│\\e[0m Grounded guidance is attached.
+\\e[36m│\\e[0m \\e[90mShown because this touches a sensitive action — ask for go-ahead before doing it.\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[32m●\\e[0m \\e[1mUse enhanced prompt\\e[0m
+\\e[36m│\\e[0m     My original request (verbatim):    \\e[2m#1\\e[0m
+\\e[36m│\\e[0m     Fix the failing payment test, the test failure blocks ci, and explain th
+\\e[36m│\\e[0m     e verification. also drop a shadow under the submit button.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Test command output:    \\e[2m#2\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Fixture and mock context:    \\e[2m#3\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Reproduction and evidence:    \\e[2m#4\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Best practices and standards:    \\e[2m#5\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Risk, safety and confirmation:    \\e[2m#6\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     - Still, before you do this \\e[1mdestructive file or codebase change\\e[0m you must
+\\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
+\\e[36m│\\e[0m     l state at ground level by reading the real source. \\e[1mDo not assume\\e[0m, and d
+\\e[36m│\\e[0m     o not rely on what you did earlier in this session.
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mUse original prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[2m↑↓ move · Esc cancel\\e[0m",
+}
+`;
+
+exports[`the recorded frames, emphasised > largest body, windowed at 80 x 24 > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": -1,
+    "row": -1,
+  },
+  "frame": "\\e[36m│\\e[0m \\e[36m\\e[1m◆ NEXPATH CLI · Prompt enhancement\\e[0m
+\\e[36m│\\e[0m \\e[2m──────────────────────────────────\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[1mBug hunt.\\e[0m
+\\e[36m│\\e[0m Your original request remains visible.
+\\e[36m│\\e[0m This body was prepared by Nexpath.
+\\e[36m│\\e[0m Nexpath does not send automatically.
+\\e[36m│\\e[0m Grounded guidance is attached.
+\\e[36m│\\e[0m \\e[90mShown because this touches a sensitive action — ask for go-ahead before doing it.\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[32m●\\e[0m \\e[1mUse enhanced prompt\\e[0m
+\\e[36m│\\e[0m     My original request (verbatim):    \\e[2m#1\\e[0m
+\\e[36m│\\e[0m     Fix the failing payment test, the test failure blocks ci, and explain th
+\\e[36m│\\e[0m     e verification. also drop a shadow under the submit button.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     \\e[90m↓ 22 more lines below · the whole prompt is included\\e[0m
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mUse original prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[2m↑↓ move · Esc cancel\\e[0m",
+}
+`;
+
+exports[`the recorded frames, emphasised > refinement view, colour on > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 20,
+    "row": 28,
+  },
+  "frame": "\\e[36m│\\e[0m \\e[36m\\e[1m◆ NEXPATH CLI · Prompt enhancement\\e[0m
+\\e[36m│\\e[0m \\e[2m──────────────────────────────────\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[1mShipping something?\\e[0m
+\\e[36m│\\e[0m Your original request remains visible.
+\\e[36m│\\e[0m This body was prepared by Nexpath.
+\\e[36m│\\e[0m Nexpath does not send automatically.
+\\e[36m│\\e[0m Grounded guidance is attached.
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[32m●\\e[0m \\e[1mUse enhanced prompt\\e[0m
+\\e[36m│\\e[0m     My original request (verbatim):    \\e[2m#1\\e[0m
+\\e[36m│\\e[0m     Add a retry with exponential backoff to the payment gateway client.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Context and constraints:    \\e[2m#2\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Approach and steps:    \\e[2m#3\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     What done looks like:    \\e[2m#4\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Best practices and standards:    \\e[2m#5\\e[0m
+\\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
+\\e[36m│\\e[0m      with a test.
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2m← Go back\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[2m↑↓ move · Esc cancel\\e[0m",
+}
+`;
+
+exports[`the recorded frames, emphasised > small body, colour off > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 48,
+    "row": 22,
+  },
+  "frame": "│ ◆ NEXPATH CLI · Prompt enhancement
+│ ──────────────────────────────────
+│
+│ Shipping something?
+│ Your original request remains visible.
+│ This body was prepared by Nexpath.
+│ Nexpath does not send automatically.
+│ Grounded guidance is attached.
+│
+│ ● Use enhanced prompt
+│     My original request (verbatim):    #1
+│     Add a retry with exponential backoff to the payment gateway client.
+│     
+│     Context and constraints:    #2
+│     - Carry forward relevant constraints, limits, environment facts, and use
+│     r instructions that affect the work.
+│     
+│     Best practices and standards:    #3
+│     - The current source signal reports stage as task_breakdown → implementa
+│     tion.
+│     - Treat what your recent practice shows as a working constraint, and tur
+│     n it into direct implementation guidance.
+│     Ctrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt
+│
+│ ○ Additional details
+│     
+│ ○ Use original prompt
+│
+│ ↑↓ move · Esc cancel",
+}
+`;
+
+exports[`the recorded frames, emphasised > small body, colour on > is recorded 1`] = `
+{
+  "caretOut": {
+    "col": 48,
+    "row": 22,
+  },
+  "frame": "\\e[36m│\\e[0m \\e[36m\\e[1m◆ NEXPATH CLI · Prompt enhancement\\e[0m
+\\e[36m│\\e[0m \\e[2m──────────────────────────────────\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[1mShipping something?\\e[0m
+\\e[36m│\\e[0m Your original request remains visible.
+\\e[36m│\\e[0m This body was prepared by Nexpath.
+\\e[36m│\\e[0m Nexpath does not send automatically.
+\\e[36m│\\e[0m Grounded guidance is attached.
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[32m●\\e[0m \\e[1mUse enhanced prompt\\e[0m
+\\e[36m│\\e[0m     My original request (verbatim):    \\e[2m#1\\e[0m
+\\e[36m│\\e[0m     Add a retry with exponential backoff to the payment gateway client.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Context and constraints:    \\e[2m#2\\e[0m
+\\e[36m│\\e[0m     - Carry forward relevant constraints, limits, environment facts, and use
+\\e[36m│\\e[0m     r instructions that affect the work.
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m     Best practices and standards:    \\e[2m#3\\e[0m
+\\e[36m│\\e[0m     - The current source signal reports stage as task_breakdown → implementa
+\\e[36m│\\e[0m     tion.
+\\e[36m│\\e[0m     - Treat what your recent practice shows as a working constraint, and tur
+\\e[36m│\\e[0m     n it into direct implementation guidance.
+\\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
+\\e[36m│\\e[0m     
+\\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mUse original prompt\\e[0m
+\\e[36m│\\e[0m
+\\e[36m│\\e[0m \\e[2m↑↓ move · Esc cancel\\e[0m",
+}
+`;

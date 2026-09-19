@@ -1,12 +1,13 @@
 /**
- * Carrying the popup's bold phrases, and drawing nothing with them.
+ * Carrying the popup's bold phrases, and doing nothing else with them.
  *
  * The list travels from the pending row to the popup by two roads — in process, and across
- * the spawn into a window host — and this phase adds both without adding a single visible
- * pixel. So there are two things to prove. The popup behaves identically whether the list is
- * absent, empty, or full: same frames, same commands, same result. And the list survives the
- * spawn, in a payload that is still valid when it is written without one, because a parent
- * that predates the field must keep working against a child that has it.
+ * the spawn into a window host — and there are two things to prove about the journey. The popup
+ * behaves identically whether the list is absent, empty, or full: same model, same body, same
+ * notices, same commands, same result. Since the drawing landed the list does reach the view, so
+ * that is stated as the one difference and everything else is compared with it set aside. And the
+ * list survives the spawn, in a payload that is still valid when it is written without one,
+ * because a parent that predates the field must keep working against a child that has it.
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -140,13 +141,13 @@ function fakeChild() {
   return value;
 }
 
-describe('the popup with phrases it does not draw', () => {
+describe('the popup with phrases it draws and nothing more', () => {
   const COMMANDS: readonly PromptEnhancementCliPopupCommandV1[] = [
     { type: 'edit_body', text: 'A body the user typed over the draft.' },
     { type: 'use_current' },
   ];
 
-  it('behaves identically whether the list is absent, empty, or full', async () => {
+  it('offers the same view and reaches the same outcome, list or no list', async () => {
     const baseRequest = request(SINGLE_INTENT, 'emphasis-inert-request');
     const prepared = await preparePromptEnhancement(baseRequest);
 
@@ -165,11 +166,17 @@ describe('the popup with phrases it does not draw', () => {
     const empty = await run([]);
     const full = await run(PHRASES);
 
-    // Every frame the popup offered, and the outcome it reached, byte for byte the same.
-    expect(empty.views).toEqual(absent.views);
-    expect(full.views).toEqual(absent.views);
+    // The list itself is the one difference — it is what the popup draws with. Everything else
+    // the popup offered, and the outcome it reached, is byte for byte the same.
+    const offered = (views: readonly PromptEnhancementCliPopupViewV1[]) =>
+      views.map(({ emphasisPhrases: _carried, ...rest }) => rest);
+    expect(offered(empty.views)).toEqual(offered(absent.views));
+    expect(offered(full.views)).toEqual(offered(absent.views));
     expect(empty.result).toEqual(absent.result);
     expect(full.result).toEqual(absent.result);
+    // And what reached the view is what was handed in — not a copy built somewhere on the way.
+    expect(full.views.map((view) => view.emphasisPhrases)).toEqual(full.views.map(() => PHRASES));
+    expect(absent.views.every((view) => view.emphasisPhrases === undefined)).toBe(true);
     // The run is a real one, not an empty no-show that would pass this vacuously.
     expect(absent.result.state).toBe('selected_current');
     expect(absent.views.length).toBeGreaterThan(0);

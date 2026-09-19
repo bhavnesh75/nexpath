@@ -130,20 +130,28 @@ describe('the view the popup loop hands its interaction', () => {
     const view = ui.views[0]!;
     expect(view.sections).toBeDefined();
     expect(view.sections).toEqual(
-      prepared.currentBody.sections.map((section) => ({ title: section.title, bodyText: section.bodyText })),
+      prepared.currentBody.sections.map((section) => ({
+        title: section.title,
+        bodyText: section.bodyText,
+        sectionKind: section.sectionKind,
+      })),
     );
     // Premise: there is more than one section, so order is actually being tested.
     expect(view.sections!.length).toBeGreaterThan(1);
   });
 
-  it('carries only title and body text — nothing else from the section', async () => {
+  it('carries only what the display needs — nothing else from the section', async () => {
     const baseRequest = request(SMALL_PROMPT);
     const prepared = await preparePromptEnhancement(baseRequest);
     const ui = interaction([{ type: 'close' }]);
     await runPromptEnhancementCliSubmitPopupV1({ request: baseRequest, result: prepared, interaction: ui });
 
+    // Three fields and no more: the title and body text place the section numbers, and the kind
+    // says which sections may never carry a mark. A section carries a good deal else — ids,
+    // sources, evidence and validation state — and none of it has any business on a view whose
+    // only job is to be drawn.
     for (const entry of ui.views[0]!.sections!) {
-      expect(Object.keys(entry).sort()).toEqual(['bodyText', 'title']);
+      expect(Object.keys(entry).sort()).toEqual(['bodyText', 'sectionKind', 'title']);
     }
   });
 

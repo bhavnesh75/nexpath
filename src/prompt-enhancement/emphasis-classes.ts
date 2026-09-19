@@ -68,8 +68,18 @@ export interface PromptEnhancementEmphasisInputV1 {
   sensitiveActionName?: string;
 }
 
-/** The two sections whose text is never marked, whatever it contains. */
-const NEVER_MARKED_SECTION_KINDS: ReadonlySet<string> = new Set([
+/**
+ * The two sections whose text is never marked, whatever it contains.
+ *
+ * Exported for the popup's overlay, which has to answer the same question from the other end: not
+ * "may this section produce a phrase" but "may a phrase land here". A phrase taken from the
+ * developer's prompt is quoted back verbatim in the first of these, so without the same list the
+ * overlay would find it there first and mark their own words at them.
+ *
+ * ⚠️ **Visibility only.** The set is unchanged, and the overlay's test pins its membership so an
+ * edit here cannot pass silently.
+ */
+export const NEVER_MARKED_SECTION_KINDS: ReadonlySet<string> = new Set([
   // The developer's own words, quoted back. Marking them would emphasise their own prompt at them.
   'original_request_or_goal',
   // Its lines propose practices by design, so the loudest mark would land on the one section that
