@@ -22,7 +22,20 @@ import { buildPromptEnhancementEmphasisPhrasesV1 } from './emphasis-locate.js';
 /** A prompt whose body carries constraints, a verification plan and a risky action. */
 const PROMPT = 'add rate limiting to the upload endpoint, then roll it out to production';
 
-function request(projectRoot: string): PromptEnhancementPrepareRequestV1 {
+/**
+ * Phase 0's own two fixtures, verbatim — the bodies every other phase pins its frames and its sent
+ * text against. The display-only proof belongs on these rather than on a prompt chosen here: the
+ * guarantee is about the bodies this feature will actually meet.
+ */
+const PHASE_0_FIXTURES: readonly { label: string; prompt: string }[] = [
+  { label: 'the small body', prompt: 'Add a retry with exponential backoff to the payment gateway client.' },
+  {
+    label: 'the confirmation-carrying body',
+    prompt: 'Fix the failing payment test, the test failure blocks ci, and explain the verification. also drop a shadow under the submit button.',
+  },
+];
+
+function request(projectRoot: string, text: string = PROMPT): PromptEnhancementPrepareRequestV1 {
   const sourceRef: PromptEnhancementSourceRefV1 = {
     sourceRefId: 'emphasis-persistence-source-a',
     sourceKind: 'source_a_user_prompt',
@@ -39,7 +52,7 @@ function request(projectRoot: string): PromptEnhancementPrepareRequestV1 {
     requestId: `emphasis-persistence-${projectRoot}`,
     projectRoot,
     hostSurface: 'cli_stop_bridge',
-    sourcePrompt: { text: PROMPT, origin: 'user', capturedAt: 1, promptIndex: 1, generatedOriginPolicy: 'ordinary_source_a' },
+    sourcePrompt: { text, origin: 'user', capturedAt: 1, promptIndex: 1, generatedOriginPolicy: 'ordinary_source_a' },
     reviewMomentContext: {
       reviewMoment: 'UserPromptSubmit_preparation',
       currentAgentMode: 'workspace-write',
@@ -166,29 +179,50 @@ describe('the phrases beside the pending row', () => {
 });
 
 describe('what the agent receives', () => {
-  it('is byte-identical whether the phrases are derived or not', async () => {
-    // The derivation reads the final body and returns a list. If it could change a byte of what is
-    // sent, every other guarantee in this feature would be worth nothing.
-    const req = request('/test/emphasis-display-only');
+  it('marks something real on a body that has something to mark — so the proof above is not vacuous', async () => {
+    const req = request('/test/emphasis-not-vacuous', PHASE_0_FIXTURES[1]!.prompt);
     const result = await preparePromptEnhancement(req);
-
-    const before = result.currentBody.text;
-    const sectionsBefore = result.currentBody.sections.map((section) => section.bodyText);
-
     const phrases = phrasesFor(result, req);
-
-    expect(result.currentBody.text).toBe(before);
-    expect(result.currentBody.sections.map((section) => section.bodyText)).toEqual(sectionsBefore);
-    // …and the phrases are real, so this is not passing vacuously on an empty list.
     expect(phrases.length).toBeGreaterThan(0);
+    expect(phrases.some((phrase) => phrase.emphasisClass === 5)).toBe(true);
   });
 
-  it('never puts a phrase into the body that the body did not already hold', async () => {
-    const req = request('/test/emphasis-no-invention');
+  it('marks nothing on a no-key small body — recorded, because it is what the floor alone does', async () => {
+    // ⚠️ A finding, not an assertion of quality. Phase 0's small fixture composes three sections and
+    // TWO of them are excluded by the standard — the developer's own text and the practices section
+    // — leaving one stretch of deterministic filler with no grounded values and no instruction in
+    // it. Tier 1 therefore has nothing to say about this body, and the measurement phase is where
+    // that stops being an anecdote. The column keeps "ran and found nothing" apart from "never ran".
+    const req = request('/test/emphasis-no-key-floor', PHASE_0_FIXTURES[0]!.prompt);
     const result = await preparePromptEnhancement(req);
-    const bodyLower = result.currentBody.sections.map((section) => section.bodyText).join('\n').toLowerCase();
-    for (const phrase of phrasesFor(result, req)) {
-      expect(bodyLower).toContain(phrase.text.toLowerCase());
-    }
+    expect(result.currentBody.sections.map((section) => section.sectionKind))
+      .toEqual(['original_request_or_goal', 'context_and_constraints', 'source_signal_guidance']);
+    expect(phrasesFor(result, req)).toEqual([]);
   });
+
+  // On Phase 0's own fixtures, because those are the bodies every other phase pins against — a
+  // display-only guarantee proved on some other prompt is a guarantee about some other prompt.
+  for (const fixture of PHASE_0_FIXTURES) {
+    it(`is byte-identical on ${fixture.label}, whether the phrases are derived or not`, async () => {
+      const req = request(`/test/emphasis-display-only-${fixture.label.replace(/\s+/g, '-')}`, fixture.prompt);
+      const result = await preparePromptEnhancement(req);
+
+      const before = result.currentBody.text;
+      const sectionsBefore = result.currentBody.sections.map((section) => section.bodyText);
+
+      phrasesFor(result, req);
+
+      expect(result.currentBody.text).toBe(before);
+      expect(result.currentBody.sections.map((section) => section.bodyText)).toEqual(sectionsBefore);
+    });
+
+    it(`never puts a phrase into ${fixture.label} that it did not already hold`, async () => {
+      const req = request(`/test/emphasis-no-invention-${fixture.label.replace(/\s+/g, '-')}`, fixture.prompt);
+      const result = await preparePromptEnhancement(req);
+      const bodyLower = result.currentBody.sections.map((section) => section.bodyText).join('\n').toLowerCase();
+      for (const phrase of phrasesFor(result, req)) {
+        expect(bodyLower).toContain(phrase.text.toLowerCase());
+      }
+    });
+  }
 });
