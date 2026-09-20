@@ -307,6 +307,7 @@ export function classifyPromptEnhancementEmphasisCandidatesV1(
 
   for (const section of input.sections) {
     if (NEVER_MARKED_SECTION_KINDS.has(section.sectionKind)) continue;
+    const sectionStartedAt = candidates.length;
 
     const userTerms = collectPromptEnhancementEmphasisUserTermsV1({
       originalPromptText: input.originalPromptText,
@@ -334,6 +335,25 @@ export function classifyPromptEnhancementEmphasisCandidatesV1(
       if (line.trim().length === 0) continue;
       if (classOneHere) for (const action of classOneOfLine(line, userTerms)) keep(action);
       for (const bound of boundaryAndConditionOfLine(line)) keep(bound);
+    }
+
+    // ⚠️ **A condition qualifies something, so it is not marked where nothing it qualifies is.**
+    //
+    // "before wrapping up" with no marked action, term or limit beside it says nothing on its own
+    // — and measuring it over ten recorded popups showed what that costs: conditions were 16 of
+    // 23 marks and 5 of the 6 that landed on a line the standard rejects. A connective turns up on
+    // good lines and bad alike, so a class that fires on connectives alone spends the reader's
+    // attention wherever the composer happened to put one.
+    //
+    // The standard's own worked example already reads this way: its "before reporting done" is
+    // kept because it sits in the same section as "run the project's test suite", which is the
+    // thing it qualifies.
+    const fromThisSection = candidates.slice(sectionStartedAt);
+    if (fromThisSection.length > 0 && fromThisSection.every((candidate) => candidate.emphasisClass === 4)) {
+      // The dedupe keys go back too, so the same words can still be marked in a later section
+      // that does give them something to qualify.
+      for (const dropped of fromThisSection) seen.delete(`${dropped.emphasisClass}:${dropped.text.toLowerCase()}`);
+      candidates.length = sectionStartedAt;
     }
   }
 

@@ -218,7 +218,50 @@ describe('classes 3 and 4 — boundaries and conditions', () => {
   });
 
   it('binds a condition to its clause', () => {
-    expect(pairs(one('Run the migration once the backup finishes.'))).toContainEqual([4, 'once the backup finishes']);
+    // Given something to qualify — see the section below for why that is the condition of it
+    // being marked at all. What this pins is the span: the clause, not the sentence around it.
+    const found = one('Run the migration once the backup finishes.', { groundedFactValues: ['the migration'] });
+    expect(pairs(found)).toContainEqual([4, 'once the backup finishes']);
+  });
+});
+
+describe('a condition qualifies something, so it is not marked alone', () => {
+  // ⚠️ Measured, not assumed. Over ten recorded popups conditions were 16 of 23 marks and 5 of
+  // the 6 that landed on a line the standard rejects: a connective turns up on good lines and bad
+  // alike, so a class firing on connectives by itself spends the reader's attention wherever the
+  // composer happened to put one.
+
+  it('marks nothing in a section that offers only a condition', () => {
+    expect(one('Run the migration once the backup finishes.')).toEqual([]);
+  });
+
+  it('marks it once the same section carries a limit it can qualify', () => {
+    const found = one('Touch the upload path only. Run it once the backup finishes.');
+    expect(pairs(found)).toContainEqual([3, 'only']);
+    expect(pairs(found)).toContainEqual([4, 'once the backup finishes']);
+  });
+
+  it('marks it once the same section carries one of the developer’s own words', () => {
+    const found = one('Rebuild the search index after the import completes.', { groundedFactValues: ['the search index'] });
+    expect(pairs(found)).toContainEqual([2, 'the search index']);
+    expect(pairs(found)).toContainEqual([4, 'after the import completes']);
+  });
+
+  it('drops the condition in the bare section and still marks it in the section that anchors it', () => {
+    // The two sections carry the SAME words, so this also pins that dropping one does not make
+    // the other unreachable — the dedupe has to give the key back.
+    const found = classify({
+      originalPromptText: 'do the work',
+      sections: [
+        { sectionKind: 'context_and_constraints', sectionText: 'Ship it once the backup finishes.' },
+        {
+          sectionKind: 'verification_or_test_plan',
+          sectionText: 'Rebuild the search index once the backup finishes.',
+          groundedFactValues: ['the search index'],
+        },
+      ],
+    });
+    expect(pairs(found)).toEqual([[2, 'the search index'], [4, 'once the backup finishes']]);
   });
 });
 
