@@ -604,6 +604,26 @@ const CALL_ROWS: readonly PromptEnhancementAcceptedCostCallInventoryRowV1[] = [
     reasonCodes: ['optional_safety_review_llm_backed_when_triggered'],
   }),
   row({
+    // The optional pass that suggests extra phrases to emphasise in a popup that is already on
+    // screen. It starts once per popup SHOWN, which is the same rate the baseline composer runs
+    // at — so its volume is that row's, taken rather than estimated. It can only ever be fewer:
+    // the call is started only where a client is available, and a popup with none simply shows the
+    // rule-based marks. Its own timeout and output cap are named because they are not the
+    // composer's, and a reader of this inventory should see which figures it is measured against.
+    callId: 'optional_emphasis_phrases',
+    trigger: 'prepare',
+    userVisibleTrigger: 'enhancement_popup_shown',
+    hiddenRuntimeTrigger: 'a popup is shown and a client is available to suggest additional phrases to emphasise',
+    requirementState: 'optional_product_selected_when_triggered',
+    productState: 'accepted_v1_llm_backed',
+    calls: [1_575, 2_025, 2_250, 9_000],
+    separateLlmCallInV1: true,
+    skipCondition: 'skip whenever no popup is shown, or no client is available; the popup never waits for it and every failure leaves the rule-based marks alone',
+    reasonCodes: ['optional_emphasis_phrases_llm_backed_when_client_available'],
+    timeoutMs: 8_000,
+    outputTokenCap: 200,
+  }),
+  row({
     // The planner call, registered so its measurement has somewhere to go. The two rows below cover
     // the wording calls and neither covers this one, so the reading with the most to say — a repair
     // loop that spends several starts and delivers no plan — had no row to be counted in.
@@ -1520,6 +1540,7 @@ const REQUIRED_CALL_IDS: readonly PromptEnhancementCostCallIdV1[] = [
   'custom_feedback_classification',
   'later_popup_feedback_decision',
   'optional_safety_review',
+  'optional_emphasis_phrases',
   'sequence_planning',
   'sequence_summary_wording',
   'sequence_item_wording',
