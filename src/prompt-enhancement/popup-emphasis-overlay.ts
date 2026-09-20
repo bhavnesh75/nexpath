@@ -69,8 +69,9 @@ function logicalLineRanges(text: string): readonly OffsetRange[] {
 }
 
 /**
- * The stretches of the buffer no mark may start in: every found title line, and every line of the
- * two sections the standard never marks.
+ * The stretches of the buffer no mark may start in: every found title line, every line of the two
+ * sections the standard never marks, and every line of the block the developer's applied details
+ * were merged into.
  */
 function ineligibleRanges(input: PromptEnhancementEmphasisOverlayInputV1): readonly OffsetRange[] {
   const map = buildPromptEnhancementSectionMapV1(input.text, input.sections);
@@ -96,8 +97,8 @@ function ineligibleRanges(input: PromptEnhancementEmphasisOverlayInputV1): reado
 
 /**
  * The first occurrence of a phrase that may actually be marked: matched case-insensitively, the
- * way the phrases were located in the first place, and skipping any that begins inside a heading
- * line or a never-marked section.
+ * way the phrases were located in the first place, and skipping any that begins inside one of the
+ * stretches above.
  */
 function firstEligibleOccurrence(
   text: string,
