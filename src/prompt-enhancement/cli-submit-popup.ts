@@ -328,15 +328,21 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
     ...(input.emphasisModel?.client ? { client: input.emphasisModel.client } : {}),
     ...(input.emphasisModel?.enabled === true ? { enabled: true } : {}),
   });
+  // ⚠️ Held here, not read off `input` each time round. The loop builds a fresh view on every
+  // pass, so a merged list that lived only in the repaint would be replaced by the rule-based one
+  // the moment the reader pressed a key — the suggestion would appear and then vanish under them.
+  let emphasisPhrases = input.emphasisPhrases;
   emphasisCall.onSettled(() => {
     const suggested = emphasisCall.read();
     if (suggested.length === 0) return;
+    const merged = mergePromptEnhancementEmphasisPhrasesV1({
+      floor: input.emphasisPhrases ?? [],
+      model: suggested.map((phrase) => phrase.text),
+      sections: emphasisSections,
+    });
+    emphasisPhrases = merged;
     try {
-      interaction.repaintWithPhrases?.(mergePromptEnhancementEmphasisPhrasesV1({
-        floor: input.emphasisPhrases ?? [],
-        model: suggested.map((phrase) => phrase.text),
-        sections: emphasisSections,
-      }));
+      interaction.repaintWithPhrases?.(merged);
     } catch {
       // A repaint that fails leaves the frame that is already there — never the popup's problem.
     }
@@ -377,7 +383,7 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
           bodyText: section.bodyText,
           sectionKind: section.sectionKind,
         })),
-        ...(input.emphasisPhrases ? { emphasisPhrases: input.emphasisPhrases } : {}),
+        ...(emphasisPhrases ? { emphasisPhrases } : {}),
       });
       publicNotice = undefined;
       publicNoticeTransient = false;
