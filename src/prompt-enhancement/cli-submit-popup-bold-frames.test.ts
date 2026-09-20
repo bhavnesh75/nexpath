@@ -435,8 +435,9 @@ describe('the bytes, and the caret', () => {
   });
 
   it('keeps the caret where it was when the marked phrase wraps across two rows', () => {
-    // A narrow field forces a marked stretch over a wrap — the fixture Q-C asks for. The caret is
-    // placed inside the first marked stretch, and it may not move by a column.
+    // A narrow field forces a marked stretch over a wrap, so a mark and the cursor meet on one
+    // visual line — the case with the most ways to go wrong. The caret is placed inside the first
+    // marked stretch, and it may not move by a column.
     const width = 24;
     const narrow = { colorize: true, caretInsideMark: true, fieldWidth: width };
     const drawn = frameOf(result, narrow);

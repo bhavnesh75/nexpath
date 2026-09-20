@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { NEVER_MARKED_SECTION_KINDS } from './emphasis-classes.js';
+import { PROMPT_ENHANCEMENT_APPLIED_DETAILS_TITLE_V1 } from './popup-section-map.js';
 import {
   buildPromptEnhancementEmphasisSpansV1,
   type PromptEnhancementEmphasisOverlayInputV1,
@@ -103,6 +104,22 @@ describe('what a mark is kept away from', () => {
     const text = [`${SECTIONS[0]!.title}:`, SECTION_TEXT[0]!, '', `${SECTIONS[2]!.title}:`, SECTION_TEXT[2]!].join('\n');
     const sections = [SECTIONS[0]!, SECTIONS[2]!];
     expect(spansOf({ text, sections, windowRows: text.split('\n').length }))
+      .toEqual(text.split('\n').map(() => []));
+  });
+
+  it('never marks the details the developer typed and applied — the same words, merged into the body', () => {
+    // Pressing Apply merges the details field into the body word for word. The field itself is
+    // never marked while they are typing in it; merging it in does not turn their words into the
+    // body's instruction, so the whole block is left alone — not only its title line.
+    const text = [
+      `${SECTIONS[1]!.title}:`,
+      '- this section holds nothing of the kind.',
+      '',
+      `${PROMPT_ENHANCEMENT_APPLIED_DETAILS_TITLE_V1}:`,
+      'and please do not delete the cache during the rollout',
+      'twice over, if it comes to that.',
+    ].join('\n');
+    expect(spansOf({ text, sections: [SECTIONS[1]!], windowRows: text.split('\n').length }))
       .toEqual(text.split('\n').map(() => []));
   });
 

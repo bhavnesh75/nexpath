@@ -7,12 +7,15 @@
  * right now. A phrase the user has edited away is simply not found, and is not drawn — which is
  * why no range can ever go stale.
  *
- * Two places in the body are never marked, and both are checked here rather than assumed:
- * a section's **title line**, because a heading is chrome and not the developer's sentence, and
- * the two sections the standard excludes outright. The second matters more than it looks: the
- * developer's own words are quoted back in the first section, so the phrase taken *from* their
- * prompt would otherwise always be found there first and marked at them in their own words.
- * An occurrence in either place is passed over, not fatal — the phrase marks its next one.
+ * Three places in the body are never marked, and each is checked here rather than assumed: a
+ * section's **title line**, because a heading is chrome and not the developer's sentence; the two
+ * sections the standard excludes outright; and the block the popup writes when the developer
+ * applies their own typed details. The last two are the same point — **their words are not
+ * marked** — and it matters more than it looks, because their prompt is quoted back verbatim in
+ * the body's first section, so a phrase taken *from* that prompt would otherwise be found there
+ * first and emphasised at them in their own words.
+ *
+ * An occurrence in any of the three is passed over, not fatal — the phrase marks its next one.
  */
 import { buildPromptEnhancementVisualLineMapV1 } from './multiline-editor.js';
 import { buildPromptEnhancementSectionMapV1, type PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
@@ -77,7 +80,13 @@ function ineligibleRanges(input: PromptEnhancementEmphasisOverlayInputV1): reado
     const title = lines[entry.titleLine];
     if (title) out.push(title);
     const kind = typeof entry.source === 'number' ? input.sections[entry.source]?.sectionKind : undefined;
-    if (kind === undefined || !NEVER_MARKED_SECTION_KINDS.has(kind)) continue;
+    // The applied-details block is the developer's own typed text, merged into the body word for
+    // word when they press Apply. It is never marked for the same reason the section that quotes
+    // their prompt back is never marked, and for the reason their details field is not marked
+    // while they are still typing in it: these are their words, not the body's instruction.
+    const neverMarked = entry.source === 'details'
+      || (kind !== undefined && NEVER_MARKED_SECTION_KINDS.has(kind));
+    if (!neverMarked) continue;
     const first = lines[entry.titleLine];
     const last = lines[entry.endLine - 1];
     if (first && last) out.push({ start: first.start, end: last.end });
