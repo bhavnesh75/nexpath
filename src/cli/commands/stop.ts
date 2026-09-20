@@ -36,6 +36,10 @@ import {
   runPromptEnhancementCliSubmitPopupV1,
   type PromptEnhancementCliPopupResultV1,
 } from '../../prompt-enhancement/cli-submit-popup.js';
+import {
+  PROMPT_ENHANCEMENT_EMPHASIS_TIMEOUT_MS_V1,
+  startPromptEnhancementEmphasisModelCallV1,
+} from '../../prompt-enhancement/emphasis-model-call.js';
 import { emitPromptEnhancementCostObservabilityV1 } from '../../prompt-enhancement/cost-measurement.js';
 import { evaluatePromptEnhancementMpsIntakeDecisionV1 } from '../../prompt-enhancement/intake-decision.js';
 import { buildPromptEnhancementCliMpsIntakeEvidenceV1 } from '../../prompt-enhancement/cli-mps-intake-evidence.js';
@@ -795,6 +799,30 @@ export function registerStopCommand(program: import('commander').Command): void 
           out.write('[SIM] PE enhanced prompt (full body follows)\n');
           out.write((body.text ?? '') + '\n');
           out.write('[SIM] PE end of enhanced prompt\n');
+          // The optional pass runs here too, and prints what it suggested. A sim opens no window,
+          // so this is the only place a run can see the tier live — without it the one thing a
+          // long session could measure about it would never be exercised. It is started and read
+          // exactly as the popup does: never awaited beyond its own cap, and every failure prints
+          // nothing at all.
+          if (typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0) {
+            const suggestion = startPromptEnhancementEmphasisModelCallV1({
+              originalPromptText: body.originalPromptText,
+              sections: sections.map((section) => ({
+                sectionKind: section.sectionKind,
+                bodyText: section.bodyText ?? '',
+              })),
+              enabled: true,
+            });
+            await new Promise<void>((resolve) => {
+              const stop = setTimeout(resolve, PROMPT_ENHANCEMENT_EMPHASIS_TIMEOUT_MS_V1);
+              suggestion.onSettled(() => { clearTimeout(stop); resolve(); });
+            });
+            suggestion.abort();
+            const suggested = suggestion.read();
+            out.write('[SIM] PE emphasis suggestions: ' + suggested.length
+              + ' (' + suggestion.outcome() + ')\n');
+            for (const phrase of suggested) out.write('     · ' + phrase.text + '\n');
+          }
           // Telemetry mirrors the stdout block so `show_pe_detail` in sim-core.sh can report
           // per cycle exactly as `show_advisory_detail` does for the DS path.
           writeTelemetry(payload.cwd, 'prompt_enhancement_sim_observed', {
@@ -947,6 +975,11 @@ export function registerStopCommand(program: import('commander').Command): void 
             request: pending.request,
             result: pending.result,
             emphasisPhrases: pending.emphasisPhrases,
+            // This process already resolved the key above, so the optional pass can run here.
+            // The spawned branch below does not pass it: that child resolves its own.
+            ...(typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
+              ? { emphasisModel: { enabled: true } }
+              : {}),
             feedbackSink: (event) => recordPromptEnhancementCliFeedbackV1(store, payload.cwd, event, pending.request),
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the
             // feedback-consent flush (store-backed sink; in-process popup on the Stop hook).

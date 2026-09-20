@@ -45,6 +45,11 @@ import {
 import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
 import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
 import {
+  mergePromptEnhancementEmphasisPhrasesV1,
+  startPromptEnhancementEmphasisModelCallV1,
+  type PromptEnhancementEmphasisModelClientV1,
+} from './emphasis-model-call.js';
+import {
   buildPromptEnhancementEmphasisSpansV1,
   type PromptEnhancementEmphasisSpanV1,
 } from './popup-emphasis-overlay.js';
@@ -133,6 +138,14 @@ export interface PromptEnhancementCliPopupSectionV1 extends PromptEnhancementSec
 export interface PromptEnhancementCliPopupInteractionV1 {
   next(view: PromptEnhancementCliPopupViewV1): Promise<PromptEnhancementCliPopupCommandV1>;
   close(): void;
+  /**
+   * Draw the frame again with a different set of phrases, without waiting for a keystroke.
+   *
+   * The loop is parked inside `next` for as long as the reader is reading, so a suggestion that
+   * arrives while they sit there has no other way onto the screen. Optional: an interaction that
+   * does not implement it simply never repaints, which is the same as no suggestion arriving.
+   */
+  repaintWithPhrases?(phrases: readonly PromptEnhancementEmphasisPhraseV1[]): void;
 }
 
 export type PromptEnhancementCliPopupResultV1 =
@@ -277,6 +290,16 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
    * today, drawn by nothing: the frame is byte-identical whether it is absent, empty or filled.
    */
   emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
+  /**
+   * The optional pass that suggests more phrases to emphasise, if the caller wants one.
+   *
+   * Nothing here waits for it. Absent — which is the default, and what the browser surface gets —
+   * the popup draws the rule-based marks and never starts a call at all.
+   */
+  emphasisModel?: {
+    client?: PromptEnhancementEmphasisModelClientV1;
+    enabled?: boolean;
+  };
 }): Promise<PromptEnhancementCliPopupResultV1> {
   let currentResult = input.result;
   let rendered = buildPromptEnhancementPopupRenderModelV1({
@@ -290,6 +313,34 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
     ? createPromptEnhancementCliPopupInteractionV1(input.onFirstRender)
     : input.interaction;
   if (!interaction) return { state: 'not_shown', reasonCodes: ['no_tty'] };
+
+  // The optional pass, started here and never awaited: this is the last point before the first
+  // frame, and the popup is now certain to be shown. Once per popup — a refinement replaces the
+  // body inside the same session and starts nothing further. Whatever it settles is merged with
+  // the rule-based marks and repainted; every way it can fail leaves the frame exactly as drawn.
+  const emphasisSections = currentResult.currentBody.sections.map((section) => ({
+    sectionKind: section.sectionKind,
+    bodyText: section.bodyText,
+  }));
+  const emphasisCall = startPromptEnhancementEmphasisModelCallV1({
+    originalPromptText: currentResult.currentBody.originalPromptText,
+    sections: emphasisSections,
+    ...(input.emphasisModel?.client ? { client: input.emphasisModel.client } : {}),
+    ...(input.emphasisModel?.enabled === true ? { enabled: true } : {}),
+  });
+  emphasisCall.onSettled(() => {
+    const suggested = emphasisCall.read();
+    if (suggested.length === 0) return;
+    try {
+      interaction.repaintWithPhrases?.(mergePromptEnhancementEmphasisPhrasesV1({
+        floor: input.emphasisPhrases ?? [],
+        model: suggested.map((phrase) => phrase.text),
+        sections: emphasisSections,
+      }));
+    } catch {
+      // A repaint that fails leaves the frame that is already there — never the popup's problem.
+    }
+  });
 
   let model = rendered.model;
   let editedBodyText = model.body.text;
@@ -543,6 +594,9 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   } catch {
     return { state: 'not_shown', reasonCodes: ['renderer_failure'] };
   } finally {
+    // Tear the suggestion call down with the popup. Nothing should still be in flight behind a
+    // frame the reader has closed, and a socket left open would hold the process past its window.
+    emphasisCall.abort();
     interaction.close();
   }
 }
@@ -1752,6 +1806,14 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
         }
         render(afterFirstPaint, state);
       }
+    },
+    repaintWithPhrases(phrases) {
+      if (closed || !lastView || !state) return;
+      // The view the loop last handed over, with the new list in place of the old one. Everything
+      // else about the frame is the frame that is already on screen, so the only thing that can
+      // move is which words are emboldened.
+      lastView = { ...lastView, emphasisPhrases: phrases };
+      repaint();
     },
     close() {
       if (closed) return;

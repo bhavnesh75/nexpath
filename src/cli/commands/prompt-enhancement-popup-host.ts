@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Command } from 'commander';
 import { closeStore, openStore, DEFAULT_DB_PATH, type Store } from '../../store/db.js';
 import { recordActionSignal } from '../../store/feedback-signals.js';
+import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
 import {
   validatePromptEnhancementPrepareRequestV1,
   validatePromptEnhancementPrepareResultV1,
@@ -260,9 +261,23 @@ export async function runPromptEnhancementPopupHostCommandV1(
           }
         }
         if (!mpsHandled) {
+          // ⚠️ The key is resolved HERE, in the child, and never carried in the payload file — a
+          // secret does not belong in a temp file. On Windows and macOS this child is always where
+          // the popup lives, so without this the optional pass would run on Linux only, and the
+          // tier most people get would be the one nobody measured. Nothing resolving is simply
+          // "no key": the popup shows its rule-based marks and starts no call.
+          let emphasisEnabled = false;
+          try {
+            await resolveOpenAIKey(input.request.projectRoot);
+            emphasisEnabled = typeof process.env['OPENAI_API_KEY'] === 'string'
+              && process.env['OPENAI_API_KEY'].length > 0;
+          } catch {
+            // Resolution is best effort; a failure here must never keep the popup from opening.
+          }
           popupResult = await dependencies.runPopup({
             request: input.request,
             result: input.result,
+            ...(emphasisEnabled ? { emphasisModel: { enabled: true } } : {}),
             onFirstRender: options.readinessFile ? markReadyOnce : undefined,
             feedbackSink: (event: PromptEnhancementPopupEventV1) => dependencies.recordFeedback(
               store!,
