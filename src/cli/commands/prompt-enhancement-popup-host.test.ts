@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProgram } from '../main.js';
 import { PROMPT_ENHANCEMENT_CONTRACT_VERSION, type PromptEnhancementPrepareRequestV1, type PromptEnhancementSourceRefV1 } from '../../prompt-enhancement/contracts.js';
 import { buildPromptEnhancementCostVisibilityMetadataV1 } from '../../prompt-enhancement/cost-observability.js';
@@ -14,6 +14,29 @@ import {
   runPromptEnhancementMpsContinuationPopupHostCommandV1,
   type PromptEnhancementPopupHostInputV1,
 } from './prompt-enhancement-popup-host.js';
+import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
+
+// Key resolution is stubbed for the whole file: the real one reads the machine's keychain and home
+// directory, so left alone these tests would answer differently on a machine that happens to have a
+// key stored — and would reach for the keychain to do it.
+vi.mock('../../config/ApiKeyResolver.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../config/ApiKeyResolver.js')>()),
+  resolveOpenAIKey: vi.fn(async () => null),
+}));
+const resolveKey = vi.mocked(resolveOpenAIKey);
+
+// Whatever the machine really has stays untouched: the stub sets and clears the variable itself.
+const realKeyEnv = process.env['OPENAI_API_KEY'];
+afterEach(() => {
+  if (realKeyEnv === undefined) delete process.env['OPENAI_API_KEY'];
+  else process.env['OPENAI_API_KEY'] = realKeyEnv;
+});
+
+beforeEach(() => {
+  resolveKey.mockReset();
+  resolveKey.mockImplementation(async () => null);
+  delete process.env['OPENAI_API_KEY'];
+});
 
 function request(): PromptEnhancementPrepareRequestV1 {
   const sourceRef: PromptEnhancementSourceRefV1 = {
@@ -365,5 +388,62 @@ describe('MPS Phase 2 — continuation (2nd popup) host handler (Option D)', () 
     expect(openStore).not.toHaveBeenCalled();
     expect(runPopup).not.toHaveBeenCalled();
     expect(runMpsPopup).not.toHaveBeenCalled();
+  });
+});
+
+describe('the optional emphasis pass is switched on in the child, not in the payload', () => {
+  it('turns it on when a key resolves here, and the payload never carried one', async () => {
+    const paths = files();
+    const input = await validInput();
+    writeFileSync(paths.inputFile, JSON.stringify(input), 'utf8');
+    // The only thing the child is given is the file. A secret does not belong in a temp file, so
+    // this asserts the written payload really is free of one before the switch is read.
+    const payload = readFileSync(paths.inputFile, 'utf8');
+    expect(payload).not.toMatch(/OPENAI_API_KEY|apiKey|sk-[A-Za-z0-9]/);
+
+    resolveKey.mockImplementation(async () => {
+      process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
+      return 'sk-test-resolved-in-the-child';
+    });
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(resolveKey).toHaveBeenCalledWith(input.request.projectRoot);
+    expect(runPopup.mock.calls[0]![0]).toMatchObject({ emphasisModel: { enabled: true } });
+  });
+
+  it('leaves it off when nothing resolves, and the popup still opens', async () => {
+    const paths = files();
+    const input = await validInput();
+    writeFileSync(paths.inputFile, JSON.stringify(input), 'utf8');
+    resolveKey.mockImplementation(async () => null);
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    const output = await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(output.result).toEqual({ state: 'selected_original' });
+    expect(runPopup).toHaveBeenCalledTimes(1);
+    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+  });
+
+  it('leaves it off when resolution throws, and the popup still opens', async () => {
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => { throw new Error('keychain locked'); });
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    const output = await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(output.result).toEqual({ state: 'selected_original' });
+    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
   });
 });
