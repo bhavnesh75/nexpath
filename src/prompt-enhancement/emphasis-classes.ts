@@ -158,8 +158,15 @@ function cutBeforeSecret(phrase: string): string {
  * developer's half is the value, which class 2 has already taken.
  *
  * Replaced with spaces rather than removed, so every other phrase keeps the line it sits on.
+ *
+ * Exported for the optional model pass, which must not be shown those sentences either: a phrase
+ * it cannot see is a phrase it cannot propose, which is stronger than asking it not to. Its reply
+ * is filtered again on the way back, so this is the first of two guards and not the only one.
+ *
+ * ⚠️ **Visibility only.** The behaviour is unchanged, and the classes it feeds are pinned by their
+ * own tests — an edit here has to come past them.
  */
-function maskInsertedText(sectionText: string, sensitiveActionName?: string): string {
+export function maskInsertedText(sectionText: string, sensitiveActionName?: string): string {
   const blank = (text: string, span: string): string =>
     span.length === 0 ? text : text.split(span).join(' '.repeat(span.length));
 

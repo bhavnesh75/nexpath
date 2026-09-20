@@ -118,6 +118,29 @@ function withoutDuplicateSpans(phrases: readonly LocatedPhrase[]): LocatedPhrase
 }
 
 /**
+ * Spend the budget: four marks in one section, twelve across the body, in the order given.
+ *
+ * Exported because the optional model pass is capped by **this** rule and not by a copy of it —
+ * its phrases are appended after the floor's and run through the same loop, so the floor can never
+ * be displaced by the model and the two can never drift apart. The caller orders the list; this
+ * only counts.
+ */
+export function applyPromptEnhancementEmphasisCapV1<T extends { sectionIndex: number }>(
+  ordered: readonly T[],
+): T[] {
+  const perSection = new Map<number, number>();
+  const kept: T[] = [];
+  for (const phrase of ordered) {
+    if (kept.length >= PROMPT_ENHANCEMENT_EMPHASIS_CAP_PER_BODY_V1) break;
+    const used = perSection.get(phrase.sectionIndex) ?? 0;
+    if (used >= PROMPT_ENHANCEMENT_EMPHASIS_CAP_PER_SECTION_V1) continue;
+    perSection.set(phrase.sectionIndex, used + 1);
+    kept.push(phrase);
+  }
+  return kept;
+}
+
+/**
  * The phrases this body will carry: classified, found in the text, and capped.
  *
  * An empty result is a real answer — it says the pass ran and nothing qualified, which is not the
@@ -155,15 +178,7 @@ export function buildPromptEnhancementEmphasisPhrasesV1(
 
   // Cap: priority order, overlaps collapsed, then four per section and twelve in all.
   const ordered = withoutDuplicateSpans([...located].sort(byPriority));
-  const perSection = new Map<number, number>();
-  const kept: LocatedPhrase[] = [];
-  for (const phrase of ordered) {
-    if (kept.length >= PROMPT_ENHANCEMENT_EMPHASIS_CAP_PER_BODY_V1) break;
-    const used = perSection.get(phrase.sectionIndex) ?? 0;
-    if (used >= PROMPT_ENHANCEMENT_EMPHASIS_CAP_PER_SECTION_V1) continue;
-    perSection.set(phrase.sectionIndex, used + 1);
-    kept.push(phrase);
-  }
+  const kept = applyPromptEnhancementEmphasisCapV1(ordered);
 
   return kept.map((phrase) => ({
     text: phrase.text,
