@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1,
   PROMPT_ENHANCEMENT_EMPHASIS_MAX_OUTPUT_TOKENS_V1,
   PROMPT_ENHANCEMENT_EMPHASIS_MODEL_V1,
   PROMPT_ENHANCEMENT_EMPHASIS_TIMEOUT_MS_V1,
@@ -275,5 +276,50 @@ describe('the shape of the call', () => {
     // ⚠️ Without the closing bracket: the redactor pads its marker to the length of what it
     // replaced, so a real one reads 'sk-[REDACTED..........]' and the bracket is at the end.
     expect(sent).toContain('[REDACTED');
+  });
+});
+
+describe('what it reports, and under whose name', () => {
+  it('reports its own event, never the classifier’s', async () => {
+    const seen: { event: string; outcome: string; phraseCount: number }[] = [];
+    const { client } = clientAnswering(`{"phrases":["run the project's test suite"]}`);
+    startPromptEnhancementEmphasisModelCallV1({
+      originalPromptText: 'x', sections: SECTIONS, client, onOutcome: (event) => seen.push(event),
+    });
+    await settle();
+    expect(seen).toEqual([{
+      event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome: 'settled', phraseCount: 1,
+    }]);
+    // ⛔ The classifier's provider-error event is what `nexpath status` reports. A timeout here
+    // costs a few unbolded words; read under that name it would look like the classifier failing.
+    expect(seen.every((event) => event.event !== 'stage_classifier_provider_error')).toBe(true);
+  });
+
+  it('reports the outcome where nothing was started at all', async () => {
+    const seen: { outcome: string }[] = [];
+    startPromptEnhancementEmphasisModelCallV1({
+      originalPromptText: 'x', sections: SECTIONS, onOutcome: (event) => seen.push(event),
+    });
+    await settle();
+    expect(seen.map((event) => event.outcome)).toEqual(['gated_out_no_client']);
+  });
+
+  it('reports a failure once, and only once', async () => {
+    const seen: { outcome: string }[] = [];
+    const client = { chat: { completions: { create: vi.fn(() => Promise.reject(new Error('503'))) } } } as unknown as PromptEnhancementEmphasisModelClientV1;
+    startPromptEnhancementEmphasisModelCallV1({
+      originalPromptText: 'x', sections: SECTIONS, client, onOutcome: (event) => seen.push(event),
+    });
+    await settle();
+    expect(seen.map((event) => event.outcome)).toEqual(['pending_or_failed']);
+  });
+
+  it('survives a sink that throws', async () => {
+    const { client } = clientAnswering('{"phrases":[]}');
+    expect(() => startPromptEnhancementEmphasisModelCallV1({
+      originalPromptText: 'x', sections: SECTIONS, client,
+      onOutcome: () => { throw new Error('sink'); },
+    })).not.toThrow();
+    await settle();
   });
 });

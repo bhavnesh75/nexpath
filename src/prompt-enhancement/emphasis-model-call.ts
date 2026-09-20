@@ -45,6 +45,16 @@ export const PROMPT_ENHANCEMENT_EMPHASIS_SYSTEM_PROMPT_V1 = [
 ].join('\n');
 
 /**
+ * This pass's OWN event name.
+ *
+ * ⛔ Never the stage classifier's. That event is what `nexpath status` reports as a provider
+ * failure, and a timeout here — which costs nothing but a few unbolded words — would read there as
+ * the classifier having failed, which is a different and much worse thing. The two must stay
+ * distinguishable in a log, so they carry different names.
+ */
+export const PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1 = 'prompt_enhancement_emphasis_call';
+
+/**
  * The outcome states, kept apart so a debug run can tell "never started" from "started and gave
  * nothing" — they call for opposite responses, and an absent value that cannot distinguish them
  * answers neither.
@@ -102,7 +112,29 @@ export interface PromptEnhancementEmphasisModelInputV1 {
    * is not a safe enough guard on its own.
    */
   enabled?: boolean;
+  /**
+   * Where this pass reports what happened to it — called exactly once, with its own event name,
+   * for every outcome including the ones where nothing was started. Optional and best effort: a
+   * sink that throws is swallowed, because an observability failure must never reach the popup.
+   */
+  onOutcome?: (event: {
+    event: typeof PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1;
+    outcome: PromptEnhancementEmphasisModelOutcomeV1;
+    phraseCount: number;
+  }) => void;
 }
+
+const report = (
+  input: Pick<PromptEnhancementEmphasisModelInputV1, 'onOutcome'>,
+  outcome: PromptEnhancementEmphasisModelOutcomeV1,
+  phraseCount: number,
+): void => {
+  try {
+    input.onOutcome?.({ event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome, phraseCount });
+  } catch {
+    // Observability is never allowed to reach the popup.
+  }
+};
 
 const inertHandle = (
   outcome: PromptEnhancementEmphasisModelOutcomeV1,
@@ -238,6 +270,7 @@ export function startPromptEnhancementEmphasisModelCallV1(
     }
   } else {
     // No client and no opt-in: nothing is started, and nothing is constructed either.
+    report(input, 'gated_out_no_client', 0);
     return inertHandle('gated_out_no_client');
   }
 
@@ -265,6 +298,7 @@ export function startPromptEnhancementEmphasisModelCallV1(
   const finish = (): void => {
     if (done) return;
     done = true;
+    report(input, outcome, settled.length);
     notify();
   };
 
@@ -289,6 +323,7 @@ export function startPromptEnhancementEmphasisModelCallV1(
       { timeout: PROMPT_ENHANCEMENT_EMPHASIS_TIMEOUT_MS_V1, maxRetries: 0, signal: controller.signal },
     );
   } catch {
+    report(input, 'pending_or_failed', 0);
     return inertHandle('pending_or_failed');
   }
 
