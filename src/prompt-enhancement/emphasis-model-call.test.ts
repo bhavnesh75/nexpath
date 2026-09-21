@@ -208,6 +208,60 @@ describe('what comes back, and what is thrown away', () => {
   });
 });
 
+describe('the pipeline’s own confirmation sentence, which the model must never see', () => {
+  // ⚠️ The mask finds that sentence by looking for `before you do this <naming>`, and the
+  // naming is whatever the clearance resolved — here "a destructive migration". No caller was
+  // passing it, so the mask found nothing, the sentence reached the model, and a phrase lifted
+  // straight out of it came back, passed every output rule and was drawn in bold: emphasis landing
+  // on the pipeline's own safety wording, which is the one thing this body exists to prevent.
+  const NAMED = 'a destructive migration';
+  const SAFETY = `Still, before you do this ${NAMED} you must ask me for go-ahead confirmation, `
+    + 'and before you ask, confirm the actual state at ground level by reading the real source. '
+    + 'Do not assume, and do not rely on what you did earlier in this session.';
+  const WITH_SAFETY = [
+    ...SECTIONS,
+    { sectionKind: 'risk_safety_and_confirmation', bodyText: SAFETY },
+  ];
+
+  it('derives the naming from the body when the caller does not supply it', () => {
+    const body = buildPromptEnhancementEmphasisModelBodyV1({ sections: WITH_SAFETY });
+    expect(body).not.toContain('you must ask me for go-ahead confirmation');
+    expect(body).not.toContain(NAMED);
+  });
+
+  it('is the same body the caller gets by passing the naming itself', () => {
+    expect(buildPromptEnhancementEmphasisModelBodyV1({ sections: WITH_SAFETY }))
+      .toBe(buildPromptEnhancementEmphasisModelBodyV1({ sections: WITH_SAFETY, sensitiveActionName: NAMED }));
+  });
+
+  it('throws away every phrase lifted out of that sentence', () => {
+    const drawnWithSafety = WITH_SAFETY.map((section) => section.bodyText).join(NL);
+    const markableWithSafety = buildPromptEnhancementEmphasisModelBodyV1({ sections: WITH_SAFETY });
+    const kept = keepPromptEnhancementEmphasisModelPhrasesV1({
+      phrases: [
+        'ask me for go-ahead confirmation',
+        'confirm the actual state at ground level',
+        'reading the real source',
+        `before you do this ${NAMED}`,
+      ],
+      drawnBodyText: drawnWithSafety,
+      markableBodyText: markableWithSafety,
+    });
+    expect(kept).toEqual([]);
+  });
+
+  it('still keeps a phrase from a section that is not the safety one', () => {
+    // The guard must not swallow the rest of the body with the sentence it is aimed at.
+    const drawnWithSafety = WITH_SAFETY.map((section) => section.bodyText).join(NL);
+    const markableWithSafety = buildPromptEnhancementEmphasisModelBodyV1({ sections: WITH_SAFETY });
+    expect(keepPromptEnhancementEmphasisModelPhrasesV1({
+      phrases: ['POST /api/upload'],
+      drawnBodyText: drawnWithSafety,
+      markableBodyText: markableWithSafety,
+    })).toEqual(['POST /api/upload']);
+  });
+});
+
 describe('the marks it adds are added, never substituted', () => {
   it('puts the rule-based marks first and the model’s after them', () => {
     const merged = mergePromptEnhancementEmphasisPhrasesV1({

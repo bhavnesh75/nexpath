@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import { redactSecrets } from '../store/redact.js';
 import { SECRET_IN_TEXT } from '../classifier/mistake-categories.js';
 import { maskInsertedText, NEVER_MARKED_SECTION_KINDS } from './emphasis-classes.js';
-import { applyPromptEnhancementEmphasisCapV1 } from './emphasis-locate.js';
+import { applyPromptEnhancementEmphasisCapV1, namedActionIn } from './emphasis-locate.js';
 import type { PromptEnhancementEmphasisPhraseV1 } from '../store/pending-prompt-enhancements.js';
 
 /**
@@ -156,9 +156,16 @@ const inertHandle = (
 export function buildPromptEnhancementEmphasisMarkableBodyV1(
   input: Pick<PromptEnhancementEmphasisModelInputV1, 'sections' | 'sensitiveActionName'>,
 ): string {
+  // ⚠️ DERIVED when the caller does not supply it. The mask finds the confirmation sentence by
+  // looking for `before you do this <naming>`, so without the naming it finds nothing and the
+  // model is shown the pipeline's own safety wording — the one thing this body exists to hide.
+  // No caller supplied it, so the sentence was reaching the model and phrases lifted from it came
+  // back and were drawn. The floor's pass already reads the name out of the body; this reads it
+  // with the same function rather than a second copy of the rule.
+  const named = input.sensitiveActionName ?? namedActionIn(input.sections);
   return input.sections
     .filter((section) => !NEVER_MARKED_SECTION_KINDS.has(section.sectionKind))
-    .map((section) => maskInsertedText(section.bodyText, input.sensitiveActionName))
+    .map((section) => maskInsertedText(section.bodyText, named))
     .join('\n');
 }
 

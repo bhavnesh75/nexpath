@@ -63,7 +63,7 @@ interface LocatedPhrase {
  * moment a verdict resolved a label the keyword rule would not, silently and per call. The body
  * already holds the answer.
  */
-function namedActionIn(sections: readonly PromptEnhancementEmphasisBodySectionV1[]): string | undefined {
+export function namedActionIn(sections: readonly { bodyText: string }[]): string | undefined {
   for (const section of sections) {
     const match = /before you do this ([\s\S]+?) you must ask me for go-ahead confirmation/.exec(section.bodyText);
     const named = match?.[1]?.trim();
