@@ -84,10 +84,10 @@ exports[`the recorded frames, emphasised > confirmation-carrying body, colour on
 \\e[36m│\\e[0m     Risk, safety and confirmation:    \\e[2m#4\\e[0m
 \\e[36m│\\e[0m     - Name risky or irreversible actions, ask for required confirmation, and
 \\e[36m│\\e[0m      include rollback or recovery checks.
-\\e[36m│\\e[0m     - Still, before you do this \\e[1mdestructive file or codebase change\\e[0m you must
-\\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
-\\e[36m│\\e[0m     l state at ground level by reading the real source. \\e[1mDo not assume\\e[0m, and d
-\\e[36m│\\e[0m     o not rely on what you did earlier in this session.
+\\e[36m│\\e[0m     \\e[1m- Still, before you do this destructive file or codebase change you must\\e[0m
+\\e[36m│\\e[0m     \\e[1m ask me for go-ahead confirmation, and before you ask, confirm the actua\\e[0m
+\\e[36m│\\e[0m     \\e[1ml state at ground level by reading the real source. Do not assume, and d\\e[0m
+\\e[36m│\\e[0m     \\e[1mo not rely on what you did earlier in this session.\\e[0m
 \\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m
@@ -138,10 +138,10 @@ exports[`the recorded frames, emphasised > largest body, colour on > is recorded
 \\e[36m│\\e[0m     Risk, safety and confirmation:    \\e[2m#6\\e[0m
 \\e[36m│\\e[0m     - Keep the existing behaviour of the payment gateway client and cover it
 \\e[36m│\\e[0m      with a test.
-\\e[36m│\\e[0m     - Still, before you do this \\e[1mdestructive file or codebase change\\e[0m you must
-\\e[36m│\\e[0m      ask me for go-ahead confirmation, and before you ask, confirm the actua
-\\e[36m│\\e[0m     l state at ground level by reading the real source. \\e[1mDo not assume\\e[0m, and d
-\\e[36m│\\e[0m     o not rely on what you did earlier in this session.
+\\e[36m│\\e[0m     \\e[1m- Still, before you do this destructive file or codebase change you must\\e[0m
+\\e[36m│\\e[0m     \\e[1m ask me for go-ahead confirmation, and before you ask, confirm the actua\\e[0m
+\\e[36m│\\e[0m     \\e[1ml state at ground level by reading the real source. Do not assume, and d\\e[0m
+\\e[36m│\\e[0m     \\e[1mo not rely on what you did earlier in this session.\\e[0m
 \\e[36m│\\e[0m     \\e[93mCtrl+J new line · Ctrl+↑/↓ move line · Ctrl+X #N · Enter sends this prompt\\e[0m
 \\e[36m│\\e[0m
 \\e[36m│\\e[0m \\e[90m○\\e[0m \\e[2mAdditional details\\e[0m

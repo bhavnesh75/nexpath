@@ -116,6 +116,38 @@ function firstEligibleOccurrence(
 }
 
 /**
+ * What a found phrase actually paints: **the whole line it sits on**, trimmed of the indentation
+ * and the trailing padding either side of the text.
+ *
+ * ⚠️ The unit of emphasis is the LINE, not the phrase (owner's decision, 2026-09-21). A phrase is
+ * how a line is *found* — the classes still look for actions, terms, boundaries, conditions and
+ * safety lines, and the cap still spends on them — but what is drawn is the sentence the reader
+ * has to act on, whole. Measured beside the labels before it was adopted: the same lines are
+ * found either way, so the change costs nothing in coverage, and the labels judge whole lines, so
+ * the metric no longer needs a word-level ground truth nobody had made.
+ *
+ * The trim matters: without it a bolded line carries its own indentation and the spaces after its
+ * full stop, which some terminals draw as a highlighted run past the end of the sentence.
+ *
+ * A line that cannot be found — which cannot happen, every offset lies in some line — falls back
+ * to the phrase's own range, so a mark is never lost to an edge case.
+ */
+function paintedRangeFor(
+  found: OffsetRange,
+  logical: readonly OffsetRange[],
+  text: string,
+): OffsetRange {
+  const line = logical.find((range) => found.start >= range.start && found.start < range.end)
+    ?? logical.find((range) => found.start === range.start);
+  if (!line) return found;
+  let start = line.start;
+  let end = line.end;
+  while (start < end && /\s/.test(text[start] ?? '')) start += 1;
+  while (end > start && /\s/.test(text[end - 1] ?? '')) end -= 1;
+  return end > start ? { start, end } : found;
+}
+
+/**
  * Merge the ranges of one row so none overlaps another.
  *
  * ⚠️ Not tidiness — correctness. The standard deliberately marks a term *and* the clause around
@@ -148,21 +180,23 @@ export function buildPromptEnhancementEmphasisSpansV1(
   if (input.phrases.length === 0 || shownRows === 0) return rows;
 
   const ineligible = ineligibleRanges(input);
+  const logical = logicalLineRanges(input.text);
   for (const phrase of input.phrases) {
     const found = firstEligibleOccurrence(input.text, phrase.text, ineligible);
     if (found === undefined) continue;
-    // A phrase that crosses a wrap becomes one sub-range per row it touches — arithmetic off the
-    // map's offsets, never a guess about where the wrap fell.
+    const painted = paintedRangeFor(found, logical, input.text);
+    // A painted range that crosses a wrap becomes one sub-range per row it touches — arithmetic
+    // off the map's offsets, never a guess about where the wrap fell.
     for (const [index, line] of visual.entries()) {
-      if (line.startOffset >= found.end || line.endOffset <= found.start) continue;
+      if (line.startOffset >= painted.end || line.endOffset <= painted.start) continue;
       const row = index - input.windowStart;
       if (row < 0 || row >= shownRows) continue;
       // A scroll marker is not the buffer's text at all — it replaced the row, so it carries no
       // mark, the same rule the section numbers follow.
       if (input.markerAbove && row === 0) continue;
       if (input.markerBelow && row === shownRows - 1) continue;
-      const startColumn = Math.max(found.start, line.startOffset) - line.startOffset;
-      const endColumn = Math.min(found.end, line.endOffset) - line.startOffset;
+      const startColumn = Math.max(painted.start, line.startOffset) - line.startOffset;
+      const endColumn = Math.min(painted.end, line.endOffset) - line.startOffset;
       if (endColumn > startColumn) rows[row]!.push({ startColumn, endColumn });
     }
   }

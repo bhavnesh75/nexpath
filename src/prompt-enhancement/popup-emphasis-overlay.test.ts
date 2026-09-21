@@ -64,9 +64,11 @@ function spansOf(overrides: Partial<PromptEnhancementEmphasisOverlayInputV1> = {
 }
 
 describe('the phrase on its row', () => {
-  it('marks the columns it occupies, and nothing else on the row', () => {
+  it('marks the whole line it sits on, and nothing else', () => {
     const rows = spansOf();
-    expect(rows[ONLY_MARKABLE_ROW]).toEqual([{ startColumn: 2, endColumn: 25 }]);
+    // ⚠️ The unit is the LINE. The phrase is how the line is found; what is drawn is the whole
+    // sentence, trimmed of the space either side of it — here the line has none, so it is all of it.
+    expect(rows[ONLY_MARKABLE_ROW]).toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
     // Read off the fixture: the clause starts after "- " and is 23 characters long.
     expect(SECTION_TEXT[1]!.slice(2, 25)).toBe('do not delete the cache');
   });
@@ -86,7 +88,7 @@ describe('the phrase on its row', () => {
 
   it('matches the way the phrases were found in the first place — case-insensitively', () => {
     expect(spansOf({ phrases: [phrase('DO NOT DELETE THE CACHE')] })[ONLY_MARKABLE_ROW])
-      .toEqual([{ startColumn: 2, endColumn: 25 }]);
+      .toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
   });
 });
 
@@ -139,7 +141,7 @@ describe('what a mark is kept away from', () => {
       windowRows: 2,
     });
     expect(rows[0]).toEqual([]);
-    expect(rows[1]).toEqual([{ startColumn: 8, endColumn: 27 }]);
+    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Cover Impact and severity for this request.'.length }]);
   });
 
   it('marks the first occurrence when the same phrase is in the section twice', () => {
@@ -148,7 +150,9 @@ describe('what a mark is kept away from', () => {
       '- retry twice, then retry once more.',
     ].join('\n');
     const rows = spansOf({ text, sections: [SECTIONS[1]!], phrases: [phrase('retry')], windowRows: 2 });
-    expect(rows[1]).toEqual([{ startColumn: 2, endColumn: 7 }]);
+    // Both occurrences are on the one line, so the question the old phrase-level rule answered —
+    // which of the two — no longer arises: the line is drawn once either way.
+    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- retry twice, then retry once more.'.length }]);
   });
 
   it('finds nothing for a phrase the user has edited away', () => {
@@ -174,7 +178,7 @@ describe('the window', () => {
 
   it('keeps the mark when the window starts above it, at the shifted row', () => {
     const rows = spansOf({ windowStart: 2, windowRows: 4 });
-    expect(rows[ONLY_MARKABLE_ROW - 2]).toEqual([{ startColumn: 2, endColumn: 25 }]);
+    expect(rows[ONLY_MARKABLE_ROW - 2]).toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
   });
 
   it('gives a scroll marker row no mark — it is the window\'s text, not the buffer\'s', () => {
@@ -187,18 +191,22 @@ describe('the window', () => {
 });
 
 describe('a phrase that crosses a wrap', () => {
-  it('becomes one sub-range per row, with the columns the wrap leaves it', () => {
-    // Width 10 wraps "- do not delete the cache before the checks pass." every ten characters, so
-    // the clause at offsets 2..25 of that line falls across rows starting at 0, 10 and 20.
+  it('becomes one sub-range per row, covering the whole wrapped line', () => {
+    // Width 10 wraps "- do not delete the cache before the checks pass." — 49 characters — into
+    // five rows. The unit is the line, so every one of those rows is fully marked, and the last
+    // carries only what is left of the sentence.
     const rows = spansOf({ fieldWidth: 10, windowStart: 0, windowRows: 200 });
     const marked = rows.map((row, index) => ({ index, row })).filter((entry) => entry.row.length > 0);
-    expect(marked.map((entry) => entry.row)).toEqual([
-      [{ startColumn: 2, endColumn: 10 }],
-      [{ startColumn: 0, endColumn: 10 }],
-      [{ startColumn: 0, endColumn: 5 }],
-    ]);
-    // Contiguous rows, and the pieces put back together are the phrase.
-    expect(marked.map((entry) => entry.index)).toEqual([marked[0]!.index, marked[0]!.index + 1, marked[0]!.index + 2]);
+    const width = 10;
+    const length = SECTION_TEXT[1]!.length;
+    const expected = [];
+    for (let at = 0; at < length; at += width) {
+      expected.push([{ startColumn: 0, endColumn: Math.min(width, length - at) }]);
+    }
+    expect(marked.map((entry) => entry.row)).toEqual(expected);
+    // Contiguous rows, and the pieces put back together are the line.
+    expect(marked.map((entry) => entry.index))
+      .toEqual(expected.map((_, offset) => marked[0]!.index + offset));
   });
 
   it('keeps a sub-range inside the window and drops the part that is outside it', () => {
@@ -227,10 +235,10 @@ describe('two phrases on one row', () => {
       markerAbove: false,
       markerBelow: false,
     });
-    expect(rows[1]).toEqual([{ startColumn: 2, endColumn: 35 }]);
+    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Do not modify the auth middleware.'.length }]);
   });
 
-  it('keeps two ranges apart when they do not touch', () => {
+  it('draws one range for two phrases on the same line, because the line is the unit', () => {
     const rows = buildPromptEnhancementEmphasisSpansV1({
       text,
       sections,
@@ -241,6 +249,9 @@ describe('two phrases on one row', () => {
       markerAbove: false,
       markerBelow: false,
     });
-    expect(rows[1]).toEqual([{ startColumn: 2, endColumn: 8 }, { startColumn: 25, endColumn: 35 }]);
+    // ⚠️ Phrase-level drew two ranges here, with the plain words between them. The line is now
+    // the unit, so two phrases that happen to sit on it ask for the same one range — which is
+    // also why the merge below can no longer be reached from a single line.
+    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Do not modify the auth middleware.'.length }]);
   });
 });
