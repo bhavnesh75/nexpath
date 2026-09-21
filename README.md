@@ -1,6 +1,6 @@
   # Nexpath CLI — Build Fast. Ship with Confidence.
 
-[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](#license)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](license)
 [![Built at MLH AI Hackfest 2026](https://img.shields.io/badge/MLH-AI%20Hackfest%202026-orange.svg)]()
 [![Follow on X](https://img.shields.io/badge/X-@Nex__path-black?style=flat&logo=x&logoColor=white)](https://x.com/Nex_path)
 [![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/F4v23nAq4)
