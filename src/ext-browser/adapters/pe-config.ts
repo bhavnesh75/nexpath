@@ -11,8 +11,15 @@ import browser from 'webextension-polyfill';
 /** Mirrors the CLI's `prompt_enhancement.popup_cooldown` config key (stop.ts). */
 export const PE_POPUP_COOLDOWN_KEY = 'prompt_enhancement.popup_cooldown';
 
-/** The CLI's default: suppress NEW PE popups for 7 prompts after one shows. */
-export const PE_POPUP_COOLDOWN_DEFAULT = 7;
+/**
+ * The CLI's default: suppress NEW PE popups for 3 prompts after one shows.
+ *
+ * Was 7 until 2026-09-17. The CLI measured the two values over a 392-prompt run — 7 showed 9 popups and
+ * threw away 8 already-prepared ones, 3 showed 14 and threw away 5 — and shipped 3 as its default. This
+ * literal is the browser's own copy of that number, so it has to move with it or the two surfaces show
+ * popups at different rates for no reason a user could explain.
+ */
+export const PE_POPUP_COOLDOWN_DEFAULT = 3;
 
 /**
  * Resolve the PE / MPS-1 popup cooldown (in prompts) — project-scoped key

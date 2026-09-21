@@ -131,6 +131,12 @@ export function deliverPePanelCommand(
 export function buildPePanelView(
   view: PromptEnhancementCliPopupViewV1,
   viewSeq: number,
+  /**
+   * What the Alt+Shift+T chooser should show as current. Passed IN rather than
+   * read here so this stays the pure projection it is — the caller owns storage.
+   * Omitted (or partly omitted), the chooser simply names no value.
+   */
+  settings?: { frequency?: string; role?: string },
 ): PePanelViewV1 {
   const model = view.model;
   const directional = model.controls.directional
@@ -165,6 +171,8 @@ export function buildPePanelView(
   if (model.whyHelp) out.whyHelp = model.whyHelp.text;
   if (view.publicNotice) out.publicNotice = view.publicNotice;
   if (model.providerFailureNotice) out.providerFailureNotice = model.providerFailureNotice;
+  if (settings?.frequency) out.currentFrequency = settings.frequency;
+  if (settings?.role) out.currentRole = settings.role;
   return out;
 }
 
@@ -321,6 +329,13 @@ export interface BrowserPePopupDeps {
   feedbackStore?: PeFeedbackKeyStore;
   /** Injectable engine runner (tests); defaults to the real state machine. */
   runPopup?: typeof runPromptEnhancementCliSubmitPopupV1;
+  /**
+   * The stored `advisory_frequency` / `role`, for the panel's Alt+Shift+T chooser.
+   * Read once per popup by the worker (which owns the key store) and passed in, so
+   * this host keeps no storage of its own. Absent = the chooser names no current
+   * value, which is also what an older worker produces.
+   */
+  currentSettings?: { frequency?: string; role?: string };
 }
 
 /**
@@ -521,7 +536,7 @@ export async function runBrowserPePopup(
       next: async (view: PromptEnhancementCliPopupViewV1) => {
         loopView = view; // feedback persistence reads the live session from here
         seq += 1;
-        const panelView = buildPePanelView(view, seq);
+        const panelView = buildPePanelView(view, seq, deps.currentSettings);
         // Checked on the FIRST render only: a body that becomes uneditable
         // mid-session is a state the user navigated into deliberately.
         if (!firstRenderOk && !panelView.bodyEditable) {

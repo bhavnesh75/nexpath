@@ -54,6 +54,7 @@
 
 import type { SurfaceId, SurfaceModel, SurfaceRow } from './surface-model.js';
 import { fieldScroller, growFields, renderSurface } from './surface-view.js';
+import { withBodyText } from './refinement.js';
 
 /** What the surfaces report upward. The dock's own union stays `dismiss`-only —
  * window furniture and surface semantics are different layers. */
@@ -185,6 +186,15 @@ export function createSurfaceController(
   /** The user's live edits, by field ordinal. The DOM owns them between renders. */
   let fieldValues: string[] = [];
   let destroyed = false;
+  /**
+   * Where Alt+Shift+T came FROM, with the body as the user had left it.
+   *
+   * Saved here rather than by the activation hook because the hook never sees a
+   * key — and restoring the model alone would discard what they had typed, the
+   * same mistake `refinement-transitions.ts` calls out for Go back. Checking a
+   * setting mid-edit must cost nothing.
+   */
+  let settingsReturn: { model: SurfaceModel; focusIndex: number } | null = null;
 
   const wrapper = doc.createElement('div');
   wrapper.className = 'np-surface-root';
@@ -346,6 +356,14 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
       return;
     }
 
+    // "Done" in the settings chooser — the CLI's `__DONE__` (TtySelectFn.ts:461).
+    // Handled here and not by the hook because leaving means restoring the saved
+    // model WITH its body, and the save slot lives in this closure.
+    if (row.kind === 'action' && row.setting === 'done') {
+      leaveSettings();
+      return;
+    }
+
     const surface = model.id;
     const pef = surface === 'prompt_enhancement_feedback';
 
@@ -448,11 +466,52 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     show(next);
   }
 
+  // ── settings chooser (Alt+Shift+T) ────────────────────────────────────────
+
+  /** True while one of the chooser's two VALUE lists is open (see `settingValue`). */
+  function inSettingsList(): boolean {
+    return model.id === 'settings'
+      && model.rows.some((r) => r.kind === 'action' && r.settingValue !== undefined);
+  }
+
+  /** Open the chooser, remembering the surface and body to come back to. */
+  function enterSettings(): void {
+    const root = options.registry.settings;
+    if (!root || model.id === 'settings') return;
+    harvest();
+    // `withBodyText` THROWS on a surface with no body (`refinement.ts:137`), and a
+    // throw inside a key listener is swallowed by the browser — the chooser would
+    // simply never open, with nothing in the console to say why. Surfaces without
+    // a field are saved as they are; only a body needs carrying back.
+    const hasBody = model.rows.some((r) => r.kind === 'field');
+    settingsReturn = { model: hasBody ? withBodyText(model, bodyText()) : model, focusIndex };
+    show(root, 0);
+  }
+
+  /** Close the chooser, restoring BOTH halves — the surface and the edited body. */
+  function leaveSettings(): void {
+    const back = settingsReturn;
+    settingsReturn = null;
+    if (!back) {
+      switchTo('prompt_enhancement');
+      return;
+    }
+    show(back.model, back.focusIndex);
+  }
+
   // ── escape, per surface ───────────────────────────────────────────────────
 
   function onEscape(): void {
     const surface = model.id;
     switch (surface) {
+      case 'settings':
+        // Two meanings, told apart by the ROWS: inside a value list Esc goes
+        // back to the root (the CLI's sub-menu Esc), at the root it leaves the
+        // chooser for the prompt. Never a close — a user who opened settings
+        // mid-edit must not lose the popup, let alone the body.
+        if (inSettingsList()) { switchTo('settings'); return; }
+        leaveSettings();
+        return;
       case 'prompt_enhancement':
         // The CLI's Esc is an IMMEDIATE close — "Feedback opens ONLY when the
         // user chooses Use original prompt … Close / Esc / crash send nothing
@@ -517,6 +576,27 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     // Row navigation is PLAIN arrows only: Shift+arrow inside a field is the
     // browser's select-by-line, which stealing the key would silently break.
     const plain = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+
+    // Alt+Shift+T — the settings chooser (advisory frequency / project role).
+    // The CLI's Ctrl+T; plain Ctrl+T is the browser's new-tab shortcut and is
+    // not interceptable by a page, so this is the advisory panel's own remap
+    // (`ui/panel.js:571-574`, user decision 2026-07-11). Matched on e.code for
+    // the same reason as the chords above: with Alt held, e.key is a composed
+    // character on macOS and layout-dependent elsewhere.
+    //
+    // Works from inside a field too — it changes no text, and a user editing the
+    // body is exactly who wants to see how often this popup will appear. It is a
+    // no-op unless the host registered a `settings` model, so a surface that
+    // cannot act on it (the fixtures, the rating popup) never opens an empty one.
+    // The "already open" case is `enterSettings`'s own guard, not a second one
+    // here: two guards for one rule mean neither is covered — remove either and
+    // the other still hides the bug.
+    if (safeChord && e.code === 'KeyT' && options.registry.settings) {
+      enterSettings();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
     // Ctrl/Cmd+↑/↓ or Alt+Shift+↑/↓ — caret line movement inside a field.
     // Physical codes, the D1.3 precedent: e.key is layout- and

@@ -3,7 +3,7 @@
 All notable changes to the browser extension. Versions track the `version` field in
 `manifest.chrome.json` / `manifest.firefox.json`.
 
-## 0.1.55
+## 0.1.57
 
 Token mode now delivers the full enhancement.
 

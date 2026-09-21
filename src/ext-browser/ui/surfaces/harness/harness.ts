@@ -27,6 +27,7 @@ import { PE_FIXTURE } from '../fixtures/pe.js';
 import { MPS_FIRST_FIXTURE, MPS_CONTINUATION_FIXTURE } from '../fixtures/mps.js';
 import { PEF_FIXTURE } from '../fixtures/pef.js';
 import { RATING_FIXTURE } from '../fixtures/rating.js';
+import { SETTINGS_FIXTURE } from '../fixtures/settings.js';
 import { withBodyText } from '../refinement.js';
 import { createRefinementTransitions } from '../refinement-transitions.js';
 import { PE_REFINED_TEXT, MPS_REFINED_TEXT } from '../fixtures/directional.js';
@@ -37,6 +38,9 @@ const FIXTURES: Record<SurfaceId, SurfaceModel> = {
   mps_continuation: MPS_CONTINUATION_FIXTURE,
   prompt_enhancement_feedback: PEF_FIXTURE,
   advisory_rating: RATING_FIXTURE,
+  // The Alt+Shift+T chooser's ROOT view. Its two lists are reached from here, so
+  // the harness renders the entry point and the transitions do the rest.
+  settings: SETTINGS_FIXTURE,
 };
 
 /** The pre-authored recompose, per surface — the static stand-in for Option B. */

@@ -225,7 +225,7 @@ export class SessionStateManager {
   /**
    * Record that a PE / MPS-1 popup was SHOWN this prompt — resets the
    * prompt-enhancement popup cooldown (`prompt_enhancement.popup_cooldown`,
-   * default 7). Mirrors the CLI manager's method of the same name; the field is
+   * default 3). Mirrors the CLI manager's method of the same name; the field is
    * optional on persisted state, so pre-PE session rows load unchanged and read
    * as "none shown yet" (-1 semantics at the gate).
    */

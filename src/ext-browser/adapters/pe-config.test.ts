@@ -23,14 +23,18 @@ beforeEach(() => {
 });
 
 describe('resolvePePopupCooldown', () => {
-  it('defaults to 7 (the CLI default) when nothing is set', async () => {
-    expect(PE_POPUP_COOLDOWN_DEFAULT).toBe(7);
-    expect(await resolvePePopupCooldown(ROOT)).toBe(7);
+  it('defaults to 3 (the CLI default) when nothing is set', async () => {
+    // Moved 7 → 3 with the CLI on 2026-09-17. Pinned as a VALUE, not just as parity with the import,
+    // because the whole point of this literal is that it is the browser's own copy: a test that only
+    // compared the two would pass while both drifted away from the number the CLI actually ships.
+    expect(PE_POPUP_COOLDOWN_DEFAULT).toBe(3);
+    expect(await resolvePePopupCooldown(ROOT)).toBe(3);
   });
 
   it('the project-scoped key wins over the global key (CLI fallback order)', async () => {
-    mockGet.mockResolvedValue({ [projectKey]: '3', [PE_POPUP_COOLDOWN_KEY]: '10' });
-    expect(await resolvePePopupCooldown(ROOT)).toBe(3);
+    // Both values are non-default on purpose, so neither can be confused with the fallback.
+    mockGet.mockResolvedValue({ [projectKey]: '4', [PE_POPUP_COOLDOWN_KEY]: '10' });
+    expect(await resolvePePopupCooldown(ROOT)).toBe(4);
   });
 
   it('falls back to the global key when no project key exists', async () => {
@@ -47,14 +51,14 @@ describe('resolvePePopupCooldown', () => {
 
   it('non-numeric and negative values fall back to the default', async () => {
     mockGet.mockResolvedValue({ [PE_POPUP_COOLDOWN_KEY]: 'often' });
-    expect(await resolvePePopupCooldown(ROOT)).toBe(7);
+    expect(await resolvePePopupCooldown(ROOT)).toBe(3);
     mockGet.mockResolvedValue({ [PE_POPUP_COOLDOWN_KEY]: '-2' });
-    expect(await resolvePePopupCooldown(ROOT)).toBe(7);
+    expect(await resolvePePopupCooldown(ROOT)).toBe(3);
   });
 
   it('a storage failure falls back to the default', async () => {
     mockGet.mockRejectedValue(new Error('gone'));
-    expect(await resolvePePopupCooldown(ROOT)).toBe(7);
+    expect(await resolvePePopupCooldown(ROOT)).toBe(3);
   });
 });
 

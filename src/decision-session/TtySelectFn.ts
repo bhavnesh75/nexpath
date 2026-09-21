@@ -464,15 +464,15 @@ function spawnRootChooserFlow(
   return SKIP_NOW;
 }
 
-/** Read the currently configured advisory_frequency, project-scoped first then global, default 'every_event'. */
+/** Read the currently configured advisory_frequency, project-scoped first then global, default 'optimum'. */
 function readCurrentFreq(store: Store | undefined, projectRoot: string | undefined): string {
-  if (!store) return 'every_event';
+  if (!store) return 'optimum';
   if (projectRoot) {
     const projectValue = getConfig(store.db, `advisory_frequency:${projectRoot}`);
     if (projectValue) return projectValue;
   }
   const globalValue = getConfig(store.db, 'advisory_frequency');
-  return globalValue ?? 'every_event';
+  return globalValue ?? 'optimum';
 }
 
 /** Read the currently configured role, project-scoped first then global, default 'founder'. */

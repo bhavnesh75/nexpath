@@ -1,4 +1,5 @@
   # Nexpath CLI — Build Fast. Ship with Confidence.
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Follow on X](https://img.shields.io/badge/X-@Nex__path-black?style=flat&logo=x&logoColor=white)](https://x.com/Nex_path) [![Discord](https://img.shields.io/badge/Discord-Join-7289DA?style=flat&logo=discord&logoColor=white)](https://discord.com/invite/F4v23nAq4) [![Extension](https://img.shields.io/badge/VS%20Code-Extension-007ACC?style=flat&logo=visual-studio-code&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=nexpath.nexpath-vscode) [![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-4285F4?style=flat&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/nexpath/gdkknhjgflkkeajbhalkaakohpoflolc) [![Firefox Add-ons](https://img.shields.io/badge/Firefox-Add--ons-FF7139?style=flat&logo=firefoxbrowser&logoColor=white)](https://addons.mozilla.org/en-US/firefox/addon/nexpath/) [![Demo](https://img.shields.io/badge/YouTube-Demo-red?style=flat&logo=youtube&logoColor=white)](https://youtu.be/pNejtPA5DPU?si=4vhclFLQxAGSRjin)
 
 > **A local-first behaviour guidance layer that helps builders catch missing checks before AI-generated work becomes shipped risk.**
 
@@ -111,7 +112,7 @@ The core interaction keeps your request and the added workflow guidance together
 
 Nexpath CLI is built for prompt capture across AI coding agents.
 
-| Agent | Status in v0.1.5 |
+| Agent | Status in v0.1.57 |
 |-------|-----------------|
 | [**Claude Code**](#add-nexpath-to-your-development-workflow--installation) | Fully supported — end-to-end tested |
 | [**Cursor**](https://marketplace.visualstudio.com/items?itemName=nexpath.nexpath-vscode) | Fully supported — end-to-end tested |
@@ -125,14 +126,10 @@ Nexpath CLI is built for prompt capture across AI coding agents.
 ## Add Nexpath to Your Development Workflow — Installation
 
 ```bash
-# Clone and build from source
-git clone https://github.com/hi0001234d/nexpath.git
-cd nexpath
-npm install
-npm run build
-npm link
+# Install
+npm install -g nexpath-cli
 
-# Register with your coding agent and verify
+# Register with your coding agent
 nexpath install
 
 # Verify
@@ -140,6 +137,9 @@ nexpath --version
 ```
 
 Setup notes:
+- The npm package is **`nexpath-cli`**; the commands it installs are **`nexpath`** and
+  `nexpath-serve`. Requires Node 18 or later.
+- Building from source instead? See the [contribution guide](CONTRIBUTING.md).
 - **Install asks how Nexpath should run — one credential, two ways to give it:** your own
   **OpenAI API key** ([get one](https://platform.openai.com/api-keys)), or a **Nexpath token**
   from a free account at [parseos.tech/nexpath](https://parseos.tech/nexpath/) if you would
@@ -150,13 +150,13 @@ Setup notes:
 ### Uninstalling
 
 ```bash
-# Remove the Nexpath CLI
+# Remove the Nexpath CLI (package name: nexpath-cli, binary: nexpath)
 nexpath uninstall
-npm uninstall -g nexpath
-npm unlink -g nexpath
+npm uninstall -g nexpath-cli
+npm unlink -g nexpath-cli    # only if you installed via npm link
 
 # Verify it's gone
-npm list -g nexpath
+npm list -g nexpath-cli
 which nexpath
 
 # Clear local data and caches

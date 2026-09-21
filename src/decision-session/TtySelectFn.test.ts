@@ -989,7 +989,8 @@ describe('createTtySelectFn — Linux new-window path', () => {
     );
     await createTtySelectFn()!(makeOpts());
     expect(capturedFreqScript).toContain('initialValue:');
-    expect(capturedFreqScript).toContain('"every_event"');
+    // No store here, so this is the UNSET default — High (`optimum`) since 2026-09-19.
+    expect(capturedFreqScript).toContain('"optimum"');
   });
 
   it('role script lists the four predefined roles and excludes the legacy Clear option', async () => {

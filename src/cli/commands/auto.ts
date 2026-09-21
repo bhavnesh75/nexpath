@@ -27,6 +27,7 @@ import { resolveLanguage } from '../../classifier/LanguageDetector.js';
 import { insertPrompt } from '../../store/prompts.js';
 import { redactSecrets } from '../../store/redact.js';
 import { getConfig } from '../../store/config.js';
+import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { getProject, upsertProject } from '../../store/projects.js';
 import { getRecentPrompts } from '../../store/prompts.js';
 import { importHistoricalPrompts } from '../../store/historical-import.js';
@@ -48,6 +49,10 @@ import {
   type PromptEnhancementDeliveryResultV1,
 } from '../../prompt-enhancement/delivery.js';
 import { insertSkippedSession } from '../../store/skipped-sessions.js';
+import {
+  resolvePromptEnhancementPopupCooldownV1,
+  isPromptEnhancementPopupCooldownActiveV1,
+} from '../../prompt-enhancement/popup-cooldown.js';
 import { recordActivity } from '../../store/feedback-cadence.js';
 import { recordActionSignal } from '../../store/feedback-signals.js';
 import { writeTelemetry } from '../../telemetry/index.js';
@@ -163,6 +168,66 @@ export function buildFiredKey(flagType: FlagType, prevStage: Stage, currentStage
     return `stage_transition:${prevStage}→${currentStage}`;
   }
   return `${flagType}@${currentStage}`;
+}
+
+/**
+ * Phase 2: name the absence WINDOW a signal is currently in, by the prompt index that opened it.
+ *
+ * This is the occurrence the dedup key is suffixed with, so it has to mean "this stretch of the signal
+ * being missing" — one value for as long as the same absence continues.
+ *
+ * A raise's own `raisedAtIndex` is NOT that value. The detector is meant to re-raise a signal at most
+ * once per `ABSENCE_COOLDOWN_PROMPTS`, but its cooldown check reads the FIRST flag it finds for the
+ * signal (`AbsenceDetector.ts:145`) while raises are appended — so once the oldest flag's window has
+ * passed, every later prompt on which the signal is still missing appends another raise. Measured on
+ * the phase-1 runs: `user_feedback_review` was raised at 167 and then at 197, 198, 199 … 205 — two
+ * absence windows recorded as ten raises. Keyed on the raise, dedup reads eight of those as brand-new
+ * occurrences and lets the same advice through eight times.
+ *
+ * So the raises are folded back into windows: scanning in order, a raise opens a NEW window only when
+ * it falls at or after the open one's end. That is what the detector's cooldown was meant to enforce,
+ * computed from the flags it already wrote — the detector itself is left alone, because changing it
+ * would move advisory volume on every level and surface, far outside this phase.
+ *
+ * Measured over the six recorded sim sessions (392 genuine windows): keying on the raise yields 439
+ * occurrences, the oldest-still-open raise yields 416, and this rule yields 409.
+ *
+ * Signals are matched by key only, not by stage, exactly as the detector's own cooldown check does,
+ * and each flag's own `cooldownUntil` is used rather than a recomputed one. When no merged window
+ * covers `promptCount` — reachable because absorbed raises outlive the window that swallowed them —
+ * the oldest raise still inside its own window is used instead, so a signal that is currently flagged
+ * always has an occurrence. `undefined` means the signal is not flagged at all here.
+ */
+export function absenceOccurrenceIndexV1(
+  flags: readonly { signalKey: string; raisedAtIndex: number; cooldownUntil: number }[],
+  signalKey: string,
+  promptCount: number,
+): number | undefined {
+  const raises = flags
+    .filter((f) => f.signalKey === signalKey && f.raisedAtIndex <= promptCount)
+    .sort((a, b) => a.raisedAtIndex - b.raisedAtIndex);
+
+  let windowStart: number | undefined;
+  let windowEnd = Number.NEGATIVE_INFINITY;
+  let absorbedButOpen: number | undefined;
+  for (const flag of raises) {
+    if (flag.raisedAtIndex >= windowEnd) {           // opens a window of its own
+      windowStart = flag.raisedAtIndex;
+      windowEnd = flag.cooldownUntil;
+      if (promptCount < windowEnd) return windowStart;
+    } else if (absorbedButOpen === undefined && promptCount < flag.cooldownUntil) {
+      // Absorbed, but its own window outlives the one that swallowed it. Remember the window it
+      // BELONGS to, not the raise: the raise is a B-11 artifact, and naming it would hand back a
+      // different occurrence on each of the prompts where these tails expire one by one.
+      //
+      // The `undefined` guard takes the OLDEST such raise. With the detector's fixed 30-prompt width
+      // it can never matter — two still-open absorbed raises from different windows cannot coexist at
+      // a prompt no window covers — so no test can tell the two apart; it is kept because the type
+      // permits per-flag widths and the oldest is the answer that stays right if they ever vary.
+      absorbedButOpen = windowStart;
+    }
+  }
+  return absorbedButOpen;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -967,6 +1032,8 @@ export function createPromptEnhancementCliHostConsumerV1(
         // feedback-consent flush (store-backed sink; in-process direct popup).
         actionSignalSink: (kind, occurredAt) => recordActionSignal(dependencies.store, request.projectRoot, kind, occurredAt),
         costObservabilitySink: (result) => emitPromptEnhancementCostObservabilityV1(result, 'popup_action', logger),
+        // Ctrl+T inside the popup (owner request 2026-09-18) — this branch holds the open store.
+        settingsControl: buildPromptEnhancementSettingsControlV1(dependencies.store, request.projectRoot),
       });
     } else {
       hostAdapter = 'linux_terminal';
@@ -1158,7 +1225,7 @@ export async function runAuto(
   const freq = (
     getConfig(store.db, `advisory_frequency:${input.projectRoot}`) ??
     getConfig(store.db, 'advisory_frequency') ??
-    'every_event'
+    'optimum'
   ) as AdvisoryFrequencyLevel;
   const freqConfig = resolveFrequencyConfig(freq);
 
@@ -1555,8 +1622,40 @@ export async function runAuto(
   const preCheckFiredKey = triggerResult.kind === 'stage_transition'
     ? buildFiredKey('stage_transition', prevStage, mgr.current.currentStage)
     : buildFiredKey(`absence:${triggerResult.qualifyingFlags[0]!.signalKey}` as FlagType, prevStage, mgr.current.currentStage);
-  const alreadyFired = mgr.hasFiredDecisionSession(preCheckFiredKey);
-  logger.debug('dedup', { firedKey: preCheckFiredKey, alreadyFired });
+  // Phase 2: dedup blocks the OCCURRENCE of a signal, not the signal itself. An absence flag carries
+  // the prompt index it was raised at, and the detector raises a fresh one once the practice is still
+  // missing after its cooldown — that re-raise IS the "this is happening again" event, so it needs no
+  // invented TTL. Suffixing the key with it means one popup per occurrence instead of one per session.
+  //
+  // ⚠️ The suffix lives ONLY in this key. `firedKey` below is read by the PE request, the router, the
+  // guidance facts, the fatigue keys and the popup body the user reads — it stays byte-identical.
+  // Stage transitions keep today's dedup on purpose: they have no flag lifecycle, and the classifier
+  // oscillates between stages, which is the noise dedup was added for in the first place.
+  //
+  // ⚠️ The qualifying flags are passed ALONGSIDE the session's own: on the fresh-raise path they have
+  // not been persisted yet (that happens at 6.8, below this gate), while the fired key built after it
+  // sees them. Without them the two would name different occurrences at a window boundary — the gate
+  // reading an absorbed raise that is still inside its own window, the fired key reading the new
+  // window the fresh raise opens. A charge recorded under one and checked under the other blocks a
+  // genuinely new occurrence. Duplicates are harmless: a repeated raise is absorbed by its own window.
+  const occurrenceFlags = triggerResult.kind === 'absence'
+    ? [...mgr.current.absenceFlags, ...triggerResult.qualifyingFlags]
+    : mgr.current.absenceFlags;
+  const dedupKey = triggerResult.kind === 'absence'
+    ? `${preCheckFiredKey}#${absenceOccurrenceIndexV1(
+        occurrenceFlags,
+        triggerResult.qualifyingFlags[0]!.signalKey,
+        mgr.current.promptCount,
+      ) ?? triggerResult.qualifyingFlags[0]!.raisedAtIndex}`
+    : preCheckFiredKey;
+  // Phase 1: under `countBudgetOnShow` the gate asks "was this advice SHOWN to the user?" instead of
+  // "did an advisory fire?" — an advisory whose popup was discarded must not block its own signal for
+  // the rest of the session. `firedDecisionSessions` keeps being written below either way, so the
+  // `once_per_session` level and the telemetry counters are untouched.
+  const alreadyFired = freqConfig.countBudgetOnShow
+    ? mgr.hasShownAdvisoryKeyV1(dedupKey)
+    : mgr.hasFiredDecisionSession(dedupKey);
+  logger.debug('dedup', { firedKey: preCheckFiredKey, dedupKey, alreadyFired });
   if (alreadyFired) {
     // F4: this key already fired in the session
     await prepareSequenceShapedPeFallback('blocked_by_dedup');
@@ -1602,7 +1701,12 @@ export async function runAuto(
   const advisoryCap = isVibeProfile
     ? freqConfig.sessionAdvisoryCapVibe
     : freqConfig.sessionAdvisoryCapDefault;
-  const advisoryCount = mgr.current.advisoryCount ?? 0;
+  // Phase 1: the ceiling counts popups the user actually SAW under `countBudgetOnShow`; otherwise it
+  // counts advisories that fired, popup or not. `advisoryCount` is still incremented either way, so
+  // `advisoryCountInSession` telemetry keeps its historical meaning.
+  const advisoryCount = freqConfig.countBudgetOnShow
+    ? (mgr.current.shownPopupCount ?? 0)
+    : (mgr.current.advisoryCount ?? 0);
   if (advisoryCount >= advisoryCap) {
     // F4: the session advisory cap is reached
     await prepareSequenceShapedPeFallback('blocked_by_session_cap');
@@ -1653,6 +1757,10 @@ export async function runAuto(
   // For an absence trigger, use the classifier's selected signal when it is one of the
   // qualifying flags; else fall back to the first qualifying flag (deterministic).
   let effectiveFlagType: FlagType;
+  // Phase 2: the occurrence the selected flag belongs to — undefined for a stage transition, which
+  // keeps today's whole-session dedup. Held alongside the flag type so the dedup form of `firedKey`
+  // can be built without re-deriving which flag the classifier picked.
+  let selectedRaisedAtIndex: number | undefined;
   if (triggerResult.kind === 'stage_transition') {
     effectiveFlagType = 'stage_transition';
   } else {
@@ -1661,125 +1769,164 @@ export async function runAuto(
       ? stageResult.selectedSignalKey
       : triggerResult.qualifyingFlags[0]!.signalKey;
     effectiveFlagType = `absence:${selectedKey}`;
+    // Same list the gate used, for the same reason — by now 6.8 has persisted the fresh raises, so
+    // the duplicates this introduces are absorbed rather than counted twice.
+    selectedRaisedAtIndex = absenceOccurrenceIndexV1(occurrenceFlags, selectedKey, mgr.current.promptCount)
+      ?? (triggerResult.qualifyingFlags.find((f) => f.signalKey === selectedKey)
+        ?? triggerResult.qualifyingFlags[0]!).raisedAtIndex;
   }
   const firedKey = buildFiredKey(effectiveFlagType, prevStage, mgr.current.currentStage);
+  // Phase 2: the dedup-list form of `firedKey`. `firedKey` itself stays byte-identical — it is read by
+  // the PE request, the router, the guidance facts and the popup body — so the suffix is added only
+  // here, for the list the gate above reads.
+  const firedDedupKey = selectedRaisedAtIndex === undefined
+    ? firedKey
+    : `${firedKey}#${selectedRaisedAtIndex}`;
   // ── 8.1. typed PE preparation seam ────────────────────────────────────
   // Build and consume the approved PE packet by default. An injected integration
   // remains available for boundary tests, while the default path now exercises
   // the executable owner-spec facade without changing legacy DS or delivery authority.
   // A3 step 7: mine-and-cache before the request is built, so freshly mined values are in the
   // store when the boundary reads them. One-shot and threshold-gated; see the closure above.
-  await ensurePromptFactsFresh();
-  const peIntegration = promptEnhancement ?? {
-    request: buildPromptEnhancementRequestForAuto({
-      auto: input,
-      store,
-      session: mgr,
-      project,
-      effectiveLanguage: effectiveLang,
-      configuredRole,
-      effectiveFlagType,
-      firedKey,
-      previousStage: prevStage,
-      trigger: triggerResult,
-      stageResult,
-      // F4: this path is reached only after frequency, dedup, cooldown, cap and the
-      // classifier fire-recommendation have ALL passed — so the trigger is cleanly eligible,
-      // UNLESS the user already dismissed this very signal. `dismissedAtIndex` is set on the
-      // absence flag when the user acts on it, and L4991 names dismissal as a state that must
-      // not anchor a popup — so the one locked value that had no producer now has one, read
-      // from session state rather than inferred.
-      triggerEligibility: promptEnhancementFiredTriggerEligibilityV1(mgr.current.absenceFlags, effectiveFlagType),
-      streamBOutputs: streamBOverrides
-        ? Object.entries(streamBOverrides)
-          .filter(([, present]) => present)
-          .map(([signal]) => `stream_b:${signal}`)
-        : [],
-    }),
-    prepare: preparePromptEnhancementForRunAuto,
-  };
-  const preparation = await preparePromptEnhancementForAuto(peIntegration);
-  await peIntegration.onResult?.(preparation);
-  logger.debug('prompt_enhancement_prepare_boundary', {
-    disposition: preparation.disposition,
-    safeFallback: preparation.safeFallback,
-    reasonCode: 'reasonCode' in preparation ? preparation.reasonCode : undefined,
-    // Diagnosability (2026-08-06): a bare invalid_result was undebuggable from the log — record
-    // WHICH validation checks failed so a live boundary rejection names its exact cause.
-    validationReasonCodes: 'validationReasonCodes' in preparation && preparation.validationReasonCodes
-      ? preparation.validationReasonCodes.slice(0, 10)
-      : undefined,
-    blockedFailureCodes: blockedFailureCodesForLog(preparation),
-    // ⚠️ BOTH of these were on the sequence-shaped boundary log and NOT here — the MAIN path, which
-    // is the common one. So the deterministic-popup suppression and the I1 ordering count were
-    // observable only on the rarer route, which is the same one-of-two-sites shape the persistence
-    // gate had. Kept identical to the other site on purpose: two logs of the same event that report
-    // different fields cannot be read together.
-    suppressedReason: promptEnhancementBodyHasNoLlmWordingV1(preparation.result)
-      ? 'deterministic_only_no_llm_wording'
-      : undefined,
-    classifierDegraded: stageResult.degraded,
-    relevanceOrderCount: stageResult.sectionRelevanceOrder.length,
-    // Kept identical to the sequence-shaped site above on purpose: two logs of the same event that
-    // report different fields cannot be read together.
-    prunedSectionCount: preparation.result?.prunedSectionCount,
-    floorSectionCount: preparation.result?.floorSectionCount,
-  });
-  // Owner decision B-i (2026-08-04): the PE popup is deferred to the Stop hook. Do NOT show a
-  // popup on UserPromptSubmit — the prompt passes through raw. When a real (non-fallback) result
-  // exists, persist it so the Stop hook can show the PE popup after Claude responds.
-  // Phase 4 (defense-in-depth): but NOT an unshowable one — a `no_popup` display decision
-  // (`no_popup_not_applicable` disposition or `no_popup` send policy) would spawn a window at Stop that
-  // the child declines (the "blink"). Phase 1's launcher gate already blocks the spawn; skipping the row
-  // here removes it at the source. Same condition the UI boundary uses; the skip stays traceable via the
-  // `prompt_enhancement_prepare_boundary` log above (no `..._stored` log follows).
-  const displayDecisionIsNoPopup = preparation.result?.disposition === 'no_popup_not_applicable'
-    || preparation.result?.uiView.body.sendPolicy === 'no_popup'
-    // Owner ruling (a): a body with no LLM wording is boilerplate, and boilerplate does not
-    // earn a popup. Same row, same gate as the blink fix above.
-    || promptEnhancementBodyHasNoLlmWordingV1(preparation.result);
-  if (!preparation.safeFallback && preparation.result && !displayDecisionIsNoPopup) {
-    upsertPendingPromptEnhancement(store, {
-      projectRoot: input.projectRoot,
-      sessionId:   mgr.current.sessionId,
-      promptCount: mgr.current.promptCount,
-      request:     peIntegration.request,
-      result:      preparation.result,
-      // P1b-ii: carry the planner item list + whole-prompt directive ranges (set by the closure
-      // during this prepare) so the Stop-hook batch can word items 2…N. Undefined on non-sequence
-      // prepares → NULL columns.
-      plannerItems: capturedPlannerItems,
-      plannerPromptDirectives: capturedPlannerPromptDirectives,
-      // Display only: the popup may draw these louder, and the agent never sees the difference.
-      emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, peIntegration.request),
-    });
-    const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
-    logger.debug('pending_prompt_enhancement_stored', {
-      projectRoot: input.projectRoot,
-      sessionId:   mgr.current.sessionId,
-      promptCount: mgr.current.promptCount,
+  // Phase 1 (prepare-time cooldown): while the popup cooldown is active, a popup prepared now
+  // cannot be displayed — the Stop hook would consume it unseen. Skipping the preparation saves
+  // that composer call, and because the budget is charged on show the signal stays eligible to
+  // return once the window has passed. Legacy DS bookkeeping below is untouched.
+  const pePopupCooldownActive = freqConfig.countBudgetOnShow
+    && isPromptEnhancementPopupCooldownActiveV1(
+      mgr.current.lastPromptEnhancementPromptIndex ?? -1,
+      mgr.current.promptCount,
+      resolvePromptEnhancementPopupCooldownV1(store, input.projectRoot),
+    );
+  let preparation: AutoPromptEnhancementPreparationResult | undefined;
+  if (!pePopupCooldownActive) {
+    await ensurePromptFactsFresh();
+    const peIntegration = promptEnhancement ?? {
+      request: buildPromptEnhancementRequestForAuto({
+        auto: input,
+        store,
+        session: mgr,
+        project,
+        effectiveLanguage: effectiveLang,
+        configuredRole,
+        effectiveFlagType,
+        firedKey,
+        previousStage: prevStage,
+        trigger: triggerResult,
+        stageResult,
+        // F4: this path is reached only after frequency, dedup, cooldown, cap and the
+        // classifier fire-recommendation have ALL passed — so the trigger is cleanly eligible,
+        // UNLESS the user already dismissed this very signal. `dismissedAtIndex` is set on the
+        // absence flag when the user acts on it, and L4991 names dismissal as a state that must
+        // not anchor a popup — so the one locked value that had no producer now has one, read
+        // from session state rather than inferred.
+        triggerEligibility: promptEnhancementFiredTriggerEligibilityV1(mgr.current.absenceFlags, effectiveFlagType),
+        streamBOutputs: streamBOverrides
+          ? Object.entries(streamBOverrides)
+            .filter(([, present]) => present)
+            .map(([signal]) => `stream_b:${signal}`)
+          : [],
+      }),
+      prepare: preparePromptEnhancementForRunAuto,
+    };
+    preparation = await preparePromptEnhancementForAuto(peIntegration);
+    await peIntegration.onResult?.(preparation);
+    logger.debug('prompt_enhancement_prepare_boundary', {
       disposition: preparation.disposition,
-      // Diagnosability: whether this stored row can ever open the MPS popup.
-      handoffPresent,
+      safeFallback: preparation.safeFallback,
+      reasonCode: 'reasonCode' in preparation ? preparation.reasonCode : undefined,
+      // Diagnosability (2026-08-06): a bare invalid_result was undebuggable from the log — record
+      // WHICH validation checks failed so a live boundary rejection names its exact cause.
+      validationReasonCodes: 'validationReasonCodes' in preparation && preparation.validationReasonCodes
+        ? preparation.validationReasonCodes.slice(0, 10)
+        : undefined,
+      blockedFailureCodes: blockedFailureCodesForLog(preparation),
+      // ⚠️ BOTH of these were on the sequence-shaped boundary log and NOT here — the MAIN path, which
+      // is the common one. So the deterministic-popup suppression and the I1 ordering count were
+      // observable only on the rarer route, which is the same one-of-two-sites shape the persistence
+      // gate had. Kept identical to the other site on purpose: two logs of the same event that report
+      // different fields cannot be read together.
+      suppressedReason: promptEnhancementBodyHasNoLlmWordingV1(preparation.result)
+        ? 'deterministic_only_no_llm_wording'
+        : undefined,
+      classifierDegraded: stageResult.degraded,
+      relevanceOrderCount: stageResult.sectionRelevanceOrder.length,
+      // Kept identical to the sequence-shaped site above on purpose: two logs of the same event that
+      // report different fields cannot be read together.
+      prunedSectionCount: preparation.result?.prunedSectionCount,
+      floorSectionCount: preparation.result?.floorSectionCount,
     });
-    // A sequence-shaped prompt that stored WITHOUT a summary is the exact anomaly that was
-    // previously untraceable — name the reason (deterministic re-explain) in the log.
-    if (!handoffPresent && isPromptEnhancementSequenceShapedTextV1(input.promptText)) {
-      logger.warn('sequence_summary_absent', {
+    // Owner decision B-i (2026-08-04): the PE popup is deferred to the Stop hook. Do NOT show a
+    // popup on UserPromptSubmit — the prompt passes through raw. When a real (non-fallback) result
+    // exists, persist it so the Stop hook can show the PE popup after Claude responds.
+    // Phase 4 (defense-in-depth): but NOT an unshowable one — a `no_popup` display decision
+    // (`no_popup_not_applicable` disposition or `no_popup` send policy) would spawn a window at Stop that
+    // the child declines (the "blink"). Phase 1's launcher gate already blocks the spawn; skipping the row
+    // here removes it at the source. Same condition the UI boundary uses; the skip stays traceable via the
+    // `prompt_enhancement_prepare_boundary` log above (no `..._stored` log follows).
+    const displayDecisionIsNoPopup = preparation.result?.disposition === 'no_popup_not_applicable'
+      || preparation.result?.uiView.body.sendPolicy === 'no_popup'
+      // Owner ruling (a): a body with no LLM wording is boilerplate, and boilerplate does not
+      // earn a popup. Same row, same gate as the blink fix above.
+      || promptEnhancementBodyHasNoLlmWordingV1(preparation.result);
+    if (!preparation.safeFallback && preparation.result && !displayDecisionIsNoPopup) {
+      upsertPendingPromptEnhancement(store, {
         projectRoot: input.projectRoot,
-        reasonCodes: explainPromptEnhancementSequenceSummaryAbsenceV1(peIntegration.request, preparation.result).slice(0, 8),
+        sessionId:   mgr.current.sessionId,
+        promptCount: mgr.current.promptCount,
+        request:     peIntegration.request,
+        result:      preparation.result,
+        // P1b-ii: carry the planner item list + whole-prompt directive ranges (set by the closure
+        // during this prepare) so the Stop-hook batch can word items 2…N. Undefined on non-sequence
+        // prepares → NULL columns.
+        plannerItems: capturedPlannerItems,
+        plannerPromptDirectives: capturedPlannerPromptDirectives,
+        // Display only: the popup may draw these louder, and the agent never sees the difference.
+        emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, peIntegration.request),
       });
+      const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
+      logger.debug('pending_prompt_enhancement_stored', {
+        projectRoot: input.projectRoot,
+        sessionId:   mgr.current.sessionId,
+        promptCount: mgr.current.promptCount,
+        disposition: preparation.disposition,
+        // Diagnosability: whether this stored row can ever open the MPS popup.
+        handoffPresent,
+      });
+      // A sequence-shaped prompt that stored WITHOUT a summary is the exact anomaly that was
+      // previously untraceable — name the reason (deterministic re-explain) in the log.
+      if (!handoffPresent && isPromptEnhancementSequenceShapedTextV1(input.promptText)) {
+        logger.warn('sequence_summary_absent', {
+          projectRoot: input.projectRoot,
+          reasonCodes: explainPromptEnhancementSequenceSummaryAbsenceV1(peIntegration.request, preparation.result).slice(0, 8),
+        });
+      }
+      // E9 (P12-G1/G2): measure cost off the result's REAL call-visibility (mode + planned/used
+      // counts come from the composer, not the hardcoded request placeholder), and run the the provider-failure contract
+      // "cost never weakens behavior" check. Observability-only — this never gates the popup. The
+      // E8 popup-action calls are measured at their own surface via the popup costObservabilitySink.
+      emitPromptEnhancementCostObservabilityV1(preparation.result, 'prepare', logger);
+      // Phase 1: remember what this row would cost if it is ever SHOWN. Both keys travel, because the
+      // dedup gate checks the first qualifying flag's key while the row carries the key of the flag
+      // Stage 2 selected — charging only the second would leave the first uncharged for ever, and an
+      // uncharged key never blocks. Bound to THIS row's prompt index: a row that is replaced or
+      // dropped unseen must not leave its keys behind for the next popup to spend.
+      //
+      // Phase 2: both travel in their DEDUP form. Under `countBudgetOnShow` this list is what the gate
+      // above reads, so charging the unsuffixed keys would mean the occurrence key it checks is never
+      // present — and absence dedup would stop blocking altogether, which is far more than this phase
+      // intends. `firedKey` on the stored row itself is untouched.
+      if (freqConfig.countBudgetOnShow) {
+        mgr.markPendingPopupChargeV1(store, mgr.current.promptCount, [dedupKey, firedDedupKey]);
+      }
     }
-    // E9 (P12-G1/G2): measure cost off the result's REAL call-visibility (mode + planned/used
-    // counts come from the composer, not the hardcoded request placeholder), and run the the provider-failure contract
-    // "cost never weakens behavior" check. Observability-only — this never gates the popup. The
-    // E8 popup-action calls are measured at their own surface via the popup costObservabilitySink.
-    emitPromptEnhancementCostObservabilityV1(preparation.result, 'prepare', logger);
   }
 
   // keeps legacy Decision Session bookkeeping after preparation; PE preparation
   // remains capture/classification-only and cannot gain DS authority.
-  mgr.markDecisionSessionFired(store, firedKey);
+  // Phase 2: the list records the occurrence, matching what the gate above checks. It still grows once
+  // per fire, so `once_per_session` (which only reads its length) is unchanged.
+  mgr.markDecisionSessionFired(store, firedDedupKey);
 
   // ── 8.5. Read user profile (computed in processPrompt, null if < 5 prompts) ──
   const userProfile = mgr.current.profile ?? undefined;
@@ -1815,7 +1962,8 @@ export async function runAuto(
     sessionId: mgr.current.sessionId,
     promptCount: mgr.current.promptCount,
     flagType: effectiveFlagType,
-    peDisposition: preparation.disposition,
+    // Phase 1: `undefined` when the popup cooldown made a preparation pointless this turn.
+    peDisposition: preparation?.disposition,
   });
   writeTelemetry(input.projectRoot, 'pipeline_advisory_pending', {
     flagType:                      effectiveFlagType,

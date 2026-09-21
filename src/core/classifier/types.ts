@@ -107,8 +107,9 @@ export interface SessionState {
   /**
    * promptCount when a PE / MPS-1 popup was last SHOWN (Stop hook). Used by the popup-cooldown gate:
    * after a popup, new PE / MPS-1 popups are suppressed for `prompt_enhancement.popup_cooldown`
-   * prompts (default 7). -1 / absent = none shown yet (the first popup always shows). An active
-   * sequence's continuation items (MPS-2) are NOT gated by this — they are not new popups.
+   * prompts (CLI default 3; the browser keeps its own literal, 7). -1 / absent = none shown yet (the
+   * first popup always shows). An active sequence's continuation items (MPS-2) are NOT gated by this —
+   * they are not new popups.
    */
   lastPromptEnhancementPromptIndex?: number;
   /**
@@ -117,6 +118,32 @@ export interface SessionState {
    * Optional for backward compatibility with existing persisted state — read as 0 when absent.
    */
   advisoryCount?: number;
+  /**
+   * Keys of advisories whose PE / MPS-1 popup was actually SHOWN to the user this session.
+   * The dedup gate reads THIS instead of `firedDecisionSessions` when the frequency level sets
+   * `countBudgetOnShow`: an advisory the user never saw must not block its own signal later.
+   * `firedDecisionSessions` keeps being written either way, so `once_per_session` and telemetry
+   * are unchanged. Optional — absent on state written before this field existed.
+   */
+  shownAdvisoryKeys?: string[];
+  /**
+   * Count of PE / MPS-1 popups actually SHOWN this session. The session cap reads THIS instead of
+   * `advisoryCount` when the frequency level sets `countBudgetOnShow`. Optional — read as 0 when absent.
+   */
+  shownPopupCount?: number;
+  /**
+   * What to charge if the pending PE row is shown — BOUND to the row it was written for.
+   *
+   * It carries BOTH the dedup pre-check key (built from the first qualifying flag) and the fired key
+   * (built from the classifier's selected flag), because those two can differ and the row itself only
+   * carries the second one. `promptCount` is the row's own prompt index, and the charge uses these
+   * keys only when it matches the row being shown: a pending row is replaced (there is exactly one per
+   * project) or consumed unseen by paths that know nothing about this state — the sequence-shaped
+   * fallback, the Stop cooldown branch, the submit-time sweep — and without the binding those keys
+   * would be spent by the NEXT popup, marking advice "seen" that was never displayed. Optional;
+   * cleared after each charge.
+   */
+  pendingPopupCharge?: { promptCount: number; keys: string[] };
   /**
    * Number of consecutive prompts processed without a correction_seeking signal being detected.
    * Resets to 0 whenever correction_seeking is detected in a prompt; increments on every other prompt.

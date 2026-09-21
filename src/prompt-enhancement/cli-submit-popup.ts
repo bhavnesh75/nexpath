@@ -62,6 +62,12 @@ import {
 } from './popup-section-removal.js';
 import type { PromptActionSignalKind } from '../store/feedback-signals.js';
 import type { PromptEnhancementEmphasisPhraseV1 } from '../store/pending-prompt-enhancements.js';
+import {
+  isPromptEnhancementSettingsShortcutKeyV1,
+  runPromptEnhancementSettingsChooserV1,
+  PROMPT_ENHANCEMENT_SETTINGS_HINT_V1,
+  type PromptEnhancementSettingsControlV1,
+} from './cli-settings-shortcut.js';
 
 export type PromptEnhancementCliPopupCommandV1 =
   | { type: 'use_current' }
@@ -307,6 +313,14 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
      */
     onOutcome?: PromptEnhancementEmphasisModelInputV1['onOutcome'];
   };
+  /**
+   * Ctrl+T — read/write the advisory frequency and the project role from inside the popup (owner
+   * request 2026-09-18; the root menu with role beside it, 2026-09-19), restoring the two-entry menu
+   * the disabled Decision Session popup used to carry. Supplied by the CLI hosts, which own the open
+   * store. Omitted, the shortcut is inert and unadvertised, so an injected `interaction` (the browser
+   * panel, which has its own Alt+Shift+T chooser) is unaffected.
+   */
+  settingsControl?: PromptEnhancementSettingsControlV1;
 }): Promise<PromptEnhancementCliPopupResultV1> {
   let currentResult = input.result;
   let rendered = buildPromptEnhancementPopupRenderModelV1({
@@ -317,7 +331,7 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   if (rendered.state === 'no_popup') return { state: 'not_shown', reasonCodes: rendered.reasonCodes };
 
   const interaction = input.interaction === undefined
-    ? createPromptEnhancementCliPopupInteractionV1(input.onFirstRender)
+    ? createPromptEnhancementCliPopupInteractionV1(input.onFirstRender, input.settingsControl)
     : input.interaction;
   if (!interaction) return { state: 'not_shown', reasonCodes: ['no_tty'] };
 
@@ -880,6 +894,12 @@ export interface PromptEnhancementCliFrameStateV1 {
    * to see the same line the user does, even though both are one line.
    */
   sectionRemovalArmed?: boolean;
+  /**
+   * Ctrl+T hint appended to the footer. Set only by the raw-TTY shell, and only when it was given a
+   * settings control — a surface that cannot act on Ctrl+T (the browser panel) must not advertise
+   * it. The current VALUES live in the chooser's root menu, not here. See `cli-settings-shortcut.ts`.
+   */
+  settingsHint?: string;
 }
 
 /** ANSI styles for the live popup's old-popup radio look (§8.1). */
@@ -1071,7 +1091,10 @@ export function renderPromptEnhancementPopupFrameV1(
     lines.push(publicText(view.publicNotice));
     lines.push('');
   }
-  lines.push(c ? `${c.dim}${PROMPT_ENHANCEMENT_CLI_FOOTER_V1}${c.reset}` : PROMPT_ENHANCEMENT_CLI_FOOTER_V1);
+  const footer = frameState.settingsHint
+    ? `${PROMPT_ENHANCEMENT_CLI_FOOTER_V1} · ${publicText(frameState.settingsHint)}`
+    : PROMPT_ENHANCEMENT_CLI_FOOTER_V1;
+  lines.push(c ? `${c.dim}${footer}${c.reset}` : footer);
 
   // Continuous cyan left rail (owner request): draw the rail on EVERY line so the left edge is one
   // unbroken vertical border, not the per-row segments it used to be. A blank line becomes the rail
@@ -1545,7 +1568,10 @@ export function openPromptEnhancementInteractiveConsoleV1(): { input: ReadStream
   }
 }
 
-function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void): PromptEnhancementCliPopupInteractionV1 | null {
+function createPromptEnhancementCliPopupInteractionV1(
+  onFirstRender?: () => void,
+  settingsControl?: PromptEnhancementSettingsControlV1,
+): PromptEnhancementCliPopupInteractionV1 | null {
   const consoleStreams = openPromptEnhancementInteractiveConsoleV1();
   if (!consoleStreams) return null;
   const { input, output, owned } = consoleStreams;
@@ -1591,6 +1617,10 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
   // Kept bounded so the frame always fits and redraws in place (no repeat).
   const fieldWidth = () => promptEnhancementCliViewportV1(output.columns ?? 80, output.rows ?? 24).fieldWidth;
   const viewportRows = () => promptEnhancementCliViewportV1(output.columns ?? 80, output.rows ?? 24).viewportRows;
+  // Ctrl+T footer hint — shown only when a control was supplied. It names no value: the chooser's
+  // root menu carries the current frequency and role, which is where a save is confirmed.
+  const settingsHint = (): string | undefined =>
+    (settingsControl ? PROMPT_ENHANCEMENT_SETTINGS_HINT_V1 : undefined);
 
   // Persistent listeners with a key buffer so no keystroke is dropped between reads.
   const keyBuffer: string[] = [];
@@ -1716,7 +1746,22 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     const caretOut = { row: -1, col: -1 };
     const frame = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: bodyDisplay, additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: true, caret, caretOut, bodyLineSuffixes, bodyLineSpans, plainMarks, sectionRemovalArmed: current.sectionRemovalArmed },
+      {
+        focusIndex: current.focusIndex,
+        helpExpanded: current.helpExpanded,
+        refinement: view.refinement,
+        colorize: true,
+        caret,
+        caretOut,
+        // Both sides' options, in the shape the incoming branch gave this call: the section
+        // numbers, the bold spans, the NO_COLOR gate and the armed line are this branch's; the
+        // settings hint is main's. Neither reads the other, and the renderer takes them all.
+        bodyLineSuffixes,
+        bodyLineSpans,
+        plainMarks,
+        sectionRemovalArmed: current.sectionRemovalArmed,
+        settingsHint: settingsHint(),
+      },
     );
     paint(frame);
 
@@ -1771,6 +1816,32 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
     }
   };
 
+  // Ctrl+T (owner request 2026-09-18; role added 2026-09-19): the settings chooser, run over this
+  // same console. It paints OVER the popup and restores it on return — the popup's own state
+  // (including an edited body) is never rebuilt, so checking a setting mid-edit costs nothing.
+  // `repaint` is re-pointed for the duration so a terminal resize repaints the chooser, not the
+  // popup underneath it (GAP-2).
+  const runSettingsChooser = async (): Promise<void> => {
+    if (!settingsControl) return;
+    let lastFrame = '';
+    const paintChooser = (frame: string): void => { lastFrame = frame; paint(frame); };
+    repaint = () => paint(lastFrame);
+    try {
+      output.write(HIDE_CURSOR);
+      await runPromptEnhancementSettingsChooserV1({
+        control: settingsControl,
+        readKey,
+        paint: paintChooser,
+        colorize: true,
+      });
+    } catch {
+      // A closed popup rejects the parked read; the outer loop handles that. The chooser must never
+      // take the popup down with it.
+    } finally {
+      repaint = paintMain;
+    }
+  };
+
   return {
     async next(view) {
       if (queue.length > 0) return queue.shift()!;
@@ -1805,6 +1876,16 @@ function createPromptEnhancementCliPopupInteractionV1(onFirstRender?: () => void
       for (;;) {
         const raw = await readKey();
         if (raw === CTRL_C) return { type: 'close' };
+        // Handled here, beside Ctrl+C, rather than in the shared reducer: the reducer also drives the
+        // browser panel, which has no store and no chooser. Ctrl+T is a terminal-shell affordance.
+        if (settingsControl && isPromptEnhancementSettingsShortcutKeyV1(raw)) {
+          await runSettingsChooser();
+          render(view, state);
+          continue;
+        }
+        // ⚠️ `view.sections` is this branch's fourth argument and it MUST survive the merge. The
+        // parameter is optional, so main's three-argument call compiles perfectly and the removal
+        // chord then silently has no sections to remove — a break no type check would report.
         const stepped = reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw), view.sections);
         state = stepped.state;
         if (stepped.commands.length > 0) {

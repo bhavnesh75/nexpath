@@ -94,24 +94,32 @@ describe('GlobalConfig — optimum level activation', () => {
 // ── optimum cap validation ────────────────────────────────────────────────────
 
 describe('GlobalConfig — OPTIMUM_LEVEL_CONFIG cap values (Stream C validation)', () => {
-  it('sessionAdvisoryCapDefault is 20', () => {
-    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault).toBe(20);
+  it('sessionAdvisoryCapDefault is 9999 — the cap is off on this level', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault).toBe(9999);
   });
 
-  it('sessionAdvisoryCapVibe is 30', () => {
-    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(30);
+  it('sessionAdvisoryCapVibe is 9999 too, and MUST equal the default', () => {
+    // The browser reads this config but has no profile wired, so it always takes the default. A vibe
+    // value below it would cap a vibe profile lower than a pro one there — which is why the two moved
+    // together rather than only the one the CLI reads.
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(9999);
+    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault);
   });
 
-  it('sessionAdvisoryCapDefault 20 is 4× the every_event cap of 5', () => {
-    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault).toBe(
-      4 * FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapDefault,
-    );
-  });
-
-  it('sessionAdvisoryCapVibe 30 is 3× the every_event vibe cap of 10', () => {
-    expect(OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe).toBe(
-      3 * FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapVibe,
-    );
+  it('both caps sit far above anything a session can reach', () => {
+    // Replaces the two relational tests that pinned 20 = 4× every_event and 30 = 3× its vibe cap.
+    // Those ratios were a description of the old numbers, not a rule worth keeping, and they would now
+    // only re-state 9999 twice. What matters instead is that the ceiling can no longer be hit: the
+    // longest scenario in the measurement set is 392 prompts, and an advisory needs at least the
+    // 2-prompt post-advisory cooldown between fires.
+    for (const cap of [OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapDefault, OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe]) {
+      expect(cap).toBeGreaterThan(1000);
+    }
+    // …and every other level keeps its real ceiling — this change is `optimum` only.
+    expect(FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapDefault).toBe(5);
+    expect(FREQUENCY_LEVEL_CONFIGS.every_event.sessionAdvisoryCapVibe).toBe(10);
+    expect(FREQUENCY_LEVEL_CONFIGS.once_per_session.sessionAdvisoryCapDefault).toBe(1);
+    expect(FREQUENCY_LEVEL_CONFIGS.off.sessionAdvisoryCapDefault).toBe(0);
   });
 
   it('postAdvisoryCooldown is 2 (tight cooldown for high-frequency target)', () => {
@@ -162,5 +170,22 @@ describe('GlobalConfig — OPTIMUM_LEVEL_CONFIG cap values (Stream C validation)
   it('vibe cap of 30 is sufficient to sustain advisory coverage across 385-prompt sessions', () => {
     const cap = OPTIMUM_LEVEL_CONFIG.sessionAdvisoryCapVibe;
     expect(cap * 15).toBeGreaterThanOrEqual(385);
+  });
+});
+
+// ── countBudgetOnShow — which levels charge the budget on show (Phase 1) ─────
+
+describe('GlobalConfig — countBudgetOnShow', () => {
+  it('optimum charges the budget when a popup is SHOWN', () => {
+    expect(OPTIMUM_LEVEL_CONFIG.countBudgetOnShow).toBe(true);
+  });
+
+  it('every other level keeps charging at fire time', () => {
+    // The phase ships on one level only. A new level that silently defaults to the show-counting
+    // behaviour would change dedup and the cap on a surface nobody measured — so every level is
+    // listed here by name rather than checked as "not optimum".
+    for (const level of ['off', 'major_only', 'once_per_session', 'every_event'] as const) {
+      expect(FREQUENCY_LEVEL_CONFIGS[level].countBudgetOnShow, level).toBe(false);
+    }
   });
 });
