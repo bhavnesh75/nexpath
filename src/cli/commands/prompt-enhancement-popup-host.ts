@@ -25,6 +25,7 @@ import {
   type PromptEnhancementCliMpsContinuationOutcomeV1,
 } from '../../prompt-enhancement/cli-mps-continuation-run.js';
 import { recordPromptEnhancementCliFeedbackV1 } from './auto.js';
+import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { logger } from '../../logger.js';
 
 const POPUP_HOST_PROTOCOL_VERSION_V1 = 1;
@@ -265,6 +266,9 @@ export async function runPromptEnhancementPopupHostCommandV1(
               state: event.state,
               reasonCodes: event.reasonCodes.slice(0, 8),
             }),
+            // Ctrl+T inside the popup (owner request 2026-09-18). This child owns the store it
+            // opened above — the same connection the feedback/action sinks already write through.
+            settingsControl: buildPromptEnhancementSettingsControlV1(store!, input.request.projectRoot),
           });
         }
       } finally {

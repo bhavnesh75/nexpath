@@ -358,6 +358,46 @@ describe('install — telemetry OFF by default (no install prompt)', () => {
       expect(summary?.telemetry.enabled).toBe(true);
     } finally { cleanup(); }
   });
+
+  it('the Setup Complete summary does NOT name telemetry (owner 2026-09-19), but still carries it', async () => {
+    // The line is commented out in install.ts, not deleted. This pins the hiding the way the hidden
+    // advisory-frequency picker is pinned: nothing about telemetry itself changed, so the returned
+    // summary must still report the state even though the box no longer prints it.
+    const { dir, cleanup } = tmpDirAgents();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    // The summary box is written by clack's note(), straight to stdout — not through console.log.
+    const written: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      written.push(String(chunk));
+      return true;
+    });
+    const dbPath = join(dir, 'telem-summary-hidden.db');
+    try {
+      const paths = resolveAgentPaths(dir, dir, dir);
+      const summary = await installAction({ yes: true }, {
+        paths, isWin: false, execFn: () => {}, skipClipboardCheck: true,
+        freqPromptFn: noopFreqPrompt, rolePromptFn: noopRolePrompt,
+        dbPath,
+      });
+      stdoutSpy.mockRestore();
+      const printed = written.join('');
+      // Guard against a vacuous pass: the box really was rendered, with its other rows.
+      expect(printed).toContain('Setup Complete');
+      expect(printed).toContain('Credential:');
+      expect(printed).toContain('Agents:');
+      // …and the hidden row is absent, in either wording.
+      expect(printed).not.toContain('Telemetry:');
+      expect(printed).not.toMatch(/telemetry/i);
+      // Display-only: the state is still seeded and still reported to callers.
+      expect(summary?.telemetry.enabled).toBe(false);
+      const store = await openStore(dbPath);
+      expect(getConfig(store.db, 'telemetry.enabled')).toBe('false');
+      closeStore(store);
+    } finally {
+      stdoutSpy.mockRestore();
+      cleanup();
+    }
+  });
 });
 
 // ── Summary returned ─────────────────────────────────────────────────────────

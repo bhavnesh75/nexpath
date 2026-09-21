@@ -15,7 +15,7 @@
 | Cursor installed on the target OS | <https://cursor.com/downloads> |
 | Windsurf installed on the target OS | <https://codeium.com/windsurf> |
 | `OPENAI_API_KEY` available | Either as env var or in a `.env` in the test workspace |
-| `nexpath` CLI installed and on PATH | `npm install -g <repo>/nexpath` from a clone, or whichever distribution channel applies |
+| `nexpath` CLI installed and on PATH | `npm install -g nexpath-cli`, or `npm install -g <repo>` from a clone (package `nexpath-cli`, binary `nexpath`), or whichever distribution channel applies |
 
 ---
 

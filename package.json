@@ -1,12 +1,40 @@
 {
-  "name": "nexpath",
-  "version": "0.1.5",
+  "name": "nexpath-cli",
+  "version": "0.1.57",
   "description": "Behaviour guidance system for vibe coders using AI coding agents",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/hi0001234d/nexpath#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hi0001234d/nexpath.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hi0001234d/nexpath/issues"
+  },
+  "keywords": [
+    "nexpath",
+    "prompt-engineering",
+    "prompt-enhancement",
+    "vibe-coding",
+    "ai-coding-assistant",
+    "ai-developer-tools",
+    "coding-agent",
+    "claude-code",
+    "cursor",
+    "windsurf",
+    "mcp",
+    "ai-code-quality",
+    "developer-productivity",
+    "cli"
+  ],
   "type": "module",
   "bin": {
-    "nexpath": "./dist/cli/index.js",
-    "nexpath-serve": "./dist/server/index.js"
+    "nexpath": "dist/cli/index.js",
+    "nexpath-serve": "dist/server/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "prebuild": "tsx scripts/check-build-gate.ts",
     "build": "tsc",
@@ -22,7 +50,8 @@
     "pe:leak-guard": "tsx scripts/pe-leak-guard.ts",
     "pe:body-assertion": "tsx scripts/pe-body-assertion.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

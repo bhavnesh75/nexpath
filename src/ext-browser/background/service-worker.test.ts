@@ -470,7 +470,7 @@ describe('service-worker.ts', () => {
           { id: 'l2-0', level: 'L2', title: 'Write one test', body: 'body' },
           { id: 'l3-0', level: 'L3', title: 'TODO comment', body: 'body' },
         ],
-        meta: { agent: 'replit', frequency: 'every_event' },
+        meta: { agent: 'replit', frequency: 'optimum' },
       });
       // Bookkeeping still happens at decision time (CLI auto parity).
       expect(mgrMarkAdvisoryFired).toHaveBeenCalledOnce();

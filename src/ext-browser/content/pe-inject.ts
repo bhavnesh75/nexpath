@@ -156,6 +156,15 @@ function ensureMounted(): PePanelControllerV1 {
     onTerminalIntent: (outcome) => {
       window.dispatchEvent(new CustomEvent('nexpath:pe-terminal-out', { detail: { outcome } }));
     },
+    // Alt+Shift+T saved a setting. Reuses the advisory panel's footer-intent
+    // channel unchanged: `main-world-injector.ts:271` already validates the
+    // intent name, attaches the project root and forwards, and the worker
+    // already whitelists the value and writes it. Fire-and-forget by design —
+    // the chooser must not go busy or wait on a re-render, and the panel has
+    // already moved its own label to the new value.
+    onSettingsIntent: (intent, value) => {
+      window.dispatchEvent(new CustomEvent('nexpath:footer-intent', { detail: { intent, value } }));
+    },
   });
   return controller;
 }

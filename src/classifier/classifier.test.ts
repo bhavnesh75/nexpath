@@ -2933,6 +2933,65 @@ describe('AbsenceDetector', () => {
     expect(flags.map((f) => f.signalKey)).not.toContain('test_creation');
   });
 
+  it('⛔ B-11: the cooldown still holds when the signal already has OLDER flags', () => {
+    // The shape the previous check could not see. It read the FIRST flag for a signal while
+    // `addAbsenceFlag` appends, so once the oldest window had passed the cooldown never gated again —
+    // and the signal was re-raised on every prompt for the rest of the session. The test above passes
+    // either way because its fixture holds a single flag, which is exactly why this went unnoticed.
+    //
+    // Measured before the fix: 2,565 raises across twelve sim sessions where 1,669 windows existed,
+    // and one 171-prompt session carrying 618 flags.
+    const now = ABSENCE_MIN_PROMPTS + 5;
+    const state = makeState({
+      stageConfidence:       0.85,
+      promptsInCurrentStage: now,
+      promptCount:           now,
+      currentStage:          'implementation',
+      signalCounters:        initialSignalCounters(),
+      absenceFlags: [
+        // an expired window — this is the one `.find()` used to return
+        { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: 0, cooldownUntil: 1 },
+        // …while THIS one is still open, so the signal must not be raised again
+        { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: now - 1, cooldownUntil: now + ABSENCE_COOLDOWN_PROMPTS },
+      ],
+    });
+    expect(detectAbsenceFlags(state).map((f) => f.signalKey)).not.toContain('test_creation');
+  });
+
+  it('and once every window has closed, the signal IS raised again', () => {
+    // The other half: the fix must not turn the cooldown into a permanent block.
+    const now = ABSENCE_MIN_PROMPTS + 5;
+    const state = makeState({
+      stageConfidence:       0.85,
+      promptsInCurrentStage: now,
+      promptCount:           now,
+      currentStage:          'implementation',
+      signalCounters:        initialSignalCounters(),
+      absenceFlags: [
+        { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: 0, cooldownUntil: 1 },
+        { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: 2, cooldownUntil: now - 1 },
+      ],
+    });
+    expect(detectAbsenceFlags(state).map((f) => f.signalKey)).toContain('test_creation');
+  });
+
+  it('one signal being flagged does not suppress a different one', () => {
+    const now = ABSENCE_MIN_PROMPTS + 5;
+    const state = makeState({
+      stageConfidence:       0.85,
+      promptsInCurrentStage: now,
+      promptCount:           now,
+      currentStage:          'implementation',
+      signalCounters:        initialSignalCounters(),
+      absenceFlags: [
+        { signalKey: 'test_creation', stage: 'implementation', raisedAtIndex: now - 1, cooldownUntil: now + ABSENCE_COOLDOWN_PROMPTS },
+      ],
+    });
+    const keys = detectAbsenceFlags(state).map((f) => f.signalKey);
+    expect(keys).not.toContain('test_creation');
+    expect(keys.length, 'the open window on one signal silenced every other signal too').toBeGreaterThan(0);
+  });
+
   it('does NOT flag signals for wrong stage', () => {
     // rollback_planning is only expected in 'release' stage
     const state = makeState({

@@ -327,7 +327,12 @@ const defaultConfirm: ConfirmFn = async () => {
 export type FreqPromptFn = (currentValue: string) => Promise<string | symbol>;
 export type RolePromptFn = (currentValue: string) => Promise<string | symbol>;
 
-const DEFAULT_FREQUENCY = 'every_event';
+// Owner, 2026-09-18: High, not Medium. The picker stays hidden at install, so this constant IS what a
+// new machine gets — and on Medium the whole PE cadence series does nothing: its session cap is still
+// 5 / 10 and `countBudgetOnShow` is false there, so a 392-prompt session tops out at ten popups against
+// forty-eight on High (`measurements/phase-4-after.md`). Seeding Medium silently meant shipping the fix
+// to nobody. Changeable either way with `nexpath config set advisory_frequency`.
+const DEFAULT_FREQUENCY = 'optimum';
 const DEFAULT_ROLE      = 'founder';
 
 const defaultFreqPrompt: FreqPromptFn = async (currentValue) =>
@@ -375,7 +380,7 @@ const defaultRolePrompt: RolePromptFn = async (currentValue) => {
   return p.prompt();
 };
 
-/** Read the currently configured advisory_frequency, default 'every_event'. */
+/** Read the currently configured advisory_frequency, default `DEFAULT_FREQUENCY` ('optimum' / High). */
 function readInstallFreq(db: import('sql.js').Database): string {
   const v = getConfig(db, 'advisory_frequency');
   return v && v !== '' ? v : DEFAULT_FREQUENCY;
@@ -861,7 +866,7 @@ export async function installAction(
 
     // ── Advisory frequency (picker hidden) + role prompt ────────────────────────
     // Owner ruling 2026-08-10: ONLY the advisory-frequency picker is hidden at install (support to be
-    // re-added later) — seed its default silently (Medium / every_event) when unset. Its interactive
+    // re-added later) — seed its default silently (High / optimum, owner 2026-09-18) when unset. Its interactive
     // block is kept COMMENTED OUT (not removed): un-comment it (and drop the default-seed line) to
     // restore the picker. The freqPromptFn param + defaultFreqPrompt are retained for that. The ROLE
     // picker stays interactive (restored 2026-08-10). Both settings stay changeable via
@@ -962,7 +967,12 @@ export async function installAction(
     : null;
   const summaryLines = [
     `Credential: ${apiKeySource === 'nexpath_token' ? 'Nexpath token' : `OpenAI key (${apiKeySource})`}`,
-    `Telemetry:  ${telemetryEnabled ? 'enabled' : 'disabled'}`,
+    // HIDDEN line (owner 2026-09-19) — un-comment to show telemetry state in the summary again.
+    // Kept COMMENTED OUT rather than removed, like the advisory-frequency picker above. Nothing about
+    // telemetry itself changes: it is still seeded OFF on a fresh install (NF Plan A, see step 1), the
+    // `telemetry` field below still carries the state for callers, and `nexpath status` still reports
+    // it. Only the install summary stops naming it.
+    // `Telemetry:  ${telemetryEnabled ? 'enabled' : 'disabled'}`,
     `Agents:     ${registered.length > 0 ? registered.join(', ') : 'none'}`,
     failed.length > 0 ? `Failed:     ${failed.join(', ')}` : null,
     extrasLine,

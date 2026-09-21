@@ -19,7 +19,14 @@ export type SurfaceId =
   | 'mps_first'
   | 'mps_continuation'
   | 'prompt_enhancement_feedback'
-  | 'advisory_rating';
+  | 'advisory_rating'
+  /**
+   * The Alt+Shift+T chooser (advisory frequency / project role). ONE id for all
+   * three of its views — root, the frequency list and the role list — because
+   * they differ only in their rows and label, and Esc tells them apart by the
+   * rows themselves (a value row carries `settingValue`), never by a label.
+   */
+  | 'settings';
 
 /**
  * The hint lines under an editable field.
@@ -90,6 +97,19 @@ export type SurfaceRow =
        * would silently change what gets sent.
        */
       rating?: number;
+      /**
+       * The settings chooser's row identity — which setting this row is about.
+       * On the row for the same reason `rating` is: the label carries the
+       * CURRENT value ("Advisory frequency - High"), so matching on it would
+       * unhook the row the moment a value changes.
+       */
+      setting?: 'frequency' | 'role' | 'done';
+      /**
+       * The value a settings row SELECTS. Present on the rows of the two lists
+       * and absent on the root's, which is exactly how Esc knows whether it is
+       * in a list (go back to the root) or at the root (leave the chooser).
+       */
+      settingValue?: string;
       /** MPS's Cancel row carries the CLI's paleYellow. */
       tone?: 'plain' | 'cancel';
       /** A line under the label, like MPS-2's interruption helper. */

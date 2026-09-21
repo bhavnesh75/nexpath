@@ -656,10 +656,28 @@ describe('HV-2 check-5 for check-1 — the liveness column must guard itself', (
   // Files are READ, not grepped, and the declaring module is excluded — an export used only inside
   // its own file is not a live CONSUMER relationship.
 
+  // ⛔ B-10 in the pre-existing bug register. This walked EVERY directory under `src`, including
+  // build output that git ignores, and treated whatever it found as production source.
+  //
+  // Two failures came out of that on any machine that had packaged the VS Code extension — which is
+  // every developer machine, and no CI one, so it looked like a phantom:
+  //
+  //  1. `src/ext-vscode/nexpath-cli/dist/` is a full compiled copy of the CLI. Its `.d.ts` files
+  //     declare `getRightGoodState` and `appendVariantServedEvent`, so the "still test-only" check
+  //     below read them as production callers and failed.
+  //  2. `src/ext-vscode/node_modules/` holds 3 764 `.ts` files. The walk went from ~1 000 files to
+  //     5 140, and the sweep re-reads every one of them per symbol, so it passed its 5 s timeout.
+  //
+  // Measured 2026-09-18: with both present, 2 failed / 21 passed in 19.8 s; with both moved aside,
+  // 23 passed in 2.5 s. Nothing tracked by git lives under a directory with one of these names — the
+  // three are checked rather than the two paths, so a future build output cannot reintroduce it.
+  const NOT_SOURCE = new Set(['node_modules', 'dist', 'out']);
+
   function allTs(): string[] {
     const out: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
+        if (NOT_SOURCE.has(entry)) continue;
         const full = `${dir}/${entry}`;
         if (statSync(full).isDirectory()) walk(full);
         else if (entry.endsWith('.ts')) out.push(full);
@@ -689,6 +707,26 @@ describe('HV-2 check-5 for check-1 — the liveness column must guard itself', (
     [10, 'guidance-facts.ts', 'buildPromptEnhancementGuidanceFactsV1'],
     [11, 'source-mix.ts', 'applyPromptEnhancementSourceMixV1'],
   ];
+
+  it('⛔ B-10: the walk collects SOURCE only, never build output', () => {
+    // The guard for the fix above. Without it the sweep read a compiled copy of the CLI as production
+    // source — `getRightGoodState` and `appendVariantServedEvent` appeared to have callers because
+    // their own `.d.ts` files were sitting in `src/ext-vscode/nexpath-cli/dist/` — and it walked
+    // `src/ext-vscode/node_modules/` as well, taking the file count from ~1 000 to 5 140 and the test
+    // past its 5 s timeout. Both directories are gitignored, so this was red on every developer
+    // machine that had packaged the extension and green everywhere else.
+    const files = allTs();
+    const buildOutput = files.filter((f) => /(^|\/)(node_modules|dist|out)\//.test(f));
+    expect(
+      buildOutput.slice(0, 5),
+      `${buildOutput.length} of ${files.length} collected files come from build output — they are not `
+      + 'production source, and reading them makes this sweep answer questions about compiled copies',
+    ).toEqual([]);
+
+    // …and it must still be collecting the real thing.
+    expect(files.length, 'the walk collected almost nothing — the exclusion is too wide').toBeGreaterThan(500);
+    expect(files.some((f) => f.endsWith('hv2-five-check-sweep.test.ts'))).toBe(true);
+  });
 
   it('every row\'s check-1 export still has a production consumer', () => {
     const dead = LIVE

@@ -286,6 +286,41 @@ describe('buildPePanelView — whitelist projection', () => {
     expect(json).not.toContain('validationDecisionId');
     expect(json).not.toContain(record.result.enhancementId);
   });
+
+  it('carries the stored frequency and role for the panel chooser', async () => {
+    // The panel has no storage of its own by design, so the two values the
+    // Alt+Shift+T chooser marks as current travel on the view.
+    const { log } = makeLog();
+    const { sendToTab, views } = scriptedTab(log, [() => ({ type: 'close' })]);
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab,
+      currentSettings: { frequency: 'optimum', role: 'pm' },
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    const v = views[0]! as unknown as Record<string, unknown>;
+    expect(v.currentFrequency).toBe('optimum');
+    expect(v.currentRole).toBe('pm');
+  });
+
+  it('omits them when the worker read nothing — an unset key must not become a value', async () => {
+    const { log } = makeLog();
+    const { sendToTab, views } = scriptedTab(log, [() => ({ type: 'close' })]);
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab,
+      currentSettings: { frequency: '', role: '' },
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    const v = views[0]! as unknown as Record<string, unknown>;
+    expect(v.currentFrequency).toBeUndefined();
+    expect(v.currentRole).toBeUndefined();
+    // …and an older worker that passes nothing at all behaves the same way.
+    const second = scriptedTab(log, [() => ({ type: 'close' })]);
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab: second.sendToTab,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    expect((second.views[0] as unknown as Record<string, unknown>).currentFrequency).toBeUndefined();
+  });
 });
 
 // ── PB6: MPS-1 sequence offer ─────────────────────────────────────────────────

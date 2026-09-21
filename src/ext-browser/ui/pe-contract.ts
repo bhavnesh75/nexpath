@@ -69,6 +69,18 @@ export interface PePanelViewV1 {
   publicNotice?: string;
   providerFailureNotice?: string;
   trustCues: readonly string[];
+  /**
+   * What the Alt+Shift+T chooser shows as current — the stored `advisory_frequency`
+   * and `role`. Optional and additive: a worker that does not send them leaves the
+   * chooser's rows unlabelled rather than claiming a value, and every older view
+   * still validates.
+   *
+   * They travel on the VIEW because this is a whitelisted projection — the panel
+   * has no storage access of its own, by design, and the write goes back out on
+   * the extension's footer-intent channel rather than as a popup command.
+   */
+  currentFrequency?: string;
+  currentRole?: string;
 }
 
 /**

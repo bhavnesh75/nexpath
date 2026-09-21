@@ -47,6 +47,15 @@ import {
 } from './surfaces/surface-controller.js';
 import { fieldScroller } from './surfaces/surface-view.js';
 import { BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER } from './surfaces/fixtures/pe.js';
+import {
+  SETTINGS_FREQUENCY_CHOICES,
+  SETTINGS_HINT,
+  SETTINGS_ROLE_CHOICES,
+  settingsFocusIndex,
+  settingsFrequencyModel,
+  settingsRoleModel,
+  settingsRootModel,
+} from './surfaces/fixtures/settings.js';
 import { PEF_FOOTER } from './surfaces/fixtures/pef.js';
 import {
   RATING_LABEL, RATING_QUESTION, RATING_FOOTER, ratingRows,
@@ -164,7 +173,10 @@ function finishPeModel(view: PePanelViewV1, rows: SurfaceRow[]): SurfaceModel {
     id: 'prompt_enhancement',
     label: 'Prompt enhancement',
     rows,
-    footer: PE_FOOTER,
+    // The CLI's footer constant is mirrored verbatim in `fixtures/pe.ts` and a
+    // contract test pins it — so the Alt+Shift+T hint is APPENDED here rather
+    // than folded into it, exactly as the CLI appends its own Ctrl+T hint.
+    footer: `${PE_FOOTER} · ${SETTINGS_HINT}`,
   };
   if (view.pinchLabel) model.pinch = view.pinchLabel;
   if (view.whyHelp) model.whyHelp = view.whyHelp;
@@ -272,6 +284,14 @@ export interface PeDockAdapterOptions {
    * so the held prompt can be released immediately while feedback continues.
    */
   onTerminalIntent?: (outcome: 'use_original') => void;
+  /**
+   * The Alt+Shift+T chooser saved a setting. NOT a `PePanelCommandV1`: that union
+   * is the popup engine's, and these two writes belong to the extension's own
+   * footer-intent channel (`content/ipc.ts`'s `set-frequency` / `set-role`), which
+   * the advisory panel has used since 2026-07-11 and the worker already validates
+   * and persists. Fire-and-forget — the chooser never waits on a round-trip.
+   */
+  onSettingsIntent?: (intent: 'set-frequency' | 'set-role', value: string) => void;
   /** Document override for tests. */
   doc?: Document;
 }
@@ -310,12 +330,51 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
     view && !('kind' in view) ? view.directional.find((d) => d.label === label) : undefined;
 
   /** Their activation hook — my commands come out of here, their notices never fire. */
+  /**
+   * What the chooser shows as current. Seeded from the view the worker sends and
+   * then advanced LOCALLY on each save: the write is fire-and-forget down the
+   * footer-intent channel, so waiting for a worker echo would leave the root menu
+   * naming the old value — and that label IS the save's confirmation.
+   */
+  const currentSettings: { frequency?: string; role?: string } = {};
+
   const resolveActivation = (
     model: SurfaceModel,
     row: SurfaceRow,
     bodyText: string,
-  ): { model: SurfaceModel } | 'refuse' | null => {
+    // `focusIndex` is the controller's own `ResolveActivation` contract — used by
+    // the settings lists, which open on the stored value rather than the top row.
+  ): { model: SurfaceModel; focusIndex?: number } | 'refuse' | null => {
     if (row.kind === 'note') return 'refuse';
+
+    if (model.id === 'settings') {
+      if (row.kind !== 'action') return 'refuse';
+      // A value row: save it, then return to the root — the CLI's loop-back, so
+      // both settings can be changed in one visit (TtySelectFn.ts:451-458).
+      if (row.settingValue !== undefined && row.setting !== 'done') {
+        const intent = row.setting === 'role' ? 'set-role' : 'set-frequency';
+        try { opts.onSettingsIntent?.(intent, row.settingValue); } catch { /* best-effort */ }
+        if (row.setting === 'role') currentSettings.role = row.settingValue;
+        else currentSettings.frequency = row.settingValue;
+        return { model: settingsRootModel(currentSettings) };
+      }
+      // A root row: open that list, focused on what is stored.
+      if (row.setting === 'frequency') {
+        return {
+          model: settingsFrequencyModel(currentSettings.frequency),
+          focusIndex: settingsFocusIndex(SETTINGS_FREQUENCY_CHOICES, currentSettings.frequency),
+        };
+      }
+      if (row.setting === 'role') {
+        return {
+          model: settingsRoleModel(currentSettings.role),
+          focusIndex: settingsFocusIndex(SETTINGS_ROLE_CHOICES, currentSettings.role),
+        };
+      }
+      // 'Done' falls through: leaving restores the saved surface AND its edited
+      // body, and only the controller holds that slot.
+      return null;
+    }
 
     if (model.id === 'advisory_rating') {
       // Same structure as the PEF block below — match on the surface, emit, and
@@ -543,8 +602,26 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       // checks, and through a stored boolean it does not — `peSurfaceModel(v)`
       // stops compiling the moment the union gains a third member. Keeping the
       // narrowing here is what makes the compiler the guard.
+      // Seed the chooser from what the worker reports, but never UNSET what the
+      // user just chose: a view built before the save still carries the old value,
+      // and the local choice is the newer fact.
+      if (!('kind' in v)) {
+        if (v.currentFrequency !== undefined && currentSettings.frequency === undefined) {
+          currentSettings.frequency = v.currentFrequency;
+        }
+        if (v.currentRole !== undefined && currentSettings.role === undefined) {
+          currentSettings.role = v.currentRole;
+        }
+      }
+      // The settings entry is registered for the PE surface ONLY. MPS and the
+      // rating popup are mid-sequence surfaces with their own Esc meanings, and
+      // the rating registry is deliberately single-surface (see below).
       const registry = !('kind' in v)
-        ? { prompt_enhancement: peSurfaceModel(v), prompt_enhancement_feedback: pefSurfaceModel() }
+        ? {
+            prompt_enhancement: peSurfaceModel(v),
+            prompt_enhancement_feedback: pefSurfaceModel(),
+            settings: settingsRootModel(currentSettings),
+          }
         : v.kind === 'rating'
           // ONE surface, deliberately: a rating has nowhere to transition to,
           // and giving it the PEF entry would let a stray `switchTo` open a

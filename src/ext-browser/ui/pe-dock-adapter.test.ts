@@ -8,6 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mountNexpathPeDock, mpsSurfaceModel, peSurfaceModel, pefSurfaceModel } from './pe-dock-adapter.js';
+import { PE_FOOTER } from './surfaces/fixtures/pe.js';
 import { NEXPATH_DOCK_HOST_ID } from './surfaces/dock.js';
 import type { PePanelControllerV1, PePanelEventV1, PeSequenceOfferViewV1, PePanelViewV1, PeRatingViewV1 } from './pe-contract.js';
 
@@ -147,6 +148,18 @@ describe('producers (my views → their models)', () => {
     expect(m.rows.filter((r) => r.kind === 'field')).toHaveLength(2);
     expect(m.rows.filter((r) => r.kind === 'action')).toHaveLength(1);
     expect(m.rows.some((r) => r.kind === 'action' && r.act === 'use-original')).toBe(true);
+  });
+
+  it('the PE footer advertises Alt+Shift+T, and keeps the CLI footer verbatim', () => {
+    // The CLI appends its own Ctrl+T hint to the same constant rather than
+    // rewriting it — `PE_FOOTER` is the pinned mirror of the CLI's string, so
+    // the hint has to ride beside it, not inside it.
+    const m = peSurfaceModel(view());
+    expect(m.footer.startsWith(PE_FOOTER)).toBe(true);
+    expect(m.footer).toContain('Alt+Shift+T settings');
+    // Never the CLI's own chord: plain Ctrl+T is the browser's new-tab shortcut
+    // and a page cannot intercept it (`ui/panel.js:571`).
+    expect(m.footer).not.toContain('Ctrl+T');
   });
 
   // Owner ruling 2026-08-25 after seeing a REAL CLI popup: the CLI renders no

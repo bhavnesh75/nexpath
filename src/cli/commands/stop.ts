@@ -15,6 +15,10 @@ import { runFeedbackPopup, type FeedbackRenderFn, type FeedbackResult } from '..
 import { createFeedbackRenderFn } from '../../decision-session/feedback-tty.js';
 import type { SelectFn } from '../../decision-session/DecisionSession.js';
 import { getConfig } from '../../store/config.js';
+import {
+  resolvePromptEnhancementPopupCooldownV1,
+  isPromptEnhancementPopupCooldownActiveV1,
+} from '../../prompt-enhancement/popup-cooldown.js';
 import { detectLanguage, LANG_WINDOW, LANG_DETECT_INTERVAL } from '../../classifier/LanguageDetector.js';
 import { SessionStateManager } from '../../classifier/SessionStateManager.js';
 import { getRecentPrompts } from '../../store/prompts.js';
@@ -51,6 +55,7 @@ import { buildFutureSequenceRuntimeGateEvidenceV1 } from '../../prompt-enhanceme
 import { evaluatePromptEnhancementFutureSequenceRuntimeGateV1 } from '../../prompt-enhancement/future-sequence-runtime-gate.js';
 import { PROMPT_ENHANCEMENT_CONTRACT_VERSION, type PromptEnhancementFutureSequenceRuntimeEventV1 } from '../../prompt-enhancement/contracts.js';
 import { resolveOpenAIKey, getKeySource } from '../../config/ApiKeyResolver.js';
+import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 
 /**
  * nexpath stop — Claude Code Stop hook handler.
@@ -384,6 +389,11 @@ async function launchMpsContinuationAtStopV1(
           ? continuationCapability.terminalCommand
           : undefined,
       });
+      // Phase 1: a continuation item the user actually saw spends budget too — charge only, with NO
+      // key and NO cooldown reset, so a sequence's own steps never throttle themselves and never add a
+      // dedup key. `not_shown` (gate/spawn/render failure) is not a popup → no charge. No-op unless the
+      // frequency level reads the shown-popup state (`countBudgetOnShow`).
+      if (outcome.state !== 'not_shown') mgr.chargeShownContinuationPopupV1(store);
       // Telemetry parity with the first popup: the popup ran lock-released (Stage D), so its in-popup
       // action signals were dropped on the re-acquire reload. Record the TERMINAL outcome signal HERE,
       // in the re-acquired window, so it persists (content-free — kind + timestamp only; not_shown → none).
@@ -469,18 +479,6 @@ async function maybeResumeInterruptedSequenceV1(
     currentItemIndex: active.currentItemIndex,
   });
   return launchMpsContinuationAtStopV1(store, payload, mgr, active);
-}
-
-/**
- * Resolve the PE / MPS-1 popup cooldown (in prompts) — how many prompts to suppress NEW popups after
- * one is shown. Config `prompt_enhancement.popup_cooldown` (project-scoped first, then global),
- * default 7. 0 disables the cooldown (every eligible prompt may pop). Non-numeric / negative → default.
- */
-function resolvePromptEnhancementPopupCooldownV1(store: Store, projectRoot: string): number {
-  const raw = getConfig(store.db, `prompt_enhancement.popup_cooldown:${projectRoot}`)
-    ?? getConfig(store.db, 'prompt_enhancement.popup_cooldown');
-  const n = raw === undefined ? 7 : Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n >= 0 ? n : 7;
 }
 
 /**
@@ -589,12 +587,12 @@ export async function runStop(
     if (pendingPe) {
       let decision: PromptEnhancementStopDecision;
       // Popup cooldown: after a PE / MPS-1 popup is shown, suppress NEW ones for
-      // `prompt_enhancement.popup_cooldown` prompts (default 7). The FIRST popup always shows
+      // `prompt_enhancement.popup_cooldown` prompts (default 3). The FIRST popup always shows
       // (lastPopupIndex < 0). During cooldown, consume the pending record (so it does not linger) and
       // show nothing this turn. Continuation items (MPS-2) take a different Stop path and are NOT gated.
       const popupCooldown = resolvePromptEnhancementPopupCooldownV1(store, payload.cwd);
       const lastPopupIndex = mgr.current.lastPromptEnhancementPromptIndex ?? -1;
-      if (lastPopupIndex >= 0 && mgr.current.promptCount - lastPopupIndex < popupCooldown) {
+      if (isPromptEnhancementPopupCooldownActiveV1(lastPopupIndex, mgr.current.promptCount, popupCooldown)) {
         markPromptEnhancementShown(store, pendingPe.id);
         logger.debug('stop_pe_popup_cooldown', {
           cwd:              payload.cwd,
@@ -617,6 +615,10 @@ export async function runStop(
         markPromptEnhancementShown(store, pendingPe.id);
         // The PE / MPS-1 popup was shown this prompt → reset the popup cooldown.
         mgr.markPromptEnhancementPopupShown(store);
+        // Phase 1: the user received it, so this is where the session budget is spent. A popup that is
+        // prepared and never displayed costs nothing. No-op unless the frequency level reads the
+        // shown-popup state (`countBudgetOnShow`).
+        mgr.chargeShownPopupV1(store, pendingPe.promptCount, pendingPe.request.reviewMomentContext.triggerProvenance.firedKey);
         // D1 (P9-G1 / resolves P9-G2): record source-use + generated-origin BEFORE transport via
         // the typed Stop-bridge delivery contract — the audit/lineage tables the ad-hoc path never
         // wrote live. Best-effort: an audit-write failure must never lose the injection (4d).
@@ -647,6 +649,9 @@ export async function runStop(
         markPromptEnhancementShown(store, pendingPe.id);
         // The PE / MPS-1 popup was shown this prompt → reset the popup cooldown.
         mgr.markPromptEnhancementPopupShown(store);
+        // Phase 1: displayed counts as received — dismiss and use-original included, since the user
+        // saw the guidance either way. Same charge as the inject path above.
+        mgr.chargeShownPopupV1(store, pendingPe.promptCount, pendingPe.request.reviewMomentContext.triggerProvenance.firedKey);
         logger.info('stop_prompt_enhancement_shown', { cwd: payload.cwd });
         // Phase 5: the user's "something else" popup resolved WITHOUT blocking (use-original / dismiss),
         // so their own turn is done — a sequence held from an earlier interruption resumes now.
@@ -959,6 +964,9 @@ export function registerStopCommand(program: import('commander').Command): void 
               state: event.state,
               reasonCodes: event.reasonCodes.slice(0, 8),
             }),
+            // Ctrl+T inside the popup (owner request 2026-09-18) — the store lock is held here for
+            // the popup's whole life, so the chooser writes through this same connection.
+            settingsControl: buildPromptEnhancementSettingsControlV1(store, payload.cwd),
           });
         } else {
           // No direct TTY but a GUI session exists: spawn a terminal popup. Release the DB lock across

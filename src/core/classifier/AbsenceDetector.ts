@@ -142,8 +142,18 @@ export function detectAbsenceFlags(
       if (!counter || counter.lastSeenAt !== null) continue;
     }
 
-    const existingFlag = state.absenceFlags.find((f) => f.signalKey === sig.key);
-    if (existingFlag && promptCount < existingFlag.cooldownUntil) continue;
+    // Do not re-raise while ANY window for this signal is still open.
+    //
+    // This read `.find()` — the FIRST flag for the signal — while `addAbsenceFlag` appends, so once
+    // the oldest flag's window had passed the cooldown never gated again and a still-missing signal
+    // was re-raised on every prompt. `ABSENCE_COOLDOWN_PROMPTS` held for exactly one window and then
+    // stopped meaning anything. Recorded as B-11; measured across twelve sim sessions, 2 565 raises
+    // were written where 1 669 windows existed — 35 % of them artifacts, and one 171-prompt session
+    // accumulated 618 flags (60 KB, re-serialised on every prompt).
+    //
+    // `.some()` rather than "the newest flag" on purpose: it does not depend on array order, which
+    // nothing guarantees, and it states the rule the cooldown was always meant to express.
+    if (state.absenceFlags.some((f) => f.signalKey === sig.key && promptCount < f.cooldownUntil)) continue;
 
     newFlags.push({
       signalKey:     sig.key,

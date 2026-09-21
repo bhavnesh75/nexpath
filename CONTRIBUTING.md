@@ -32,6 +32,20 @@ Nexpath does and how to install and run it. This guide covers how to contribute 
 - State the problem, your approach, and why it belongs in Nexpath
 - For features and non-trivial changes, wait for maintainer approval before opening a PR. **PRs without an approved issue may be closed.**
  
+## Local Setup
+
+The published package is `nexpath-cli`; from a clone you get the same `nexpath` binary
+via `npm link`.
+
+```bash
+git clone https://github.com/hi0001234d/nexpath.git
+cd nexpath
+npm install
+npm run build
+npm link          # exposes the nexpath + nexpath-serve binaries from your clone
+nexpath --version
+```
+
 ## Common Checks
  
 Nexpath runs **no CI on pull requests** — your local run is the only gate.

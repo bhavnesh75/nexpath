@@ -2082,7 +2082,7 @@ describe('installAction — frequency and role prompts', () => {
     return { path, cleanup: () => { try { rmSync(path); } catch { /* ignore */ } } };
   }
 
-  it('--yes path applies the every_event frequency default when no value is configured', async () => {
+  it('--yes path applies the optimum (High) frequency default when no value is configured', async () => {
     const { dir, cleanup: cleanupDir } = tmpDir();
     markClaudeInstalled(dir);
     const { path: dbPath, cleanup: cleanupDb } = tempDbFile();
@@ -2091,7 +2091,7 @@ describe('installAction — frequency and role prompts', () => {
       const paths = resolveAgentPaths(dir, dir, dir);
       await installAction({ yes: true }, { paths, isWin: false, execFn: () => {}, dbPath, skipClipboardCheck: true });
       const store = await openStore(dbPath);
-      expect(getConfig(store.db, 'advisory_frequency')).toBe('every_event');
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('optimum');
       closeStore(store);
     } finally {
       cleanupDir();
@@ -2213,7 +2213,7 @@ describe('installAction — frequency and role prompts', () => {
       expect(freqPromptFn).not.toHaveBeenCalled();          // frequency picker hidden
       expect(rolePromptFn).toHaveBeenCalledWith('founder');  // role picker STILL shown (default founder)
       const store = await openStore(dbPath);
-      expect(getConfig(store.db, 'advisory_frequency')).toBe('every_event'); // Medium default seeded
+      expect(getConfig(store.db, 'advisory_frequency')).toBe('optimum'); // High default seeded (owner 2026-09-18)
       expect(getConfig(store.db, 'role')).toBe('founder');                    // written by the role picker
       closeStore(store);
     } finally {
