@@ -217,6 +217,45 @@ describe('classes 3 and 4 — boundaries and conditions', () => {
     expect(pairs(one('Limit applies to the upload endpoint only.'))).toContainEqual([3, 'only']);
   });
 
+  // A bare `not` needs something to negate. `do not` and `must not` carry their own verb and are
+  // matched whole, so a bare one reaches the scan only where neither did — and there it is either
+  // negating a verb, or sitting inside a noun phrase that merely NAMES a practice. The second is
+  // a description, and a description is not a constraint.
+  //
+  // Both directions are pinned, and every sentence here is written from the grammar: a detector
+  // that only ever says no would pass half of this block as surely as one that only says yes.
+  describe('a bare `not` is a limit only when it negates something', () => {
+    for (const governed of [
+      'You should not send the request twice.',
+      'The migration must be reversible, and it is not reversible today.',
+      'The token will not be refreshed automatically.',
+      'The endpoint can not be called before the handshake.',
+      'This path has not been verified on staging.',
+    ]) {
+      it(`marks it: ${JSON.stringify(governed)}`, () => {
+        expect(one(governed).some((candidate) => candidate.emphasisClass === 3)).toBe(true);
+      });
+    }
+
+    for (const named of [
+      'Follow best practices like not sharing credentials in the repository.',
+      'Consider strategies such as not caching the response body.',
+      'The checklist covers things like not logging tokens.',
+    ]) {
+      it(`does not mark it: ${JSON.stringify(named)}`, () => {
+        const found = one(named).filter((candidate) => candidate.emphasisClass === 3);
+        expect(found, `"not …" here names a practice; it imposes no limit`).toEqual([]);
+      });
+    }
+
+    it('still takes the whole limiter when the line carries one, alongside a named practice', () => {
+      // The governed limiter earns its mark; the named practice in the same line does not, and the
+      // two are distinguished by what precedes the word rather than by where it sits.
+      const found = one('Do not log the token, and follow practices like not caching the body.');
+      expect(pairs(found).filter(([klass]) => klass === 3)).toEqual([[3, 'Do not log the token']]);
+    });
+  });
+
   it('binds a condition to its clause', () => {
     // Given something to qualify — see the section below for why that is the condition of it
     // being marked at all. What this pins is the span: the clause, not the sentence around it.

@@ -124,6 +124,36 @@ const CLAUSE_BOUNDARY = /[,.;:!?]|\bbefore\b|\bafter\b|\bonce\b|\bunless\b|\bunt
 /** A hard negation or scope limiter. */
 const CLASS_3_BOUNDARY_WORDS: readonly string[] = ['do not', 'must not', 'never', 'without', 'only', 'not'];
 
+/** The last entry above, which is the only one that needs the governor test below. */
+const BARE_NOT = 'not' as const;
+
+/**
+ * What a bare `not` must be negating to count as a limit.
+ *
+ * `not` is a negator: it needs a verb to negate. `do not`, `must not` and `never` carry their own
+ * verb and are matched whole, so a BARE `not` only ever reaches here when neither did — and there
+ * it is doing one of two very different jobs:
+ *
+ *   `you should not send the request`   — a limit. `should` is what it negates.
+ *   `practices like not sharing keys`   — a practice being NAMED. It negates nothing; the phrase
+ *                                         is a noun, and marking it emphasises a description
+ *                                         rather than a constraint.
+ *
+ * ⚠️ Class 1 already refuses the same shape for the same reason — *"only a verb that opens the
+ * clause counts; one buried further in is the body describing something, not instructing"*. Class 3
+ * had no equivalent test, which is the asymmetry this closes, not a special case.
+ *
+ * The test is on the word BEFORE, not on where the word sits: a limiter is a limiter wherever it
+ * falls in a sentence, and what makes this one a limiter is that it has something to negate.
+ */
+const NEGATION_GOVERNOR =
+  /\b(?:do|does|did|must|shall|should|will|would|can|could|may|might|is|are|was|were|be|been|being|am|has|have|had|need|dare)$/i;
+
+/** Whether the bare `not` at this offset is negating a verb rather than sitting inside a phrase. */
+function bareNotIsGoverned(line: string, at: number): boolean {
+  return NEGATION_GOVERNOR.test(line.slice(0, at).trimEnd());
+}
+
 /** A precondition that gates the work. */
 const CLASS_4_CONDITION_WORDS: readonly string[] = ['only if', 'before', 'after', 'once', 'unless', 'until'];
 
@@ -256,6 +286,8 @@ function boundaryAndConditionOfLine(line: string): PromptEnhancementEmphasisCand
       if (at < 0) continue;
       // A longer limiter wins: "do not" is not also a bare "not".
       if (claimed.some((taken) => taken.toLowerCase().includes(word.toLowerCase()))) continue;
+      // …and a bare "not" that negates nothing is a word in a phrase, not a limit.
+      if (word === BARE_NOT && !bareNotIsGoverned(line, at)) continue;
       const phrase = cutBeforeSecret(clauseFrom(line, at, word.length));
       if (phrase.length === 0) continue;
       claimed.push(phrase);
