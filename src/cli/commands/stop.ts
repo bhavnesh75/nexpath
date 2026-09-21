@@ -978,7 +978,18 @@ export function registerStopCommand(program: import('commander').Command): void 
             // This process already resolved the key above, so the optional pass can run here.
             // The spawned branch below does not pass it: that child resolves its own.
             ...(typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
-              ? { emphasisModel: { enabled: true } }
+              ? {
+                emphasisModel: {
+                  enabled: true,
+                  // Its OWN event name — a timeout here costs a few unbolded words, and must
+                  // never read in the log as the stage classifier's provider failure.
+                  onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
+                    cwd: payload.cwd,
+                    outcome: event.outcome,
+                    phraseCount: event.phraseCount,
+                  }),
+                },
+              }
               : {}),
             feedbackSink: (event) => recordPromptEnhancementCliFeedbackV1(store, payload.cwd, event, pending.request),
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the

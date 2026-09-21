@@ -206,6 +206,25 @@ describe('the popup and the suggestion pass', () => {
     expect(ui.repaints).toEqual([]);
   });
 
+  it('forwards the caller’s outcome sink to the pass, so the CLI hosts can log it', async () => {
+    const create = vi.fn(async () => ({ choices: [{ message: { content: '{"phrases":[]}' } }] }));
+    const client = { chat: { completions: { create } } } as unknown as PromptEnhancementEmphasisModelClientV1;
+    const seen: { event: string; outcome: string; phraseCount: number }[] = [];
+    const base = request('emphasis-wiring-sink');
+    const prepared = await preparePromptEnhancement(base);
+    const ui = interaction([{ type: 'use_current' }]);
+
+    await runPromptEnhancementCliSubmitPopupV1({
+      request: base, result: prepared, interaction: ui,
+      emphasisPhrases: FLOOR,
+      emphasisModel: { client, onOutcome: (event) => seen.push(event) },
+    });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.event).toBe('prompt_enhancement_emphasis_call');
+  });
+
   it('starts nothing at all when no client and no opt-in are given', async () => {
     const base = request('emphasis-wiring-none');
     const prepared = await preparePromptEnhancement(base);
@@ -318,6 +337,7 @@ describe('the suggestion pass marks the body, it never rewrites it', () => {
 
     return {
       offered,
+      marked: ui.repaints.at(-1)?.filter((phrase) => phrase.source === 'model') ?? [],
       returned: result.state === 'selected_current' ? result.bodyText : undefined,
       composed: prepared.currentBody.text,
       drawn: ui.views.map((view) => view.model.body.text),
@@ -331,9 +351,12 @@ describe('the suggestion pass marks the body, it never rewrites it', () => {
       const off = await bodyTextsFor(prompt, 'off');
       const on = await bodyTextsFor(prompt, 'on');
 
-      // The premise: the tier really had something to say about this body. Without this the
-      // comparison would pass just as well on a tier that did nothing at all.
+      // ⚠️ The premise, asserted on what the tier actually MARKED and not merely on what it was
+      // offered: every offered phrase can be rejected by the output rules, and this comparison
+      // would then pass just as well on a tier that did nothing at all.
       expect(on.offered.length).toBeGreaterThan(0);
+      expect(on.marked.length).toBeGreaterThan(0);
+      expect(off.marked).toEqual([]);
 
       expect(on.composed).toBe(off.composed);
       expect(on.drawn).toEqual(off.drawn);

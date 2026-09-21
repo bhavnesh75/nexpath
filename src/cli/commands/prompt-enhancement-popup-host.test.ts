@@ -15,6 +15,8 @@ import {
   type PromptEnhancementPopupHostInputV1,
 } from './prompt-enhancement-popup-host.js';
 import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
+import { logger } from '../../logger.js';
+import { PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1 } from '../../prompt-enhancement/emphasis-model-call.js';
 
 // Key resolution is stubbed for the whole file: the real one reads the machine's keychain and home
 // directory, so left alone these tests would answer differently on a machine that happens to have a
@@ -444,6 +446,46 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
     );
 
     expect(output.result).toEqual({ state: 'selected_original' });
+    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+  });
+});
+
+describe('the pass reports into the log, under its own name', () => {
+  it('hands the popup a sink that logs the outcome as prompt_enhancement_emphasis_call', async () => {
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => {
+      process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
+      return 'sk-test-resolved-in-the-child';
+    });
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    const passed = (runPopup.mock.calls[0]![0] as { emphasisModel?: { onOutcome?: (e: unknown) => void } }).emphasisModel;
+    expect(typeof passed?.onOutcome).toBe('function');
+    // ⛔ The name is the point: the stage classifier's provider-error event is what `nexpath
+    // status` reports, and a timeout here costs a few unbolded words, nothing more.
+    passed!.onOutcome!({ event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome: 'pending_or_failed', phraseCount: 0 });
+    expect(debug).toHaveBeenCalledWith('prompt_enhancement_emphasis_call', expect.objectContaining({ outcome: 'pending_or_failed', phraseCount: 0 }));
+    debug.mockRestore();
+  });
+
+  it('hands it no sink when there is no key, because it starts no call either', async () => {
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => null);
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
     expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
   });
 });

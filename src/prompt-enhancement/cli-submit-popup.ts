@@ -48,6 +48,7 @@ import {
   mergePromptEnhancementEmphasisPhrasesV1,
   startPromptEnhancementEmphasisModelCallV1,
   type PromptEnhancementEmphasisModelClientV1,
+  type PromptEnhancementEmphasisModelInputV1,
 } from './emphasis-model-call.js';
 import {
   buildPromptEnhancementEmphasisSpansV1,
@@ -299,6 +300,12 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   emphasisModel?: {
     client?: PromptEnhancementEmphasisModelClientV1;
     enabled?: boolean;
+    /**
+     * Where the pass reports what became of it — one call, its own event name, every outcome.
+     * The CLI hosts give it the log; without a sink the pass runs exactly as before and says
+     * nothing, which is what the browser surface gets.
+     */
+    onOutcome?: PromptEnhancementEmphasisModelInputV1['onOutcome'];
   };
 }): Promise<PromptEnhancementCliPopupResultV1> {
   let currentResult = input.result;
@@ -327,6 +334,7 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
     sections: emphasisSections,
     ...(input.emphasisModel?.client ? { client: input.emphasisModel.client } : {}),
     ...(input.emphasisModel?.enabled === true ? { enabled: true } : {}),
+    ...(input.emphasisModel?.onOutcome ? { onOutcome: input.emphasisModel.onOutcome } : {}),
   });
   // ⚠️ Held here, not read off `input` each time round. The loop builds a fresh view on every
   // pass, so a merged list that lived only in the repaint would be replaced by the rule-based one

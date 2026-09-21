@@ -277,7 +277,18 @@ export async function runPromptEnhancementPopupHostCommandV1(
           popupResult = await dependencies.runPopup({
             request: input.request,
             result: input.result,
-            ...(emphasisEnabled ? { emphasisModel: { enabled: true } } : {}),
+            // The pass reports under its OWN event name, so a timeout costing a few unbolded
+            // words is never read here as the stage classifier's provider failure.
+            ...(emphasisEnabled ? {
+              emphasisModel: {
+                enabled: true,
+                onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
+                  projectRoot: input.request.projectRoot,
+                  outcome: event.outcome,
+                  phraseCount: event.phraseCount,
+                }),
+              },
+            } : {}),
             onFirstRender: options.readinessFile ? markReadyOnce : undefined,
             feedbackSink: (event: PromptEnhancementPopupEventV1) => dependencies.recordFeedback(
               store!,
