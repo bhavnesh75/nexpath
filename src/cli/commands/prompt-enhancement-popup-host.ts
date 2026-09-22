@@ -286,16 +286,21 @@ export async function runPromptEnhancementPopupHostCommandV1(
             result: input.result,
             // The pass reports under its OWN event name, so a timeout costing a few unbolded
             // words is never read here as the stage classifier's provider failure.
-            ...(emphasisEnabled ? {
-              emphasisModel: {
-                enabled: true,
-                onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
-                  projectRoot: input.request.projectRoot,
-                  outcome: event.outcome,
-                  phraseCount: event.phraseCount,
-                }),
-              },
-            } : {}),
+            // ⚠️ The SINK is handed over unconditionally and only `enabled` is gated. The pass
+            // reports once for every outcome **including the ones where it started nothing**, so
+            // this way the log records that the tier did not run instead of saying nothing at all
+            // — and someone reading it is not left to guess whether a key failed to resolve.
+            // `tierShips` is in the record for exactly that: the outcome alone reads as "no
+            // client", which would send a reader hunting for a missing key.
+            emphasisModel: {
+              ...(emphasisEnabled ? { enabled: true } : {}),
+              onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
+                projectRoot: input.request.projectRoot,
+                outcome: event.outcome,
+                phraseCount: event.phraseCount,
+                tierShips: PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
+              }),
+            },
             onFirstRender: options.readinessFile ? markReadyOnce : undefined,
             feedbackSink: (event: PromptEnhancementPopupEventV1) => dependencies.recordFeedback(
               store!,

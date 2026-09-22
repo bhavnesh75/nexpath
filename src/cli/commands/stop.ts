@@ -985,21 +985,26 @@ export function registerStopCommand(program: import('commander').Command): void 
             // The spawned branch below does not pass it: that child resolves its own.
             // 🔒 It does not run: see PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1, which carries the
             // measured numbers that decided it and is the one line that turns it back on.
-            ...(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1
-              && typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
-              ? {
-                emphasisModel: {
-                  enabled: true,
-                  // Its OWN event name — a timeout here costs a few unbolded words, and must
-                  // never read in the log as the stage classifier's provider failure.
-                  onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
-                    cwd: payload.cwd,
-                    outcome: event.outcome,
-                    phraseCount: event.phraseCount,
-                  }),
-                },
-              }
-              : {}),
+            //
+            // ⚠️ The SINK is handed over anyway, and only `enabled` is gated. The pass reports once
+            // for every outcome **including the ones where it started nothing**, so the log records
+            // that the tier did not run rather than saying nothing at all. `tierShips` rides along
+            // because the outcome alone reads as "no client", which would send a reader hunting for
+            // a key that resolved perfectly well.
+            emphasisModel: {
+              ...(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1
+                && typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
+                ? { enabled: true }
+                : {}),
+              // Its OWN event name — a timeout here costs a few unbolded words, and must
+              // never read in the log as the stage classifier's provider failure.
+              onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
+                cwd: payload.cwd,
+                outcome: event.outcome,
+                phraseCount: event.phraseCount,
+                tierShips: PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
+              }),
+            },
             feedbackSink: (event) => recordPromptEnhancementCliFeedbackV1(store, payload.cwd, event, pending.request),
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the
             // feedback-consent flush (store-backed sink; in-process popup on the Stop hook).

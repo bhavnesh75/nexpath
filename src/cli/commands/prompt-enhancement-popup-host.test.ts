@@ -427,7 +427,10 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
 
     expect(resolveKey).toHaveBeenCalledWith(input.request.projectRoot);
     expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
-    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
   });
 
   it('leaves it off when nothing resolves, and the popup still opens', async () => {
@@ -444,7 +447,10 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
 
     expect(output.result).toEqual({ state: 'selected_original' });
     expect(runPopup).toHaveBeenCalledTimes(1);
-    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
   });
 
   it('leaves it off when resolution throws, and the popup still opens', async () => {
@@ -459,26 +465,29 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
     );
 
     expect(output.result).toEqual({ state: 'selected_original' });
-    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
   });
 });
 
 describe('the pass reports into the log, under its own name', () => {
-  it('hands the popup no sink, because the tier that would report into it does not ship', async () => {
-    // ⚠️ This test used to drive the sink and assert the event name. It cannot any more, and that
-    // is a real consequence of the decision worth naming rather than hiding: with the tier off,
-    // the sink is defined inside the branch that no longer runs, so **its wiring is unreachable
-    // through this route until the constant turns**. The event name itself is still pinned where
-    // it is defined, and the pass's own tests still exercise the reporting.
+  it('hands the popup a sink even though the tier does not ship, and the log says which', async () => {
+    // ⚠️ The sink is handed over whether or not the tier runs, and that is the fix for something
+    // the ruling would otherwise have broken twice over: a tier that is off would log NOTHING, so
+    // anyone asking "why is there no model bold" gets silence — and the sink's own wiring would
+    // sit in a branch nothing reaches, untested until the day it is turned back on.
     //
-    // The assertion is tied to the constant on purpose. Flipping it to true fails this test, which
-    // is the point of a build-time switch: it cannot be turned on quietly.
+    // ⛔ `tierShips` is in the record because the outcome alone reads as "no client", which would
+    // send that reader hunting for a key that resolved perfectly well.
     const paths = files();
     writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
     resolveKey.mockImplementation(async () => {
       process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
       return 'sk-test-resolved-in-the-child';
     });
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
     const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
 
     await runPromptEnhancementPopupHostCommandV1(
@@ -486,11 +495,22 @@ describe('the pass reports into the log, under its own name', () => {
       { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
     );
 
+    const passed = (runPopup.mock.calls[0]![0] as {
+      emphasisModel?: { enabled?: boolean; onOutcome?: (e: unknown) => void };
+    }).emphasisModel;
+    // The sink is there; the opt-in is not — which is the whole shape of the decision.
+    expect(typeof passed?.onOutcome).toBe('function');
+    expect(passed?.enabled).toBeUndefined();
     expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
-    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
-    // ⛔ Still pinned, because it is what a log must never confuse with the stage classifier's
-    // provider failure — a timeout in that pass costs a few unbolded words, nothing more.
-    expect(PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1).toBe('prompt_enhancement_emphasis_call');
+
+    // ⛔ The name is the point: the stage classifier's provider-error event is what `nexpath
+    // status` reports, and a timeout here costs a few unbolded words, nothing more.
+    passed!.onOutcome!({ event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome: 'gated_out_no_client', phraseCount: 0 });
+    expect(debug).toHaveBeenCalledWith(
+      'prompt_enhancement_emphasis_call',
+      expect.objectContaining({ outcome: 'gated_out_no_client', phraseCount: 0, tierShips: false }),
+    );
+    debug.mockRestore();
   });
 
   it('hands it no sink when there is no key, because it starts no call either', async () => {
@@ -504,6 +524,9 @@ describe('the pass reports into the log, under its own name', () => {
       { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
     );
 
-    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
   });
 });
