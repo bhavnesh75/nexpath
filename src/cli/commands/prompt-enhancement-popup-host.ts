@@ -32,6 +32,7 @@ import {
 } from '../../store/pending-prompt-enhancements.js';
 import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { logger } from '../../logger.js';
+import { PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1 } from '../../prompt-enhancement/emphasis-model-call.js';
 
 const POPUP_HOST_PROTOCOL_VERSION_V1 = 1;
 
@@ -267,10 +268,15 @@ export async function runPromptEnhancementPopupHostCommandV1(
           // the popup lives, so without this the optional pass would run on Linux only, and the
           // tier most people get would be the one nobody measured. Nothing resolving is simply
           // "no key": the popup shows its rule-based marks and starts no call.
+          // 🔒 …and it does not ship — see PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1, which carries
+          // the numbers that decided it. The key is still resolved because this process resolves it
+          // for whatever else needs it, and because the day the tier is turned back on the only
+          // change here is the constant.
           let emphasisEnabled = false;
           try {
             await resolveOpenAIKey(input.request.projectRoot);
-            emphasisEnabled = typeof process.env['OPENAI_API_KEY'] === 'string'
+            emphasisEnabled = PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1
+              && typeof process.env['OPENAI_API_KEY'] === 'string'
               && process.env['OPENAI_API_KEY'].length > 0;
           } catch {
             // Resolution is best effort; a failure here must never keep the popup from opening.

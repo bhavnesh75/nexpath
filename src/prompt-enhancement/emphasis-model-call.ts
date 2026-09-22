@@ -55,6 +55,32 @@ export const PROMPT_ENHANCEMENT_EMPHASIS_SYSTEM_PROMPT_V1 = [
 export const PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1 = 'prompt_enhancement_emphasis_call';
 
 /**
+ * 🔒 **Whether this pass runs in production at all. It does not — owner's decision, 2026-09-22,
+ * taken on measured numbers rather than on preference.**
+ *
+ * Measured against a hand-labelled set of real popups, one pass per popup:
+ *
+ * | | lines it should mark | wrong landings | precision |
+ * |---|---|---|---|
+ * | rule-based marks alone | 23 % | **0** | **1.000** |
+ * | with this pass merged in | ~70 % | **18 to 28** | ~0.68 |
+ *
+ * So it does raise coverage — roughly threefold — and it does so by marking lines the standard
+ * rejects, about one in three of what it adds. **Wrong emphasis is worse than absent emphasis**:
+ * a mark is an instruction to read this, and putting one on a sentence that should not have been
+ * written at all points the reader straight at the defect. The bar for wrong landings is zero and
+ * the deterministic marks meet it exactly.
+ *
+ * ⛔ **Nothing about this pass is deleted.** It is built, tested and measurable, and the day its
+ * accuracy earns the bar this constant is the single line that turns it on — which is why it is
+ * one constant and not a flag repeated at each call site, where the two could drift apart.
+ *
+ * ⚠️ This is not a user-facing switch. The milestone settled that question separately and built
+ * none; this is a build-time decision about which tier ships.
+ */
+export const PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1 = false;
+
+/**
  * The outcome states, kept apart so a debug run can tell "never started" from "started and gave
  * nothing" — they call for opposite responses, and an absent value that cannot distinguish them
  * answers neither.

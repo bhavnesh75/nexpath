@@ -42,6 +42,7 @@ import {
 } from '../../prompt-enhancement/cli-submit-popup.js';
 import {
   PROMPT_ENHANCEMENT_EMPHASIS_TIMEOUT_MS_V1,
+  PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
   startPromptEnhancementEmphasisModelCallV1,
 } from '../../prompt-enhancement/emphasis-model-call.js';
 import { emitPromptEnhancementCostObservabilityV1 } from '../../prompt-enhancement/cost-measurement.js';
@@ -980,9 +981,12 @@ export function registerStopCommand(program: import('commander').Command): void 
             request: pending.request,
             result: pending.result,
             emphasisPhrases: pending.emphasisPhrases,
-            // This process already resolved the key above, so the optional pass can run here.
+            // This process already resolved the key above, so the optional pass COULD run here.
             // The spawned branch below does not pass it: that child resolves its own.
-            ...(typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
+            // 🔒 It does not run: see PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1, which carries the
+            // measured numbers that decided it and is the one line that turns it back on.
+            ...(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1
+              && typeof process.env['OPENAI_API_KEY'] === 'string' && process.env['OPENAI_API_KEY'].length > 0
               ? {
                 emphasisModel: {
                   enabled: true,

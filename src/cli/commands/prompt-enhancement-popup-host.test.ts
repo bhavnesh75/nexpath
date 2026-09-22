@@ -16,7 +16,10 @@ import {
 } from './prompt-enhancement-popup-host.js';
 import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
 import { logger } from '../../logger.js';
-import { PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1 } from '../../prompt-enhancement/emphasis-model-call.js';
+import {
+  PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1,
+  PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
+} from '../../prompt-enhancement/emphasis-model-call.js';
 
 // Key resolution is stubbed for the whole file: the real one reads the machine's keychain and home
 // directory, so left alone these tests would answer differently on a machine that happens to have a
@@ -394,7 +397,16 @@ describe('MPS Phase 2 — continuation (2nd popup) host handler (Option D)', () 
 });
 
 describe('the optional emphasis pass is switched on in the child, not in the payload', () => {
-  it('turns it on when a key resolves here, and the payload never carried one', async () => {
+  it('does NOT turn it on, because the tier does not ship — and the payload still carries no key', async () => {
+    // ⚠️ This test used to assert the opposite, and the assertion moved with a decision rather
+    // than with the code: measured against a labelled set, the pass raises coverage about
+    // threefold and does it by marking lines the standard rejects — eighteen to twenty-eight wrong
+    // landings where the deterministic marks have none. Wrong emphasis is worse than absent
+    // emphasis, so the constant that starts it is false.
+    //
+    // What is still asserted here is everything AROUND that switch, because all of it must keep
+    // working for the day the constant turns: the key is still resolved for this project, and the
+    // payload written for the child still carries no secret.
     const paths = files();
     const input = await validInput();
     writeFileSync(paths.inputFile, JSON.stringify(input), 'utf8');
@@ -414,7 +426,8 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
     );
 
     expect(resolveKey).toHaveBeenCalledWith(input.request.projectRoot);
-    expect(runPopup.mock.calls[0]![0]).toMatchObject({ emphasisModel: { enabled: true } });
+    expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
+    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
   });
 
   it('leaves it off when nothing resolves, and the popup still opens', async () => {
@@ -451,14 +464,21 @@ describe('the optional emphasis pass is switched on in the child, not in the pay
 });
 
 describe('the pass reports into the log, under its own name', () => {
-  it('hands the popup a sink that logs the outcome as prompt_enhancement_emphasis_call', async () => {
+  it('hands the popup no sink, because the tier that would report into it does not ship', async () => {
+    // ⚠️ This test used to drive the sink and assert the event name. It cannot any more, and that
+    // is a real consequence of the decision worth naming rather than hiding: with the tier off,
+    // the sink is defined inside the branch that no longer runs, so **its wiring is unreachable
+    // through this route until the constant turns**. The event name itself is still pinned where
+    // it is defined, and the pass's own tests still exercise the reporting.
+    //
+    // The assertion is tied to the constant on purpose. Flipping it to true fails this test, which
+    // is the point of a build-time switch: it cannot be turned on quietly.
     const paths = files();
     writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
     resolveKey.mockImplementation(async () => {
       process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
       return 'sk-test-resolved-in-the-child';
     });
-    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
     const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
 
     await runPromptEnhancementPopupHostCommandV1(
@@ -466,13 +486,11 @@ describe('the pass reports into the log, under its own name', () => {
       { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
     );
 
-    const passed = (runPopup.mock.calls[0]![0] as { emphasisModel?: { onOutcome?: (e: unknown) => void } }).emphasisModel;
-    expect(typeof passed?.onOutcome).toBe('function');
-    // ⛔ The name is the point: the stage classifier's provider-error event is what `nexpath
-    // status` reports, and a timeout here costs a few unbolded words, nothing more.
-    passed!.onOutcome!({ event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome: 'pending_or_failed', phraseCount: 0 });
-    expect(debug).toHaveBeenCalledWith('prompt_enhancement_emphasis_call', expect.objectContaining({ outcome: 'pending_or_failed', phraseCount: 0 }));
-    debug.mockRestore();
+    expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
+    expect(runPopup.mock.calls[0]![0]).not.toHaveProperty('emphasisModel');
+    // ⛔ Still pinned, because it is what a log must never confuse with the stage classifier's
+    // provider failure — a timeout in that pass costs a few unbolded words, nothing more.
+    expect(PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1).toBe('prompt_enhancement_emphasis_call');
   });
 
   it('hands it no sink when there is no key, because it starts no call either', async () => {
