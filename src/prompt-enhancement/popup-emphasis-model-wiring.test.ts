@@ -295,6 +295,70 @@ describe('the popup and the suggestion pass', () => {
     // And the rule-based marks are still all there, ahead of it.
     expect(afterwards.emphasisPhrases?.slice(0, FLOOR.length)).toEqual(FLOOR);
   });
+
+  it('does not repaint when every suggested phrase was already the floor\'s', async () => {
+    // ⚠️ The case where every rule behaves and the screen still must not move. The reply names a
+    // phrase the floor already holds: the output filter keeps it — verbatim, on a markable row —
+    // and the merge then drops it as a duplicate. The list is the floor's again and the frame
+    // would be byte-identical, so a repaint here is a flicker the reader is given no reason for.
+    //
+    // The sibling above is the other half: a phrase that really is new DOES repaint. Together they
+    // say the gate is on what survived, not on whether a reply arrived.
+    let answer: (value: unknown) => void = () => {};
+    const create = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const client = { chat: { completions: { create } } } as unknown as PromptEnhancementEmphasisModelClientV1;
+    const base = request('emphasis-wiring-noop-repaint');
+    const prepared = await preparePromptEnhancement(base);
+
+    // Derived from the body, not invented: a span the output filter will certainly accept.
+    const target = buildPromptEnhancementEmphasisMarkableBodyV1({
+      sections: prepared.currentBody.sections.map((section) => ({
+        sectionKind: section.sectionKind, bodyText: section.bodyText,
+      })),
+    })
+      .split('\n')
+      .map((line) => line.trim())
+      .find((line) => line.length > 20)!
+      .slice(0, 24)
+      .trim();
+    // …and the floor already holds exactly it, which is the whole point.
+    const floorWithTarget: readonly PromptEnhancementEmphasisPhraseV1[] = [
+      { text: target, emphasisClass: 3, source: 'floor' },
+    ];
+
+    const queue: PromptEnhancementCliPopupCommandV1[] = [
+      { type: 'edit_body', text: prepared.currentBody.text },
+      { type: 'use_current' },
+    ];
+    const views: PromptEnhancementCliPopupViewV1[] = [];
+    const repaints: (readonly PromptEnhancementEmphasisPhraseV1[])[] = [];
+    const ui: PromptEnhancementCliPopupInteractionV1 = {
+      async next(view) {
+        views.push(view);
+        if (views.length === 1) {
+          answer({ choices: [{ message: { content: JSON.stringify({ phrases: [target] }) } }] });
+          await new Promise((resolve) => { setTimeout(resolve, 0); });
+        }
+        const command = queue.shift();
+        if (!command) throw new Error('missing scripted command');
+        return command;
+      },
+      close() {},
+      repaintWithPhrases(phrases) { repaints.push(phrases); },
+    };
+
+    await runPromptEnhancementCliSubmitPopupV1({
+      request: base, result: prepared, interaction: ui,
+      emphasisPhrases: floorWithTarget, emphasisModel: { client },
+    });
+
+    // The reply did arrive and did survive the output rules — this is not a test of the filter.
+    expect(create).toHaveBeenCalledTimes(1);
+    // …and nothing was drawn again.
+    expect(repaints).toEqual([]);
+    // The view handed over afterwards carries the floor, unchanged and with nothing appended.
+    expect(views[views.length - 1]!.emphasisPhrases).toEqual(floorWithTarget);
+  });
 });
 
 describe('the suggestion pass marks the body, it never rewrites it', () => {

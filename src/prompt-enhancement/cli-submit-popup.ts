@@ -357,11 +357,21 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   emphasisCall.onSettled(() => {
     const suggested = emphasisCall.read();
     if (suggested.length === 0) return;
+    const floor = input.emphasisPhrases ?? [];
     const merged = mergePromptEnhancementEmphasisPhrasesV1({
-      floor: input.emphasisPhrases ?? [],
+      floor,
       model: suggested.map((phrase) => phrase.text),
       sections: emphasisSections,
     });
+    // ⚠️ The gate is on what SURVIVED, not on what came back. Every rule can behave and the reply
+    // still change nothing: the optional pass may return a phrase the floor already holds, the
+    // output filter keeps it — it is verbatim, on a markable row — and the merge then drops it as a
+    // duplicate. The list is the floor's again, the frame would be byte-identical, and a repaint
+    // there is a flicker the reader is given no reason for.
+    //
+    // The test is exact rather than approximate: the merge returns the floor whole with the
+    // survivors appended, so a longer list is the only way anything was added.
+    if (merged.length === floor.length) return;
     emphasisPhrases = merged;
     try {
       interaction.repaintWithPhrases?.(merged);
