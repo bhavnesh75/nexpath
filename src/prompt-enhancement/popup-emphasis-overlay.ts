@@ -16,6 +16,15 @@
  * first and emphasised at them in their own words.
  *
  * An occurrence in any of the three is passed over, not fatal — the phrase marks its next one.
+ *
+ * ⚠️ **The unit is the PHRASE, and painting the whole line instead was tried and withdrawn.** Under
+ * line painting a phrase found anywhere in a sentence turned the entire sentence bold — which reads
+ * well when the sentence is wholly apt, and badly when it is not: a line can carry one clause that
+ * answers what was asked and a second that wanders past it, and making the wanderer loud along with
+ * the answer is the opposite of what a mark is for. Marking the words that earned it keeps the rest
+ * plain, so the reader's eye lands on the part that was actually judged. Measured either way
+ * against the same labels: coverage is identical and precision does not fall, so the narrower unit
+ * costs nothing — it only declines to amplify text no rule ever looked at.
  */
 import { buildPromptEnhancementVisualLineMapV1 } from './multiline-editor.js';
 import { buildPromptEnhancementSectionMapV1, type PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
@@ -116,38 +125,6 @@ function firstEligibleOccurrence(
 }
 
 /**
- * What a found phrase actually paints: **the whole line it sits on**, trimmed of the indentation
- * and the trailing padding either side of the text.
- *
- * ⚠️ The unit of emphasis is the LINE, not the phrase (owner's decision, 2026-09-21). A phrase is
- * how a line is *found* — the classes still look for actions, terms, boundaries, conditions and
- * safety lines, and the cap still spends on them — but what is drawn is the sentence the reader
- * has to act on, whole. Measured beside the labels before it was adopted: the same lines are
- * found either way, so the change costs nothing in coverage, and the labels judge whole lines, so
- * the metric no longer needs a word-level ground truth nobody had made.
- *
- * The trim matters: without it a bolded line carries its own indentation and the spaces after its
- * full stop, which some terminals draw as a highlighted run past the end of the sentence.
- *
- * A line that cannot be found — which cannot happen, every offset lies in some line — falls back
- * to the phrase's own range, so a mark is never lost to an edge case.
- */
-function paintedRangeFor(
-  found: OffsetRange,
-  logical: readonly OffsetRange[],
-  text: string,
-): OffsetRange {
-  const line = logical.find((range) => found.start >= range.start && found.start < range.end)
-    ?? logical.find((range) => found.start === range.start);
-  if (!line) return found;
-  let start = line.start;
-  let end = line.end;
-  while (start < end && /\s/.test(text[start] ?? '')) start += 1;
-  while (end > start && /\s/.test(text[end - 1] ?? '')) end -= 1;
-  return end > start ? { start, end } : found;
-}
-
-/**
  * Merge the ranges of one row so none overlaps another.
  *
  * ⚠️ Not tidiness — correctness. The standard deliberately marks a term *and* the clause around
@@ -180,11 +157,9 @@ export function buildPromptEnhancementEmphasisSpansV1(
   if (input.phrases.length === 0 || shownRows === 0) return rows;
 
   const ineligible = ineligibleRanges(input);
-  const logical = logicalLineRanges(input.text);
   for (const phrase of input.phrases) {
-    const found = firstEligibleOccurrence(input.text, phrase.text, ineligible);
-    if (found === undefined) continue;
-    const painted = paintedRangeFor(found, logical, input.text);
+    const painted = firstEligibleOccurrence(input.text, phrase.text, ineligible);
+    if (painted === undefined) continue;
     // A painted range that crosses a wrap becomes one sub-range per row it touches — arithmetic
     // off the map's offsets, never a guess about where the wrap fell.
     for (const [index, line] of visual.entries()) {

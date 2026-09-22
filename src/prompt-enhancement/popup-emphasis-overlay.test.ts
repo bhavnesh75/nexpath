@@ -46,6 +46,11 @@ const TEXT = [
 /** The one row of this fixture a mark may land on. */
 const ONLY_MARKABLE_ROW = 4;
 
+/** The clause the fixture repeats, and where it sits on that row — read off, never assumed. */
+const CLAUSE = 'do not delete the cache';
+const CLAUSE_AT = SECTION_TEXT[1]!.indexOf(CLAUSE);
+const CLAUSE_SPAN = { startColumn: CLAUSE_AT, endColumn: CLAUSE_AT + CLAUSE.length };
+
 const phrase = (text: string): PromptEnhancementEmphasisPhraseV1 => ({ text, emphasisClass: 3, source: 'floor' });
 
 function spansOf(overrides: Partial<PromptEnhancementEmphasisOverlayInputV1> = {}) {
@@ -64,13 +69,14 @@ function spansOf(overrides: Partial<PromptEnhancementEmphasisOverlayInputV1> = {
 }
 
 describe('the phrase on its row', () => {
-  it('marks the whole line it sits on, and nothing else', () => {
+  it('marks the phrase where it sits, and nothing else on that row', () => {
     const rows = spansOf();
-    // ⚠️ The unit is the LINE. The phrase is how the line is found; what is drawn is the whole
-    // sentence, trimmed of the space either side of it — here the line has none, so it is all of it.
-    expect(rows[ONLY_MARKABLE_ROW]).toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
-    // Read off the fixture: the clause starts after "- " and is 23 characters long.
-    expect(SECTION_TEXT[1]!.slice(2, 25)).toBe('do not delete the cache');
+    // ⚠️ The unit is the PHRASE. The words that earned the mark are drawn and the rest of the
+    // sentence stays plain — the bullet before it included.
+    expect(rows[ONLY_MARKABLE_ROW]).toEqual([CLAUSE_SPAN]);
+    // Read off the fixture rather than asserted: the clause starts after "- ".
+    expect(SECTION_TEXT[1]!.slice(CLAUSE_SPAN.startColumn, CLAUSE_SPAN.endColumn)).toBe(CLAUSE);
+    expect(CLAUSE_SPAN.endColumn).toBeLessThan(SECTION_TEXT[1]!.length);
   });
 
   it('leaves every other row alone', () => {
@@ -88,7 +94,7 @@ describe('the phrase on its row', () => {
 
   it('matches the way the phrases were found in the first place — case-insensitively', () => {
     expect(spansOf({ phrases: [phrase('DO NOT DELETE THE CACHE')] })[ONLY_MARKABLE_ROW])
-      .toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
+      .toEqual([CLAUSE_SPAN]);
   });
 });
 
@@ -140,8 +146,10 @@ describe('what a mark is kept away from', () => {
       phrases: [phrase('Impact and severity')],
       windowRows: 2,
     });
+    const line = '- Cover Impact and severity for this request.';
+    const at = line.indexOf('Impact and severity');
     expect(rows[0]).toEqual([]);
-    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Cover Impact and severity for this request.'.length }]);
+    expect(rows[1]).toEqual([{ startColumn: at, endColumn: at + 'Impact and severity'.length }]);
   });
 
   it('marks the first occurrence when the same phrase is in the section twice', () => {
@@ -150,9 +158,12 @@ describe('what a mark is kept away from', () => {
       '- retry twice, then retry once more.',
     ].join('\n');
     const rows = spansOf({ text, sections: [SECTIONS[1]!], phrases: [phrase('retry')], windowRows: 2 });
-    // Both occurrences are on the one line, so the question the old phrase-level rule answered —
-    // which of the two — no longer arises: the line is drawn once either way.
-    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- retry twice, then retry once more.'.length }]);
+    // The FIRST one, and only it. Both are on the same row, so this is the case that says the
+    // answer is "the first eligible occurrence" rather than "every occurrence" or "the last".
+    const line = '- retry twice, then retry once more.';
+    const at = line.indexOf('retry');
+    expect(rows[1]).toEqual([{ startColumn: at, endColumn: at + 'retry'.length }]);
+    expect(line.indexOf('retry', at + 1)).toBeGreaterThan(at);
   });
 
   it('finds nothing for a phrase the user has edited away', () => {
@@ -178,7 +189,7 @@ describe('the window', () => {
 
   it('keeps the mark when the window starts above it, at the shifted row', () => {
     const rows = spansOf({ windowStart: 2, windowRows: 4 });
-    expect(rows[ONLY_MARKABLE_ROW - 2]).toEqual([{ startColumn: 0, endColumn: SECTION_TEXT[1]!.length }]);
+    expect(rows[ONLY_MARKABLE_ROW - 2]).toEqual([CLAUSE_SPAN]);
   });
 
   it('gives a scroll marker row no mark — it is the window\'s text, not the buffer\'s', () => {
@@ -191,19 +202,24 @@ describe('the window', () => {
 });
 
 describe('a phrase that crosses a wrap', () => {
-  it('becomes one sub-range per row, covering the whole wrapped line', () => {
-    // Width 10 wraps "- do not delete the cache before the checks pass." — 49 characters — into
-    // five rows. The unit is the line, so every one of those rows is fully marked, and the last
-    // carries only what is left of the sentence.
+  it('becomes one sub-range per row it touches, and stops where the phrase does', () => {
+    // Width 10 wraps "- do not delete the cache before the checks pass." into five rows. The unit
+    // is the PHRASE, so only the rows it actually crosses are marked — the tail of the sentence
+    // after it stays plain — and the first row's mark starts at the bullet's offset, not at 0.
     const rows = spansOf({ fieldWidth: 10, windowStart: 0, windowRows: 200 });
     const marked = rows.map((row, index) => ({ index, row })).filter((entry) => entry.row.length > 0);
     const width = 10;
-    const length = SECTION_TEXT[1]!.length;
     const expected = [];
-    for (let at = 0; at < length; at += width) {
-      expected.push([{ startColumn: 0, endColumn: Math.min(width, length - at) }]);
+    for (let at = CLAUSE_SPAN.startColumn; at < CLAUSE_SPAN.endColumn; at = Math.floor(at / width) * width + width) {
+      const rowStart = Math.floor(at / width) * width;
+      expected.push([{
+        startColumn: at - rowStart,
+        endColumn: Math.min(rowStart + width, CLAUSE_SPAN.endColumn) - rowStart,
+      }]);
     }
     expect(marked.map((entry) => entry.row)).toEqual(expected);
+    // The sentence is longer than the phrase, so some of it must have been left plain.
+    expect(marked.length).toBeLessThan(Math.ceil(SECTION_TEXT[1]!.length / width));
     // Contiguous rows, and the pieces put back together are the line.
     expect(marked.map((entry) => entry.index))
       .toEqual(expected.map((_, offset) => marked[0]!.index + offset));
@@ -235,10 +251,12 @@ describe('two phrases on one row', () => {
       markerAbove: false,
       markerBelow: false,
     });
-    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Do not modify the auth middleware.'.length }]);
+    const clause = 'Do not modify the auth middleware';
+    const at = '- Do not modify the auth middleware.'.indexOf(clause);
+    expect(rows[1]).toEqual([{ startColumn: at, endColumn: at + clause.length }]);
   });
 
-  it('draws one range for two phrases on the same line, because the line is the unit', () => {
+  it('draws two ranges for two phrases on one row, with the plain words between them', () => {
     const rows = buildPromptEnhancementEmphasisSpansV1({
       text,
       sections,
@@ -249,9 +267,15 @@ describe('two phrases on one row', () => {
       markerAbove: false,
       markerBelow: false,
     });
-    // ⚠️ Phrase-level drew two ranges here, with the plain words between them. The line is now
-    // the unit, so two phrases that happen to sit on it ask for the same one range — which is
-    // also why the merge below can no longer be reached from a single line.
-    expect(rows[1]).toEqual([{ startColumn: 0, endColumn: '- Do not modify the auth middleware.'.length }]);
+    // ⚠️ They do NOT become one. The words between them earned no mark, and drawing them bold
+    // because they happen to sit between two that did is exactly what the narrower unit avoids.
+    const line = '- Do not modify the auth middleware.';
+    const first = line.indexOf('Do not');
+    const second = line.indexOf('middleware');
+    expect(rows[1]).toEqual([
+      { startColumn: first, endColumn: first + 'Do not'.length },
+      { startColumn: second, endColumn: second + 'middleware'.length },
+    ]);
+    expect(second).toBeGreaterThan(first + 'Do not'.length);
   });
 });
