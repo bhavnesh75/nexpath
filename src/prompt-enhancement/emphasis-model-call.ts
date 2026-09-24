@@ -75,8 +75,8 @@ export const PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1 = 'prompt_enhancement_emp
  * accuracy earns the bar this constant is the single line that turns it on — which is why it is
  * one constant and not a flag repeated at each call site, where the two could drift apart.
  *
- * ⚠️ This is not a user-facing switch. The milestone settled that question separately and built
- * none; this is a build-time decision about which tier ships.
+ * ⚠️ This is not a user-facing switch. That question was settled separately and none was built;
+ * this is a build-time decision about which tier ships.
  */
 export const PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1 = false;
 
