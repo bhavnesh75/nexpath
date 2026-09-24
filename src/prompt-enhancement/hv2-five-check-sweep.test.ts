@@ -673,7 +673,18 @@ describe('HV-2 check-5 for check-1 — the liveness column must guard itself', (
   // three are checked rather than the two paths, so a future build output cannot reintroduce it.
   const NOT_SOURCE = new Set(['node_modules', 'dist', 'out']);
 
+  // ⚠️ Walked + READ once, then cached (2026-09-24). The B-10 note above already measured how close
+  // this sweep runs to its 5 s timeout: it re-walked `src` and re-read every production file for
+  // EVERY symbol below — roughly 1 000 files × ~30 symbols of disk I/O per run. Adding two ordinary
+  // source files to src/prompt-enhancement/ was enough to tip it over under the full suite's
+  // parallel load, and it then failed on a DIFFERENT test each run, which reads as a phantom rather
+  // than as "this sweep is too slow". The tree cannot change mid-run, so one read of each file is
+  // all this ever needed.
+  let walkedFiles: string[] | undefined;
+  const sourceText = new Map<string, string>();
+
   function allTs(): string[] {
+    if (walkedFiles) return walkedFiles;
     const out: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
@@ -684,13 +695,23 @@ describe('HV-2 check-5 for check-1 — the liveness column must guard itself', (
       }
     };
     walk('src');
+    walkedFiles = out;
     return out;
   }
 
   function productionConsumers(exportName: string, declaredIn: string): string[] {
-    return allTs()
-      .filter((f) => !f.endsWith('.test.ts') && !f.endsWith(declaredIn))
-      .filter((f) => new RegExp(`\\b${exportName}\\b`).test(readFileSync(f, 'utf8')));
+    const pattern = new RegExp(`\\b${exportName}\\b`);
+    const hits: string[] = [];
+    for (const file of allTs()) {
+      if (file.endsWith('.test.ts') || file.endsWith(declaredIn)) continue;
+      let text = sourceText.get(file);
+      if (text === undefined) {
+        text = readFileSync(file, 'utf8');
+        sourceText.set(file, text);
+      }
+      if (pattern.test(text)) hits.push(file);
+    }
+    return hits;
   }
 
   // row → the export whose liveness the row's check-1 cell rests on
@@ -769,16 +790,28 @@ describe('§17.7 carried - the render path asks the section-key question exactly
   // behavioural pin on one section kind cannot see a second answer reappearing.
   const RAW_READS = ['fact.targetSectionKind ' + '===', 'fact.targetSectionKind ' + '!=='];
 
+  // ⛔ B-10 again, in the SECOND walker (2026-09-24). The fix recorded further down was applied to
+  // that describe's walk only; this one still descended into `node_modules`, `dist` and `out`. On a
+  // machine that has packaged the VS Code extension — `src/ext-vscode/node_modules` (3 764 .ts) plus
+  // the compiled CLI under `nexpath-cli/dist` — this read ~5 000 files instead of ~1 000 and spent
+  // the whole 5 s timeout doing it, failing as a phantom on developer machines and passing in CI.
+  // Same exclusion, same reason; the walk is cached because the tree cannot change mid-run.
+  const NOT_SOURCE_PROD = new Set(['node_modules', 'dist', 'out']);
+  let productionFiles: string[] | undefined;
+
   function productionTs(): string[] {
+    if (productionFiles) return productionFiles;
     const out: string[] = [];
     const walk = (dir: string): void => {
       for (const entry of readdirSync(dir)) {
+        if (NOT_SOURCE_PROD.has(entry)) continue;
         const full = dir + '/' + entry;
         if (statSync(full).isDirectory()) walk(full);
         else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) out.push(full);
       }
     };
     walk('src');
+    productionFiles = out;
     return out;
   }
 
