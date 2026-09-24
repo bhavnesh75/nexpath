@@ -26,6 +26,7 @@ import type { StageClassifierResult } from '../../classifier/stage-classifier.js
 import { resolveLanguage } from '../../classifier/LanguageDetector.js';
 import { insertPrompt } from '../../store/prompts.js';
 import { redactSecrets } from '../../store/redact.js';
+import { normalizePastedContentClosingTagsV1 } from '../../prompt-enhancement/pasted-content-tags.js';
 import { getConfig } from '../../store/config.js';
 import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { getProject, upsertProject } from '../../store/projects.js';
@@ -1102,6 +1103,21 @@ export async function runAuto(
     capturedPlannerPromptDirectives = prepared.plannerPromptDirectives;
     return prepared.result;
   };
+
+  // ── -2. Agent markup repair ─────────────────────────────────────────────────
+  // Claude Code closes its pasted-block wrapper as `</pasted_content id="…">` — attributes on a
+  // closing tag — which the PE popup then showed verbatim and looked broken to the user (bug report
+  // 2026-09-24). Repaired HERE, before the prompt is stored or composed, so the store, the body, the
+  // popup and the sendability gate all hold one identical string; see pasted-content-tags.ts for why
+  // this is not done at paint time. A no-op for every prompt without that shape.
+  const repairedPromptText = normalizePastedContentClosingTagsV1(input.promptText);
+  if (repairedPromptText !== input.promptText) {
+    logger.debug('pasted_content_closing_tag_normalized', {
+      project: input.projectRoot,
+      chars_removed: input.promptText.length - repairedPromptText.length,
+    });
+    input = { ...input, promptText: repairedPromptText };
+  }
 
   // ── -1. Advisory-injected prompt guard ──────────────────────────────────────
   // When the stop hook injects an advisory option as a new Claude turn (block decision),

@@ -4720,3 +4720,39 @@ describe('absenceOccurrenceIndexV1', () => {
     expect(absenceOccurrenceIndexV1([], 'x', 5)).toBeUndefined();
   });
 });
+
+// ── runAuto — agent markup repair (bug report 2026-09-24) ────────────────────
+
+describe('runAuto — Claude Code pasted-block markup', () => {
+  let store: Store;
+
+  beforeEach(async () => { store = await openStore(':memory:'); });
+  afterEach(() => { store.db.close(); });
+
+  it('stores the prompt with the closing tag repaired, content intact', async () => {
+    // Claude Code expands a pasted block with the opening tag's attributes repeated on the CLOSING
+    // tag. The popup showed that verbatim and read as broken markup to the user. Repaired at intake,
+    // so the store, the composed body and the popup all hold one identical string.
+    const projectRoot = '/test/pasted-content';
+    const raw = 'Listen\n\n<pasted_content id="eea2">\nnexpath-cost-curve-banner\n</pasted_content id="eea2">\n\n post';
+
+    await runAuto(makeInput({ projectRoot, promptText: raw }), store);
+
+    const stored = getRecentPrompts(store, projectRoot, 1).map((r) => r.text)[0];
+    expect(stored).toContain('</pasted_content>');
+    expect(stored).not.toContain('</pasted_content id=');
+    // Nothing else moved: the opening tag keeps its id, and every line survives.
+    expect(stored).toContain('<pasted_content id="eea2">');
+    expect(stored).toContain('nexpath-cost-curve-banner');
+    expect(stored).toContain('Listen');
+  });
+
+  it('leaves a prompt without that markup byte-identical', async () => {
+    const projectRoot = '/test/pasted-content-absent';
+    const ordinary = 'add a login form and write tests for it';
+
+    await runAuto(makeInput({ projectRoot, promptText: ordinary }), store);
+
+    expect(getRecentPrompts(store, projectRoot, 1).map((r) => r.text)[0]).toBe(ordinary);
+  });
+});
