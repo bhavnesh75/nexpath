@@ -308,6 +308,42 @@ describe('the body sections the view numbers', () => {
     expect(out?.sections).toEqual([{ number: 1, title: 'Scope' }]);
   });
 
+  describe('titles are matched in order, the way the CLI matches them', () => {
+    it('a duplicated title maps one line to one section, never both to the same line', () => {
+      const body = ['Scope:', 'the login route only.'].join('\n');
+      const out = parsePromptEnhancementExtensionPayloadV1(withSections(
+        [{ title: 'Scope' }, { title: 'Scope' }],
+        { text: body },
+      ));
+      // Only ONE `Scope:` line exists, so only one section can claim it.
+      expect(out?.sections).toEqual([{ number: 1, title: 'Scope' }]);
+    });
+
+    it('two lines for a duplicated title give two numbers', () => {
+      const body = ['Scope:', 'a', '', 'Scope:', 'b'].join('\n');
+      const out = parsePromptEnhancementExtensionPayloadV1(withSections(
+        [{ title: 'Scope' }, { title: 'Scope' }],
+        { text: body },
+      ));
+      expect(out?.sections).toEqual([
+        { number: 1, title: 'Scope' },
+        { number: 2, title: 'Scope' },
+      ]);
+    });
+
+    it('a title that appears only ABOVE the section before it is not found', () => {
+      // The body has `Acceptance:` before `Scope:`, but the sections are listed
+      // Scope then Acceptance. The search never goes backwards, so Acceptance
+      // has no line left after Scope's — exactly what the CLI reports.
+      const body = ['Acceptance:', 'the password is hashed.', '', 'Scope:', 'the login route only.'].join('\n');
+      const out = parsePromptEnhancementExtensionPayloadV1(withSections(
+        [{ title: 'Scope' }, { title: 'Acceptance' }],
+        { text: body },
+      ));
+      expect(out?.sections).toEqual([{ number: 1, title: 'Scope' }]);
+    });
+  });
+
   describe('never throws, whatever the shape', () => {
     const MALFORMED: ReadonlyArray<[string, unknown]> = [
       ['sections is a string', 'Scope'],

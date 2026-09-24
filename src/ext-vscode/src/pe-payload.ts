@@ -120,11 +120,19 @@ function parseBodySectionsV1(currentBody: unknown, bodyText: string): PeBodySect
   if (!Array.isArray(raw)) return [];
   const lines = bodyText.split('\n').map((line) => line.replace(/[ \t]+$/, ''));
   const out: PeBodySection[] = [];
+  // FORWARD-ONLY, with a cursor, because that is what the rule says: titles are
+  // matched IN ORDER. A plain "is this line anywhere in the body" test gets two
+  // cases wrong — a duplicated title would let both sections claim the same
+  // line, and a title appearing only ABOVE the section before it would be
+  // numbered when the CLI would not find it at all.
+  let searchFrom = 0;
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
     const title = (entry as Record<string, unknown>).title;
     if (typeof title !== 'string' || title.length === 0) continue;
-    if (!lines.includes(`${title}:`)) continue;
+    const at = lines.indexOf(`${title}:`, searchFrom);
+    if (at < 0) continue;
+    searchFrom = at + 1;
     out.push({ number: out.length + 1, title });
   }
   return out;
