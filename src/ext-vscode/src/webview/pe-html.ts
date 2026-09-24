@@ -27,7 +27,7 @@
  */
 
 import { escapeHtml } from './html.js';
-import type { PromptEnhancementExtensionPayloadV1 } from '../pe-payload.js';
+import type { PeBodySection, PromptEnhancementExtensionPayloadV1 } from '../pe-payload.js';
 
 export interface PeRenderOptions {
   /** Pass `webview.cspSource` so the CSP allows the webview's local resources. */
@@ -103,6 +103,46 @@ function renderFallbackState(cspSource: string): string {
   );
 }
 
+/**
+ * The body's section index — each title with the number the CLI draws beside it.
+ *
+ * WHY AN INDEX AND NOT A NUMBER ON THE LINE ITSELF. The body is ONE `<textarea>`
+ * (PEH-2 requires exactly that, and the delivered text is its `value`), so there
+ * is nowhere on a title line to put a number that is not also IN the text — and
+ * text is what gets sent. The CLI can draw beside its lines because it paints
+ * every row itself; here the control paints its own content.
+ *
+ * An overlay was the other candidate and is rejected on this surface: the body
+ * inherits `--vscode-font-family`, which is PROPORTIONAL, so a mirrored layer
+ * cannot be aligned to it by measurement the way a monospace one can.
+ *
+ * So the numbers are rendered as a short read-only index above the body. It says
+ * the same thing — which sections there are, and what number each one has —
+ * without a character of it being sendable.
+ *
+ * Returns '' when there is nothing to draw, and the caller then emits nothing at
+ * all: with no sections the frame is byte-identical to the one drawn before this
+ * existed, its style block included.
+ */
+function renderSectionIndex(sections: readonly PeBodySection[] | undefined): string {
+  if (!sections || sections.length === 0) return '';
+  const rows = sections
+    .map((section) => `  <li class="pe-section"><span class="pe-section-title">${escapeHtml(section.title)}</span>`
+      + `<span class="pe-section-number">#${String(section.number)}</span></li>`)
+    .join('\n');
+  // Not `aria-hidden`: unlike a decorative overlay this is the ONLY place the
+  // numbers exist, so a reader who cannot see the styling still needs them.
+  return `<style>
+  .pe-sections { list-style: none; margin: 0 0 0.6em 0; padding: 0; font-size: 0.86em; }
+  .pe-section { display: flex; justify-content: space-between; gap: 1em; padding: 0.15em 0; color: var(--vscode-descriptionForeground); }
+  .pe-section-number { flex: 0 0 auto; opacity: 0.8; }
+</style>
+<ol class="pe-sections" aria-label="Sections of this prompt, in order">
+${rows}
+</ol>
+`;
+}
+
 function renderReadyState(
   payload: PromptEnhancementExtensionPayloadV1,
   nonce: string,
@@ -136,7 +176,7 @@ function renderReadyState(
 `;
 
   const body = `<style>${style}</style>
-<textarea id="pe-body" class="pe-body" data-body-id="${escapeHtml(payload.currentBodyId)}" data-body-revision="${payload.bodyRevision}">${bodyEsc}</textarea>
+${renderSectionIndex(payload.sections)}<textarea id="pe-body" class="pe-body" data-body-id="${escapeHtml(payload.currentBodyId)}" data-body-revision="${payload.bodyRevision}">${bodyEsc}</textarea>
 <div class="pe-actions">
 ${directionalHtml}
 </div>

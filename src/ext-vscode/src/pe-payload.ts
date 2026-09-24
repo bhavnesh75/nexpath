@@ -37,6 +37,21 @@ const DIRECTIONAL_ACTION_TYPES: readonly string[] = [
   'more_project_grounded',
 ];
 
+/**
+ * One numbered section of the current body, for display beside it.
+ *
+ * The number is NOT the array index. It is the position among the sections whose
+ * title line is actually present in the body text — the CLI's own rule: a title
+ * that is not found gets no number, and the sections after it stay contiguous.
+ * A number naming a heading the reader cannot see would be worse than none.
+ */
+export interface PeBodySection {
+  /** 1-based, in body order, over the sections actually found. */
+  number: number;
+  /** The section's title, exactly as its title line reads without the colon. */
+  title: string;
+}
+
 export interface PeDirectionalAction {
   actionType: PeDirectionalActionType;
   actionId:   string;
@@ -70,6 +85,49 @@ export interface PromptEnhancementExtensionPayloadV1 {
   additionalDetailsAvailable: boolean;
   directionalActions: readonly PeDirectionalAction[];
   closeActionId:     string | null;
+  /**
+   * The body's numbered sections, when the result carries them and their titles
+   * are present in the text. **Absent means no numbers** — an older result, a
+   * malformed list and a body with none of its titles left all read the same
+   * way, and the view renders exactly what it rendered before this existed.
+   *
+   * Display-only: nothing here is part of `currentBodyText`, and nothing here is
+   * ever sent.
+   */
+  sections?:         readonly PeBodySection[];
+}
+
+/**
+ * The sections of the body, numbered the way the CLI numbers them.
+ *
+ * This MIRRORS a rule it cannot import. `src/prompt-enhancement/**` is
+ * unreachable from this package — the module header above records the TS6059
+ * proof — so the one rule that matters is re-stated rather than called: a title
+ * counts when some line of the body is exactly `<title>:` ignoring trailing
+ * spaces, and numbering runs 1..N over the titles found, in order.
+ *
+ * What is deliberately NOT copied: the CLI additionally skips past an unchanged
+ * section body when looking for the next title, so a heading-shaped line inside
+ * a section cannot steal a later number. That case needs an EDITED body to
+ * arise, and nothing here edits one — this view renders the composed text as
+ * stored. A stated subset is safer than a half-copy of a rule.
+ *
+ * Never throws. Any shape it does not recognise yields an empty list.
+ */
+function parseBodySectionsV1(currentBody: unknown, bodyText: string): PeBodySection[] {
+  if (!currentBody || typeof currentBody !== 'object') return [];
+  const raw = (currentBody as Record<string, unknown>).sections;
+  if (!Array.isArray(raw)) return [];
+  const lines = bodyText.split('\n').map((line) => line.replace(/[ \t]+$/, ''));
+  const out: PeBodySection[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const title = (entry as Record<string, unknown>).title;
+    if (typeof title !== 'string' || title.length === 0) continue;
+    if (!lines.includes(`${title}:`)) continue;
+    out.push({ number: out.length + 1, title });
+  }
+  return out;
 }
 
 function isBlockedSendPolicy(sendPolicy: string): boolean {
@@ -164,17 +222,23 @@ export function parsePromptEnhancementExtensionPayloadV1(
     }
   }
 
+  // Computed from the text this payload actually carries, so a blocked or absent
+  // body — which self-scrubs to '' below — simply has no numbers.
+  const currentBodyText = isBlockedSendPolicy(sendPolicy) ? '' : text;
+  const sections = parseBodySectionsV1(result.currentBody, currentBodyText);
+
   return {
     transportVersion: PE_EXTENSION_PAYLOAD_TRANSPORT_VERSION,
     enhancementId,
     validationDecisionId,
     currentBodyId,
     bodyRevision,
-    currentBodyText: isBlockedSendPolicy(sendPolicy) ? '' : text,
+    currentBodyText,
     sendPolicy: sendPolicy as PePromptSendPolicy,
     renderState: renderStateFor(sendPolicy, b.fallbackMode, b.actionLoadingState),
     additionalDetailsAvailable,
     directionalActions,
     closeActionId,
+    ...(sections.length > 0 ? { sections } : {}),
   };
 }

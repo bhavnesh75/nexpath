@@ -194,3 +194,85 @@ describe('renderPromptEnhancementHtml — embedded script source (mirrors html.t
     }
   });
 });
+
+describe('the section index — the numbers beside the body', () => {
+  const withSections = (
+    sections: PromptEnhancementExtensionPayloadV1['sections'],
+  ): PromptEnhancementExtensionPayloadV1 => ({ ...readyPayload, ...(sections ? { sections } : {}) });
+  const render = (payload: PromptEnhancementExtensionPayloadV1): string =>
+    renderPromptEnhancementHtml(payload, { cspSource: CSP_SRC, nonce: FIXED_NONCE });
+  const SECTIONS = [{ number: 1, title: 'Scope' }, { number: 2, title: 'Acceptance' }];
+
+  it('draws each title with its number after it', () => {
+    const html = render(withSections(SECTIONS));
+    expect(html).toContain('<span class="pe-section-title">Scope</span><span class="pe-section-number">#1</span>');
+    expect(html).toContain('<span class="pe-section-title">Acceptance</span><span class="pe-section-number">#2</span>');
+  });
+
+  /**
+   * The property this rests on, asserted as a byte comparison rather than
+   * described: with no sections the frame must be what it was before this
+   * existed — the style block included, which is why the index carries its own
+   * `<style>` instead of adding rules to the shared one.
+   */
+  it('changes NOTHING when there are no sections — byte-identical, style and all', () => {
+    const before = render(readyPayload);
+    expect(render(withSections(undefined))).toBe(before);
+    expect(render(withSections([]))).toBe(before);
+    expect(before).not.toContain('pe-sections');
+    expect(before).not.toContain('pe-section-number');
+  });
+
+  it('adds the index and nothing else — the rest of the frame is untouched', () => {
+    const before = render(readyPayload);
+    const after = render(withSections(SECTIONS));
+    // Everything the frame had, it still has, in the same order.
+    const index = after.indexOf('<ol class="pe-sections"');
+    expect(index).toBeGreaterThan(0);
+    const withoutIndex = after.slice(0, after.indexOf('<style>\n  .pe-sections'))
+      + after.slice(after.indexOf('</ol>\n') + '</ol>\n'.length);
+    expect(withoutIndex).toBe(before);
+  });
+
+  it('never puts a number into the body a reader sends', () => {
+    const html = render(withSections(SECTIONS));
+    const body = html.slice(html.indexOf('<textarea id="pe-body"'));
+    const value = body.slice(body.indexOf('>') + 1, body.indexOf('</textarea>'));
+    expect(value).toBe(readyPayload.currentBodyText);
+    expect(value).not.toContain('#');
+  });
+
+  it('sits ABOVE the body, so it reads as an index of what follows', () => {
+    const html = render(withSections(SECTIONS));
+    expect(html.indexOf('<ol class="pe-sections"')).toBeLessThan(html.indexOf('<textarea id="pe-body"'));
+  });
+
+  it('escapes every title — a section cannot inject markup', () => {
+    const html = render(withSections([
+      { number: 1, title: '<img src=x onerror="alert(1)">' },
+      { number: 2, title: 'A & B "quoted"' },
+    ]));
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;img src=x');
+    expect(html).toContain('&amp;');
+  });
+
+  it('leaves the CSP and the nonce exactly as they were', () => {
+    const before = render(readyPayload);
+    const after = render(withSections(SECTIONS));
+    const csp = (html: string): string => html.slice(html.indexOf('Content-Security-Policy'), html.indexOf('">', html.indexOf('Content-Security-Policy')));
+    expect(csp(after)).toBe(csp(before));
+    // The index adds a <style>, and the CSP must already have allowed styles —
+    // it does, and nothing here loosens it.
+    expect((after.match(/nonce="test-nonce-deterministic"/g) ?? []).length)
+      .toBe((before.match(/nonce="test-nonce-deterministic"/g) ?? []).length);
+  });
+
+  it('is rendered only in the ready state — a blocked or fallback frame has no body to index', () => {
+    for (const renderState of ['blocked', 'fallback', 'loading', 'no_popup'] as const) {
+      const html = render({ ...withSections(SECTIONS), renderState });
+      if (renderState === 'loading') continue; // loading renders its own state
+      expect(html, renderState).not.toContain('pe-sections');
+    }
+  });
+});
