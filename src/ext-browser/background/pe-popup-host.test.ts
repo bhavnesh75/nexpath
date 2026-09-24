@@ -22,6 +22,9 @@ import {
 import { recordSignal, readSignals } from '../adapters/lifecycle-signals.js';
 import { _resetIdentityInFlight } from '../adapters/rating-identity.js';
 import type { PePanelCommandV1, PePanelViewV1 } from '../ui/pe-contract.js';
+// The engine's own section map — the consumer of the projected section list.
+// Imported here, not in the worker: the numbers belong wherever they are drawn.
+import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/popup-section-map.js';
 
 function makeLog(): { log: LogPort; events: Array<[string, Record<string, unknown> | undefined]> } {
   const events: Array<[string, Record<string, unknown> | undefined]> = [];
@@ -320,6 +323,122 @@ describe('buildPePanelView — whitelist projection', () => {
       onFirstRendered: vi.fn().mockResolvedValue(undefined),
     });
     expect((second.views[0] as unknown as Record<string, unknown>).currentFrequency).toBeUndefined();
+  });
+});
+
+describe('buildPePanelView — the sections the panel numbers from', () => {
+  /** The engine's render view, reduced to the fields the projection reads. */
+  const engineView = (
+    editedBodyText: string,
+    sections?: readonly { title: string; bodyText: string; sectionKind?: string }[],
+  ): Parameters<typeof buildPePanelView>[0] => ({
+    model: {
+      title: 't', editorHeading: 'Use enhanced prompt',
+      body: { editable: true },
+      publicCopy: { trustCues: [], diagnostics: [] },
+      controls: {
+        directional: [], original: { availability: 'available' },
+        close: { availability: 'available' },
+      },
+    },
+    editedBodyText,
+    additionalDetailsText: '',
+    ...(sections ? { sections } : {}),
+  } as unknown as Parameters<typeof buildPePanelView>[0]);
+
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.', sectionKind: 'context_and_constraints' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.', sectionKind: 'acceptance_or_output_expectation' },
+  ];
+  /** The numbers a consumer derives — the engine's own map, on the text in front of it. */
+  const numbersFor = (text: string, view: PePanelViewV1): (readonly [string, number])[] =>
+    buildPromptEnhancementSectionMapV1(text, view.sections ?? [])
+      .entries.map((e) => [e.title, e.number] as const);
+
+  it('carries the real engine\'s own sections, in body order, each title a real title line', async () => {
+    const { log } = makeLog();
+    const { sendToTab, views } = scriptedTab(log, [() => ({ type: 'close' })]);
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    const v = views[0]!;
+    expect(v.sections, 'the real engine view carries sections, so the panel view must too').toBeDefined();
+    expect(v.sections!.length).toBeGreaterThan(0);
+
+    // Every section names a line the reader can actually see, which is the only
+    // thing a number is for; and they arrive in the order they appear.
+    const lines = v.bodyText.split('\n').map((l) => l.trimEnd());
+    for (const section of v.sections!) expect(lines).toContain(`${section.title}:`);
+    const at = v.sections!.map((section) => lines.indexOf(`${section.title}:`));
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+
+    // And they are exactly what the engine's map needs: 1..N over the real body.
+    const numbers = numbersFor(v.bodyText, v);
+    expect(numbers.map(([, n]) => n)).toEqual(numbers.map((_, i) => i + 1));
+    expect(numbers.length).toBe(v.sections!.length);
+  });
+
+  it('projects the title and the composed text and NOTHING else', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(view.sections).toEqual([
+      { title: 'Scope', bodyText: 'the login route only.' },
+      { title: 'Acceptance', bodyText: 'the password is hashed.' },
+    ]);
+    // The kind is engine business and must not ride along.
+    for (const section of view.sections!) expect(Object.keys(section).sort()).toEqual(['bodyText', 'title']);
+  });
+
+  it('omits the field when the engine view carries no sections — an older worker draws the frame it always drew', () => {
+    expect(buildPePanelView(engineView(BODY), 1).sections).toBeUndefined();
+    // An empty list is the same absence, never an empty array on the wire.
+    expect(buildPePanelView(engineView(BODY, []), 1).sections).toBeUndefined();
+  });
+
+  /**
+   * The reason the NUMBER is not on the wire.
+   *
+   * The CLI renumbers from the live editor buffer on every frame. The panel gets
+   * a new view only when the engine re-renders, and plain typing never reaches
+   * the worker — `SurfaceEvent` carries no text-changed case at all, and
+   * `pe-inject.ts` shows a surface only on a pushed view. So a number decided in
+   * the worker would describe the text as it was when the popup opened. Carrying
+   * the sections AS COMPOSED keeps the answer derivable from whatever the field
+   * holds at the moment it is drawn, which is what this proves.
+   */
+  it('stays correct after edits the worker never sees — a deleted title drops out, the rest stay contiguous', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(numbersFor(BODY, view)).toEqual([['Scope', 1], ['Acceptance', 2]]);
+
+    // The user deletes a title line in the panel. No command, no new view.
+    const edited = BODY.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    expect(numbersFor(edited, view)).toEqual([['Acceptance', 1]]);
+
+    // And undoes it — back to both, still from the same view.
+    expect(numbersFor(BODY, view)).toEqual([['Scope', 1], ['Acceptance', 2]]);
+
+    // Retyped somewhere else instead, the engine's in-order title matching finds
+    // only the moved one. Pinned rather than worked around: it is exactly what
+    // the CLI does with the same buffer, and the panel must not diverge from it.
+    const moved = `${edited}\nScope:\nthe login route only.`;
+    expect(numbersFor(moved, view)).toEqual([['Scope', 1]]);
+
+    // Every title gone: no numbers, and the view itself never had to change.
+    expect(numbersFor('Add a login page.', view)).toEqual([]);
+  });
+
+  it('never puts a number into the text — bodyText is byte-identical to the engine\'s', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(view.bodyText).toBe(BODY);
+    expect(view.bodyText).not.toContain('#');
   });
 });
 

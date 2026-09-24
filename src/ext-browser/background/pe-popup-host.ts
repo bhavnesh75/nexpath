@@ -167,6 +167,15 @@ export function buildPePanelView(
     hasFeedback: model.controls.feedback !== undefined,
     trustCues: model.publicCopy.trustCues.map((c) => c.publicSafeText),
   };
+  // The composed sections, so the panel can number the body. Passed through as
+  // composed and NOT numbered here: the CLI renumbers from the live buffer on
+  // every frame, and this projection runs only when the engine re-renders, so a
+  // number fixed here would be stale from the first keystroke. The panel derives
+  // it with the engine's own map instead. Only the two fields the map needs
+  // cross; the section's kind stays here.
+  if (view.sections !== undefined && view.sections.length > 0) {
+    out.sections = view.sections.map((section) => ({ title: section.title, bodyText: section.bodyText }));
+  }
   if (model.pinchLabel) out.pinchLabel = model.pinchLabel.text;
   if (model.whyHelp) out.whyHelp = model.whyHelp.text;
   if (view.publicNotice) out.publicNotice = view.publicNotice;

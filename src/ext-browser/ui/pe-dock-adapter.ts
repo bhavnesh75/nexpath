@@ -38,6 +38,11 @@ import {
   type PePanelViewV1,
 } from './pe-contract.js';
 import type { SurfaceModel, SurfaceRow } from './surfaces/surface-model.js';
+// The engine's own section map. It belongs on THIS side of the bridge: the
+// surfaces layer is deliberately engine-free, so it is handed a rule to call
+// rather than the knowledge of what a section is. The module is pure and
+// imports nothing itself.
+import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/popup-section-map.js';
 import { mountNexpathDock, type NexpathDockController } from './surfaces/dock.js';
 import { installChromeStyles } from './surfaces/chrome.js';
 import {
@@ -88,10 +93,22 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
   // The CLI locks its WHOLE editor in this state — body and details together
   // (`cli-submit-popup.ts:969`) — and marks the heading row "(unavailable)".
   const locked = !view.bodyEditable;
+  // The body's section numbers, the CLI's `#N` (`cli-submit-popup.ts:1048-1055`).
+  // A rule, not a list: the field's text changes with no re-render, and the CLI
+  // renumbers from its live buffer on every frame — so the answer is computed
+  // from whatever the field holds at the moment it is drawn. Absent sections
+  // means no rule, which means the row renders exactly as it always has.
+  const sections = view.sections;
+  const lineNumbers = sections === undefined
+    ? undefined
+    : (text: string): ReadonlyMap<number, number> =>
+      new Map(buildPromptEnhancementSectionMapV1(text, sections)
+        .entries.map((entry) => [entry.titleLine, entry.number] as const));
   const bodyRow: SurfaceRow = {
     kind: 'field',
     label: view.editorHeading,
     text: view.bodyText,
+    ...(lineNumbers ? { lineNumbers } : {}),
     hints: locked
       // A locked body is the engine's compose-FAILURE state (the deterministic
       // template stands in for wording it could not generate). The CLI shows no

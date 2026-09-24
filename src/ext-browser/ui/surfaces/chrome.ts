@@ -296,6 +296,16 @@ export const CHROME_STYLES = `
   /* The scroll markers. Dimmed so they read as a hint rather than as part of
      the body — the CLI dims them for the same reason (owner, 2026-08-07). */
   .np-scroll-marker { color: #9ba7a7; }
+
+  /* The field's line-number layer: the CLI's #N after a section title. It sits
+     OVER the field rather than in it, because a textarea has no per-line hook
+     and a number written into the text would be editable and would be sent.
+     Purely decorative — aria-hidden and untouchable, so the textarea stays the
+     only thing focus, the caret or a pointer can reach. Each mark's own
+     left/top are measured at runtime and stay inline. */
+  .np-has-marks { position: relative; }
+  .np-marks { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .np-marks span { position: absolute; white-space: pre; }
   /* Structural, and declared rather than left implicit: a marker row is an
      ordinary row until it is hidden, and the unstyled-class guard is right to
      insist that every class the code applies has a rule to point at. */

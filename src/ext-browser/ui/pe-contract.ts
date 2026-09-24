@@ -22,6 +22,29 @@
 
 export const PE_PANEL_SCHEMA_VERSION = 1 as const;
 
+/**
+ * One composed section of the enhanced body, as the panel is allowed to see it.
+ *
+ * ⚠️ The NUMBER is deliberately not here. The CLI derives each section's number
+ * from the LIVE editor buffer on every frame, so a title the user just typed or
+ * deleted is numbered correctly as they type. The panel has no such loop — it
+ * keeps its text locally and the worker only hears about an edit on an apply or
+ * a terminal action — so a number computed worker-side would freeze the moment
+ * the popup opened. What crosses is therefore the section AS COMPOSED, the
+ * exact input the engine's own section map takes, and the number is derived
+ * where it is drawn.
+ *
+ * Nothing beyond those two fields is projected: the section's kind is engine
+ * business. `bodyText` discloses nothing new — it is the text that already sits
+ * under this section's title inside `PePanelViewV1.bodyText`.
+ */
+export interface PePanelSectionV1 {
+  /** The section's title, exactly as its title line reads without the colon. */
+  title: string;
+  /** The text the section was composed with — what follows its title line. */
+  bodyText: string;
+}
+
 /** One directional/adjust control row (Shorter / More thorough / More project-grounded). */
 export interface PePanelDirectionalV1 {
   actionType: 'shorter' | 'more_thorough' | 'more_project_grounded';
@@ -44,6 +67,21 @@ export interface PePanelViewV1 {
   /** The ONE editable enhanced body — current text including prior edits. */
   bodyText: string;
   bodyEditable: boolean;
+  /**
+   * The composed sections of `bodyText`, in body order — what the panel numbers
+   * `#N` from.
+   *
+   * DISPLAY-ONLY: a number is never part of `bodyText` and is never sent. And
+   * OPTIONAL in the wire-compat sense this file already uses for
+   * `detailsAvailable` / `currentFrequency`: absent means "no numbers", so an
+   * older worker and a newer panel draw exactly the frame they drew before this
+   * field existed.
+   *
+   * A section listed here is not promised a number: the engine's map gives one
+   * only to a title it finds in the live text, which is how a title the user
+   * edited away stops being numbered while the rest stay contiguous.
+   */
+  sections?: readonly PePanelSectionV1[];
   /** Additional-details field state (present only when the engine offers the action). */
   hasAdditionalDetails: boolean;
   additionalDetailsText: string;

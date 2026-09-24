@@ -79,6 +79,28 @@ export type SurfaceRow =
        * (:1354-1365).
        */
       maxLines?: number;
+      /**
+       * Display-only numbers for this field's own lines: given the text the
+       * field currently holds, which logical line (0-based) carries which
+       * number. The renderer draws each one dim after its line and nowhere
+       * else; nothing here reaches the text, the caret, or what is sent.
+       *
+       * A FUNCTION rather than a list, and that is the load-bearing part. The
+       * field's text changes under the user's fingers with no re-render — this
+       * surface has no text-changed event and the producer is not asked for one
+       * — so a precomputed list would describe the text as it was when the model
+       * was built. Asked afresh on every keystroke, the answer is always about
+       * what is actually on screen.
+       *
+       * It also keeps this layer honest: the surfaces know nothing about what a
+       * number MEANS. Whoever builds the model owns that rule and passes it in.
+       *
+       * ⚠️ A rule is bound to the content its producer built it from. Deriving a
+       * model whose field holds DIFFERENT content — a locally recomposed body,
+       * say — must rebuild the rule rather than carry this one across, or the
+       * new text is numbered against the old structure.
+       */
+      lineNumbers?: (text: string) => ReadonlyMap<number, number>;
     }
   | {
       kind: 'action';

@@ -194,6 +194,117 @@ describe('what the parity test cannot see', () => {
   });
 });
 
+describe('the field\'s line numbers — the CLI\'s #N, display-only', () => {
+  const TEXT = ['Add a login page.', '', 'Scope:', 'the login route only.', 'Acceptance:', 'x'].join('\n');
+  /** A model whose body row numbers the two title lines, like the CLI does. */
+  const withNumbers = (rule?: (text: string) => ReadonlyMap<number, number>): SurfaceModel => ({
+    id: 'prompt_enhancement',
+    label: 'Prompt enhancement',
+    rows: [{
+      kind: 'field',
+      label: 'Use enhanced prompt',
+      text: TEXT,
+      ...(rule ? { lineNumbers: rule } : {}),
+    }],
+    footer: PE_FOOTER,
+  });
+  /** The rule the producer supplies: title lines, numbered in order. */
+  const titleLines = (text: string): ReadonlyMap<number, number> => {
+    const out = new Map<number, number>();
+    text.split('\n').forEach((line, index) => {
+      if (/^\S.*:$/.test(line)) out.set(index, out.size + 1);
+    });
+    return out;
+  };
+  /** jsdom lays nothing out, so the one measurement the drawing gates on is stubbed. */
+  const layOut = (frame: HTMLElement): HTMLTextAreaElement => {
+    const field = frame.querySelector('textarea')!;
+    Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+    return field;
+  };
+  const markTexts = (frame: HTMLElement): string[] =>
+    [...frame.querySelectorAll('.np-marks span')].map((el) => el.textContent ?? '');
+
+  it('draws nothing at all when the model asks for no numbers', () => {
+    const frame = renderSurface(document, withNumbers(), { focusIndex: 0 });
+    expect(frame.querySelector('.np-marks')).toBeNull();
+  });
+
+  it('draws one dim mark per numbered line, after the line, when it asks', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    const field = layOut(frame);
+    growFields(frame);
+
+    expect(markTexts(frame)).toEqual(['    #1', '    #2']);
+    for (const mark of frame.querySelectorAll('.np-marks span')) {
+      expect(mark.classList.contains('np-dim')).toBe(true);
+    }
+    // The layer is decoration: nothing can focus it, read it aloud, or click it.
+    expect(frame.querySelector('.np-marks')!.getAttribute('aria-hidden')).toBe('true');
+    // …and it is positioned against its own row, not whatever ancestor happens
+    // to be positioned — the marks would otherwise be placed against the frame.
+    expect(frame.querySelector('.np-marks')!.parentElement!.classList.contains('np-has-marks')).toBe(true);
+    expect(field.value).toBe(TEXT);
+  });
+
+  it('follows the text as it is typed — the worker is never asked', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    const field = layOut(frame);
+    growFields(frame);
+    expect(markTexts(frame)).toHaveLength(2);
+
+    // A title line deleted in the panel. No command, no re-render, no new model.
+    field.value = TEXT.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(markTexts(frame)).toEqual(['    #1']);
+
+    // And a new section typed in — numbered without anything being rebuilt.
+    field.value = `${TEXT}\nVerification:\nrun the suite.`;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(markTexts(frame)).toEqual(['    #1', '    #2', '    #3']);
+  });
+
+  /**
+   * The property the whole feature rests on, asserted directly.
+   *
+   * It cannot be read off the parity suites or the recorded baseline: both read
+   * a row holding a textarea as `field.value` and never visit its other
+   * children, so the marks are invisible to them by construction. That is what
+   * makes them safe, and it is also why their absence there proves nothing. The
+   * comparison has to be made here.
+   */
+  it('changes not one line of the frame a reader sees, and not one byte of the text', () => {
+    const lines = (model: SurfaceModel): string[] => {
+      const frame = renderSurface(document, model, { focusIndex: 0 });
+      layOut(frame);
+      growFields(frame);
+      const out: string[] = [];
+      for (const row of frame.querySelectorAll('.np-row')) {
+        if (row.classList.contains('np-marker-hidden')) continue;
+        const field = row.querySelector('textarea');
+        if (field) { for (const line of field.value.split('\n')) out.push(line.trimEnd()); continue; }
+        out.push(rowText(row));
+      }
+      return out;
+    };
+    expect(lines(withNumbers(titleLines))).toEqual(lines(withNumbers()));
+
+    // …and the marks really were drawn in the frame that matched.
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    layOut(frame);
+    growFields(frame);
+    expect(markTexts(frame).length).toBeGreaterThan(0);
+    expect(frame.querySelector('textarea')!.value).not.toContain('#');
+  });
+
+  it('draws nothing where it cannot measure — an unlaid-out field gets no misplaced mark', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    growFields(frame); // no clientHeight stub: jsdom's zero-height field
+    expect(markTexts(frame)).toEqual([]);
+    expect(frame.querySelector('.np-marks')).not.toBeNull(); // the layer is there, waiting
+  });
+});
+
 describe('no class escapes the stylesheet', () => {
   it('every np- class any surface file writes is styled in CHROME_STYLES', () => {
     // The guard for a whole class of bug that jsdom cannot see: a class applied

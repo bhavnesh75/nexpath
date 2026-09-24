@@ -137,8 +137,9 @@ export function growFields(root: ParentNode): void {
     if (field.scrollHeight > field.clientHeight) field.style.height = `${field.scrollHeight}px`;
   }
 
-  // Sizing settles the window, so the markers can only be right after it.
-  for (const field of fields) updateFieldMarkers(field);
+  // Sizing settles the window, so the markers can only be right after it — and
+  // the line numbers are measured against that same settled layout.
+  for (const field of fields) { updateFieldMarkers(field); updateFieldLineNumbers(field); }
 }
 
 /**
@@ -166,6 +167,18 @@ export function clampScrollToCaret(
  * half of the CLI's cursor math (`promptEnhancementCursorVisualPositionV1`).
  */
 export function measureCaretTopPx(field: HTMLTextAreaElement): number {
+  return measureOffsetPx(field, field.selectionStart ?? 0).top;
+}
+
+/**
+ * Where a given character offset sits inside a textarea, in pixels relative to
+ * the field's own box. The mirror technique described above, generalised from
+ * the caret to any offset — the caret is just `selectionStart`.
+ *
+ * Returns zeros without layout (jsdom, a hidden dock), which every caller must
+ * treat as "cannot place" rather than as the origin.
+ */
+export function measureOffsetPx(field: HTMLTextAreaElement, offset: number): { top: number; left: number } {
   const doc = field.ownerDocument;
   const mirror = doc.createElement('div');
   mirror.style.cssText =
@@ -181,14 +194,74 @@ export function measureCaretTopPx(field: HTMLTextAreaElement): number {
     mirror.style.boxSizing = cs.boxSizing;
     mirror.style.width = `${field.clientWidth}px`;
   }
-  mirror.textContent = field.value.slice(0, field.selectionStart ?? 0);
+  mirror.textContent = field.value.slice(0, offset);
   const marker = doc.createElement('span');
   marker.textContent = '​';
   mirror.appendChild(marker);
   doc.body.appendChild(mirror);
   const top = marker.offsetTop;
+  const left = marker.offsetLeft;
   mirror.remove();
-  return top;
+  return { top, left };
+}
+
+// ── the field's line numbers ─────────────────────────────────────────────────
+//
+// Drawn as their own layer inside the field's row, never into the text: a
+// textarea has no per-line hook, and putting a number in `value` would let the
+// user edit it and would send it. The layer is `aria-hidden` and takes no
+// pointer events, so the textarea stays the only thing anyone can reach.
+//
+// It is also invisible to the frame readers by construction: a row holding a
+// textarea is read as `field.value` and its other children are never visited,
+// which is what keeps the parity suites comparing the text and nothing else.
+
+/** The producer's rule for this field, kept off the DOM. */
+const fieldLineNumbers = new WeakMap<HTMLTextAreaElement, (text: string) => ReadonlyMap<number, number>>();
+
+/** Character offset of the END of a logical line — where its number goes. */
+function endOfLineOffset(text: string, line: number): number | undefined {
+  const lines = text.split('\n');
+  if (line < 0 || line >= lines.length) return undefined;
+  let offset = 0;
+  for (let index = 0; index < line; index++) offset += lines[index]!.length + 1;
+  return offset + lines[line]!.length;
+}
+
+/** The CLI's gap between a title and its number (`cli-submit-popup.ts:1052`). */
+const MARK_GAP = '    ';
+
+/**
+ * Redraw one field's line numbers from the text it holds NOW.
+ *
+ * Every mark is rebuilt rather than moved: the set changes as the user types,
+ * and a stale mark left behind would sit beside a line it no longer belongs to.
+ */
+export function updateFieldLineNumbers(field: HTMLTextAreaElement): void {
+  const layer = field.parentElement?.querySelector('.np-marks');
+  if (!(layer instanceof HTMLElement)) return;
+  layer.textContent = '';
+
+  const numbers = fieldLineNumbers.get(field)?.(field.value);
+  if (!numbers || numbers.size === 0) return;
+
+  const doc = field.ownerDocument;
+  for (const [line, number] of numbers) {
+    const offset = endOfLineOffset(field.value, line);
+    if (offset === undefined) continue;
+    const at = measureOffsetPx(field, offset);
+    // The window scrolls under the layer, so a mark for a line scrolled out of
+    // view must not be drawn over one that is still showing. This is also what
+    // draws nothing at all without layout: an unmeasurable field reports no
+    // height, so every mark falls outside it rather than stacking on line one.
+    const top = field.offsetTop + at.top - field.scrollTop;
+    if (top < field.offsetTop || top >= field.offsetTop + field.clientHeight) continue;
+    const mark = doc.createElement('span');
+    mark.className = 'np-dim';
+    mark.textContent = `${MARK_GAP}#${number}`;
+    mark.style.cssText = `left:${field.offsetLeft + at.left}px;top:${top}px;`;
+    layer.appendChild(mark);
+  }
 }
 
 /**
@@ -212,11 +285,20 @@ export const fieldScroller = {
       field.clientHeight,
     );
     updateFieldMarkers(field);
+    updateFieldLineNumbers(field);
   },
 };
 
 /** The editable field beneath a `field` row's label. */
-function buildField(doc: Document, text: string, indent: 4 | 6, placeholder?: string, readOnly?: boolean, maxLines?: number): HTMLElement {
+function buildField(
+  doc: Document,
+  text: string,
+  indent: 4 | 6,
+  placeholder?: string,
+  readOnly?: boolean,
+  maxLines?: number,
+  lineNumbers?: (text: string) => ReadonlyMap<number, number>,
+): HTMLElement {
   const row = doc.createElement('div');
   row.className = 'np-row';
 
@@ -239,12 +321,24 @@ function buildField(doc: Document, text: string, indent: 4 | 6, placeholder?: st
   // collapse to nothing, which is the failure this replaced.
   field.rows = 1;
   // The listener dies with the element, which is discarded whole on re-render.
-  field.addEventListener('input', () => { autoGrow(field); updateFieldMarkers(field); });
+  field.addEventListener('input', () => { autoGrow(field); updateFieldMarkers(field); updateFieldLineNumbers(field); });
   // Scrolling changes what is hidden without changing the text, so the markers
   // have to follow the scroll and not only the content.
-  field.addEventListener('scroll', () => updateFieldMarkers(field));
+  field.addEventListener('scroll', () => { updateFieldMarkers(field); updateFieldLineNumbers(field); });
 
   row.appendChild(field);
+
+  // Only when the model asked for numbers. Without them the row is exactly the
+  // row it has always been — no extra element, nothing to position, and the
+  // frame is unchanged down to the DOM.
+  if (lineNumbers) {
+    fieldLineNumbers.set(field, lineNumbers);
+    row.className = 'np-row np-has-marks';
+    const layer = doc.createElement('div');
+    layer.className = 'np-marks';
+    layer.setAttribute('aria-hidden', 'true');
+    row.appendChild(layer);
+  }
   return row;
 }
 
@@ -339,7 +433,7 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
     group.className = 'np-field-group';
     group.appendChild(scroll.removeChild(scroll.lastElementChild!));   // the label row
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↑ above
-    group.appendChild(buildField(doc, row.text, fieldIndent, row.placeholder, row.readOnly, row.maxLines));
+    group.appendChild(buildField(doc, row.text, fieldIndent, row.placeholder, row.readOnly, row.maxLines, row.lineNumbers));
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↓ below
     for (const hint of row.hints?.always ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
     if (focused) {

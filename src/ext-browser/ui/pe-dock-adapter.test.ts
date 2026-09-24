@@ -454,6 +454,109 @@ describe('REAL prepare → whitelisted view → real dock DOM (plan §7: fixture
   });
 });
 
+describe('the body row\'s section numbers (the producer side)', () => {
+  const BODY = ['Add a login page.', '', 'Scope:', 'the login route only.', 'Acceptance:', 'x'].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'x' },
+  ];
+  const bodyRow = (v: PePanelViewV1) => {
+    const row = peSurfaceModel(v).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    return row;
+  };
+
+  it('supplies no rule at all when the view carries no sections', () => {
+    expect(bodyRow(view({ bodyText: BODY })).lineNumbers).toBeUndefined();
+  });
+
+  it('turns the view\'s sections into the CLI\'s own numbering', () => {
+    const rule = bodyRow(view({ bodyText: BODY, sections: SECTIONS })).lineNumbers!;
+    // Line 2 is `Scope:`, line 4 is `Acceptance:` — numbered in body order.
+    expect([...rule(BODY)]).toEqual([[2, 1], [4, 2]]);
+  });
+
+  it('answers about the text it is GIVEN, not the text the view was built with', () => {
+    const rule = bodyRow(view({ bodyText: BODY, sections: SECTIONS })).lineNumbers!;
+
+    // The panel's own text after edits the worker never saw.
+    const edited = BODY.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    expect([...rule(edited)]).toEqual([[3, 1]]);
+    expect([...rule('nothing here')]).toEqual([]);
+    // …and the original answer is unchanged, so the rule holds no state.
+    expect([...rule(BODY)]).toEqual([[2, 1], [4, 2]]);
+  });
+
+  /**
+   * The whole chain in one place: a REAL engine prepare, through the worker's
+   * whitelist, through the producer, into the REAL dock DOM.
+   *
+   * The three links are each proven on their own elsewhere. This is the one that
+   * fails if the wiring BETWEEN them is broken — a field renamed on the view, a
+   * rule not passed to the row, a row not passed to the renderer — none of which
+   * any of the three would notice on its own.
+   */
+  it('a real engine prepare draws its own section numbers in the real dock', { timeout: 30_000 }, async () => {
+    const { buildBrowserPeRequest, prepareBrowserPe } = await import('../background/pe-prepare.js');
+    const { buildPePanelView } = await import('../background/pe-popup-host.js');
+    const prep = await prepareBrowserPe(buildBrowserPeRequest({
+      projectRoot: 'https://bolt.new/~/real-numbers',
+      promptText: 'add a login page with email and password to the app',
+      sessionId: 's-num', promptCount: 6,
+      currentStage: 'implementation', prevStage: 'implementation',
+      triggerKind: 'absence', effectiveFlagType: 'absence:tests_before_merge',
+      firedKey: 'absence:tests_before_merge@implementation', triggerConfidence: 0.9,
+      classifierState: 'fire_recommended', profile: null, configuredRole: 'founder',
+      detectedLanguage: undefined, streamBOutputs: [],
+      triggerEligibility: 'fresh_trigger_eligible', recentPromptRefs: [],
+    }));
+    expect(prep.safeFallback).toBe(false);
+    if (prep.safeFallback) return;
+
+    const { buildPromptEnhancementPopupRenderModelV1 } = await import('../../prompt-enhancement/popup-render-model.js');
+    const rm = buildPromptEnhancementPopupRenderModelV1({
+      result: prep.result, timestampMs: 1, deliverySurface: prep.result.delivery.deliveryChannel,
+    });
+    expect(rm.state).toBe('render_model_ready');
+    if (rm.state !== 'render_model_ready') return;
+
+    // The engine's own composed sections, exactly as the popup loop passes them.
+    const sections = prep.result.currentBody.sections.map((s) => ({ title: s.title, bodyText: s.bodyText }));
+    expect(sections.length).toBeGreaterThan(0);
+    const panelView = buildPePanelView(
+      { model: rm.model, editedBodyText: rm.model.body.text, additionalDetailsText: '', refinement: false, sections },
+      1,
+    );
+    expect(panelView.sections).toHaveLength(sections.length);
+
+    adapter.show(panelView);
+    const field = bodyField();
+    // jsdom lays nothing out, so the one measurement the drawing gates on is
+    // stubbed; an input event redraws against it. Where each mark LANDS needs a
+    // real browser — what this proves is that the chain produces them at all.
+    Object.defineProperty(field, 'clientHeight', { value: 400, configurable: true });
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const marks = [...surfaceEl().querySelectorAll('.np-marks span')].map((el) => el.textContent);
+    expect(marks).toEqual(sections.map((_, index) => `    #${index + 1}`));
+
+    // And the body the user sees and sends is still the engine's, byte for byte.
+    expect(field.value).toBe(rm.model.body.text);
+    expect(field.value).not.toContain('#');
+  });
+
+  it('puts the numbers on screen and leaves the sent text alone', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    expect(field.value).toBe(BODY);
+    expect(field.value).not.toContain('#');
+    // Enter sends what the field holds — the numbers are not in it.
+    field.focus();
+    pressOn(field, 'Enter');
+    expect(commands()).toEqual([{ type: 'use_current', bodyText: BODY }]);
+  });
+});
+
 describe('read-only fallback bodies (live 2026-08-25: typed edits silently dropped)', () => {
   it('bodyEditable:false renders BOTH fields natively read-only — the field never promises an edit the send path will discard', () => {
     adapter.show(view({ bodyEditable: false }));
