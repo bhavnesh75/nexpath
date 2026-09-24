@@ -44,6 +44,10 @@ describe('isPePanelCommandV1 — accepts exactly the command union', () => {
     ['feedback with junk category', { type: 'feedback_suggested', category: 'loved_it' }],
     ['feedback with free text as category', { type: 'feedback_suggested', category: 'the body was wrong about auth' }],
     ['type as non-string', { type: 3 }],
+    // A removal is an EDIT and travels as edit_body, so no command of its own was
+    // ever added. A sender that invents one is refused like any other stranger —
+    // pinned here so the day someone adds it, they see this line first.
+    ['a removal command that does not exist', { type: 'remove_section', sectionNumber: 1 }],
   ];
   // The rating is the ONLY user-influenced number that reaches the analytics
   // envelope, so its bounds are checked here, at the trust boundary, and not

@@ -61,6 +61,12 @@ import { withBodyText } from './refinement.js';
 export type SurfaceEvent =
   | { type: 'send'; surface: SurfaceId; text: string }
   | { type: 'apply-details'; surface: SurfaceId; mergedBody: string }
+  /**
+   * A numbered part of the body was removed by the chord. Carries the text that
+   * remains, because that — not the number — is what the host has to send: a
+   * removal is an EDIT, so it travels the same road as any other body edit.
+   */
+  | { type: 'section-removed'; surface: SurfaceId; bodyText: string }
   | { type: 'use-original'; surface: SurfaceId }
   | { type: 'cancelled'; surface: SurfaceId }
   | { type: 'cancel-sequence'; surface: SurfaceId }
@@ -195,6 +201,16 @@ export function createSurfaceController(
    * setting mid-edit must cost nothing.
    */
   let settingsReturn: { model: SurfaceModel; focusIndex: number } | null = null;
+  /**
+   * Alt+Shift+R has been pressed and the next key is the chord's.
+   *
+   * The arm/disarm half is written here rather than borrowed from the CLI's:
+   * that one arms on a control BYTE the terminal delivers, and this surface has
+   * DOM events and a different key. What must not be a second copy is the
+   * REMOVAL, and that is the injected rule — this flag decides only whether a
+   * digit belongs to the chord or to the text.
+   */
+  let removalArmed = false;
 
   const wrapper = doc.createElement('div');
   wrapper.className = 'np-surface-root';
@@ -335,6 +351,26 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
       .filter((r) => r.kind === 'field')
       .map((r) => (r.kind === 'field' ? r.text : ''));
     render();
+  }
+
+  /**
+   * Remove the part a digit named, if the model's rule allows it.
+   *
+   * The rule answers about the LIVE text, so the body is harvested from the DOM
+   * first: the reader typed a number they could see, and what they can see is
+   * what is in the field, not what the last render was built from. A refusal
+   * changes nothing and says nothing — the digit is still swallowed, because it
+   * belonged to the chord either way.
+   */
+  function removeSection(sectionNumber: number): void {
+    const body = interactiveRows(model).find((row) => row.kind === 'field');
+    if (body?.kind !== 'field' || !body.removeSection) return;
+    harvest();
+    const remaining = body.removeSection(bodyText(), sectionNumber);
+    if (remaining === undefined) return;
+    fieldValues[0] = remaining;
+    render();
+    emit?.({ type: 'section-removed', surface: model.id, bodyText: remaining });
   }
 
   function say(text: string): void {
@@ -576,6 +612,35 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     // Row navigation is PLAIN arrows only: Shift+arrow inside a field is the
     // browser's select-by-line, which stealing the key would silently break.
     const plain = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+
+    // ARMED: the next key after Alt+Shift+R belongs to the chord. A digit 1-9
+    // names a part and is swallowed — it must never reach the text, which is the
+    // whole reason this sits above every other branch. Anything else disarms and
+    // goes on to mean exactly what it means today, so the chord takes nothing
+    // away: press Alt+Shift+R then Alt+Shift+T and the chooser still opens.
+    if (removalArmed) {
+      removalArmed = false;
+      if (plain && /^[1-9]$/.test(e.key)) {
+        removeSection(Number(e.key));
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+    }
+
+    // Alt+Shift+R — arm the removal chord; the digit that follows names the part.
+    // The CLI's shape is Ctrl+X then a digit, and only the SHAPE can match here:
+    // Ctrl+X is cut inside a textarea and Alt+Shift+X already ends the feature, so
+    // R (for remove) is the free letter. Matched on e.code for the same reason as
+    // every chord below it — with Alt held, e.key is a composed character on
+    // macOS and layout-dependent elsewhere.
+    //
+    // Pressing it twice leaves the chord armed rather than doing anything, which
+    // is the CLI's own rule for its prefix key.
+    if (safeChord && e.code === 'KeyR') {
+      removalArmed = true;
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
 
     // Alt+Shift+T — the settings chooser (advisory frequency / project role).
     // The CLI's Ctrl+T; plain Ctrl+T is the browser's new-tab shortcut and is

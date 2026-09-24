@@ -1083,3 +1083,184 @@ describe('advisory_rating', () => {
     expect(host.textContent).toContain('No action wired');
   });
 });
+
+describe('Alt+Shift+R and a digit — removing a numbered part of the body', () => {
+  const BODY = ['Add a login page.', '', 'Scope:', 'the login route only.', 'Acceptance:', 'x'].join('\n');
+  /** A stand-in rule: removes the Nth `Title:` line and the line under it. */
+  const dropSection = (text: string, n: number): string | undefined => {
+    const lines = text.split('\n');
+    const titles = lines.map((l, i) => [l, i] as const).filter(([l]) => /^\S.*:$/.test(l));
+    const hit = titles[n - 1];
+    if (!hit) return undefined;                       // no such section
+    const kept = [...lines.slice(0, hit[1]), ...lines.slice(hit[1] + 2)];
+    if (kept.join('\n').trim().length === 0) return undefined;  // would blank
+    return kept.join('\n');
+  };
+  const modelWith = (rule?: (text: string, n: number) => string | undefined): SurfaceModel => ({
+    id: 'prompt_enhancement',
+    label: 'Prompt enhancement',
+    rows: [
+      { kind: 'field', label: 'Use enhanced prompt', text: BODY, ...(rule ? { removeSection: rule } : {}) },
+      { kind: 'action', label: 'Use original prompt', act: 'use-original' },
+    ],
+    footer: 'x',
+  });
+  const mountWith = (rule?: (text: string, n: number) => string | undefined): SurfaceController => {
+    controller = createSurfaceController(host, {
+      registry: { prompt_enhancement: modelWith(rule) },
+      initial: 'prompt_enhancement',
+      onEvent: (e) => events.push(e),
+    });
+    return controller;
+  };
+  const armed = (target: Element): void => key(target, 'R', { code: 'KeyR', altKey: true, shiftKey: true });
+  const removals = (): SurfaceEvent[] => events.filter((e) => e.type === 'section-removed');
+
+  it('removes the part the digit names and reports the text that remains', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    armed(field);
+    key(field, '1');
+
+    const expected = dropSection(BODY, 1);
+    // The frame is rebuilt by the removal, so the field to read is the new one.
+    expect(bodyField().value).toBe(expected);
+    expect(removals()).toEqual([
+      { type: 'section-removed', surface: 'prompt_enhancement', bodyText: expected },
+    ]);
+  });
+
+  it('acts on what the reader can SEE — the live text, not the text the model was built with', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    // The reader deletes the first title themselves, so what was #2 is now #1.
+    field.value = BODY.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const live = field.value;
+    expect(live).toContain('Acceptance:');
+
+    armed(field);
+    key(field, '1');
+    // #1 is now Acceptance, because that is the first title still on screen.
+    expect(bodyField().value).toBe(dropSection(live, 1));
+    expect(bodyField().value).not.toContain('Acceptance:');
+    expect(removals()).toHaveLength(1);
+  });
+
+  it('a digit ALONE still types itself — the chord takes no key away', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    const event = new KeyboardEvent('keydown', { key: '1', code: 'Digit1', bubbles: true, cancelable: true });
+    field.dispatchEvent(event);
+
+    expect(event.defaultPrevented, 'an unarmed digit must reach the text').toBe(false);
+    expect(removals()).toEqual([]);
+    expect(field.value).toBe(BODY);
+  });
+
+  it('swallows the armed digit even when the rule refuses, and changes nothing', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    armed(field);
+    const event = new KeyboardEvent('keydown', { key: '9', code: 'Digit9', bubbles: true, cancelable: true });
+    field.dispatchEvent(event);
+
+    expect(event.defaultPrevented, 'the digit belonged to the chord either way').toBe(true);
+    expect(field.value).toBe(BODY);
+    expect(removals()).toEqual([]);
+  });
+
+  it('arms on the physical key, whatever character the layout produces', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    // macOS with Alt held gives a composed character, so e.key is useless here.
+    const arm = new KeyboardEvent('keydown', {
+      key: '®', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    });
+    field.dispatchEvent(arm);
+    expect(arm.defaultPrevented, 'the arming key must not reach the text either').toBe(true);
+
+    key(field, '1');
+    expect(removals()).toHaveLength(1);
+  });
+
+  it('takes only a PLAIN digit — a modified one does not belong to the chord', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    armed(field);
+    // Alt+Shift+1: the same family as the arming chord, and the likeliest
+    // mis-press. The CLI's own guard takes a bare editor key and nothing else.
+    const event = new KeyboardEvent('keydown', {
+      key: '1', code: 'Digit1', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    });
+    field.dispatchEvent(event);
+
+    expect(removals(), 'a modified digit must not remove anything').toEqual([]);
+    expect(event.defaultPrevented, 'and it keeps its own meaning').toBe(false);
+    expect(field.value).toBe(BODY);
+  });
+
+  it('acts on the body whatever row has focus, and moves focus nowhere', () => {
+    // The CLI's own rule, stated at its reducer: the chord acts on the body
+    // whatever row has focus. Here the reader is on the action row, not in the
+    // text, which is exactly where someone reviewing the prompt tends to be.
+    const c = mountWith(dropSection);
+    key(c.element, 'ArrowDown');
+    expect(c.getFocusIndex(), 'focus is on the action row').toBe(1);
+
+    armed(c.element);
+    key(c.element, '1');
+
+    expect(bodyField().value).toBe(dropSection(BODY, 1));
+    expect(removals()).toHaveLength(1);
+    expect(c.getFocusIndex(), 'and the removal moved focus nowhere').toBe(1);
+  });
+
+  it('does nothing at all on a surface whose model supplies no rule', () => {
+    mountWith(undefined);
+    const field = bodyField();
+    armed(field);
+    key(field, '1');
+    expect(field.value).toBe(BODY);
+    expect(removals()).toEqual([]);
+  });
+
+  it('disarms on anything else, and that key keeps its own meaning', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    armed(field);
+    key(field, 'a');            // not a digit: disarms, types itself
+    key(field, '1');            // therefore an ordinary digit again
+    expect(removals()).toEqual([]);
+    expect(field.value).toBe(BODY);
+  });
+
+  it('pressing it twice stays armed rather than doing something', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+    armed(field);
+    armed(field);
+    key(field, '1');
+    expect(removals()).toHaveLength(1);
+  });
+
+  it('leaves every shipped Alt+Shift key exactly as it was', () => {
+    mountWith(dropSection);
+    const field = bodyField();
+
+    // Alt+Shift+J still writes a newline, armed or not.
+    armed(field);
+    field.setSelectionRange(0, 0);
+    key(field, 'J', { code: 'KeyJ', altKey: true, shiftKey: true });
+    expect(field.value.startsWith('\n')).toBe(true);
+    expect(removals()).toEqual([]);
+
+    // …and the digit that follows is a plain digit again, because J disarmed it.
+    const after = field.value;
+    const event = new KeyboardEvent('keydown', { key: '1', code: 'Digit1', bubbles: true, cancelable: true });
+    field.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(field.value).toBe(after);
+  });
+});

@@ -101,6 +101,18 @@ export type SurfaceRow =
        * new text is numbered against the old structure.
        */
       lineNumbers?: (text: string) => ReadonlyMap<number, number>;
+      /**
+       * Remove the numbered part a digit names from this field's text and give
+       * back what remains — or `undefined` when the rule refuses, which is the
+       * only way it can say no. A refusal leaves the field exactly as it was.
+       *
+       * A rule for the same reasons as `lineNumbers`, and it must agree with it:
+       * the digit a reader types is the number they can SEE, so both answers are
+       * computed from the text in front of them, and neither layer here knows
+       * what a section is or which removals are refused. Whoever builds the
+       * model owns both, and owns keeping them consistent.
+       */
+      removeSection?: (text: string, sectionNumber: number) => string | undefined;
     }
   | {
       kind: 'action';
