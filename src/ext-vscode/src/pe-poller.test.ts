@@ -20,7 +20,8 @@ const validResultJson = JSON.stringify({
 
 const row = (o: Partial<PendingPromptEnhancementRow> = {}): PendingPromptEnhancementRow => ({
   id: 1, projectRoot: '/proj', sessionId: 's1', promptCount: 1,
-  status: 'pending', createdAt: 5000, requestJson: '{}', resultJson: validResultJson, ...o,
+  status: 'pending', createdAt: 5000, requestJson: '{}', resultJson: validResultJson,
+  emphasisPhrasesJson: null, ...o,
 });
 
 describe('createPePoller (Windsurf/Devin PE delivery)', () => {
@@ -156,6 +157,39 @@ describe('createPePoller (Windsurf/Devin PE delivery)', () => {
     const p = make(); p.start(); t = 5001;
     await expect(p.pollOnce()).resolves.toBeUndefined();
     expect(onDeliver).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ⛔ The failure this work has hit FOUR times already: a producer that is
+   * correct and never reached.
+   *
+   * The phrases live in a different column from the result, so the parser takes
+   * them as a second argument — and a call site that simply does not pass it
+   * compiles, runs, and quietly publishes a payload with no bold. Nothing in the
+   * parser's own tests can see that, because they call it directly.
+   *
+   * So this asserts the PRODUCTION path: a row carrying phrases must publish a
+   * payload carrying them.
+   */
+  it('publishes the phrases the row carries — the column reaches the payload', async () => {
+    readPendingPe.mockResolvedValue(row({
+      createdAt: 5000,
+      emphasisPhrasesJson: JSON.stringify([
+        { text: 'the enhanced body', emphasisClass: 3, source: 'floor' },
+      ]),
+    }));
+    const p = make(); p.start(); t = 5001;
+    await p.pollOnce();
+    expect(onPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ emphasisPhrases: ['the enhanced body'] }),
+    );
+  });
+
+  it('a row with no phrase column publishes a payload with none', async () => {
+    readPendingPe.mockResolvedValue(row({ createdAt: 5000 }));
+    const p = make(); p.start(); t = 5001;
+    await p.pollOnce();
+    expect(onPublish).toHaveBeenCalledWith(expect.not.objectContaining({ emphasisPhrases: expect.anything() }));
   });
 
   it('onPublish/onOutcome are optional — omitting them never crashes', async () => {

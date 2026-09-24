@@ -1290,7 +1290,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       try {
         const pending = await readPendingPromptEnhancement(projectRoot);
         if (pending) {
-          parsed = parsePromptEnhancementExtensionPayloadV1(pending.resultJson);
+          parsed = parsePromptEnhancementExtensionPayloadV1(pending.resultJson, pending.emphasisPhrasesJson);
           if (parsed) {
             if (pending.createdAt >= peLastPublishedCreatedAt) {
               const isNewPeShow = pending.createdAt > peLastPublishedCreatedAt;
@@ -1348,7 +1348,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!result.delivered) return;
       try {
         const pending = await readPendingPromptEnhancement(projectRoot);
-        const parsed = pending ? parsePromptEnhancementExtensionPayloadV1(pending.resultJson) : null;
+        const parsed = pending
+          ? parsePromptEnhancementExtensionPayloadV1(pending.resultJson, pending.emphasisPhrasesJson)
+          : null;
         if (parsed) {
           peInjectedRecordStore?.record(projectRoot, resultText, undefined, {
             currentBodyId: parsed.currentBodyId,
