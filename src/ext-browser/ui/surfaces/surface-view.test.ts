@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { autoGrow, growFields, renderSurface } from './surface-view.js';
-import { PE_FIXTURE, PE_FOOTER, DETAILS_HINT, EDIT_KEYS_HINT, BODY_HINT } from './fixtures/pe.js';
+import { PE_FIXTURE, PE_FOOTER, DETAILS_HINT, EDIT_KEYS_HINT, BODY_HINT, REMOVAL_HINT } from './fixtures/pe.js';
 import { MPS_FIRST_FIXTURE, MPS_CONTINUATION_FIXTURE } from './fixtures/mps.js';
 import { PEF_FIXTURE } from './fixtures/pef.js';
 import type { SurfaceModel } from './surface-model.js';
@@ -104,7 +104,10 @@ describe('PE surface — hints follow focus (D3.4)', () => {
 
   it('shows the send hint only while the body is focused', () => {
     // Off-focus it would be a lie: Enter acts on whichever row IS focused.
-    expect(hints(0)).toContain(`${EDIT_KEYS_HINT} · ${BODY_HINT}`);
+    // The removal hint sits between the edit keys and the send hint, where the
+    // CLI puts its own — the assertion carries it so the WHOLE line is pinned
+    // rather than a fragment that would still pass if a part went missing.
+    expect(hints(0)).toContain(`${EDIT_KEYS_HINT} · ${REMOVAL_HINT} · ${BODY_HINT}`);
     expect(hints(1).some((h) => h.includes(BODY_HINT))).toBe(false);
     expect(hints(2).some((h) => h.includes(BODY_HINT))).toBe(false);
   });

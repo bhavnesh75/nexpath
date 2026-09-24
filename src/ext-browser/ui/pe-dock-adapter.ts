@@ -55,7 +55,10 @@ import {
   type SurfaceEvent,
 } from './surfaces/surface-controller.js';
 import { fieldScroller } from './surfaces/surface-view.js';
-import { BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER } from './surfaces/fixtures/pe.js';
+import {
+  BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER,
+  REMOVAL_ARMED_HINT, REMOVAL_HINT, REMOVAL_NOTICE,
+} from './surfaces/fixtures/pe.js';
 import {
   SETTINGS_FREQUENCY_CHOICES,
   SETTINGS_HINT,
@@ -152,7 +155,14 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
     label: view.editorHeading,
     text: view.bodyText,
     ...(lineNumbers ? { lineNumbers } : {}),
-    ...(removeSection ? { removeSection } : {}),
+    ...(removeSection ? {
+      removeSection,
+      // The three texts travel together with the rule they describe: a hint for
+      // a chord the row cannot run, or a notice for a refusal that can never
+      // happen, would each be a promise the surface does not keep.
+      armedHint: REMOVAL_ARMED_HINT,
+      removalNotice: REMOVAL_NOTICE,
+    } : {}),
     hints: locked
       // A locked body is the engine's compose-FAILURE state (the deterministic
       // template stands in for wording it could not generate). The CLI shows no
@@ -162,7 +172,15 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
       // honest fix: it says why typing does nothing and what Enter will do.
       // Owner-approved divergence, deliberately additive — no behaviour changes.
       ? { always: [LOCKED_BODY_HINT] }
-      : { whenFocused: [`${EDIT_KEYS_HINT} · ${BODY_HINT}`] },
+      // The removal hint appears only where the removal does. A locked body
+      // refuses every edit, so advertising the chord there would name a key that
+      // cannot work — the same mistake the read-only lesson of 2026-08-25 was
+      // about, one line further down.
+      : {
+        whenFocused: [removeSection
+          ? `${EDIT_KEYS_HINT} · ${REMOVAL_HINT} · ${BODY_HINT}`
+          : `${EDIT_KEYS_HINT} · ${BODY_HINT}`],
+      },
     ...(locked ? { readOnly: true, unavailable: true } : {}),
   };
 

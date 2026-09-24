@@ -113,6 +113,32 @@ export type SurfaceRow =
        * model owns both, and owns keeping them consistent.
        */
       removeSection?: (text: string, sectionNumber: number) => string | undefined;
+      /**
+       * The line to show INSTEAD of this field's focused hint while the removal
+       * chord is armed — the question the digit answers.
+       *
+       * It replaces the hint rather than joining it, which is the CLI's own
+       * rule and its reason: the frame keeps its line count either way, so
+       * nothing below the hint moves when the chord arms. A line that appeared
+       * would push the rows down and back on every press.
+       *
+       * Absent means the chord changes nothing on screen — which is what the
+       * surface did before this existed.
+       */
+      armedHint?: string;
+      /**
+       * What to say when {@link removeSection} refuses.
+       *
+       * ONE string for every refusal, as the CLI settled: a number naming no
+       * section, a locked body, and a cut that would leave the prompt blank all
+       * read the same to a reader, who needs to know only that the section did
+       * not go. Why it did not is not their question.
+       *
+       * It is shown for ONE render and then clears itself. This surface runs its
+       * own loop rather than the engine's, so nothing else would ever take it
+       * down again.
+       */
+      removalNotice?: string;
     }
   | {
       kind: 'action';

@@ -268,6 +268,18 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
   function render(): void {
     lastRenderAt = Date.now(); // re-arms the focus-steal guard's window
     wrapper.replaceChildren(renderSurface(doc, model, { focusIndex, notice }));
+    // ONE render, then gone. This surface runs its own loop rather than the
+    // engine's, so nothing else would ever take a notice down again — it would
+    // sit there through every later frame until an unrelated keypress cleared
+    // it. Dropped AFTER the frame is built, so the frame just drawn still has
+    // it and the next one does not.
+    notice = undefined;
+    // A rebuilt frame draws the model's own hint again, so an armed chord would
+    // become INVISIBLE while still live — the next digit would then remove a
+    // section with nothing on screen having asked for one. The chord is a
+    // two-keystroke transaction, and anything that rebuilds the frame has
+    // interrupted it, so it disarms here rather than lingering unseen.
+    removalArmed = false;
 
     // Re-apply the user's edits — the freshly built textareas carry model text.
     const rendered = fields();
@@ -367,10 +379,43 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     if (body?.kind !== 'field' || !body.removeSection) return;
     harvest();
     const remaining = body.removeSection(bodyText(), sectionNumber);
-    if (remaining === undefined) return;
+    if (remaining === undefined) {
+      // A refusal SAYS so, once. Silence here was the state before this phase,
+      // and it reads exactly like a key that did nothing.
+      if (body.removalNotice !== undefined) { notice = body.removalNotice; render(); }
+      return;
+    }
     fieldValues[0] = remaining;
     render();
     emit?.({ type: 'section-removed', surface: model.id, bodyText: remaining });
+  }
+
+  /**
+   * Swap the body row's hint line for its armed question, IN PLACE.
+   *
+   * ⛔ Deliberately not a re-render, and the two reasons are both behaviour:
+   *
+   *  - a re-render parks the caret at the end of the field, so arming the chord
+   *    mid-sentence would move the reader's cursor;
+   *  - disarming happens on the keydown of whatever key was pressed NEXT, before
+   *    the browser has inserted it. Rebuilding the frame there detaches the
+   *    textarea the keystroke was aimed at, and the character is lost — which
+   *    would break the rule the chord is built on, that anything other than a
+   *    digit goes on to mean exactly what it means today.
+   *
+   * So only the text of one line changes. The frame keeps its line count either
+   * way, which is the CLI's own reason for replacing the hint rather than adding
+   * a line beneath it.
+   */
+  function paintArmedHint(armed: boolean): void {
+    const row = interactiveRows(model).find((r) => r.kind === 'field');
+    if (row?.kind !== 'field' || row.armedHint === undefined) return;
+    const group = wrapper.querySelector('.np-field-group');
+    const hints = group ? [...group.querySelectorAll('.np-hint')] : [];
+    const line = hints[hints.length - 1];
+    if (!line) return;
+    const focused = row.hints?.whenFocused ?? [];
+    line.textContent = armed ? row.armedHint : (focused[focused.length - 1] ?? line.textContent);
   }
 
   function say(text: string): void {
@@ -620,6 +665,7 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     // away: press Alt+Shift+R then Alt+Shift+T and the chooser still opens.
     if (removalArmed) {
       removalArmed = false;
+      paintArmedHint(false);
       if (plain && /^[1-9]$/.test(e.key)) {
         removeSection(Number(e.key));
         e.preventDefault(); e.stopPropagation();
@@ -638,6 +684,7 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     // is the CLI's own rule for its prefix key.
     if (safeChord && e.code === 'KeyR') {
       removalArmed = true;
+      paintArmedHint(true);
       e.preventDefault(); e.stopPropagation();
       return;
     }

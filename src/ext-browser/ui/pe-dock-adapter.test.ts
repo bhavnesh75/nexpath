@@ -788,6 +788,69 @@ left over from the last run`);
   });
 });
 
+describe('the removal texts the panel supplies', () => {
+  const BODY = ['Add a login page.', '', 'Scope:', 'the login route only.'].join('\n');
+  const SECTIONS = [{ title: 'Scope', bodyText: 'the login route only.' }];
+  const bodyRow = (v: PePanelViewV1) => {
+    const row = peSurfaceModel(v).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    return row;
+  };
+
+  it('carries all three, and only when the removal itself is there', () => {
+    const withSections = bodyRow(view({ bodyText: BODY, sections: SECTIONS }));
+    expect(withSections.hints?.whenFocused?.[0]).toContain('Alt+Shift+R #N');
+    expect(withSections.armedHint).toBe('Alt+Shift+R — which section? #1–#9');
+    expect(withSections.removalNotice).toBe('no section with that number');
+
+    // No sections, no removal — so no hint for a chord that cannot run, and no
+    // notice for a refusal that can never happen.
+    const without = bodyRow(view({ bodyText: BODY }));
+    expect(without.hints?.whenFocused?.[0]).not.toContain('Alt+Shift+R #N');
+    expect(without.armedHint).toBeUndefined();
+    expect(without.removalNotice).toBeUndefined();
+  });
+
+  it('advertises nothing on a locked body — the chord cannot work there', () => {
+    const locked = bodyRow(view({ bodyText: BODY, sections: SECTIONS, bodyEditable: false }));
+    expect(JSON.stringify(locked.hints)).not.toContain('Alt+Shift+R');
+  });
+
+  it('belong to the panel, never to the CLI', () => {
+    const row = bodyRow(view({ bodyText: BODY, sections: SECTIONS }));
+    const all = JSON.stringify([row.hints, row.armedHint, row.removalNotice]);
+    expect(all).not.toContain('Ctrl+X');
+    expect(all).not.toContain('this section not found');
+    expect(all).not.toContain('Remove which section?');
+  });
+
+  it('shows the question on screen when the chord arms, and takes it back', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const hint = () => [...surfaceEl().querySelectorAll('.np-hint')].map((el) => el.textContent ?? '').join(' | ');
+    expect(hint()).toContain('Alt+Shift+R #N');
+
+    bodyField().dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    expect(hint()).toContain('which section?');
+    expect(hint()).not.toContain('Alt+Shift+R #N');
+  });
+
+  it('says so when a digit names no section, and sends nothing', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: '9', code: 'Digit9', bubbles: true, cancelable: true,
+    }));
+    expect(surfaceEl().textContent).toContain('no section with that number');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+});
+
 describe('read-only fallback bodies (live 2026-08-25: typed edits silently dropped)', () => {
   it('bodyEditable:false renders BOTH fields natively read-only — the field never promises an edit the send path will discard', () => {
     adapter.show(view({ bodyEditable: false }));
