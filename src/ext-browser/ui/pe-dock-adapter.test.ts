@@ -557,6 +557,237 @@ describe('the body row\'s section numbers (the producer side)', () => {
   });
 });
 
+describe('removing a section in the panel (Alt+Shift+R, then a digit)', () => {
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    '',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.' },
+  ];
+  const chord = (field: HTMLTextAreaElement, digit: string): void => {
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: digit, code: `Digit${digit}`, bubbles: true, cancelable: true,
+    }));
+  };
+  /** The CLI's own cut, run directly, as the reference. */
+  const cliRemoval = async (text: string, n: number): Promise<string | undefined> => {
+    const { removePromptEnhancementSectionV1 } = await import('../../prompt-enhancement/popup-section-removal.js');
+    const { buildPromptEnhancementMultilineEditorStateV1 } = await import('../../prompt-enhancement/multiline-editor.js');
+    const result = removePromptEnhancementSectionV1(
+      buildPromptEnhancementMultilineEditorStateV1({
+        identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1, validationDecisionId: 'v' },
+        enhancedBodyText: text, fieldWidth: 72, viewportRows: 6,
+      }),
+      SECTIONS,
+      n,
+    );
+    return result.outcome === 'removed' ? result.editor.buffers.enhanced_body.text : undefined;
+  };
+
+  it('produces the body the CLI produces, byte for byte, and sends it as an edit', async () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+
+    const expected = await cliRemoval(BODY, 1);
+    expect(expected).toBeDefined();
+    expect(bodyField().value).toBe(expected);
+    // D2: a removal is an EDIT. It goes out as the engine's own edit_body — no
+    // new command type, so nothing on the wire had to change to carry it.
+    expect(commands()).toEqual([{ type: 'edit_body', bodyText: expected }]);
+  });
+
+  it('renumbers as the CLI does: after one removal the next digit means the next section', async () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+    expect(afterFirst).not.toContain('Scope:');
+
+    // No new view has arrived. #1 is now what used to be #2.
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(await cliRemoval(afterFirst, 1));
+    expect(bodyField().value).not.toContain('Acceptance:');
+  });
+
+  it('refuses what the ENGINE refuses — a number that names nothing', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '9');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('refuses to empty the prompt — the engine\'s would-blank rule, not a second copy', async () => {
+    const onlyOne = 'Scope:\nthe login route only.';
+    expect(await cliRemoval(onlyOne, 1), 'the engine itself refuses this cut').toBeUndefined();
+
+    adapter.show(view({ bodyText: onlyOne, sections: [SECTIONS[0]!] }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(onlyOne);
+    expect(commands()).toEqual([]);
+  });
+
+  it('refuses on a locked body, the way the engine refuses every other edit to one', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS, bodyEditable: false }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('is absent, not inert, when the view carries no sections', () => {
+    adapter.show(view({ bodyText: BODY }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('the numbers a reader sees and the digit they type name the same section', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    Object.defineProperty(field, 'clientHeight', { value: 400, configurable: true });
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    const marks = [...surfaceEl().querySelectorAll('.np-marks span')].map((el) => el.textContent);
+    expect(marks).toEqual(['    #1', '    #2']);
+
+    // #1 is drawn beside `Scope:`, so 1 must take `Scope:`.
+    chord(bodyField(), '1');
+    expect(bodyField().value).not.toContain('Scope:');
+    expect(bodyField().value).toContain('Acceptance:');
+  });
+});
+
+describe('work done while the panel waits for the engine is never thrown away', () => {
+  /**
+   * The panel goes busy the moment a command leaves it and stays busy until the
+   * engine's next view (`content/pe-inject.ts:117`). The overlay stops the
+   * mouse, but not the keyboard — so a reader can keep editing in that window,
+   * and until this was fixed the arriving view silently reverted everything
+   * they did there.
+   *
+   * Measured before the fix, both of these: the second removal vanished, and so
+   * did anything typed. The engine is told about the newer text instead.
+   */
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    '',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.' },
+  ];
+  const chord = (field: HTMLTextAreaElement, digit: string): void => {
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: digit, code: `Digit${digit}`, bubbles: true, cancelable: true,
+    }));
+  };
+  const typeInto = (field: HTMLTextAreaElement, text: string): void => {
+    field.value = text;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  it('a second removal inside the window survives, and the engine is told', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);               // what pe-inject does with that edit
+    chord(bodyField(), '1');             // …and the reader removes another
+    const afterSecond = bodyField().value;
+    expect(afterSecond).not.toBe(afterFirst);
+
+    // The engine answers the FIRST edit — all it has heard about.
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+
+    expect(bodyField().value, 'the second removal must still be gone').toBe(afterSecond);
+    expect(commands()).toEqual([
+      { type: 'edit_body', bodyText: afterFirst },
+      { type: 'edit_body', bodyText: afterSecond },
+    ]);
+  });
+
+  it('text typed inside the window survives, and the engine is told', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    const typed = `${afterFirst}\n\nAlso: rate-limit the login route.`;
+    typeInto(bodyField(), typed);
+
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+
+    expect(bodyField().value).toBe(typed);
+    expect(commands()[commands().length - 1]).toEqual({ type: 'edit_body', bodyText: typed });
+  });
+
+  it('does not carry the edit of one popup run into the next', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    typeInto(bodyField(), `${afterFirst}
+left over from the last run`);
+    adapter.hide();                       // the run ends; the field survives it
+
+    // A NEW run whose body happens to equal the previous run's last edit. It is
+    // not an echo of anything — nothing was sent in this run — so it stands.
+    adapter.show(view({ viewSeq: 1, bodyText: afterFirst, sections: SECTIONS }));
+    expect(bodyField().value).toBe(afterFirst);
+  });
+
+  it('REAL news still wins — a body the engine changed is not overwritten by stale local text', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    typeInto(bodyField(), `${afterFirst}\nlocal scribble`);
+
+    // Not an echo of our edit: the engine recomposed the prompt (a refinement,
+    // a go-back, a fallback). Its body is the news and must stand.
+    const recomposed = 'A completely different, recomposed prompt.';
+    adapter.show(view({ viewSeq: 2, bodyText: recomposed, sections: SECTIONS }));
+
+    expect(bodyField().value).toBe(recomposed);
+    expect(commands().some((c) => c?.type === 'edit_body' && c.bodyText.includes('scribble'))).toBe(false);
+  });
+
+  it('settles: once the engine agrees, nothing more is sent', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    chord(bodyField(), '1');
+    const afterSecond = bodyField().value;
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+    const sent = commands().length;
+
+    // The engine now echoes the second edit too. The panel and the engine hold
+    // the same text, so there is nothing left to say — no re-send loop.
+    adapter.show(view({ viewSeq: 3, bodyText: afterSecond, sections: SECTIONS }));
+    expect(bodyField().value).toBe(afterSecond);
+    expect(commands()).toHaveLength(sent);
+  });
+});
+
 describe('read-only fallback bodies (live 2026-08-25: typed edits silently dropped)', () => {
   it('bodyEditable:false renders BOTH fields natively read-only — the field never promises an edit the send path will discard', () => {
     adapter.show(view({ bodyEditable: false }));

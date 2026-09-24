@@ -43,6 +43,10 @@ import type { SurfaceModel, SurfaceRow } from './surfaces/surface-model.js';
 // rather than the knowledge of what a section is. The module is pure and
 // imports nothing itself.
 import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/popup-section-map.js';
+// The engine's own cut, for the same reason and on the same side of the bridge.
+// The panel must not carry a second copy of which removals are refused.
+import { removePromptEnhancementSectionV1 } from '../../prompt-enhancement/popup-section-removal.js';
+import { buildPromptEnhancementMultilineEditorStateV1 } from '../../prompt-enhancement/multiline-editor.js';
 import { mountNexpathDock, type NexpathDockController } from './surfaces/dock.js';
 import { installChromeStyles } from './surfaces/chrome.js';
 import {
@@ -77,6 +81,24 @@ type PendingTerminal = { type: 'close' } | { type: 'use_original' } | { type: 'm
 
 // ── producers: my views → their models ─────────────────────────────────────────
 
+/**
+ * What the engine's remover needs that the panel has no use for.
+ *
+ * The cut reads the body, the editability and nothing else: the identity is never
+ * looked at, and the width and row count only shape the cursor and viewport it
+ * returns, which are a terminal's concerns and are discarded here. They are named
+ * rather than inlined so it is plain that no id of the real draft is involved —
+ * the panel is not given any, by design.
+ */
+const PANEL_REMOVAL_DRAFT_IDENTITY = {
+  enhancementId: 'panel-local',
+  currentBodyId: 'panel-local',
+  bodyRevision: 1,
+  validationDecisionId: 'panel-local',
+} as const;
+const PANEL_REMOVAL_FIELD_WIDTH = 72;
+const PANEL_REMOVAL_VIEWPORT_ROWS = 6;
+
 /** The CLI's refinement-return label (`cli-submit-popup.ts:541`). */
 const CLI_GO_BACK_LABEL = '← Go back';
 
@@ -104,11 +126,33 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
     : (text: string): ReadonlyMap<number, number> =>
       new Map(buildPromptEnhancementSectionMapV1(text, sections)
         .entries.map((entry) => [entry.titleLine, entry.number] as const));
+  // Removing the part a digit names, the CLI's `Ctrl+X` + digit. Its refusals are
+  // the engine's — a number that names nothing, a locked body, a cut that would
+  // leave the prompt blank — because the panel asks the shipped remover rather
+  // than deciding for itself. Like the numbering it is asked about the LIVE text,
+  // so the digit acts on the body the reader is looking at.
+  const removeSection = sections === undefined
+    ? undefined
+    : (text: string, sectionNumber: number): string | undefined => {
+      const result = removePromptEnhancementSectionV1(
+        buildPromptEnhancementMultilineEditorStateV1({
+          identity: PANEL_REMOVAL_DRAFT_IDENTITY,
+          enhancedBodyText: text,
+          fieldWidth: PANEL_REMOVAL_FIELD_WIDTH,
+          viewportRows: PANEL_REMOVAL_VIEWPORT_ROWS,
+          editable: view.bodyEditable,
+        }),
+        sections,
+        sectionNumber,
+      );
+      return result.outcome === 'removed' ? result.editor.buffers.enhanced_body.text : undefined;
+    };
   const bodyRow: SurfaceRow = {
     kind: 'field',
     label: view.editorHeading,
     text: view.bodyText,
     ...(lineNumbers ? { lineNumbers } : {}),
+    ...(removeSection ? { removeSection } : {}),
     hints: locked
       // A locked body is the engine's compose-FAILURE state (the deterministic
       // template stands in for wording it could not generate). The CLI shows no
@@ -327,11 +371,21 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
    * view scrolls to where the details landed" (cli-submit-popup.ts:1037), so
    * that one rebuild must follow the caret (parked at the body's end). */
   let followCaretOnNextShow = false;
+  /**
+   * The body text of the last edit the panel handed the engine.
+   *
+   * A view coming back with exactly this text is the engine AGREEING with us,
+   * not telling us anything — so whatever the panel shows now is the newer
+   * fact. Without it the panel cannot tell that echo apart from real news, and
+   * treats both as "the engine's body wins".
+   */
+  let lastEditSent: string | null = null;
 
   const doc = opts.doc ?? document;
 
   const emitCommand = (command: PePanelCommandV1): void => {
     if (!view || busy) return;
+    if (command.type === 'edit_body') lastEditSent = command.bodyText;
     opts.onEvent({ type: 'command', viewSeq: view.viewSeq, command });
   };
 
@@ -479,6 +533,12 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
         followCaretOnNextShow = true;
         emitCommand({ type: 'edit_body', bodyText: event.mergedBody });
         return;
+      case 'section-removed':
+        // D2, the parent's ruling of 2026-09-18: a removal is an EDIT, not
+        // feedback. So it travels as the engine's own edit_body — no new command,
+        // no contract change, and no removal event of its own.
+        emitCommand({ type: 'edit_body', bodyText: event.bodyText });
+        return;
       case 'cancelled':
         // Esc on the PE surface = the CLI's immediate close: "Feedback opens
         // ONLY when the user chooses Use original prompt … Close / Esc / crash
@@ -594,12 +654,32 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       const samePeBody = !('kind' in v)
         && prevFields[0] !== undefined
         && prevFields[0].value === v.bodyText;
-      const preserved = samePeBody
+      // The panel is AHEAD of the engine: this view echoes the last edit we
+      // sent, but the user has changed the body again since — typed into it,
+      // removed another section, applied details — while the panel was busy
+      // waiting for exactly this view. Their work is the newer fact and the
+      // echo must not overwrite it.
+      //
+      // Measured before it was fixed: a second removal inside that window
+      // vanished from the screen when the first one's view came back, and so
+      // did anything typed there. The engine is told immediately below, so the
+      // two agree again within the same task.
+      //
+      // Strictly `=== lastEditSent`, never merely "different": a view whose
+      // body is anything ELSE is real news — a refinement, a go-back, a
+      // fallback — and there the engine's body rightly wins.
+      const localAhead = !('kind' in v)
+        && !samePeBody
+        && prevFields[0] !== undefined
+        && lastEditSent !== null
+        && v.bodyText === lastEditSent;
+      const preserved = samePeBody || localAhead
         ? {
             focusIndex: surfaces!.getFocusIndex(),
             bodyScrollTop: prevFields[0]!.scrollTop,
             bodyCaret: prevFields[0]!.selectionStart ?? v.bodyText.length,
             detailsDraft: v.additionalDetailsText === '' ? prevFields[1]?.value ?? '' : '',
+            ...(localAhead ? { aheadBodyText: prevFields[0]!.value } : {}),
           }
         : null;
       // The dock must be VISIBLE before the surface renders: the controller's
@@ -660,6 +740,14 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
         const rebuilt = [...surfaces.element.querySelectorAll('textarea')] as HTMLTextAreaElement[];
         const body = rebuilt[0];
         if (body) {
+          // Put the user's newer text back before anything measures the field,
+          // then tell the engine, so its editedBodyText tracks what is on screen.
+          // `busy` is already false here, so this send is not dropped in turn.
+          if (preserved.aheadBodyText !== undefined && preserved.aheadBodyText !== body.value) {
+            body.value = preserved.aheadBodyText;
+            body.dispatchEvent(new Event('input', { bubbles: true })); // re-grow, markers, numbers
+            emitCommand({ type: 'edit_body', bodyText: preserved.aheadBodyText });
+          }
           body.setSelectionRange(preserved.bodyCaret, preserved.bodyCaret);
           body.scrollTop = preserved.bodyScrollTop;
         }
@@ -680,6 +768,11 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       setBusyOverlay(b);
     },
     hide(): void {
+      // One popup run's edit is meaningless to the next. The surface is hidden
+      // rather than destroyed, so its field survives into the following run —
+      // and without this, a later view whose body happened to equal this run's
+      // last edit would be read as an echo of it.
+      lastEditSent = null;
       dock?.hide();
     },
     destroy(): void {
