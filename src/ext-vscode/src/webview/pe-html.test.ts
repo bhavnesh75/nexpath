@@ -276,3 +276,126 @@ describe('the section index — the numbers beside the body', () => {
     }
   });
 });
+
+describe('the bold preview', () => {
+  const BODY = [
+    'My original request (verbatim):',
+    'do not delete the audit log',
+    '',
+    'Scope:',
+    'do not delete the audit log while refactoring.',
+  ].join('\n');
+  const SECTIONS = [
+    { number: 1, title: 'My original request (verbatim)', sectionKind: 'original_request_or_goal', titleLine: 0, endLine: 3 },
+    { number: 2, title: 'Scope', sectionKind: 'context_and_constraints', titleLine: 3, endLine: 5 },
+  ];
+  const withBold = (
+    emphasisPhrases: readonly string[] | undefined,
+    over: Partial<PromptEnhancementExtensionPayloadV1> = {},
+  ): PromptEnhancementExtensionPayloadV1 => ({
+    ...readyPayload,
+    currentBodyText: BODY,
+    sections: SECTIONS,
+    ...(emphasisPhrases ? { emphasisPhrases } : {}),
+    ...over,
+  });
+  const render = (p: PromptEnhancementExtensionPayloadV1): string =>
+    renderPromptEnhancementHtml(p, { cspSource: CSP_SRC, nonce: FIXED_NONCE });
+  const preview = (html: string): string => {
+    const at = html.indexOf('<div class="pe-preview">');
+    return at < 0 ? '' : html.slice(at, html.indexOf('</div>', at));
+  };
+
+  it('draws nothing at all when there are no phrases', () => {
+    const before = render(withBold(undefined));
+    expect(before).not.toContain('pe-preview');
+    expect(render(withBold([]))).toBe(before);
+  });
+
+  it('bolds the phrase, and leaves the body a reader sends untouched', () => {
+    const html = render(withBold(['while refactoring']));
+    expect(preview(html)).toContain('<strong>while refactoring</strong>');
+
+    const field = html.slice(html.indexOf('<textarea id="pe-body"'));
+    const value = field.slice(field.indexOf('>') + 1, field.indexOf('</textarea>'));
+    expect(value).toBe(BODY);
+    expect(value).not.toContain('<strong>');
+  });
+
+  /**
+   * The rule this surface must not break on its own. The phrase appears TWICE —
+   * once inside the section that quotes the developer's prompt back, and once in
+   * an ordinary section. The standard never marks the first, so the mark must
+   * land on the second.
+   */
+  it('never marks inside a section the standard excludes', () => {
+    const html = render(withBold(['do not delete the audit log']));
+    const body = preview(html);
+    const marked = body.indexOf('<strong>');
+    // The quoted-prompt section runs to the blank line before `Scope:`.
+    expect(body.slice(0, marked)).toContain('My original request');
+    expect(body.slice(0, marked)).toContain('Scope:');
+    expect((body.match(/<strong>/g) ?? []).length).toBe(1);
+  });
+
+  it('never marks a title line', () => {
+    const html = render(withBold(['Scope']));
+    // `Scope` occurs only as the title, so there is nowhere left to draw it.
+    expect(preview(html)).not.toContain('<strong>');
+  });
+
+  it('a phrase that is not in the body is drawn nowhere, and nothing else breaks', () => {
+    const html = render(withBold(['nowhere in this body', 'while refactoring']));
+    expect((preview(html).match(/<strong>/g) ?? []).length).toBe(1);
+  });
+
+  /**
+   * ⛔ The safety property, asserted rather than described: the body is escaped
+   * FIRST and the phrases are matched inside the escaped text, so nothing taken
+   * from a body can ever be emitted as markup.
+   */
+  it('cannot be made to emit markup from a body or a phrase', () => {
+    const hostile = 'Scope:\nuse <img src=x onerror="alert(1)"> carefully';
+    const html = render(withBold(['<img src=x onerror="alert(1)">'], {
+      currentBodyText: hostile,
+      sections: [{ number: 1, title: 'Scope', sectionKind: 'context_and_constraints', titleLine: 0, endLine: 2 }],
+    }));
+    expect(html).not.toContain('<img src=x');
+    expect(preview(html)).toContain('&lt;img src=x');
+    // …and it is still bolded, as escaped text.
+    expect(preview(html)).toContain('<strong>&lt;img');
+  });
+
+  it('bolds every phrase that has somewhere to go', () => {
+    const html = render(withBold(['while refactoring', 'the audit log']));
+    expect((preview(html).match(/<strong>/g) ?? []).length).toBe(2);
+  });
+
+  /**
+   * The invariant that makes every other assertion here safe: strip the markup
+   * back out and what is left must be the body, exactly.
+   *
+   * ⚠️ Written after a weaker version of this test let a real defect through.
+   * Checking only for `<strong><strong>` and balanced tags passed even with the
+   * overlap guard removed — that path does not nest, it DUPLICATES and DROPS
+   * text either side of the overlap, which no tag count can see.
+   */
+  it('shows the body and nothing but the body, whatever the phrases overlap', () => {
+    for (const phrases of [
+      ['delete the audit log while', 'audit log while refactoring'],   // overlapping
+      ['while refactoring', 'the audit log'],                          // disjoint
+      ['do not delete the audit log'],                                 // one
+    ]) {
+      const body = preview(render(withBold(phrases)));
+      expect(body.replace(/<\/?strong>/g, '').replace('<div class="pe-preview">', ''), phrases.join(' + '))
+        .toBe(BODY.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+      expect(body).not.toContain('<strong><strong>');
+    }
+  });
+
+  it('is absent on every state that has no editable body', () => {
+    for (const renderState of ['blocked', 'fallback', 'no_popup'] as const) {
+      expect(render({ ...withBold(['while refactoring']), renderState }), renderState).not.toContain('pe-preview');
+    }
+  });
+});

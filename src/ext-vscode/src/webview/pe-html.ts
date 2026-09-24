@@ -27,7 +27,11 @@
  */
 
 import { escapeHtml } from './html.js';
-import type { PeBodySection, PromptEnhancementExtensionPayloadV1 } from '../pe-payload.js';
+import {
+  NEVER_MARKED_SECTION_KINDS,
+  type PeBodySection,
+  type PromptEnhancementExtensionPayloadV1,
+} from '../pe-payload.js';
 
 export interface PeRenderOptions {
   /** Pass `webview.cspSource` so the CSP allows the webview's local resources. */
@@ -143,6 +147,111 @@ ${rows}
 `;
 }
 
+/**
+ * The bold preview — the body again, read-only, with the emphasised phrases in
+ * bold.
+ *
+ * WHY A PREVIEW AND NOT BOLD IN THE FIELD. The body is a `<textarea>`, which
+ * cannot carry markup at all, and the surface requires it to stay exactly one
+ * editable field. The browser panel draws its bold through a mirrored overlay,
+ * and that technique is rejected here rather than merely unbuilt: the body
+ * inherits the editor's UI font, which is PROPORTIONAL, so bold glyphs are wider
+ * and the overlay's wrapping drifts from the textarea's — the failure the
+ * browser has to spike for is a certainty here. The field is user-resizable too,
+ * a second axis an overlay would have to chase.
+ *
+ * So the preview is an additional read-only block. The textarea remains the one
+ * editable field and the one thing that is sent.
+ *
+ * ⛔ SAFETY — the order is the whole of it. The body is escaped FIRST, and the
+ * phrases are escaped too and then matched inside the escaped text. Nothing
+ * taken from a body is ever emitted as markup, so a phrase containing `<b>`
+ * finds nothing and a body containing it stays inert.
+ */
+function renderBoldPreview(payload: PromptEnhancementExtensionPayloadV1): string {
+  const phrases = payload.emphasisPhrases ?? [];
+  if (phrases.length === 0 || payload.currentBodyText.length === 0) return '';
+
+  const marks = locateEmphasisMarks(payload);
+  if (marks.length === 0) return '';
+
+  // Escape once, then slice the ESCAPED text at offsets computed on the escaped
+  // text — never map a raw offset onto escaped output, which is where this kind
+  // of code usually goes wrong.
+  const escapedBody = escapeHtml(payload.currentBodyText);
+  const escapedMarks = marks
+    .map((m) => ({ start: escapeHtml(payload.currentBodyText.slice(0, m.start)).length, text: escapeHtml(m.text) }))
+    .map((m) => ({ start: m.start, end: m.start + m.text.length }))
+    .sort((a, b) => a.start - b.start);
+
+  let out = '';
+  let cursor = 0;
+  for (const mark of escapedMarks) {
+    if (mark.start < cursor) continue;            // overlapping runs draw once
+    out += escapedBody.slice(cursor, mark.start);
+    out += `<strong>${escapedBody.slice(mark.start, mark.end)}</strong>`;
+    cursor = mark.end;
+  }
+  out += escapedBody.slice(cursor);
+
+  // ⚠️ The leading newline belongs to the BLOCK, not to the template. Written the
+  // other way round, an absent preview still left a blank line behind, and every
+  // recorded frame shifted by one — 174 lines reported as moved for a feature
+  // that had drawn nothing. Absent must mean absent, to the byte.
+  return `
+<style>
+  .pe-preview-label { margin: 0.9em 0 0.3em 0; font-size: 0.83em; color: var(--vscode-descriptionForeground); }
+  .pe-preview { white-space: pre-wrap; overflow-wrap: anywhere; padding: 0.7em; border-radius: 4px; border: 1px solid var(--vscode-input-border, var(--vscode-editorWidget-border)); background: var(--vscode-editor-background); color: var(--vscode-descriptionForeground); font-size: 0.9em; }
+  .pe-preview strong { color: var(--vscode-foreground); font-weight: 600; }
+</style>
+<p class="pe-preview-label">What this prompt emphasises</p>
+<div class="pe-preview">${out}</div>
+`;
+}
+
+/**
+ * Where each phrase may be drawn — the FIRST occurrence that is allowed to carry
+ * a mark, and nothing if there is none.
+ *
+ * Two stretches are never marked, and both are the standard's own rule rather
+ * than a preference here: a section's title line, and any section whose kind is
+ * one the standard excludes. A phrase that appears only inside those is drawn
+ * nowhere, which is what the popup itself does.
+ */
+function locateEmphasisMarks(
+  payload: PromptEnhancementExtensionPayloadV1,
+): { start: number; text: string }[] {
+  const text = payload.currentBodyText;
+  const lines = text.split('\n');
+  const lineStart: number[] = [];
+  let offset = 0;
+  for (const line of lines) { lineStart.push(offset); offset += line.length + 1; }
+
+  /** Half-open [start, end) offsets a mark may not begin inside. */
+  const barred: { start: number; end: number }[] = [];
+  for (const section of payload.sections ?? []) {
+    const titleFrom = lineStart[section.titleLine];
+    if (titleFrom !== undefined) {
+      barred.push({ start: titleFrom, end: titleFrom + (lines[section.titleLine]?.length ?? 0) });
+    }
+    if (!NEVER_MARKED_SECTION_KINDS.has(section.sectionKind)) continue;
+    const from = lineStart[section.titleLine];
+    const to = section.endLine < lineStart.length ? lineStart[section.endLine] : text.length;
+    if (from !== undefined && to !== undefined) barred.push({ start: from, end: to });
+  }
+
+  const out: { start: number; text: string }[] = [];
+  for (const phrase of payload.emphasisPhrases ?? []) {
+    if (phrase.length === 0) continue;
+    for (let at = text.indexOf(phrase); at >= 0; at = text.indexOf(phrase, at + 1)) {
+      if (barred.some((range) => at >= range.start && at < range.end)) continue;
+      out.push({ start: at, text: phrase });
+      break;
+    }
+  }
+  return out;
+}
+
 function renderReadyState(
   payload: PromptEnhancementExtensionPayloadV1,
   nonce: string,
@@ -184,7 +293,7 @@ ${detailsHtml}
 <div class="pe-footer">
   <button class="pe-deliver" id="pe-deliver">Use this prompt</button>
   <button class="pe-close" id="pe-close" data-action-id="${closeIdEsc}">Close</button>
-</div>
+</div>${renderBoldPreview(payload)}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const bodyEl = document.getElementById('pe-body');

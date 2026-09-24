@@ -50,7 +50,33 @@ export interface PeBodySection {
   number: number;
   /** The section's title, exactly as its title line reads without the colon. */
   title: string;
+  /**
+   * The composed kind, carried so the bold preview can leave alone the sections
+   * the standard never marks. Numbering itself never reads it.
+   */
+  sectionKind: string;
+  /** Logical line (0-based) of this section's title, and the first line past it. */
+  titleLine: number;
+  endLine: number;
 }
+
+/**
+ * The two section kinds the standard never marks, restated because this package
+ * cannot import the set that defines them.
+ *
+ *   `original_request_or_goal`   the developer's own words, quoted back — marking
+ *                                them would emphasise their own prompt at them.
+ *   `source_signal_guidance`     its lines propose practices by design, so the
+ *                                loudest mark would land on the one section that
+ *                                is a suggestion rather than the ask.
+ *
+ * ⛔ A mark drawn inside either is a defect, not a preference, which is why the
+ * preview computes eligibility rather than trusting the phrase list.
+ */
+export const NEVER_MARKED_SECTION_KINDS: ReadonlySet<string> = new Set([
+  'original_request_or_goal',
+  'source_signal_guidance',
+]);
 
 export interface PeDirectionalAction {
   actionType: PeDirectionalActionType;
@@ -95,6 +121,18 @@ export interface PromptEnhancementExtensionPayloadV1 {
    * ever sent.
    */
   sections?:         readonly PeBodySection[];
+  /**
+   * The phrases the popup draws in bold, as the store holds them — text only.
+   *
+   * Absent means no bold, and that is the ordinary case for every prompt written
+   * before the column existed.
+   *
+   * ⚠️ Only phrases the store actually carries can appear here, and the store
+   * only ever holds locally-produced ones. A phrase marked as coming from a model
+   * is runtime-only by rule and never persisted, so one arriving here would mean
+   * something upstream is wrong — it is dropped rather than drawn.
+   */
+  emphasisPhrases?:  readonly string[];
 }
 
 /**
@@ -133,7 +171,40 @@ function parseBodySectionsV1(currentBody: unknown, bodyText: string): PeBodySect
     const at = lines.indexOf(`${title}:`, searchFrom);
     if (at < 0) continue;
     searchFrom = at + 1;
-    out.push({ number: out.length + 1, title });
+    const kind = (entry as Record<string, unknown>).sectionKind;
+    out.push({
+      number: out.length + 1,
+      title,
+      sectionKind: typeof kind === 'string' ? kind : '',
+      titleLine: at,
+      endLine: lines.length,          // closed below, once the next title is known
+    });
+  }
+  // Each section runs to the next title found, and the last to the end.
+  for (let i = 0; i < out.length - 1; i += 1) out[i]!.endLine = out[i + 1]!.titleLine;
+  return out;
+}
+
+/**
+ * The phrases the store holds for this prompt, or none.
+ *
+ * Defensive in the same way as everything else here: a malformed column, an
+ * entry without text, a duplicate, or one claiming to have come from a model all
+ * drop out rather than throwing or reaching the view.
+ */
+function parseEmphasisPhrasesV1(emphasisPhrasesJson: string | null | undefined): string[] {
+  if (typeof emphasisPhrasesJson !== 'string' || emphasisPhrasesJson.length === 0) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(emphasisPhrasesJson); } catch { return []; }
+  if (!Array.isArray(parsed)) return [];
+  const out: string[] = [];
+  for (const entry of parsed) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    if (typeof e.text !== 'string' || e.text.length === 0) continue;
+    // Runtime-only by rule, so one here means something upstream is wrong.
+    if (e.source === 'model') continue;
+    if (!out.includes(e.text)) out.push(e.text);
   }
   return out;
 }
@@ -163,6 +234,13 @@ function renderStateFor(
  */
 export function parsePromptEnhancementExtensionPayloadV1(
   resultJson: string,
+  /**
+   * The store's own phrase column, from a DIFFERENT column of the same row —
+   * which is why it is a second argument and not something read out of the
+   * result. A caller that does not pass it gets a payload with no bold, exactly
+   * as every caller did before this existed.
+   */
+  emphasisPhrasesJson?: string | null,
 ): PromptEnhancementExtensionPayloadV1 | null {
   let parsed: unknown;
   try {
@@ -234,6 +312,8 @@ export function parsePromptEnhancementExtensionPayloadV1(
   // body — which self-scrubs to '' below — simply has no numbers.
   const currentBodyText = isBlockedSendPolicy(sendPolicy) ? '' : text;
   const sections = parseBodySectionsV1(result.currentBody, currentBodyText);
+  // A blocked body self-scrubs to '' above, so it can carry no marks either.
+  const emphasisPhrases = currentBodyText.length > 0 ? parseEmphasisPhrasesV1(emphasisPhrasesJson) : [];
 
   return {
     transportVersion: PE_EXTENSION_PAYLOAD_TRANSPORT_VERSION,
@@ -248,5 +328,6 @@ export function parsePromptEnhancementExtensionPayloadV1(
     directionalActions,
     closeActionId,
     ...(sections.length > 0 ? { sections } : {}),
+    ...(emphasisPhrases.length > 0 ? { emphasisPhrases } : {}),
   };
 }

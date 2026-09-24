@@ -34,6 +34,9 @@ describe('readPendingPromptEnhancement', () => {
       createdAt: 1700000000000,
       requestJson: '{"prompt":"do the thing"}',
       resultJson: '{"body":"do the enhanced thing"}',
+      // Null, because the fixture row predates the column — which is the
+      // ordinary state for every prompt written before it existed.
+      emphasisPhrasesJson: null,
     });
     expect(readRow).toHaveBeenCalledWith('/db', '/proj');
   });
