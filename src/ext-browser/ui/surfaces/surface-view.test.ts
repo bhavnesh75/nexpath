@@ -564,3 +564,190 @@ describe('field window policy — the CLI sizing rules (cli-submit-popup.ts:1335
     host.remove();
   });
 });
+
+/**
+ * The field's bold — the mirror behind the textarea.
+ *
+ * ⛔ jsdom lays nothing out, and this drawing GATES on a layout measurement: the
+ * mirror only goes up if bold is the same width as normal in the font that
+ * actually resolved, because where it is not, every mark would push the rest of
+ * its line sideways. So the measurement is stubbed here, in both directions —
+ * which is the point, because the fallback is as load-bearing as the drawing and
+ * a test that could only see one of them would be half a test.
+ */
+describe('the field\'s bold', () => {
+  const TEXT = [
+    'Scope:',
+    'Do not delete the audit log while refactoring.',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  /** Offsets of `Do not delete` in TEXT — the first mark a producer would ask for. */
+  const MARK = { start: TEXT.indexOf('Do not delete'), end: TEXT.indexOf('Do not delete') + 'Do not delete'.length };
+
+  const withBold = (rule?: (text: string) => readonly { start: number; end: number }[]): SurfaceModel => ({
+    ...PE_FIXTURE,
+    rows: [{
+      kind: 'field',
+      label: 'Use enhanced prompt',
+      text: TEXT,
+      ...(rule ? { boldRanges: rule } : {}),
+    }],
+    footer: PE_FOOTER,
+  });
+
+  /**
+   * Make the font answer the guard's question.
+   *
+   * `sameWidth: true` is a true monospace face — bold measures exactly as wide as
+   * normal, which is what was measured on a real browser and what lets the mirror
+   * be trusted.
+   * `false` is a proportional one, where bold is wider and the mirror must refuse.
+   */
+  const withFont = (sameWidth: boolean, run: () => void): void => {
+    const real = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+      const weight = (this as HTMLElement).style?.fontWeight;
+      const width = weight === '700' && !sameWidth ? 120 : 100;
+      return { width, height: 15, top: 0, left: 0, right: width, bottom: 15, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    };
+    try { run(); } finally { Element.prototype.getBoundingClientRect = real; }
+  };
+
+  /** The frame, laid out enough for the drawing to run, with the input fired once. */
+  const draw = (rule?: (text: string) => readonly { start: number; end: number }[]): HTMLElement => {
+    const frame = renderSurface(document, withBold(rule), { focusIndex: 0 });
+    document.body.appendChild(frame);
+    const field = frame.querySelector('textarea')!;
+    Object.defineProperty(field, 'clientWidth', { value: 365, configurable: true });
+    Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+    field.dispatchEvent(new Event('input'));
+    return frame;
+  };
+
+  it('adds no element at all when the model asks for no bold — the row is the row it always was', () => {
+    const frame = renderSurface(document, withBold(), { focusIndex: 0 });
+    expect(frame.querySelector('.np-bold')).toBeNull();
+    expect(frame.className.includes('np-has-marks')).toBe(false);
+  });
+
+  it('draws the body once, with the marked stretch in strong', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const layer = frame.querySelector('.np-bold')!;
+      expect(layer.querySelectorAll('strong')).toHaveLength(1);
+      expect(layer.querySelector('strong')!.textContent).toBe('Do not delete');
+      // The body exactly once: a mirror that duplicated text would still look
+      // plausible in a tag count.
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('leaves the text a reader sends untouched — the bold is display-only', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      expect(field.value).toBe(TEXT);
+      expect(field.value).not.toContain('<strong>');
+    });
+  });
+
+  it('🔴 refuses to draw when bold is NOT the same width — the fallback, not a smaller mirror', () => {
+    withFont(false, () => {
+      const frame = draw(() => [MARK]);
+      const layer = frame.querySelector('.np-bold') as HTMLElement;
+      expect(layer.hidden, 'a mirror that cannot line up must not go up at all').toBe(true);
+      expect(layer.querySelectorAll('strong')).toHaveLength(0);
+      // And the field keeps its own text visible, so nothing is invisible.
+      expect(frame.querySelector('textarea')!.style.color).not.toBe('transparent');
+    });
+  });
+
+  it('hides the mirror again when the marks go away', () => {
+    withFont(true, () => {
+      let ranges: readonly { start: number; end: number }[] = [MARK];
+      const frame = draw((_t) => ranges);
+      expect((frame.querySelector('.np-bold') as HTMLElement).hidden).toBe(false);
+      ranges = [];
+      frame.querySelector('textarea')!.dispatchEvent(new Event('input'));
+      const layer = frame.querySelector('.np-bold') as HTMLElement;
+      expect(layer.hidden).toBe(true);
+      expect(layer.textContent).toBe('');
+      expect(frame.querySelector('textarea')!.style.color).not.toBe('transparent');
+    });
+  });
+
+  it('takes its width from the FIELD, not the row — the scrollbar is the field\'s to lose', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      expect((frame.querySelector('.np-bold') as HTMLElement).style.width).toBe('365px');
+    });
+  });
+
+  it('gives the field a caret colour, because its text has gone transparent', () => {
+    withFont(true, () => {
+      const field = draw(() => [MARK]).querySelector('textarea')!;
+      expect(field.style.color).toBe('transparent');
+      expect(field.style.caretColor, 'without this the caret goes transparent with the text').not.toBe('');
+    });
+  });
+
+  it('is inert: out of the accessibility tree and out of every pointer\'s way', () => {
+    withFont(true, () => {
+      const layer = draw(() => [MARK]).querySelector('.np-bold')!;
+      expect(layer.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
+  it('draws one run for overlapping ranges, never nested tags or doubled text', () => {
+    withFont(true, () => {
+      const a = { start: MARK.start, end: MARK.start + 10 };
+      const b = { start: MARK.start + 5, end: MARK.end };
+      const layer = draw(() => [b, a]).querySelector('.np-bold')!; // deliberately out of order
+      expect(layer.querySelectorAll('strong')).toHaveLength(1);
+      expect(layer.querySelector('strong')!.querySelector('strong')).toBeNull();
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('cannot be made to emit markup from the body', () => {
+    withFont(true, () => {
+      const hostile = 'Scope:\nuse <img src=x onerror="alert(1)"> carefully';
+      const frame = renderSurface(document, {
+        ...PE_FIXTURE,
+        rows: [{ kind: 'field', label: 'Use enhanced prompt', text: hostile, boldRanges: () => [{ start: 11, end: 40 }] }],
+        footer: PE_FOOTER,
+      } as unknown as SurfaceModel, { focusIndex: 0 });
+      document.body.appendChild(frame);
+      const field = frame.querySelector('textarea')!;
+      Object.defineProperty(field, 'clientWidth', { value: 365, configurable: true });
+      Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+      field.dispatchEvent(new Event('input'));
+      const layer = frame.querySelector('.np-bold')!;
+      expect(layer.querySelector('img')).toBeNull();
+      expect(layer.textContent).toBe(hostile);
+    });
+  });
+
+  it('follows the field\'s scroll, so the mirror does not sit still while the text moves', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      field.scrollTop = 30;
+      field.dispatchEvent(new Event('scroll'));
+      expect((frame.querySelector('.np-bold') as HTMLElement).scrollTop).toBe(30);
+    });
+  });
+
+  it('re-measures on INPUT, not only when the frame is resized', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      // The scrollbar appears as the body grows, so the field's text width moves
+      // while the reader types. The mirror must take the new one.
+      Object.defineProperty(field, 'clientWidth', { value: 350, configurable: true });
+      field.dispatchEvent(new Event('input'));
+      expect((frame.querySelector('.np-bold') as HTMLElement).style.width).toBe('350px');
+    });
+  });
+});

@@ -46,6 +46,8 @@ import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/pop
 // The engine's own cut, for the same reason and on the same side of the bridge.
 // The panel must not carry a second copy of which removals are refused.
 import { removePromptEnhancementSectionV1 } from '../../prompt-enhancement/popup-section-removal.js';
+// The popup's OWN emphasis placement rules, in the shape a CSS-wrapped surface needs.
+import { locatePromptEnhancementEmphasisOffsetsV1 } from '../../prompt-enhancement/popup-emphasis-overlay.js';
 import { buildPromptEnhancementMultilineEditorStateV1 } from '../../prompt-enhancement/multiline-editor.js';
 import { mountNexpathDock, type NexpathDockController } from './surfaces/dock.js';
 import { installChromeStyles } from './surfaces/chrome.js';
@@ -150,11 +152,32 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
       );
       return result.outcome === 'removed' ? result.editor.buffers.enhanced_body.text : undefined;
     };
+  // Which stretches the body emphasises, the CLI's own bold. A rule for the same
+  // reason as the numbering: the field's text changes with no re-render, so the
+  // answer is computed from what the field holds at the moment it is drawn — a
+  // range fixed here would point at the old text after one keystroke.
+  //
+  // ⛔ The standard is the CLI's, called and not copied: the two exclusions — a
+  // title line, and a section whose kind the standard excludes — are decided by
+  // the engine's own locator, so this surface cannot drift from the popup's.
+  //
+  // No phrases means no rule, which means the row renders exactly as it always
+  // has and the frame is unchanged down to the DOM.
+  const phrases = view.emphasisPhrases;
+  const boldRanges = sections === undefined || phrases === undefined || phrases.length === 0
+    ? undefined
+    : (text: string): readonly { start: number; end: number }[] =>
+      locatePromptEnhancementEmphasisOffsetsV1({
+        text,
+        sections,
+        phrases: phrases.map((phrase) => ({ text: phrase })),
+      });
   const bodyRow: SurfaceRow = {
     kind: 'field',
     label: view.editorHeading,
     text: view.bodyText,
     ...(lineNumbers ? { lineNumbers } : {}),
+    ...(boldRanges ? { boldRanges } : {}),
     ...(removeSection ? {
       removeSection,
       // The three texts travel together with the rule they describe: a hint for

@@ -82,7 +82,10 @@ function logicalLineRanges(text: string): readonly OffsetRange[] {
  * sections the standard never marks, and every line of the block the developer's applied details
  * were merged into.
  */
-function ineligibleRanges(input: PromptEnhancementEmphasisOverlayInputV1): readonly OffsetRange[] {
+function ineligibleRanges(input: {
+  readonly text: string;
+  readonly sections: readonly PromptEnhancementEmphasisOverlaySectionV1[];
+}): readonly OffsetRange[] {
   const map = buildPromptEnhancementSectionMapV1(input.text, input.sections);
   const lines = logicalLineRanges(input.text);
   const out: OffsetRange[] = [];
@@ -148,6 +151,37 @@ function merged(spans: readonly PromptEnhancementEmphasisSpanV1[]): PromptEnhanc
  * window shows, so the renderer can index it by the row it is drawing; a row with nothing to mark
  * gets an empty list.
  */
+/**
+ * Where a body's emphasised phrases may be marked, as character offsets into the text.
+ *
+ * ⛔ THE SAME RULES AS THE POPUP'S OWN OVERLAY, not a second copy of them: it calls the very
+ * functions `buildPromptEnhancementEmphasisSpansV1` calls, and neither is edited. What differs is
+ * only the shape of the answer — the popup needs spans per visual row because it wraps text itself
+ * at a fixed width inside a window; a surface that wraps with CSS has no such width and no window,
+ * and needs the offsets.
+ *
+ * Exported for that second surface, on the precedent already set for the floor guard: one
+ * definition, read by both consumers, rather than two that drift with the drifting one being
+ * whichever is tested less.
+ *
+ * Each phrase contributes at most one range — its first occurrence that is allowed to carry a mark,
+ * matched case-insensitively, skipping a title line and any section whose kind the standard
+ * excludes. A phrase with nowhere to go contributes nothing.
+ */
+export function locatePromptEnhancementEmphasisOffsetsV1(input: {
+  readonly text: string;
+  readonly sections: readonly PromptEnhancementEmphasisOverlaySectionV1[];
+  readonly phrases: readonly { readonly text: string }[];
+}): readonly { start: number; end: number }[] {
+  const ineligible = ineligibleRanges(input);
+  const out: { start: number; end: number }[] = [];
+  for (const phrase of input.phrases) {
+    const at = firstEligibleOccurrence(input.text, phrase.text, ineligible);
+    if (at !== undefined) out.push({ start: at.start, end: at.end });
+  }
+  return out;
+}
+
 export function buildPromptEnhancementEmphasisSpansV1(
   input: PromptEnhancementEmphasisOverlayInputV1,
 ): readonly (readonly PromptEnhancementEmphasisSpanV1[])[] {

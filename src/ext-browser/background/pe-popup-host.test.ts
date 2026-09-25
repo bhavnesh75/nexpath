@@ -387,14 +387,87 @@ describe('buildPePanelView — the sections the panel numbers from', () => {
     expect(numbers.length).toBe(v.sections!.length);
   });
 
-  it('projects the title and the composed text and NOTHING else', () => {
+  /**
+   * ⏪ This used to assert that the kind must NOT ride along, and the bold overlay
+   * changed that deliberately: the standard keeps marks out of the kinds it
+   * excludes, and a surface that cannot see the kind cannot honour it. So the
+   * assertion is inverted rather than loosened — the kind is now REQUIRED to
+   * cross, and the list of fields is still closed, because a closed list is what
+   * makes "and nothing else" mean anything.
+   */
+  it('projects the title, the composed text and the kind — and NOTHING else', () => {
     const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
     expect(view.sections).toEqual([
-      { title: 'Scope', bodyText: 'the login route only.' },
-      { title: 'Acceptance', bodyText: 'the password is hashed.' },
+      { title: 'Scope', bodyText: 'the login route only.', sectionKind: 'context_and_constraints' },
+      { title: 'Acceptance', bodyText: 'the password is hashed.', sectionKind: 'acceptance_or_output_expectation' },
     ]);
-    // The kind is engine business and must not ride along.
-    for (const section of view.sections!) expect(Object.keys(section).sort()).toEqual(['bodyText', 'title']);
+    for (const section of view.sections!) {
+      expect(Object.keys(section).sort()).toEqual(['bodyText', 'sectionKind', 'title']);
+    }
+  });
+
+  /**
+   * The phrase list, and the four things about it that are behaviour rather than
+   * plumbing. It is the engine side's own deterministic pass, run in the worker on
+   * the composed sections — never re-derived here, never read from the CLI's
+   * database, and never a model call.
+   */
+  describe('the phrases the body emphasises', () => {
+    const BOLD_BODY = [
+      'Scope:',
+      'Do not delete the audit log while refactoring, and run the test suite before reporting done.',
+    ].join('\n');
+    const BOLD_SECTIONS = [
+      { title: 'Scope', bodyText: 'Do not delete the audit log while refactoring, and run the test suite before reporting done.', sectionKind: 'context_and_constraints' },
+    ];
+
+    it('finds marks on a body that has them — so the plumbing is not vacuous', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      expect(view.emphasisPhrases, 'a body with limits and actions must earn marks').toBeDefined();
+      expect(view.emphasisPhrases!.length).toBeGreaterThan(0);
+      // Every phrase is text that is actually in the body — a mark with nowhere to
+      // go would be drawn nowhere, and a phrase from somewhere else is a defect.
+      for (const phrase of view.emphasisPhrases!) expect(BOLD_BODY).toContain(phrase);
+    });
+
+    /**
+     * ⚠️ The body here is `the login route.` and NOT the fixture's own
+     * `the login route only.`, which was the first thing tried and does earn a
+     * mark: the rules return `only` on its own. That is the standard's `only …`
+     * shape, already recorded as a quality observation about marks cut
+     * mid-phrase — so it makes a poor "nothing to mark" fixture and a good
+     * reminder that this one was picked by measuring rather than by eye.
+     */
+    it('omits the field entirely when nothing earns a mark — absent means absent', () => {
+      const plain = [{ title: 'Scope', bodyText: 'the login route.', sectionKind: 'context_and_constraints' }];
+      const view = buildPePanelView(engineView('Scope:\nthe login route.', plain), 1);
+      expect(view.emphasisPhrases).toBeUndefined();
+    });
+
+    it('omits the field when the engine view carries no sections at all', () => {
+      expect(buildPePanelView(engineView(BOLD_BODY), 1, undefined, 'x').emphasisPhrases).toBeUndefined();
+    });
+
+    it('carries no duplicates — the same words twice would draw the same mark twice', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      const phrases = view.emphasisPhrases ?? [];
+      expect(new Set(phrases).size).toBe(phrases.length);
+    });
+
+    it('still marks without the prompt — one class needs it, the others do not', () => {
+      const withPrompt = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      const without = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1);
+      expect(without.emphasisPhrases, 'the other classes do not need the prompt').toBeDefined();
+      expect(without.emphasisPhrases!.length).toBeGreaterThan(0);
+      // And the prompt can only ever ADD: it feeds the developer's-own-words class.
+      expect(withPrompt.emphasisPhrases!.length).toBeGreaterThanOrEqual(without.emphasisPhrases!.length);
+    });
+
+    it('never puts the phrases into the body — the bold is display-only and the text is what is sent', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      expect(view.bodyText).toBe(BOLD_BODY);
+      expect(view.bodyText).not.toContain('<strong>');
+    });
   });
 
   it('omits the field when the engine view carries no sections — an older worker draws the frame it always drew', () => {

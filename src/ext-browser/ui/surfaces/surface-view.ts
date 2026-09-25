@@ -205,6 +205,157 @@ export function measureOffsetPx(field: HTMLTextAreaElement, offset: number): { t
   return { top, left };
 }
 
+// ── the field's bold ─────────────────────────────────────────────────────────
+//
+// The CLI paints its emphasis into the body it draws. A textarea carries no
+// markup at all, so the same thing here is a MIRROR: a div behind the field with
+// the same text and the same box, the marks in `<strong>`, and the field's own
+// text turned transparent so the mirror is what the reader sees. The textarea
+// stays the only editable element and the only thing that is sent — the send
+// path, the readonly lock, the chords, caret-follow and windowing are untouched.
+//
+// 🔑 SIX THINGS ARE MEASURED, NOT CHOSEN, and each one was wrong first:
+//
+//  1. WIDTH IS THE FIELD'S, NOT THE ROW'S AND NOT `inset: 0`. The field takes a
+//     scrollbar out of its own text area (15 px, measured), so a mirror pinned to
+//     the row or stretched over the field's outer box is that much too wide and
+//     its wrapping walks away from the field's — 30 px out by one offset, 45 by
+//     the next. And the row is not the field's box either: a character of padding
+//     and a border put the text 8.5 px in.
+//  2. RE-MEASURE ON INPUT, not only on resize. That scrollbar appears when the
+//     body grows, so the width moves while the reader TYPES. An overlay that
+//     measured once is 45 px wrong by the end of the body — measured, with the
+//     mutation that proves it.
+//  3. THE FIELD'S COMPUTED WRAP RULE, copied. A textarea computes `break-word`
+//     from the UA stylesheet while the row sets `anywhere`, so a mirror that
+//     inherits gets a rule the field does not have.
+//  4. A NEGATIVE z-index. "Behind" is not what DOM order gives: an absolutely
+//     positioned element paints ABOVE static content whatever the order, so
+//     without this the mirror lands in front of the field.
+//  5. `caret-color` ON THE FIELD, explicitly. It defaults to the text colour, and
+//     the text has to go transparent for the mirror to show — so the caret goes
+//     transparent with it and the reader loses the cursor in the field they are
+//     editing.
+//  6. AND THE MIRROR ONLY DRAWS IF BOLD IS THE SAME WIDTH in the font that
+//     actually resolved. In a true monospace face it is, and that was measured —
+//     but on one browser and one of the six families the stack names. Where it is
+//     NOT, every mark would push the rest of its line sideways and the mirror
+//     would sit visibly off the text. So the mirror measures the resolved font
+//     before it draws, and draws nothing when the answer is no: the reader loses
+//     the bold, which is the honest fallback, and never gets a mirror
+//     that does not line up.
+
+/** Where a field's bold ranges come from, when the model supplied a rule. */
+const fieldBoldRanges = new WeakMap<
+  HTMLTextAreaElement,
+  (text: string) => readonly { start: number; end: number }[]
+>();
+
+/**
+ * Does bold change the advance width in the font this element actually resolved?
+ *
+ * Asked of the live element so the answer is about the family the stack landed
+ * on, which differs per platform. Two strings, one weight apart: if they measure
+ * the same, a mark cannot move a glyph and the mirror can be trusted.
+ *
+ * Returns `false` without layout (jsdom), which the caller treats as "do not
+ * draw" — a mirror that cannot be checked is a mirror that does not go up.
+ */
+function boldKeepsAdvanceWidth(field: HTMLTextAreaElement): boolean {
+  const doc = field.ownerDocument;
+  const view = doc.defaultView;
+  if (!view) return false;
+  const probe = doc.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre;';
+  probe.style.font = view.getComputedStyle(field).font;
+  probe.textContent = 'MMMMMMMMMMWWWWWWWWWWiiiiiiiiiill0123456789';
+  doc.body.appendChild(probe);
+  probe.style.fontWeight = '400';
+  const normal = probe.getBoundingClientRect().width;
+  probe.style.fontWeight = '700';
+  const bold = probe.getBoundingClientRect().width;
+  probe.remove();
+  // No layout at all (both zero) is not agreement — it is no answer.
+  if (normal <= 0) return false;
+  return Math.abs(bold - normal) < 0.01;
+}
+
+/**
+ * Redraw a field's bold mirror: the same text, the marks in `<strong>`, the
+ * field's own box.
+ *
+ * Called on every input and every scroll, exactly like the line numbers, because
+ * both of those move what the mirror has to match.
+ */
+export function updateFieldBold(field: HTMLTextAreaElement): void {
+  const layer = field.parentElement?.querySelector('.np-bold');
+  if (!(layer instanceof HTMLElement)) return;
+  const doc = field.ownerDocument;
+  const view = doc.defaultView;
+
+  const ranges = fieldBoldRanges.get(field)?.(field.value) ?? [];
+  // Nothing to draw, or a font that would not line up: leave the mirror empty and
+  // the field's own text visible. That is the fallback, and it is silent on
+  // purpose — a reader who loses the bold still has the prompt.
+  if (ranges.length === 0 || !boldKeepsAdvanceWidth(field)) {
+    layer.textContent = '';
+    layer.hidden = true;
+    field.style.color = '';
+    field.style.caretColor = '';
+    return;
+  }
+
+  if (view) {
+    const cs = view.getComputedStyle(field);
+    // (1) and (6): the field's TEXT width, which excludes its scrollbar, and its
+    // own height — re-read here rather than remembered, which is (2).
+    layer.style.width = `${field.clientWidth}px`;
+    layer.style.height = `${field.clientHeight}px`;
+    // (3): the field's own wrap rule, not the one the row would pass down.
+    layer.style.setProperty('overflow-wrap', cs.overflowWrap || 'break-word');
+    layer.style.setProperty('word-break', cs.wordBreak);
+    layer.style.setProperty('white-space', cs.whiteSpace || 'pre-wrap');
+    layer.style.font = cs.font;
+    layer.style.lineHeight = cs.lineHeight;
+    layer.style.letterSpacing = cs.letterSpacing;
+    // (5): the caret would go transparent with the text without this.
+    field.style.caretColor = cs.color;
+  }
+  // The field's text gives way to the mirror's. Only now — a field whose mirror
+  // is empty keeps its own text, so the fallback above leaves nothing invisible.
+  field.style.color = 'transparent';
+  layer.hidden = false;
+  layer.scrollTop = field.scrollTop;
+
+  // Overlapping or out-of-order ranges would nest tags and duplicate text. Sort
+  // and merge first, so the mirror is the body exactly once however the rule
+  // answered.
+  const merged: { start: number; end: number }[] = [];
+  for (const r of [...ranges].sort((a, b) => a.start - b.start)) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && r.start <= last.end) last.end = Math.max(last.end, r.end);
+    else merged.push({ start: r.start, end: r.end });
+  }
+
+  // Built from text nodes and elements, never from a string of markup: the body
+  // is the reader's own words and must not be able to become tags.
+  layer.textContent = '';
+  const text = field.value;
+  let cursor = 0;
+  for (const r of merged) {
+    const start = Math.max(0, Math.min(r.start, text.length));
+    const end = Math.max(start, Math.min(r.end, text.length));
+    if (start > cursor) layer.appendChild(doc.createTextNode(text.slice(cursor, start)));
+    if (end > start) {
+      const strong = doc.createElement('strong');
+      strong.textContent = text.slice(start, end);
+      layer.appendChild(strong);
+    }
+    cursor = end;
+  }
+  if (cursor < text.length) layer.appendChild(doc.createTextNode(text.slice(cursor)));
+}
+
 // ── the field's line numbers ─────────────────────────────────────────────────
 //
 // Drawn as their own layer inside the field's row, never into the text: a
@@ -298,6 +449,7 @@ function buildField(
   readOnly?: boolean,
   maxLines?: number,
   lineNumbers?: (text: string) => ReadonlyMap<number, number>,
+  boldRanges?: (text: string) => readonly { start: number; end: number }[],
 ): HTMLElement {
   const row = doc.createElement('div');
   row.className = 'np-row';
@@ -321,10 +473,17 @@ function buildField(
   // collapse to nothing, which is the failure this replaced.
   field.rows = 1;
   // The listener dies with the element, which is discarded whole on re-render.
-  field.addEventListener('input', () => { autoGrow(field); updateFieldMarkers(field); updateFieldLineNumbers(field); });
+  field.addEventListener('input', () => {
+    autoGrow(field); updateFieldMarkers(field); updateFieldLineNumbers(field);
+    // On EVERY input, not only on resize: the field's scrollbar comes and goes as
+    // the body grows, and with it the width the mirror has to match.
+    updateFieldBold(field);
+  });
   // Scrolling changes what is hidden without changing the text, so the markers
   // have to follow the scroll and not only the content.
-  field.addEventListener('scroll', () => { updateFieldMarkers(field); updateFieldLineNumbers(field); });
+  field.addEventListener('scroll', () => {
+    updateFieldMarkers(field); updateFieldLineNumbers(field); updateFieldBold(field);
+  });
 
   row.appendChild(field);
 
@@ -338,6 +497,27 @@ function buildField(
     layer.className = 'np-marks';
     layer.setAttribute('aria-hidden', 'true');
     row.appendChild(layer);
+  }
+
+  // Same rule as the numbers: only when the model asked. Without a bold rule the
+  // row gains no element at all, so a frame with no phrases is the frame it was
+  // before any of this existed — which is what the recorded frames check.
+  //
+  // It goes inside the FIELD'S own parent and is sized to the field, never
+  // stretched over the row: the row carries a character of padding and a border,
+  // and the field carries a scrollbar. Both were measured, and both put a mirror
+  // that trusts the row visibly off the text.
+  if (boldRanges) {
+    fieldBoldRanges.set(field, boldRanges);
+    row.className = row.className.includes('np-has-marks') ? row.className : 'np-row np-has-marks';
+    const bold = doc.createElement('div');
+    bold.className = 'np-bold';
+    // Inert, and both halves matter: aria-hidden keeps it out of the accessibility
+    // tree (the field already carries the text), and pointer-events keeps every
+    // click and drag on the textarea, which stays the only thing anyone reaches.
+    bold.setAttribute('aria-hidden', 'true');
+    bold.hidden = true;
+    row.appendChild(bold);
   }
   return row;
 }
@@ -433,7 +613,9 @@ export function renderSurface(doc: Document, model: SurfaceModel, state: Surface
     group.className = 'np-field-group';
     group.appendChild(scroll.removeChild(scroll.lastElementChild!));   // the label row
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↑ above
-    group.appendChild(buildField(doc, row.text, fieldIndent, row.placeholder, row.readOnly, row.maxLines, row.lineNumbers));
+    group.appendChild(buildField(
+      doc, row.text, fieldIndent, row.placeholder, row.readOnly, row.maxLines, row.lineNumbers, row.boldRanges,
+    ));
     group.appendChild(buildScrollMarkerRow(doc, fieldIndent));         // ↓ below
     for (const hint of row.hints?.always ?? []) group.appendChild(buildHintRow(doc, hint, hintIndent));
     if (focused) {

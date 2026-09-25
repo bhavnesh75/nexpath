@@ -114,6 +114,23 @@ export type SurfaceRow =
        */
       removeSection?: (text: string, sectionNumber: number) => string | undefined;
       /**
+       * Which stretches of this field's text are emphasised — half-open
+       * `[start, end)` character offsets into the text as given, in any order.
+       *
+       * A rule for the same reasons as `lineNumbers`: asked afresh on every
+       * keystroke, so the answer is always about what is on screen, and this
+       * layer knows nothing about what an emphasised stretch MEANS. Whoever
+       * builds the model owns that rule — including the standard's two
+       * exclusions, a title line and a section whose kind is excluded, which are
+       * decided before a range ever reaches here.
+       *
+       * ⛔ DISPLAY-ONLY, and this is the whole of it: a range never touches
+       * `text`, so the field's value is what it always was and what is sent is
+       * unchanged. Absent means no bold, and the row is then the row it was
+       * before this field existed — down to the DOM.
+       */
+      boldRanges?: (text: string) => readonly { start: number; end: number }[];
+      /**
        * The line to show INSTEAD of this field's focused hint while the removal
        * chord is armed — the question the digit answers.
        *
