@@ -180,3 +180,65 @@ describe('NexpathPromptEnhancementViewProvider.handleMessage', () => {
     expect(onMessage).toHaveBeenCalledWith({ type: 'pe_close' });
   });
 });
+
+/**
+ * The gate on the per-section remove control.
+ *
+ * ⛔ This is the assertion the whole "no dead control" promise rests on, and it was
+ * missing until a mutation that removed the gate entirely passed every other test.
+ * A control is only offered when routing was injected, because the default handler
+ * is inert and a click into it would go nowhere — telling the reader a part can be
+ * removed and then not removing it.
+ */
+describe('the remove control is offered only when someone is listening', () => {
+  const payload = {
+    renderState: 'ready' as const,
+    currentBodyId: 'body-1',
+    bodyRevision: 1,
+    currentBodyText: 'Scope:\nthe login route only.',
+    directionalActions: [],
+    additionalDetailsAvailable: false,
+    sections: [{ number: 1, title: 'Scope' }],
+  } as unknown as PromptEnhancementExtensionPayloadV1;
+
+  it('offers NO control with the default inert handler', () => {
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri);
+    const view = makeFakeView();
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+    provider.publishPayload(payload);
+    expect(view.webview.html).toContain('pe-section-number');   // the numbers are there
+    expect(view.webview.html).not.toContain('pe-section-remove'); // the control is not
+    expect(view.webview.html).not.toContain('pe_remove_section');
+  });
+
+  it('offers the control once real routing is injected', () => {
+    const onMessage = vi.fn();
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, onMessage);
+    const view = makeFakeView();
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+    provider.publishPayload(payload);
+    expect(view.webview.html).toContain('pe-section-remove');
+    expect(view.webview.html).toContain('pe_remove_section');
+  });
+
+  it('and the same is true of the first render, before any publish', () => {
+    const bare = new NexpathPromptEnhancementViewProvider(fakeUri);
+    const wired = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn());
+    const a = makeFakeView(); const b = makeFakeView();
+    bare.publishPayload(payload); wired.publishPayload(payload);
+    bare.resolveWebviewView(a as never, {} as never, {} as never);
+    wired.resolveWebviewView(b as never, {} as never, {} as never);
+    expect(a.webview.html).not.toContain('pe-section-remove');
+    expect(b.webview.html).toContain('pe-section-remove');
+  });
+
+  it('routes a removal message to the injected handler, unchanged', async () => {
+    const onMessage = vi.fn();
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, onMessage);
+    const view = makeFakeView();
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+    const msg = { type: 'pe_remove_section', sectionNumber: 2, bodyId: 'body-1', bodyRevision: 1, hasDirtyBodyEdit: false };
+    await provider.handleMessage(msg);
+    expect(onMessage).toHaveBeenCalledWith(msg);
+  });
+});

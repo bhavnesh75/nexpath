@@ -25,7 +25,7 @@ interface PeWebviewMessage {
   [key: string]: unknown;
 }
 
-/** Default message handler: does nothing. Real routing arrives in P6. */
+/** Default message handler: does nothing. Real routing arrives with its consumer. */
 async function noopOnMessage(_msg: PeWebviewMessage): Promise<void> {
   // intentionally inert — see class doc
 }
@@ -44,6 +44,25 @@ export class NexpathPromptEnhancementViewProvider
     ) => Promise<void> | void = noopOnMessage,
   ) {}
 
+  /**
+   * Whether the rendered surface may offer a per-section remove control.
+   *
+   * ⛔ ONLY WHEN SOMEONE IS LISTENING. The default handler is inert, so with it in
+   * place a click would go nowhere — and a control that goes nowhere tells the
+   * reader a part can be removed and then does not remove it, which is worse than
+   * not offering it. Injected routing is exactly the evidence that a consumer
+   * exists, so it is what the control is gated on.
+   *
+   * ⚠️ It is NOT evidence that the consumer can reach the far side. The cut itself
+   * is performed by the side that owns the section rules, over a transport that
+   * does not exist yet; a consumer wired to nothing would still render the control.
+   * That is the right division all the same: whether a click is routed is this
+   * module's business, and whether the route arrives is its caller's.
+   */
+  private get sectionRemovalAvailable(): boolean {
+    return this.onMessage !== noopOnMessage;
+  }
+
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _ctx: vscode.WebviewViewResolveContext,
@@ -58,6 +77,7 @@ export class NexpathPromptEnhancementViewProvider
 
     webviewView.webview.html = renderPromptEnhancementHtml(this.currentPayload, {
       cspSource: webviewView.webview.cspSource,
+      sectionRemoval: this.sectionRemovalAvailable,
     });
 
     webviewView.webview.onDidReceiveMessage((raw: unknown) => {
@@ -79,6 +99,7 @@ export class NexpathPromptEnhancementViewProvider
     if (!this.view) return;
     this.view.webview.html = renderPromptEnhancementHtml(payload, {
       cspSource: this.view.webview.cspSource,
+      sectionRemoval: this.sectionRemovalAvailable,
     });
     this.view.show(true);
   }

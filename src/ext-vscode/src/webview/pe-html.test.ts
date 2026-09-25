@@ -399,3 +399,94 @@ describe('the bold preview', () => {
     }
   });
 });
+
+/**
+ * The per-section remove control.
+ *
+ * ⛔ Nothing here cuts anything. The cut belongs to the side that owns the section
+ * rules — this package cannot import them — so what a control does is post a typed
+ * message naming the number the reader saw. These tests are about the control being
+ * offered only when it should be, being unambiguous about which part it names, and
+ * being unable to smuggle markup out of a title.
+ */
+describe('the per-section remove control', () => {
+  const SECTIONS = [{ number: 1, title: 'Scope' }, { number: 2, title: 'Acceptance' }];
+  const withSections = (
+    sections: PromptEnhancementExtensionPayloadV1['sections'],
+  ): PromptEnhancementExtensionPayloadV1 => ({ ...readyPayload, ...(sections ? { sections } : {}) });
+  const render = (removal?: boolean): string =>
+    renderPromptEnhancementHtml(withSections(SECTIONS), {
+      cspSource: CSP_SRC, nonce: FIXED_NONCE, ...(removal === undefined ? {} : { sectionRemoval: removal }),
+    });
+
+  it('🔑 is absent by default, and the HTML is byte-identical to before the option existed', () => {
+    const off = render();
+    expect(off).not.toContain('pe-section-remove');
+    // Not merely "no button": the same bytes, so a surface with nowhere to send a
+    // click renders exactly what it always rendered.
+    expect(render(false)).toBe(off);
+  });
+
+  it('offers one control per section when asked, each naming its own number', () => {
+    const html = render(true);
+    expect((html.match(/class="pe-section-remove"/g) ?? [])).toHaveLength(2);
+    expect(html).toContain('data-section-number="1"');
+    expect(html).toContain('data-section-number="2"');
+  });
+
+  it('says which section it removes, for a reader who cannot see the row', () => {
+    const html = render(true);
+    // The number alone is not enough and neither is the title — the label carries both.
+    expect(html).toContain('aria-label="Remove section #1, Scope"');
+    expect(html).toContain('aria-label="Remove section #2, Acceptance"');
+  });
+
+  it('cannot be made to emit markup from a section title', () => {
+    const html = renderPromptEnhancementHtml(
+      withSections([{ number: 1, title: '<img src=x onerror="alert(1)">' }]),
+      { cspSource: CSP_SRC, nonce: FIXED_NONCE, sectionRemoval: true },
+    );
+    expect(html).not.toContain('<img src=x');
+    // Escaped in BOTH places the title appears — the visible span and the label.
+    expect(html).toContain('&lt;img src=x');
+    expect((html.match(/&lt;img src=x/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('adds nothing at all when there are no sections to remove', () => {
+    const html = renderPromptEnhancementHtml(
+      { ...readyPayload }, { cspSource: CSP_SRC, nonce: FIXED_NONCE, sectionRemoval: true },
+    );
+    expect(html).not.toContain('pe-section-remove');
+    expect(html).not.toContain('pe-sections');
+  });
+
+  it('posts the number, the canonical body it was read from, and whether the draft is dirty', () => {
+    const html = render(true);
+    expect(html).toContain("type: 'pe_remove_section'");
+    expect(html).toContain('sectionNumber: Number(btn.dataset.sectionNumber)');
+    // The number is only trustworthy against the body it was read from.
+    expect(html).toContain('bodyId: bodyEl.dataset.bodyId');
+    expect(html).toContain('bodyRevision: Number(bodyEl.dataset.bodyRevision)');
+    // Same signal a directional action sends, for the same reason.
+    expect(html).toContain('hasDirtyBodyEdit: bodyEl.value !== bodyEl.defaultValue');
+  });
+
+  it('disables every control on the first click, so a second cannot overlap it', () => {
+    const html = render(true);
+    expect(html).toContain("document.querySelectorAll('button.pe-section-remove').forEach((b) => { b.disabled = true; });");
+  });
+
+  it('wires no removal script at all when the control is not offered', () => {
+    expect(render(false)).not.toContain('pe_remove_section');
+  });
+
+  it('leaves the one editable body exactly where it was — the control is not in the text', () => {
+    const html = render(true);
+    const field = html.slice(html.indexOf('<textarea id="pe-body"'));
+    const value = field.slice(field.indexOf('>') + 1, field.indexOf('</textarea>'));
+    expect(value).not.toContain('pe-section-remove');
+    expect(value).not.toContain('Remove');
+    // And the index still sits above the body, as the numbers do.
+    expect(html.indexOf('pe-section-remove')).toBeLessThan(html.indexOf('<textarea id="pe-body"'));
+  });
+});

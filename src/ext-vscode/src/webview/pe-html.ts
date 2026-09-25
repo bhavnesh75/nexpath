@@ -38,6 +38,15 @@ export interface PeRenderOptions {
   cspSource: string;
   /** Nonce for the inline `<script>` block. Tests pass a fixed value. */
   nonce?: string;
+  /**
+   * Offer a per-section remove control.
+   *
+   * ⛔ Absent or false, the rendered HTML is byte-identical to what it was before
+   * this option existed — which is the point. The caller turns it on only when it
+   * has somewhere to send the click, because a control that reaches nothing tells
+   * the reader a part can be removed and then does not remove it.
+   */
+  sectionRemoval?: boolean;
 }
 
 const NONCE_CHARS =
@@ -128,18 +137,41 @@ function renderFallbackState(cspSource: string): string {
  * all: with no sections the frame is byte-identical to the one drawn before this
  * existed, its style block included.
  */
-function renderSectionIndex(sections: readonly PeBodySection[] | undefined): string {
+function renderSectionIndex(
+  sections: readonly PeBodySection[] | undefined,
+  /**
+   * Whether each row may offer to cut its own section.
+   *
+   * ⛔ OFF unless the caller has somewhere to send the click. A control that
+   * reaches nothing is worse than no control: it tells the reader a part can be
+   * removed and then does not remove it. So the provider turns this on only when
+   * real routing was injected, and with it off this function returns exactly what
+   * it returned before any of this existed.
+   */
+  removal?: boolean,
+): string {
   if (!sections || sections.length === 0) return '';
   const rows = sections
     .map((section) => `  <li class="pe-section"><span class="pe-section-title">${escapeHtml(section.title)}</span>`
-      + `<span class="pe-section-number">#${String(section.number)}</span></li>`)
+      + `<span class="pe-section-number">#${String(section.number)}</span>`
+      // The number is in the label, not just the position: a reader using a screen
+      // reader hears which part this removes, and the title alone would not say.
+      + (removal === true
+        ? `<button type="button" class="pe-section-remove" data-section-number="${String(section.number)}"`
+          + ` title="Remove this section" aria-label="Remove section #${String(section.number)}, ${escapeHtml(section.title)}">Remove</button>`
+        : '')
+      + '</li>')
     .join('\n');
   // Not `aria-hidden`: unlike a decorative overlay this is the ONLY place the
   // numbers exist, so a reader who cannot see the styling still needs them.
   return `<style>
   .pe-sections { list-style: none; margin: 0 0 0.6em 0; padding: 0; font-size: 0.86em; }
   .pe-section { display: flex; justify-content: space-between; gap: 1em; padding: 0.15em 0; color: var(--vscode-descriptionForeground); }
-  .pe-section-number { flex: 0 0 auto; opacity: 0.8; }
+  .pe-section-number { flex: 0 0 auto; opacity: 0.8; }${removal === true ? `
+  .pe-section-remove { flex: 0 0 auto; font: inherit; padding: 0 0.5em; cursor: pointer; border-radius: 2px;
+    color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground);
+    border: 1px solid var(--vscode-button-border, transparent); }
+  .pe-section-remove:disabled { opacity: 0.5; cursor: default; }` : ''}
 </style>
 <ol class="pe-sections" aria-label="Sections of this prompt, in order">
 ${rows}
@@ -256,8 +288,15 @@ function renderReadyState(
   payload: PromptEnhancementExtensionPayloadV1,
   nonce: string,
   cspSource: string,
+  sectionRemoval: boolean,
 ): string {
   const bodyEsc = escapeHtml(payload.currentBodyText);
+  // Only with a control to attach to. Off, or with no sections, the script block is
+  // what it was before any of this existed — which is what "absent means absent"
+  // has to mean for a template whose output is compared byte for byte.
+  const removalScript = sectionRemoval && payload.sections !== undefined && payload.sections.length > 0
+    ? "  document.querySelectorAll('button.pe-section-remove').forEach((btn) => {\n    btn.addEventListener('click', () => {\n      if (btn.disabled) return;\n      // Disabled on the way out, not on the way back: the request locks the loop\n      // anyway, and a button that stays live until a reply arrives invites the\n      // second click the loop would then have to refuse.\n      document.querySelectorAll('button.pe-section-remove').forEach((b) => { b.disabled = true; });\n      vscode.postMessage({\n        type: 'pe_remove_section',\n        sectionNumber: Number(btn.dataset.sectionNumber),\n        bodyId: bodyEl.dataset.bodyId,\n        bodyRevision: Number(bodyEl.dataset.bodyRevision),\n        // Same signal and same reason as a directional action: unsaved manual edits\n        // are discarded rather than silently sent as canonical, and only a live read\n        // at click time can tell whether the textarea has diverged.\n        hasDirtyBodyEdit: bodyEl.value !== bodyEl.defaultValue,\n      });\n    });\n  });\n"
+    : '';
   const directionalHtml = payload.directionalActions
     .map((action) => {
       const labelEsc = escapeHtml(action.label);
@@ -285,7 +324,7 @@ function renderReadyState(
 `;
 
   const body = `<style>${style}</style>
-${renderSectionIndex(payload.sections)}<textarea id="pe-body" class="pe-body" data-body-id="${escapeHtml(payload.currentBodyId)}" data-body-revision="${payload.bodyRevision}">${bodyEsc}</textarea>
+${renderSectionIndex(payload.sections, sectionRemoval)}<textarea id="pe-body" class="pe-body" data-body-id="${escapeHtml(payload.currentBodyId)}" data-body-revision="${payload.bodyRevision}">${bodyEsc}</textarea>
 <div class="pe-actions">
 ${directionalHtml}
 </div>
@@ -316,7 +355,7 @@ ${detailsHtml}
   document.getElementById('pe-close').addEventListener('click', (ev) => {
     vscode.postMessage({ type: 'pe_close', actionId: ev.currentTarget.dataset.actionId });
   });
-  document.querySelectorAll('button.pe-action').forEach((btn) => {
+${removalScript}  document.querySelectorAll('button.pe-action').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
       vscode.postMessage({
@@ -373,6 +412,6 @@ export function renderPromptEnhancementHtml(
     case 'loading':  return renderLoadingState(opts.cspSource);
     case 'blocked':  return renderBlockedState(opts.cspSource);
     case 'fallback': return renderFallbackState(opts.cspSource);
-    case 'ready':    return renderReadyState(payload, nonce, opts.cspSource);
+    case 'ready':    return renderReadyState(payload, nonce, opts.cspSource, opts.sectionRemoval === true);
   }
 }
