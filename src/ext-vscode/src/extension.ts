@@ -17,7 +17,11 @@ import {
   NexpathPromptEnhancementViewProvider,
   PE_VIEW_ID,
 } from './webview/pe-view-provider.js';
-import { routePeWebviewMessage, describePeEventSafely } from './pe-events.js';
+import {
+  routePeWebviewMessage,
+  describePeEventSafely,
+  peWebviewMessageTypeIsRouted,
+} from './pe-events.js';
 import { resolvePeSendIntent } from './pe-send-intent.js';
 import { readPendingPromptEnhancement, readLatestPromptEnhancementMeta } from './pe-store-reader.js';
 import { isPePopupHostLikelyAvailable } from './pe-popup-host-probe.js';
@@ -676,6 +680,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         )}`);
       }
     },
+    // ⛔ ASKED, NOT PROMISED. A control is only offered when the router above has a
+    // case for the message it sends — and it does not have one for a removal today,
+    // so the control does not render. The handler being wired proves nothing: it
+    // routes four message types and drops the rest, which is precisely how a button
+    // that does nothing gets shipped. The day the router learns that message, this
+    // turns true on its own.
+    { sectionRemoval: peWebviewMessageTypeIsRouted('pe_remove_section') },
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(PE_VIEW_ID, peViewProvider),

@@ -211,9 +211,23 @@ describe('the remove control is offered only when someone is listening', () => {
     expect(view.webview.html).not.toContain('pe_remove_section');
   });
 
-  it('offers the control once real routing is injected', () => {
-    const onMessage = vi.fn();
-    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, onMessage);
+  /**
+   * 🔑 THE LESSON, PINNED. The first version of this gate took an injected handler
+   * as proof that a click had somewhere to go. It is not: a handler can be wired and
+   * still drop the message. This extension's own handler routes four message types
+   * and drops the rest, so under that gate the control rendered and did nothing.
+   */
+  it('offers NO control for an injected handler alone — a handler can still drop the message', () => {
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn());
+    const view = makeFakeView();
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+    provider.publishPayload(payload);
+    expect(view.webview.html).not.toContain('pe-section-remove');
+    expect(view.webview.html).not.toContain('pe_remove_section');
+  });
+
+  it('offers the control when the caller declares it can act on the message', () => {
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn(), { sectionRemoval: true });
     const view = makeFakeView();
     provider.resolveWebviewView(view as never, {} as never, {} as never);
     provider.publishPayload(payload);
@@ -221,13 +235,21 @@ describe('the remove control is offered only when someone is listening', () => {
     expect(view.webview.html).toContain('pe_remove_section');
   });
 
+  it('offers none when the caller declares it cannot', () => {
+    const provider = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn(), { sectionRemoval: false });
+    const view = makeFakeView();
+    provider.resolveWebviewView(view as never, {} as never, {} as never);
+    provider.publishPayload(payload);
+    expect(view.webview.html).not.toContain('pe-section-remove');
+  });
+
   it('and the same is true of the first render, before any publish', () => {
-    const bare = new NexpathPromptEnhancementViewProvider(fakeUri);
-    const wired = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn());
+    const off = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn());
+    const on = new NexpathPromptEnhancementViewProvider(fakeUri, vi.fn(), { sectionRemoval: true });
     const a = makeFakeView(); const b = makeFakeView();
-    bare.publishPayload(payload); wired.publishPayload(payload);
-    bare.resolveWebviewView(a as never, {} as never, {} as never);
-    wired.resolveWebviewView(b as never, {} as never, {} as never);
+    off.publishPayload(payload); on.publishPayload(payload);
+    off.resolveWebviewView(a as never, {} as never, {} as never);
+    on.resolveWebviewView(b as never, {} as never, {} as never);
     expect(a.webview.html).not.toContain('pe-section-remove');
     expect(b.webview.html).toContain('pe-section-remove');
   });

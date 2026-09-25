@@ -118,6 +118,31 @@ function directionalEventTypeFor(actionType: unknown): PeEventType | null {
  * own typed fields — `editedBodyText`/`additionalDetailsText` are carried
  * for delivery only and never inspected to decide routing.
  */
+/**
+ * The message types this router actually turns into events.
+ *
+ * ⛔ EXISTS SO A SURFACE CANNOT OFFER A CONTROL NOBODY ROUTES. A webview button is a
+ * promise that something happens when it is pressed, and the only honest evidence
+ * for that promise is whether the router below has a case for the message it sends.
+ * "A handler was injected" is NOT that evidence — a handler can be wired and still
+ * drop the message, which is exactly how a control that does nothing gets shipped.
+ *
+ * ⚠️ It must match the switch. A test reads this file's own source, extracts every
+ * `case` in the router, and fails if the two disagree — so adding a case without
+ * adding it here, or the reverse, cannot pass.
+ */
+export const PE_ROUTED_MESSAGE_TYPES = [
+  'pe_deliver_current_body',
+  'pe_close',
+  'pe_directional_action',
+  'pe_submit_additional_details',
+] as const;
+
+/** Whether a control that sends this message type has somewhere for it to go. */
+export function peWebviewMessageTypeIsRouted(type: string): boolean {
+  return (PE_ROUTED_MESSAGE_TYPES as readonly string[]).includes(type);
+}
+
 export function routePeWebviewMessage(
   raw: unknown,
   ctx: PeEventRoutingContext,

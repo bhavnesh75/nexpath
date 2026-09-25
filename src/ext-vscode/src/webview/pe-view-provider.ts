@@ -42,25 +42,37 @@ export class NexpathPromptEnhancementViewProvider
     private readonly onMessage: (
       msg: PeWebviewMessage,
     ) => Promise<void> | void = noopOnMessage,
+    /**
+     * What the caller can actually act on, declared rather than guessed.
+     *
+     * Absent, every controlled surface is off — the safe default, because the cost
+     * of being wrong the other way is a control that does nothing.
+     */
+    private readonly capabilities?: { readonly sectionRemoval?: boolean },
   ) {}
 
   /**
    * Whether the rendered surface may offer a per-section remove control.
    *
-   * ⛔ ONLY WHEN SOMEONE IS LISTENING. The default handler is inert, so with it in
-   * place a click would go nowhere — and a control that goes nowhere tells the
-   * reader a part can be removed and then does not remove it, which is worse than
-   * not offering it. Injected routing is exactly the evidence that a consumer
-   * exists, so it is what the control is gated on.
+   * ⛔ THE CALLER DECLARES IT, and this is the second answer to that question. The
+   * first inferred it — a handler other than the inert default was taken as proof
+   * that a click had somewhere to go — and that inference is WRONG, measurably:
+   * this extension injects a handler that routes four message types and drops
+   * every other, so a removal click was routed into a router with no case for it.
+   * The control would have rendered and done nothing, which is the exact failure
+   * the gate exists to prevent.
    *
-   * ⚠️ It is NOT evidence that the consumer can reach the far side. The cut itself
-   * is performed by the side that owns the section rules, over a transport that
-   * does not exist yet; a consumer wired to nothing would still render the control.
-   * That is the right division all the same: whether a click is routed is this
-   * module's business, and whether the route arrives is its caller's.
+   * 🔑 A handler existing is not evidence. What the caller must assert is that the
+   * MESSAGE THIS CONTROL SENDS is one something acts on — and the caller can ask
+   * its own router that, rather than promise it.
+   *
+   * ⚠️ Still not a promise that the far side is reachable: the cut is performed by
+   * the side that owns the section rules, over a transport that does not exist.
+   * That division is deliberate — whether a click is acted on is knowable here,
+   * whether the action completes is not.
    */
   private get sectionRemovalAvailable(): boolean {
-    return this.onMessage !== noopOnMessage;
+    return this.capabilities?.sectionRemoval === true;
   }
 
   resolveWebviewView(
