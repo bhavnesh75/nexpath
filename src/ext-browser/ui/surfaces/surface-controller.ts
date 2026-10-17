@@ -61,6 +61,12 @@ import { withBodyText } from './refinement.js';
 export type SurfaceEvent =
   | { type: 'send'; surface: SurfaceId; text: string }
   | { type: 'apply-details'; surface: SurfaceId; mergedBody: string }
+  /**
+   * A numbered part of the body was removed by the chord. Carries the text that
+   * remains, because that — not the number — is what the host has to send: a
+   * removal is an EDIT, so it travels the same road as any other body edit.
+   */
+  | { type: 'section-removed'; surface: SurfaceId; bodyText: string }
   | { type: 'use-original'; surface: SurfaceId }
   | { type: 'cancelled'; surface: SurfaceId }
   | { type: 'cancel-sequence'; surface: SurfaceId }
@@ -195,6 +201,16 @@ export function createSurfaceController(
    * setting mid-edit must cost nothing.
    */
   let settingsReturn: { model: SurfaceModel; focusIndex: number } | null = null;
+  /**
+   * Alt+Shift+R has been pressed and the next key is the chord's.
+   *
+   * The arm/disarm half is written here rather than borrowed from the CLI's:
+   * that one arms on a control BYTE the terminal delivers, and this surface has
+   * DOM events and a different key. What must not be a second copy is the
+   * REMOVAL, and that is the injected rule — this flag decides only whether a
+   * digit belongs to the chord or to the text.
+   */
+  let removalArmed = false;
 
   const wrapper = doc.createElement('div');
   wrapper.className = 'np-surface-root';
@@ -252,6 +268,18 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
   function render(): void {
     lastRenderAt = Date.now(); // re-arms the focus-steal guard's window
     wrapper.replaceChildren(renderSurface(doc, model, { focusIndex, notice }));
+    // ONE render, then gone. This surface runs its own loop rather than the
+    // engine's, so nothing else would ever take a notice down again — it would
+    // sit there through every later frame until an unrelated keypress cleared
+    // it. Dropped AFTER the frame is built, so the frame just drawn still has
+    // it and the next one does not.
+    notice = undefined;
+    // A rebuilt frame draws the model's own hint again, so an armed chord would
+    // become INVISIBLE while still live — the next digit would then remove a
+    // section with nothing on screen having asked for one. The chord is a
+    // two-keystroke transaction, and anything that rebuilds the frame has
+    // interrupted it, so it disarms here rather than lingering unseen.
+    removalArmed = false;
 
     // Re-apply the user's edits — the freshly built textareas carry model text.
     const rendered = fields();
@@ -335,6 +363,71 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
       .filter((r) => r.kind === 'field')
       .map((r) => (r.kind === 'field' ? r.text : ''));
     render();
+  }
+
+  /**
+   * Remove the part a digit named, if the model's rule allows it.
+   *
+   * The rule answers about the LIVE text, so the body is harvested from the DOM
+   * first: the reader typed a number they could see, and what they can see is
+   * what is in the field, not what the last render was built from. A refusal
+   * changes nothing and says nothing — the digit is still swallowed, because it
+   * belonged to the chord either way.
+   */
+  function removeSection(sectionNumber: number): void {
+    const body = interactiveRows(model).find((row) => row.kind === 'field');
+    if (body?.kind !== 'field' || !body.removeSection) return;
+    harvest();
+    const remaining = body.removeSection(bodyText(), sectionNumber);
+    if (remaining === undefined) {
+      // A refusal SAYS so, once. Silence here was the state before this phase,
+      // and it reads exactly like a key that did nothing.
+      if (body.removalNotice !== undefined) { notice = body.removalNotice; render(); }
+      return;
+    }
+    fieldValues[0] = remaining;
+    render();
+    emit?.({ type: 'section-removed', surface: model.id, bodyText: remaining });
+  }
+
+  /**
+   * Swap the body row's hint line for its armed question, IN PLACE.
+   *
+   * ⛔ Deliberately not a re-render, and the two reasons are both behaviour:
+   *
+   *  - a re-render parks the caret at the end of the field, so arming the chord
+   *    mid-sentence would move the reader's cursor;
+   *  - disarming happens on the keydown of whatever key was pressed NEXT, before
+   *    the browser has inserted it. Rebuilding the frame there detaches the
+   *    textarea the keystroke was aimed at, and the character is lost — which
+   *    would break the rule the chord is built on, that anything other than a
+   *    digit goes on to mean exactly what it means today.
+   *
+   * So only the text of one line changes. The frame keeps its line count either
+   * way, which is the CLI's own reason for replacing the hint rather than adding
+   * a line beneath it.
+   */
+  function paintArmedHint(armed: boolean): void {
+    const row = interactiveRows(model).find((r) => r.kind === 'field');
+    if (row?.kind !== 'field' || row.armedHint === undefined) return;
+    const group = wrapper.querySelector('.np-field-group');
+    const hints = group ? [...group.querySelectorAll('.np-hint')] : [];
+    const line = hints[hints.length - 1];
+    if (!line) return;
+    const focused = row.hints?.whenFocused ?? [];
+    const armedHint = row.armedHint;
+    // A line asked about the text harvests it FIRST, the way `removeSection` does immediately
+    // above — harvest, then read. Nothing harvests on `input`, so without this the number offered
+    // would come from the text as it stood before the last edit, while the cut acts on the text as
+    // it stands now: the two would name different sections from the same keypress.
+    const resolveArmed = (): string => {
+      if (typeof armedHint !== 'function') return armedHint;
+      harvest();
+      return armedHint(bodyText());
+    };
+    // Resolved only on the arming side: the disarm path must touch as little as possible (see
+    // above), and a surface whose line is a plain string reads no text either way.
+    line.textContent = armed ? resolveArmed() : (focused[focused.length - 1] ?? line.textContent);
   }
 
   function say(text: string): void {
@@ -576,6 +669,37 @@ function scrollRowIntoView(wrapper: HTMLElement): void {
     // Row navigation is PLAIN arrows only: Shift+arrow inside a field is the
     // browser's select-by-line, which stealing the key would silently break.
     const plain = !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
+
+    // ARMED: the next key after Alt+Shift+R belongs to the chord. A digit 1-9
+    // names a part and is swallowed — it must never reach the text, which is the
+    // whole reason this sits above every other branch. Anything else disarms and
+    // goes on to mean exactly what it means today, so the chord takes nothing
+    // away: press Alt+Shift+R then Alt+Shift+T and the chooser still opens.
+    if (removalArmed) {
+      removalArmed = false;
+      paintArmedHint(false);
+      if (plain && /^[1-9]$/.test(e.key)) {
+        removeSection(Number(e.key));
+        e.preventDefault(); e.stopPropagation();
+        return;
+      }
+    }
+
+    // Alt+Shift+R — arm the removal chord; the digit that follows names the part.
+    // The CLI's shape is Ctrl+X then a digit, and only the SHAPE can match here:
+    // Ctrl+X is cut inside a textarea and Alt+Shift+X already ends the feature, so
+    // R (for remove) is the free letter. Matched on e.code for the same reason as
+    // every chord below it — with Alt held, e.key is a composed character on
+    // macOS and layout-dependent elsewhere.
+    //
+    // Pressing it twice leaves the chord armed rather than doing anything, which
+    // is the CLI's own rule for its prefix key.
+    if (safeChord && e.code === 'KeyR') {
+      removalArmed = true;
+      paintArmedHint(true);
+      e.preventDefault(); e.stopPropagation();
+      return;
+    }
 
     // Alt+Shift+T — the settings chooser (advisory frequency / project role).
     // The CLI's Ctrl+T; plain Ctrl+T is the browser's new-tab shortcut and is

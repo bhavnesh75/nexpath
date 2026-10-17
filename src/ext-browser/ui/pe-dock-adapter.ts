@@ -38,6 +38,19 @@ import {
   type PePanelViewV1,
 } from './pe-contract.js';
 import type { SurfaceModel, SurfaceRow } from './surfaces/surface-model.js';
+// The engine's own section map. It belongs on THIS side of the bridge: the
+// surfaces layer is deliberately engine-free, so it is handed a rule to call
+// rather than the knowledge of what a section is. The module is pure and
+// imports nothing itself.
+import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/popup-section-map.js';
+import { promptEnhancementRemovableSectionTopV1 } from '../../prompt-enhancement/popup-section-removal.js';
+import { promptEnhancementUnmarkableOffsetsV1 } from '../../prompt-enhancement/popup-emphasis-overlay.js';
+// The engine's own cut, for the same reason and on the same side of the bridge.
+// The panel must not carry a second copy of which removals are refused.
+import { removePromptEnhancementSectionV1 } from '../../prompt-enhancement/popup-section-removal.js';
+// The popup's OWN emphasis placement rules, in the shape a CSS-wrapped surface needs.
+import { locatePromptEnhancementEmphasisOffsetsV1 } from '../../prompt-enhancement/popup-emphasis-overlay.js';
+import { buildPromptEnhancementMultilineEditorStateV1 } from '../../prompt-enhancement/multiline-editor.js';
 import { mountNexpathDock, type NexpathDockController } from './surfaces/dock.js';
 import { installChromeStyles } from './surfaces/chrome.js';
 import {
@@ -46,7 +59,10 @@ import {
   type SurfaceEvent,
 } from './surfaces/surface-controller.js';
 import { fieldScroller } from './surfaces/surface-view.js';
-import { BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER } from './surfaces/fixtures/pe.js';
+import {
+  BODY_HINT, DETAILS_HINT, EDIT_KEYS_HINT, PE_FOOTER,
+  REMOVAL_HINT, REMOVAL_NOTICE, removalArmedHint,
+} from './surfaces/fixtures/pe.js';
 import {
   SETTINGS_FREQUENCY_CHOICES,
   SETTINGS_HINT,
@@ -72,6 +88,24 @@ type PendingTerminal = { type: 'close' } | { type: 'use_original' } | { type: 'm
 
 // ── producers: my views → their models ─────────────────────────────────────────
 
+/**
+ * What the engine's remover needs that the panel has no use for.
+ *
+ * The cut reads the body, the editability and nothing else: the identity is never
+ * looked at, and the width and row count only shape the cursor and viewport it
+ * returns, which are a terminal's concerns and are discarded here. They are named
+ * rather than inlined so it is plain that no id of the real draft is involved —
+ * the panel is not given any, by design.
+ */
+const PANEL_REMOVAL_DRAFT_IDENTITY = {
+  enhancementId: 'panel-local',
+  currentBodyId: 'panel-local',
+  bodyRevision: 1,
+  validationDecisionId: 'panel-local',
+} as const;
+const PANEL_REMOVAL_FIELD_WIDTH = 72;
+const PANEL_REMOVAL_VIEWPORT_ROWS = 6;
+
 /** The CLI's refinement-return label (`cli-submit-popup.ts:541`). */
 const CLI_GO_BACK_LABEL = '← Go back';
 
@@ -88,10 +122,90 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
   // The CLI locks its WHOLE editor in this state — body and details together
   // (`cli-submit-popup.ts:969`) — and marks the heading row "(unavailable)".
   const locked = !view.bodyEditable;
+  // The body's section numbers, the CLI's `#N` (`cli-submit-popup.ts:1048-1055`).
+  // A rule, not a list: the field's text changes with no re-render, and the CLI
+  // renumbers from its live buffer on every frame — so the answer is computed
+  // from whatever the field holds at the moment it is drawn. Absent sections
+  // means no rule, which means the row renders exactly as it always has.
+  const sections = view.sections;
+  const lineNumbers = sections === undefined
+    ? undefined
+    : (text: string): ReadonlyMap<number, number> =>
+      new Map(buildPromptEnhancementSectionMapV1(text, sections)
+        .entries.map((entry) => [entry.titleLine, entry.number] as const));
+  // Removing the part a digit names, the CLI's `Ctrl+X` + digit. Its refusals are
+  // the engine's — a number that names nothing, a locked body, a cut that would
+  // leave the prompt blank — because the panel asks the shipped remover rather
+  // than deciding for itself. Like the numbering it is asked about the LIVE text,
+  // so the digit acts on the body the reader is looking at.
+  const removeSection = sections === undefined
+    ? undefined
+    : (text: string, sectionNumber: number): string | undefined => {
+      const result = removePromptEnhancementSectionV1(
+        buildPromptEnhancementMultilineEditorStateV1({
+          identity: PANEL_REMOVAL_DRAFT_IDENTITY,
+          enhancedBodyText: text,
+          fieldWidth: PANEL_REMOVAL_FIELD_WIDTH,
+          viewportRows: PANEL_REMOVAL_VIEWPORT_ROWS,
+          editable: view.bodyEditable,
+        }),
+        sections,
+        sectionNumber,
+      );
+      return result.outcome === 'removed' ? result.editor.buffers.enhanced_body.text : undefined;
+    };
+  // Which stretches the body emphasises, the CLI's own bold. A rule for the same
+  // reason as the numbering: the field's text changes with no re-render, so the
+  // answer is computed from what the field holds at the moment it is drawn — a
+  // range fixed here would point at the old text after one keystroke.
+  //
+  // ⛔ The standard is the CLI's, called and not copied: the two exclusions — a
+  // title line, and a section whose kind the standard excludes — are decided by
+  // the engine's own locator, so this surface cannot drift from the popup's.
+  //
+  // No phrases means no rule, which means the row renders exactly as it always
+  // has and the frame is unchanged down to the DOM.
+  const phrases = view.emphasisPhrases;
+  // What must stay at full weight when the rest of the body is drawn lighter. Asked about the live
+  // text, like the numbering and the marks beside it, and from the same definition the marks are
+  // placed by — so the two can never disagree about a stretch.
+  const unmarkableRanges = sections === undefined
+    ? undefined
+    : (text: string): readonly { start: number; end: number }[] =>
+      promptEnhancementUnmarkableOffsetsV1({ text, sections });
+  const boldRanges = sections === undefined || phrases === undefined || phrases.length === 0
+    ? undefined
+    : (text: string): readonly { start: number; end: number }[] =>
+      locatePromptEnhancementEmphasisOffsetsV1({
+        text,
+        sections,
+        // The section each phrase was charged to travels beside the list, index for index — see
+        // `PePanelViewV1.emphasisPhraseSections`. Used only when the two line up: a worker older than
+        // that field sends no sections at all, and a misaligned pair is worse than none, so both cases
+        // fall back to placing each phrase by its first eligible occurrence.
+        phrases: phrases.map((phrase, index) => {
+          const sectionIndex = view.emphasisPhraseSections?.length === phrases.length
+            ? view.emphasisPhraseSections[index]
+            : undefined;
+          return sectionIndex === undefined ? { text: phrase } : { text: phrase, sectionIndex };
+        }),
+      });
   const bodyRow: SurfaceRow = {
     kind: 'field',
     label: view.editorHeading,
     text: view.bodyText,
+    ...(lineNumbers ? { lineNumbers } : {}),
+    ...(boldRanges ? { boldRanges, unmarkableRanges } : {}),
+    ...(removeSection ? {
+      removeSection,
+      // The three texts travel together with the rule they describe: a hint for
+      // a chord the row cannot run, or a notice for a refusal that can never
+      // happen, would each be a promise the surface does not keep.
+      // The range names the sections this body HAS, not the nine the chord could take — and
+      // like the numbering beside it, asked about the live text rather than the opening view.
+      armedHint: (text: string): string => removalArmedHint(promptEnhancementRemovableSectionTopV1(text, sections)),
+      removalNotice: REMOVAL_NOTICE,
+    } : {}),
     hints: locked
       // A locked body is the engine's compose-FAILURE state (the deterministic
       // template stands in for wording it could not generate). The CLI shows no
@@ -101,7 +215,15 @@ export function peSurfaceModel(view: PePanelViewV1): SurfaceModel {
       // honest fix: it says why typing does nothing and what Enter will do.
       // Owner-approved divergence, deliberately additive — no behaviour changes.
       ? { always: [LOCKED_BODY_HINT] }
-      : { whenFocused: [`${EDIT_KEYS_HINT} · ${BODY_HINT}`] },
+      // The removal hint appears only where the removal does. A locked body
+      // refuses every edit, so advertising the chord there would name a key that
+      // cannot work — the same mistake the read-only lesson of 2026-08-25 was
+      // about, one line further down.
+      : {
+        whenFocused: [removeSection
+          ? `${EDIT_KEYS_HINT} · ${REMOVAL_HINT} · ${BODY_HINT}`
+          : `${EDIT_KEYS_HINT} · ${BODY_HINT}`],
+      },
     ...(locked ? { readOnly: true, unavailable: true } : {}),
   };
 
@@ -310,11 +432,21 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
    * view scrolls to where the details landed" (cli-submit-popup.ts:1037), so
    * that one rebuild must follow the caret (parked at the body's end). */
   let followCaretOnNextShow = false;
+  /**
+   * The body text of the last edit the panel handed the engine.
+   *
+   * A view coming back with exactly this text is the engine AGREEING with us,
+   * not telling us anything — so whatever the panel shows now is the newer
+   * fact. Without it the panel cannot tell that echo apart from real news, and
+   * treats both as "the engine's body wins".
+   */
+  let lastEditSent: string | null = null;
 
   const doc = opts.doc ?? document;
 
   const emitCommand = (command: PePanelCommandV1): void => {
     if (!view || busy) return;
+    if (command.type === 'edit_body') lastEditSent = command.bodyText;
     opts.onEvent({ type: 'command', viewSeq: view.viewSeq, command });
   };
 
@@ -462,6 +594,12 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
         followCaretOnNextShow = true;
         emitCommand({ type: 'edit_body', bodyText: event.mergedBody });
         return;
+      case 'section-removed':
+        // D2, the parent's ruling of 2026-09-18: a removal is an EDIT, not
+        // feedback. So it travels as the engine's own edit_body — no new command,
+        // no contract change, and no removal event of its own.
+        emitCommand({ type: 'edit_body', bodyText: event.bodyText });
+        return;
       case 'cancelled':
         // Esc on the PE surface = the CLI's immediate close: "Feedback opens
         // ONLY when the user chooses Use original prompt … Close / Esc / crash
@@ -577,12 +715,32 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       const samePeBody = !('kind' in v)
         && prevFields[0] !== undefined
         && prevFields[0].value === v.bodyText;
-      const preserved = samePeBody
+      // The panel is AHEAD of the engine: this view echoes the last edit we
+      // sent, but the user has changed the body again since — typed into it,
+      // removed another section, applied details — while the panel was busy
+      // waiting for exactly this view. Their work is the newer fact and the
+      // echo must not overwrite it.
+      //
+      // Measured before it was fixed: a second removal inside that window
+      // vanished from the screen when the first one's view came back, and so
+      // did anything typed there. The engine is told immediately below, so the
+      // two agree again within the same task.
+      //
+      // Strictly `=== lastEditSent`, never merely "different": a view whose
+      // body is anything ELSE is real news — a refinement, a go-back, a
+      // fallback — and there the engine's body rightly wins.
+      const localAhead = !('kind' in v)
+        && !samePeBody
+        && prevFields[0] !== undefined
+        && lastEditSent !== null
+        && v.bodyText === lastEditSent;
+      const preserved = samePeBody || localAhead
         ? {
             focusIndex: surfaces!.getFocusIndex(),
             bodyScrollTop: prevFields[0]!.scrollTop,
             bodyCaret: prevFields[0]!.selectionStart ?? v.bodyText.length,
             detailsDraft: v.additionalDetailsText === '' ? prevFields[1]?.value ?? '' : '',
+            ...(localAhead ? { aheadBodyText: prevFields[0]!.value } : {}),
           }
         : null;
       // The dock must be VISIBLE before the surface renders: the controller's
@@ -643,6 +801,14 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
         const rebuilt = [...surfaces.element.querySelectorAll('textarea')] as HTMLTextAreaElement[];
         const body = rebuilt[0];
         if (body) {
+          // Put the user's newer text back before anything measures the field,
+          // then tell the engine, so its editedBodyText tracks what is on screen.
+          // `busy` is already false here, so this send is not dropped in turn.
+          if (preserved.aheadBodyText !== undefined && preserved.aheadBodyText !== body.value) {
+            body.value = preserved.aheadBodyText;
+            body.dispatchEvent(new Event('input', { bubbles: true })); // re-grow, markers, numbers
+            emitCommand({ type: 'edit_body', bodyText: preserved.aheadBodyText });
+          }
           body.setSelectionRange(preserved.bodyCaret, preserved.bodyCaret);
           body.scrollTop = preserved.bodyScrollTop;
         }
@@ -663,6 +829,11 @@ export function mountNexpathPeDock(opts: PeDockAdapterOptions): PePanelControlle
       setBusyOverlay(b);
     },
     hide(): void {
+      // One popup run's edit is meaningless to the next. The surface is hidden
+      // rather than destroyed, so its field survives into the following run —
+      // and without this, a later view whose body happened to equal this run's
+      // last edit would be read as an echo of it.
+      lastEditSent = null;
       dock?.hide();
     },
     destroy(): void {

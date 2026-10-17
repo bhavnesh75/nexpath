@@ -34,6 +34,9 @@ describe('readPendingPromptEnhancement', () => {
       createdAt: 1700000000000,
       requestJson: '{"prompt":"do the thing"}',
       resultJson: '{"body":"do the enhanced thing"}',
+      // Null, because the fixture row predates the column — which is the
+      // ordinary state for every prompt written before it existed.
+      emphasisPhrasesJson: null,
     });
     expect(readRow).toHaveBeenCalledWith('/db', '/proj');
   });
@@ -155,7 +158,12 @@ describe.skipIf(!canLoadBetterSqlite3)('readPendingPromptEnhancement — real st
         status       TEXT    NOT NULL DEFAULT 'pending',
         created_at   INTEGER NOT NULL,
         request_json TEXT    NOT NULL,
-        result_json  TEXT    NOT NULL
+        result_json  TEXT    NOT NULL,
+        -- The reader SELECTs this column, so a fixture without it makes the read THROW — and the
+        -- reader is fail-open, so the throw arrives as null and the assertions below read as "no
+        -- row" rather than as a broken query. The real store gains it from the add-if-missing
+        -- migration; this hand-written schema is the one place it has to be kept in step by hand.
+        emphasis_phrases_json TEXT
       );
       CREATE TABLE pending_advisories (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,

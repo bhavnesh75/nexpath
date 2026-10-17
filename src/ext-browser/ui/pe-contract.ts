@@ -22,6 +22,50 @@
 
 export const PE_PANEL_SCHEMA_VERSION = 1 as const;
 
+/**
+ * One composed section of the enhanced body, as the panel is allowed to see it.
+ *
+ * ⚠️ The NUMBER is deliberately not here. The CLI derives each section's number
+ * from the LIVE editor buffer on every frame, so a title the user just typed or
+ * deleted is numbered correctly as they type. The panel has no such loop — it
+ * keeps its text locally and the worker only hears about an edit on an apply or
+ * a terminal action — so a number computed worker-side would freeze the moment
+ * the popup opened. What crosses is therefore the section AS COMPOSED, the
+ * exact input the engine's own section map takes, and the number is derived
+ * where it is drawn.
+ *
+ * `bodyText` discloses nothing new — it is the text that already sits under this
+ * section's title inside `PePanelViewV1.bodyText`.
+ *
+ * ⏪ **The kind crosses now, and it did not before.** When the numbers were built
+ * this comment said the kind was engine business and stopped at two fields — with
+ * a note that the bold overlay would need it and should ask for it when it was
+ * built rather than in advance. It is built now. The standard keeps marks out of two
+ * stretches, and one of them is *a section whose kind it excludes*; a surface that
+ * cannot see the kind cannot honour it, and would mark inside the developer's own
+ * quoted prompt. It is the narrowest thing that closes that, and nothing else
+ * reads it.
+ */
+export interface PePanelSectionV1 {
+  /** The section's title, exactly as its title line reads without the colon. */
+  title: string;
+  /** The text the section was composed with — what follows its title line. */
+  bodyText: string;
+  /**
+   * The engine's own kind for this section, passed through unchanged.
+   *
+   * Read for one purpose: the emphasis standard never marks inside certain kinds,
+   * and the check belongs where the marks are drawn.
+   *
+   * ⚠️ OPTIONAL because it is optional at the source — the engine's popup view
+   * carries it that way deliberately, so a caller that only wants numbering is
+   * unchanged. Absent means the standard's kind exclusion cannot apply, which is
+   * the same answer the popup's own overlay gives for a section whose kind it
+   * cannot see. The rule is not stricter here than there.
+   */
+  sectionKind?: string;
+}
+
 /** One directional/adjust control row (Shorter / More thorough / More project-grounded). */
 export interface PePanelDirectionalV1 {
   actionType: 'shorter' | 'more_thorough' | 'more_project_grounded';
@@ -44,6 +88,63 @@ export interface PePanelViewV1 {
   /** The ONE editable enhanced body — current text including prior edits. */
   bodyText: string;
   bodyEditable: boolean;
+  /**
+   * The composed sections of `bodyText`, in body order — what the panel numbers
+   * `#N` from.
+   *
+   * DISPLAY-ONLY: a number is never part of `bodyText` and is never sent. And
+   * OPTIONAL in the wire-compat sense this file already uses for
+   * `detailsAvailable` / `currentFrequency`: absent means "no numbers", so an
+   * older worker and a newer panel draw exactly the frame they drew before this
+   * field existed.
+   *
+   * A section listed here is not promised a number: the engine's map gives one
+   * only to a title it finds in the live text, which is how a title the user
+   * edited away stops being numbered while the rest stay contiguous.
+   */
+  sections?: readonly PePanelSectionV1[];
+  /**
+   * The phrases the body emphasises, as the CLI's own rules found them.
+   *
+   * ⛔ **These are the CLI's, not the panel's.** They are computed by the engine
+   * side's deterministic pass on the composed body and passed through; the panel
+   * re-derives nothing, because two copies of that standard would drift and the
+   * drifting one would be whichever is tested less.
+   *
+   * ⛔ **The optional model tier is not here and must not arrive here.** It is
+   * runtime-only by rule, never stored, and this surface would otherwise be the
+   * one place a browser pays for a call it never asked for. What crosses is the
+   * deterministic floor and nothing else.
+   *
+   * DISPLAY-ONLY, in the same sense as the numbers above: a mark is never part of
+   * `bodyText` and is never sent. OPTIONAL in the same wire-compat sense too —
+   * absent means "no bold", so an older worker and a newer panel draw the frame
+   * they drew before this field existed, to the byte.
+   *
+   * A phrase listed here is not promised a mark: it is drawn only where the
+   * standard allows one, which is nowhere inside a title line or a section whose
+   * kind the standard excludes.
+   */
+  emphasisPhrases?: readonly string[];
+  /**
+   * Which composed section each of those phrases was charged to, index for index.
+   *
+   * The engine's cap spends four marks per SECTION and decides which section each phrase belongs to.
+   * A panel that then searches the whole body for a phrase's first occurrence overrules that: two
+   * phrases can land on overlapping stretches the cap never compared, and the overlay's range merge
+   * draws the pair as one long heavy run. Measured on a reported body, `account if the email` and
+   * `email matches` rendered as a single bold stretch across both.
+   *
+   * ⛔ **A SIBLING ARRAY rather than a richer `emphasisPhrases`, and that is the wire rule above, not
+   * a preference.** Turning the string list into objects would make an older panel render nothing for
+   * a newer worker's message. Absent here means what absent meant before: the panel places each phrase
+   * by its first eligible occurrence, exactly as it did. Same length as `emphasisPhrases` whenever it
+   * is present, and a panel that finds them misaligned should ignore it rather than guess.
+   *
+   * Display-only, like the list beside it — a section index is not part of `bodyText` and is never
+   * sent.
+   */
+  emphasisPhraseSections?: readonly number[];
   /** Additional-details field state (present only when the engine offers the action). */
   hasAdditionalDetails: boolean;
   additionalDetailsText: string;

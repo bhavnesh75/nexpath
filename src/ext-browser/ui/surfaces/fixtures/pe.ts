@@ -32,6 +32,53 @@ export const BODY_HINT = 'Enter sends this prompt';
 /** `cli-submit-popup.ts:512`. */
 export const DETAILS_HINT = 'Enter applies these details · unapplied details are not sent';
 
+/**
+ * The panel's own three removal texts — ruled 2026-09-24, and deliberately NOT
+ * the CLI's.
+ *
+ * The CLI says `Ctrl+X #N`, `Remove which section? 1-9` and `this section not
+ * found`. None of those can be reused here:
+ *
+ *  - the chord differs, because `Ctrl+X` is cut inside a textarea and the panel
+ *    advertises the `Alt+Shift` family (the same remap as the edit keys above);
+ *  - the armed line names `#1-#9` rather than `1-9`, because the panel draws its
+ *    numbers as `#1` and `#2` — the digit is named the way the reader sees it;
+ *  - the notice is worded apart from the CLI's on purpose. `section not found`
+ *    was considered and dropped: it sits INSIDE the CLI's own string, and the
+ *    parity rewrite substitutes globally, so the day a notice normalisation is
+ *    added it would turn the CLI's line into that text with a word doubled.
+ */
+export const REMOVAL_HINT = 'Alt+Shift+R #N';
+
+/**
+ * Shown INSTEAD of the hint while the chord is armed — never in addition to it,
+ * so the frame keeps its line count and nothing below moves.
+ */
+export const REMOVAL_ARMED_HINT = 'Alt+Shift+R — which section? #1–#9';
+
+/** The range inside that line, exactly as written above, so the substitution has one thing to find. */
+const REMOVAL_ARMED_FULL_RANGE = '#1–#9';
+
+/**
+ * That line with the range the panel actually offers, by the rule the CLI follows: the span of
+ * the key sequence is not the span of the body, and a reader offered nine numbers while seeing
+ * five stops trusting the panel (owner 2026-09-27).
+ *
+ * ⚠️ The wording stays above, in the one literal ruled for it, and only the range substring is
+ * substituted — so the panel's text cannot drift into the CLI's, which is the whole reason these
+ * three are separate constants.
+ *
+ * `undefined` keeps the line as it ships: nothing to count, and every digit refuses anyway.
+ */
+export function removalArmedHint(top: number | undefined): string {
+  if (top === undefined) return REMOVAL_ARMED_HINT;
+  const range = top === 1 ? '#1' : `#1–#${top}`;
+  return REMOVAL_ARMED_HINT.replace(REMOVAL_ARMED_FULL_RANGE, range);
+}
+
+/** ONE text for every refusal, as the CLI settled: the reader needs only that the section did not go. */
+export const REMOVAL_NOTICE = 'no section with that number';
+
 /** `PROMPT_ENHANCEMENT_CLI_FOOTER_V1`, `cli-submit-popup.ts:509`. */
 export const PE_FOOTER = '↑↓ move · Esc cancel';
 
@@ -54,7 +101,9 @@ export const PE_FIXTURE: SurfaceModel = {
       ].join('\n'),
       // Focused only. Off-focus the send hint would be a lie — Enter acts on
       // whichever row IS focused, not on the body (owner, 2026-08-19).
-      hints: { whenFocused: [`${EDIT_KEYS_HINT} · ${BODY_HINT}`] },
+      hints: { whenFocused: [`${EDIT_KEYS_HINT} · ${REMOVAL_HINT} · ${BODY_HINT}`] },
+      armedHint: REMOVAL_ARMED_HINT,
+      removalNotice: REMOVAL_NOTICE,
     },
     {
       kind: 'field',

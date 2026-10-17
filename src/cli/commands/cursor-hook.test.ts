@@ -15,6 +15,12 @@ vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// A real, disposable project root. This used to be an absolute POSIX literal, which on Windows
+// resolves against the current drive — so the directories these tests cause to be created landed at
+// the drive root and stayed there. A temporary directory is what a fake project root was always
+// standing in for.
+const PROJECT_ROOT = mkdtempSync(join(tmpdir(), 'nexpath-cursor-hook-'));
 import {
   runCursorHookAction, CURSOR_CONTINUE, CURSOR_BLOCK_USER_MESSAGE,
   CURSOR_PROMPTSUBMIT_ADVISORY_ENV, isCursorPromptSubmitAdvisoryEnabled,
@@ -25,7 +31,7 @@ import { SUBMIT_POPUP_MIN_REMAINING_MS } from './submit-expiry-consumer.js';
 
 const PAYLOAD = JSON.stringify({
   prompt: 'hello',
-  workspace_roots: ['/proj'],
+  workspace_roots: [PROJECT_ROOT],
   user_email: 'someone@example.com',
   transcript_path: '/tmp/t.jsonl',
 });
@@ -131,7 +137,7 @@ describe('the decider receives a parsed, PII-free payload', () => {
     const h = harness({ decide: async (p: never) => { seen = p; return 'allow' as const; } });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
     expect(seen!.promptText).toBe('hello');
-    expect(seen!.projectRoot).toBe('/proj');
+    expect(seen!.projectRoot).toBe(PROJECT_ROOT);
   });
 
   it('⚠ §4.3 — never receives user_email', async () => {
@@ -419,7 +425,7 @@ describe('option-A ordering — auto is spawned+awaited before the decision', ()
     const decide = vi.fn(async () => { order.push('decide'); return 'block' as const; });
     const h = harness({ spawnAutoFn, waitForChild, decide });
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
-    expect(spawnAutoFn).toHaveBeenCalledWith('hello', expect.objectContaining({ cwd: '/proj' }));
+    expect(spawnAutoFn).toHaveBeenCalledWith('hello', expect.objectContaining({ cwd: PROJECT_ROOT }));
     expect(order).toEqual(['spawnAuto:hello', 'await', 'decide']);
     expect(h.writes[0]).toContain('"continue":false');
   });
@@ -437,7 +443,7 @@ describe('option-A ordering — auto is spawned+awaited before the decision', ()
   it('empty prompt: auto is not spawned, still decides (fail-open, no crash)', async () => {
     const spawnAutoFn = vi.fn();
     const h = harness({
-      readStdin: async () => JSON.stringify({ prompt: '   ', workspace_roots: ['/proj'] }),
+      readStdin: async () => JSON.stringify({ prompt: '   ', workspace_roots: [PROJECT_ROOT] }),
       spawnAutoFn,
       decide: async () => 'allow' as const,
     });
@@ -725,7 +731,7 @@ describe('⭐ RC41 — afterAgentResponse runs the sequence continuation', () =>
     const runSequenceContinuation = vi.fn(async () => ({ ran: true, blocked: true }));
     const h = harness({ runSequenceContinuation });
     await runCursorHookAction('afterAgentResponse', h.deps as never);
-    expect(runSequenceContinuation).toHaveBeenCalledWith('/proj', 'cursor');
+    expect(runSequenceContinuation).toHaveBeenCalledWith(PROJECT_ROOT, 'cursor');
     expect(JSON.parse(h.writes[0])).toEqual(CURSOR_CONTINUE);
     expect(h.exits).toEqual([0]);
   });
@@ -892,7 +898,7 @@ describe('⭐ RC71 — cursor expiry consume + 6.1 floor', () => {
     await runCursorHookAction('beforeSubmitPrompt', h.deps as never);
     expect(consumer).toHaveBeenCalledTimes(1);
     const arg = consumer.mock.calls[0]![0] as unknown as { projectRoot: string; before: number; reason: string };
-    expect(arg).toMatchObject({ reason: 'decider_expired', projectRoot: '/proj' });
+    expect(arg).toMatchObject({ reason: 'decider_expired', projectRoot: PROJECT_ROOT });
     expect(arg.before).toBeGreaterThanOrEqual(t0);
     expect(c.find('cursor_hook_expiry_consume')).toEqual([{ level: 'info', name: 'cursor_hook_expiry_consume',
       data: { reason: 'decider_expired', spawned: true, pid: 77, error: null } }]);

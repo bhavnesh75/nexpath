@@ -296,6 +296,49 @@ export const CHROME_STYLES = `
   /* The scroll markers. Dimmed so they read as a hint rather than as part of
      the body — the CLI dims them for the same reason (owner, 2026-08-07). */
   .np-scroll-marker { color: #9ba7a7; }
+
+  /* The field's line-number layer: the CLI's #N after a section title. It sits
+     OVER the field rather than in it, because a textarea has no per-line hook
+     and a number written into the text would be editable and would be sent.
+     Purely decorative — aria-hidden and untouchable, so the textarea stays the
+     only thing focus, the caret or a pointer can reach. Each mark's own
+     left/top are measured at runtime and stay inline. */
+  .np-has-marks { position: relative; }
+  .np-marks { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+  .np-marks span { position: absolute; white-space: pre; }
+  /* ── the field's bold, as a mirror BEHIND it ──────────────────────────────
+     The CLI paints emphasis into the body it draws; a textarea carries no markup,
+     so the same thing here is this layer with the text repeated and the marks in
+     <strong>, while the field's own text goes transparent.
+
+     🔑 z-index: -1 is the whole of "behind", and it is not what DOM order gives:
+     a positioned element paints ABOVE static content whatever the markup order,
+     so without this the mirror lands in FRONT of the field — measured, and the
+     opposite of the ruling. It stays visible because nothing between it and the
+     frame paints a background: the row and the content have none, and the field's
+     own background is already transparent.
+
+     ⛔ No inset: 0 here, deliberately, and no width at all: the width and height
+     are set per redraw from the FIELD's own client box, because the field loses
+     15 px to its scrollbar the moment the body overflows — and that happens while
+     the reader types, not only when the frame is resized. A layer stretched over
+     the row would be wrong twice: the row also carries 1ch of padding and a
+     border, which put the field's text 8.5 px in.
+
+     left/top are the field's origin, which is the row's content origin — the
+     field is the row's first child and carries no margin. */
+  .np-bold {
+    position: absolute; left: 0; top: 0; z-index: -1;
+    overflow: hidden; pointer-events: none;
+    padding: 0; margin: 0; border: none;
+    color: inherit;
+  }
+  .np-bold strong { font-weight: 700; }
+  /* The unmarked body, lighter — the same #a8a9a8 that np-dim, np-rule and np-label
+     already use, so no colour is introduced here. A stretch that may never hold a mark
+     carries no class at all and keeps the inherited weight: a title is what the reader
+     navigates by, and the verbatim section is their own prompt quoted back. */
+  .np-bold .np-plain { color: #a8a9a8; }
   /* Structural, and declared rather than left implicit: a marker row is an
      ordinary row until it is hidden, and the unstyled-class guard is right to
      insist that every class the code applies has a rule to point at. */

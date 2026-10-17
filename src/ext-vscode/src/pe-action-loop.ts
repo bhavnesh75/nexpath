@@ -40,7 +40,23 @@ export type PeActionRequestType =
   | 'shorter'
   | 'more_thorough'
   | 'more_project_grounded'
-  | 'apply_details';
+  | 'apply_details'
+  /**
+   * Cut the numbered part of the body the reader named.
+   *
+   * ⛔ THE CUT IS NOT PERFORMED HERE, and it cannot be: this package is its own
+   * npm package and cannot import the engine's section rules at all, so the rule
+   * arrives as data or not at all. What travels is the NUMBER the reader saw, and
+   * what comes back is the body that remains — decided by the side that owns the
+   * rule, exactly as a directional action is.
+   *
+   * That also settles what the number means. A digit is only trustworthy against
+   * the body it was read from, so it rides with the canonical id and revision
+   * every other request already carries: the far side can refuse a number read
+   * off a body that has since moved on, rather than cut the wrong part of a newer
+   * one.
+   */
+  | 'remove_section';
 
 export interface PeActionRequestV1 {
   requestId: string;
@@ -55,6 +71,14 @@ export interface PeActionRequestV1 {
   /** `apply_details` only — the ONLY request type carrying visible edited body + details. */
   editedBodyText?: string;
   additionalDetailsText?: string;
+  /**
+   * `remove_section` only — the number the reader named, as they saw it.
+   *
+   * 1-based, because that is what is on screen. It is not an index into anything
+   * here: nothing in this package knows what a section is, and a number that
+   * matched no part is a refusal for the side that does.
+   */
+  sectionNumber?: number;
 }
 
 export type PeActionResponseOutcome =
@@ -100,6 +124,8 @@ export interface PeBuildActionRequestInput {
   /** Required, non-blank, for `apply_details` only. */
   editedBodyText?: string;
   additionalDetailsText?: string;
+  /** Required for `remove_section` only — the 1-based number the reader named. */
+  sectionNumber?: number;
 }
 
 export type PeBuildActionRequestResult =
@@ -123,6 +149,16 @@ export function buildPeActionRequest(input: PeBuildActionRequestInput): PeBuildA
       return { ok: false, reasonCodes: ['apply_details_requires_additional_details_text'] };
     }
   }
+  // A removal with no number, or one that is not a whole number a reader could
+  // have read off the screen, is refused HERE rather than sent. Whether the number
+  // names an actual part is not knowable here and is the far side's refusal to
+  // make; whether it is a number at all is knowable, so it is checked.
+  if (input.actionType === 'remove_section') {
+    const n = input.sectionNumber;
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
+      return { ok: false, reasonCodes: ['remove_section_requires_a_positive_whole_number'] };
+    }
+  }
 
   const request: PeActionRequestV1 = {
     requestId: input.requestId,
@@ -134,6 +170,10 @@ export function buildPeActionRequest(input: PeBuildActionRequestInput): PeBuildA
     ...(input.actionType === 'apply_details'
       ? { editedBodyText: input.editedBodyText, additionalDetailsText: input.additionalDetailsText }
       : {}),
+    // Only on a removal, and only the number: a cut is decided from the canonical
+    // body the id names, so sending any text with it would invite the far side to
+    // cut a body nobody agreed on.
+    ...(input.actionType === 'remove_section' ? { sectionNumber: input.sectionNumber } : {}),
   };
 
   return {

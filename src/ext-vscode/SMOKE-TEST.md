@@ -12,26 +12,40 @@ The unit tests verify each component in isolation. This document walks through v
 
 | Item | Version / state |
 |---|---|
-| Node.js | ≥ 18 |
+| Node.js | **≥ 20.19** — what `package.json` declares in `engines`; npm refuses to install below it |
 | Cursor or Windsurf | Installed and launchable (config dir present under `~/.config/Cursor` on Linux, etc.) |
 | `nexpath` repo | Working tree on `v0.1.3/m2/smoke-test` (or any later stacked branch) |
 | OpenAI API key | Set in `OPENAI_API_KEY` env var — required by Layer C for advisory generation |
 | `vsce` CLI (optional) | For packaging the extension as a `.vsix` (`npm install -g @vscode/vsce`) |
+| C++ build tools | **Only for packaging a `.vsix`** — not for running the tests. Windows: *Build Tools for Visual Studio*, workload **Desktop development with C++** · Linux: `build-essential` and `python3` · macOS: *Xcode Command Line Tools*. See Step 1 |
 
 ---
 
 ## Step 1 — Build the extension bundle + sub-package deps
 
 ```bash
-cd ~/Documents/Vedanshi/NexPathMain/reviewduel/nexpath/src/ext-vscode
-npm install
+cd <repo>/src/ext-vscode
+npm ci --ignore-scripts
 npm run build
 ```
 
+⚠️ **`--ignore-scripts` is not a workaround, it is the short path.** `better-sqlite3` ships binaries
+for every platform and architecture inside its own package and picks one at load time, so nothing
+needs compiling to run or to test. But it also ships a `binding.gyp` and no install script, and npm's
+rule for that combination is to run `node-gyp rebuild` — so a plain `npm install` or `npm ci`
+**compiles by default**, and a machine with no C++ toolchain stops right here. That behaviour arrived
+when the dependency moved to its Node-API major; before that it downloaded a binary and only compiled
+as a fallback, which is what older instructions describe.
+
 **Expected output:**
-- `node_modules/` populated (includes `better-sqlite3` with prebuilt platform binary)
-- `out/extension.js` produced (~15 KB)
+- `node_modules/` populated — `better-sqlite3` is present and loadable, using the binary shipped in
+  the package for this platform and architecture
+- `out/extension.cjs` produced — the entry `package.json` names in `main`
 - No tsc errors
+
+⛔ **Packaging is the exception and needs the toolchain on every OS**, because the `.vsix` carries a
+binary built per editor runtime rather than the one shipped for Node. Run the install **without**
+`--ignore-scripts` then, and see the Prerequisites row for what each OS needs.
 
 ---
 
@@ -64,7 +78,7 @@ Two paths.
 ### Path A — Extension Development Host (fastest for iteration)
 
 ```bash
-cd ~/Documents/Vedanshi/NexPathMain/reviewduel/nexpath/src/ext-vscode
+cd <repo>/src/ext-vscode
 code .                        # or `cursor .`
 # Then press F5 — opens a new VS Code/Cursor window with the extension loaded.
 ```
@@ -264,7 +278,9 @@ the final B5 gate** — when it's YES, M2 Branch 5 is done. **Step 5b feeds P12'
 | `[nexpath] consent not granted` | Click "Allow" on the first-launch toast. If the toast doesn't reappear, the user explicitly denied — clear globalState via `Ctrl+Shift+P` → `Developer: Reload Window With Extensions Disabled`, then re-open. |
 | `[nexpath] no workspace state.vscdb found` | Open at least one folder in Cursor (`File → Open Folder`) and reload the window. |
 | Watcher fires but nothing is rendered | `nexpath stop` returned `null` — Layer C decided no advisory is needed for this prompt. Try a prompt that's known to trigger an advisory (something with `delete`, `force`, etc.). Or, if there's no `.env` with `OPENAI_API_KEY` in the workspace, Stage 2 may silently no-op. |
-| `Error: Cannot find module 'better-sqlite3'` | Run `npm install` inside `src/ext-vscode/`. If the prebuilt binary fails on your platform, `npm install --build-from-source` (needs `node-gyp`). |
+| `Error: Cannot find module 'better-sqlite3'` | The install did not finish. Run `npm ci --ignore-scripts` inside `src/ext-vscode/` — the package ships a binary for this platform and nothing needs compiling. |
+| Install stops in `node-gyp`, and the error names a compiler | Expected without a C++ toolchain: a plain install compiles by default (Step 1 says why). **For running or testing, use `npm ci --ignore-scripts`.** For packaging, install the toolchain — Windows: *"Could not find any Visual Studio installation"* → Build Tools with **Desktop development with C++** · Linux: *"g++: not found"* or *"make: not found"* → `build-essential` (and `python3`) · macOS: *"no xcrun"* or a missing clang → Xcode Command Line Tools |
+| `Cannot find module 'node-abi'` while packaging | The install did not complete, so the packaging dependencies are absent. This is a symptom of the row above, not its own problem — fix the install first. |
 | Schema-unknown toast appears | Cursor schema isn't recognised by any of the extractors. Capture a dump via `npx tsx scripts/dump-cursor-state.ts --name cursor-debug --redact` and share — see dev plan §2.5. |
 | Extension activates but webview never reveals | Check the developer console for errors. Specifically: spawn-failures (nexpath CLI not on PATH), or `viewProvider undefined`. |
 | `nexpath auto` runs but no advisory appears later | `OPENAI_API_KEY` not set in the workspace `.env`, or the prompt didn't trigger Stage 2. Check `~/.nexpath/prompt-store.db` for the captured prompt: `sqlite3 ~/.nexpath/prompt-store.db "SELECT prompt_text FROM prompts ORDER BY id DESC LIMIT 3;"` |

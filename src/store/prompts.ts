@@ -58,6 +58,54 @@ export function insertPrompt(store: Store, params: InsertParams): void {
   saveStore(store);
 }
 
+export type BatchPromptRow = Omit<InsertParams, 'projectRoot'>;
+
+/**
+ * Insert several prompts for one project, in the given order, with the same redaction and
+ * per-project cap as `insertPrompt` — but the store file is written once, not once per row.
+ *
+ * Used by the history import, which can insert hundreds of rows on a project's first prompt:
+ * one save per row rewrites the whole store each time, which on a large store takes long
+ * enough to matter inside a hook. The rows go in as one transaction, so a failure leaves the
+ * project as it was. The result is identical to calling `insertPrompt` for each row in order.
+ */
+export function insertPromptsBatch(store: Store, projectRoot: string, rows: readonly BatchPromptRow[]): void {
+  if (rows.length === 0) return;
+  store.db.run('BEGIN');
+  try {
+    for (const row of rows) {
+      store.db.run(
+        'INSERT INTO prompts (project_root, prompt_text, agent, captured_at) VALUES (?, ?, ?, ?)',
+        [projectRoot, redactSecrets(row.promptText), row.agent ?? null, row.capturedAt ?? Date.now()]
+      );
+    }
+
+    // The same cap rule as `insertPrompt`, applied once after the whole batch: keeping the newest
+    // `max` ids once gives the same rows as keeping them after every insert.
+    const maxRaw = getConfig(store.db, 'prompt_store_max_per_project');
+    const max = maxRaw !== undefined ? parseInt(maxRaw, 10) : DEFAULT_MAX_PER_PROJECT;
+    if (max > 0) {
+      store.db.run(
+        `DELETE FROM prompts
+         WHERE project_root = ?
+           AND id NOT IN (
+             SELECT id FROM prompts
+             WHERE project_root = ?
+             ORDER BY id DESC
+             LIMIT ?
+           )`,
+        [projectRoot, projectRoot, max]
+      );
+    }
+    store.db.run('COMMIT');
+  } catch (err) {
+    store.db.run('ROLLBACK');
+    throw err;
+  }
+
+  saveStore(store);
+}
+
 /** Delete all prompts for a specific project. */
 export function deleteProjectPrompts(store: Store, projectRoot: string): void {
   store.db.run('DELETE FROM prompts WHERE project_root = ?', [projectRoot]);

@@ -419,3 +419,107 @@ describe('no extension-side prompt rewriting — structural proof', () => {
     expect(out.request.additionalDetailsText).toBe(detailsMarker);
   });
 });
+
+/**
+ * The removal request.
+ *
+ * ⛔ Nothing here performs a cut, and nothing here could: this package cannot
+ * import the engine's section rules, so what a number MEANS is decided by the
+ * side that owns them. These tests are about the request being well-formed and
+ * refused when it is not — the two things this side is actually responsible for.
+ */
+describe('buildPeActionRequest — remove_section', () => {
+  it('carries the number the reader named, with the canonical body it was read from', () => {
+    const out = buildPeActionRequest({
+      requestId: 'req-1',
+      actionType: 'remove_section',
+      loopState: freshState(),
+      hasDirtyBodyEdit: false,
+      sectionNumber: 2,
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.request.actionType).toBe('remove_section');
+    expect(out.request.sectionNumber).toBe(2);
+    // The number is only trustworthy against the body it was read from, so both travel.
+    expect(out.request.currentBodyId).toBe('body-1');
+    expect(out.request.bodyRevision).toBe(1);
+  });
+
+  it('never carries body text — a cut is decided from the canonical body, not a draft', () => {
+    const out = buildPeActionRequest({
+      requestId: 'req-1',
+      actionType: 'remove_section',
+      loopState: freshState(),
+      hasDirtyBodyEdit: true,
+      sectionNumber: 1,
+      editedBodyText: 'a dirty draft that must not travel',
+      additionalDetailsText: 'nor this',
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.request.editedBodyText).toBeUndefined();
+    expect(out.request.additionalDetailsText).toBeUndefined();
+  });
+
+  it('says a dirty draft was discarded, like every other canonical action', () => {
+    const out = buildPeActionRequest({
+      requestId: 'req-1', actionType: 'remove_section', loopState: freshState(),
+      hasDirtyBodyEdit: true, sectionNumber: 1,
+    });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.request.dirtyDraftDisposition).toBe('discarded_for_canonical_action');
+  });
+
+  it('locks the loop, so a second click cannot overlap the first', () => {
+    const first = buildPeActionRequest({
+      requestId: 'req-1', actionType: 'remove_section', loopState: freshState(),
+      hasDirtyBodyEdit: false, sectionNumber: 1,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const second = buildPeActionRequest({
+      requestId: 'req-2', actionType: 'remove_section', loopState: first.nextState,
+      hasDirtyBodyEdit: false, sectionNumber: 2,
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.reasonCodes).toContain('duplicate_send_intent_rejected_action_in_flight');
+  });
+
+  /**
+   * Whether a number names an actual part is the far side's refusal to make. Whether
+   * it is a number at all is knowable here, so it is refused here rather than sent.
+   */
+  for (const [label, sectionNumber] of [
+    ['absent', undefined],
+    ['zero', 0],
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['not a number', '2' as unknown as number],
+  ] as const) {
+    it(`refuses a number that is ${label}`, () => {
+      const out = buildPeActionRequest({
+        requestId: 'req-1', actionType: 'remove_section', loopState: freshState(),
+        hasDirtyBodyEdit: false,
+        ...(sectionNumber === undefined ? {} : { sectionNumber }),
+      });
+      expect(out.ok).toBe(false);
+      if (out.ok) return;
+      expect(out.reasonCodes).toContain('remove_section_requires_a_positive_whole_number');
+    });
+  }
+
+  it('leaves the other request types alone — none of them gains a number', () => {
+    for (const actionType of ['shorter', 'more_thorough', 'more_project_grounded'] as const) {
+      const out = buildPeActionRequest({
+        requestId: 'req-1', actionType, loopState: freshState(), hasDirtyBodyEdit: false,
+        sectionNumber: 3, // offered, and must be ignored
+      });
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.request.sectionNumber, actionType).toBeUndefined();
+    }
+  });
+});

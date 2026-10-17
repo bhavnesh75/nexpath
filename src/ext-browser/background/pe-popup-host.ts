@@ -54,6 +54,9 @@ import {
   type PeRatingViewV1,
 } from '../ui/pe-contract.js';
 import { markFeedbackShown } from '../adapters/rating-cadence.js';
+// The engine side's own emphasis rules. Imported rather than restated: P18 keeps one
+// definition of the standard, and this tree is allowed to import that one.
+import { buildPromptEnhancementEmphasisPhrasesV1 } from '../../prompt-enhancement/emphasis-locate.js';
 import {
   flushLifecycle,
   sendRating,
@@ -137,6 +140,22 @@ export function buildPePanelView(
    * Omitted (or partly omitted), the chooser simply names no value.
    */
   settings?: { frequency?: string; role?: string },
+  /**
+   * The developer's prompt as they typed it, for the emphasis pass only.
+   *
+   * ⛔ Passed IN, like `settings`, so this stays a pure projection — and it is
+   * read here rather than fetched because the record that holds it belongs to the
+   * caller. It never reaches the panel: only the phrases the pass returns do.
+   *
+   * ⚠️ It is LOCAL. The composer is deliberately never shown the raw prompt
+   * (`composerVisiblePromptContext.rawPromptTextExcluded`), and nothing here
+   * changes that — this pass is deterministic and runs in the worker, so the
+   * prompt stays on the machine exactly as it already did.
+   *
+   * Omitted, the pass still runs; it is one of the five classes that needs the
+   * developer's own words, so the marks are the other four.
+   */
+  originalPromptText?: string,
 ): PePanelViewV1 {
   const model = view.model;
   const directional = model.controls.directional
@@ -167,6 +186,76 @@ export function buildPePanelView(
     hasFeedback: model.controls.feedback !== undefined,
     trustCues: model.publicCopy.trustCues.map((c) => c.publicSafeText),
   };
+  // The composed sections, so the panel can number the body. Passed through as
+  // composed and NOT numbered here: the CLI renumbers from the live buffer on
+  // every frame, and this projection runs only when the engine re-renders, so a
+  // number fixed here would be stale from the first keystroke. The panel derives
+  // it with the engine's own map instead.
+  //
+  // ⏪ The KIND crosses now too. The numbers never needed it and this comment used
+  // to say it stays here; the bold overlay does need it, because the standard
+  // keeps marks out of the kinds it excludes and that check has to happen where
+  // the marks are drawn. Nothing else on the panel reads it.
+  if (view.sections !== undefined && view.sections.length > 0) {
+    out.sections = view.sections.map((section) => ({
+      title: section.title,
+      bodyText: section.bodyText,
+      // Only when the engine gave one: the field is optional at the source and the
+      // projection must not invent a kind the engine did not state.
+      ...(section.sectionKind !== undefined ? { sectionKind: section.sectionKind } : {}),
+    }));
+    // The phrases the body emphasises, from the engine side's OWN deterministic
+    // pass on the composed sections. Not re-derived here and not read from the
+    // CLI's database: the browser has its own store, and what it needs is the
+    // rule, which is imported.
+    //
+    // ⛔ This is the floor only. The optional model tier does not ship, and the
+    // one place it must never be started from is a browser — a service worker
+    // that runs the engine with a key in its env would pay for a call nobody
+    // asked for. Nothing below can start one: the pass is pure.
+    //
+    // Fail-open, like every other projection here: a body the pass cannot read
+    // costs the bold and never the popup.
+    try {
+      const phrases = buildPromptEnhancementEmphasisPhrasesV1({
+        originalPromptText: originalPromptText ?? '',
+        sections: view.sections.map((section) => ({
+          // An absent kind becomes the empty string, which is not one of the kinds
+          // the standard excludes — the same answer the popup's own overlay reaches
+          // for a section whose kind it cannot see. Not stricter here than there.
+          sectionKind: section.sectionKind ?? '',
+          bodyText: section.bodyText,
+        })),
+      });
+      // The dedupe is UNCHANGED and keyed on the text, as it always was. What changed on 2026-09-29 is
+      // only that both arrays below are built from ONE filtered list, because the section each phrase
+      // was charged to is useful only while it lines up with the phrase it belongs to, index for index.
+      //
+      // ⏪ **Keying it on text AND section was built here and reverted the same day.** The reasoning was
+      // that the same words in two sections are two stretches of text — true, and irrelevant: the
+      // classifier dedupes a candidate by class and text over the whole BODY, by a deliberate ruling
+      // (*"a body that repeated the same six words in five sections would spend four and stop"*), so the
+      // case cannot arise. Measured over the 35 recorded bodies: **no body produces one text twice**, so
+      // the wider key changed nothing and only added a reason to be wrong about later.
+      const seen = new Set<string>();
+      const kept = phrases.filter((phrase) => {
+        if (phrase.text.length === 0) return false;
+        if (seen.has(phrase.text)) return false;
+        seen.add(phrase.text);
+        return true;
+      });
+      if (kept.length > 0) {
+        out.emphasisPhrases = kept.map((phrase) => phrase.text);
+        // Only when every one of them has a section: a half-filled array cannot be indexed safely, and
+        // the panel's fallback — place by first occurrence — is exactly what it did before this existed.
+        if (kept.every((phrase) => phrase.sectionIndex !== undefined)) {
+          out.emphasisPhraseSections = kept.map((phrase) => phrase.sectionIndex as number);
+        }
+      }
+    } catch {
+      // no marks; the popup is unaffected
+    }
+  }
   if (model.pinchLabel) out.pinchLabel = model.pinchLabel.text;
   if (model.whyHelp) out.whyHelp = model.whyHelp.text;
   if (view.publicNotice) out.publicNotice = view.publicNotice;
@@ -536,7 +625,11 @@ export async function runBrowserPePopup(
       next: async (view: PromptEnhancementCliPopupViewV1) => {
         loopView = view; // feedback persistence reads the live session from here
         seq += 1;
-        const panelView = buildPePanelView(view, seq, deps.currentSettings);
+        const panelView = buildPePanelView(
+          view, seq, deps.currentSettings,
+          // Local, and for the emphasis pass only — see the parameter's own note.
+          deps.record.request.sourcePrompt.text,
+        );
         // Checked on the FIRST render only: a body that becomes uneditable
         // mid-session is a state the user navigated into deliberately.
         if (!firstRenderOk && !panelView.bodyEditable) {

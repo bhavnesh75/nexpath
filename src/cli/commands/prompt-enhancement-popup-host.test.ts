@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProgram } from '../main.js';
 import { PROMPT_ENHANCEMENT_CONTRACT_VERSION, type PromptEnhancementPrepareRequestV1, type PromptEnhancementSourceRefV1 } from '../../prompt-enhancement/contracts.js';
 import { buildPromptEnhancementCostVisibilityMetadataV1 } from '../../prompt-enhancement/cost-observability.js';
@@ -14,6 +14,34 @@ import {
   runPromptEnhancementMpsContinuationPopupHostCommandV1,
   type PromptEnhancementPopupHostInputV1,
 } from './prompt-enhancement-popup-host.js';
+import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
+import { logger } from '../../logger.js';
+import {
+  PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1,
+  PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
+} from '../../prompt-enhancement/emphasis-model-call.js';
+
+// Key resolution is stubbed for the whole file: the real one reads the machine's keychain and home
+// directory, so left alone these tests would answer differently on a machine that happens to have a
+// key stored — and would reach for the keychain to do it.
+vi.mock('../../config/ApiKeyResolver.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../config/ApiKeyResolver.js')>()),
+  resolveOpenAIKey: vi.fn(async () => null),
+}));
+const resolveKey = vi.mocked(resolveOpenAIKey);
+
+// Whatever the machine really has stays untouched: the stub sets and clears the variable itself.
+const realKeyEnv = process.env['OPENAI_API_KEY'];
+afterEach(() => {
+  if (realKeyEnv === undefined) delete process.env['OPENAI_API_KEY'];
+  else process.env['OPENAI_API_KEY'] = realKeyEnv;
+});
+
+beforeEach(() => {
+  resolveKey.mockReset();
+  resolveKey.mockImplementation(async () => null);
+  delete process.env['OPENAI_API_KEY'];
+});
 
 function request(): PromptEnhancementPrepareRequestV1 {
   const sourceRef: PromptEnhancementSourceRefV1 = {
@@ -365,5 +393,140 @@ describe('MPS Phase 2 — continuation (2nd popup) host handler (Option D)', () 
     expect(openStore).not.toHaveBeenCalled();
     expect(runPopup).not.toHaveBeenCalled();
     expect(runMpsPopup).not.toHaveBeenCalled();
+  });
+});
+
+describe('the optional emphasis pass is switched on in the child, not in the payload', () => {
+  it('does NOT turn it on, because the tier does not ship — and the payload still carries no key', async () => {
+    // ⚠️ This test used to assert the opposite, and the assertion moved with a decision rather
+    // than with the code: measured against a labelled set, the pass raises coverage about
+    // threefold and does it by marking lines the standard rejects — eighteen to twenty-eight wrong
+    // landings where the deterministic marks have none. Wrong emphasis is worse than absent
+    // emphasis, so the constant that starts it is false.
+    //
+    // What is still asserted here is everything AROUND that switch, because all of it must keep
+    // working for the day the constant turns: the key is still resolved for this project, and the
+    // payload written for the child still carries no secret.
+    const paths = files();
+    const input = await validInput();
+    writeFileSync(paths.inputFile, JSON.stringify(input), 'utf8');
+    // The only thing the child is given is the file. A secret does not belong in a temp file, so
+    // this asserts the written payload really is free of one before the switch is read.
+    const payload = readFileSync(paths.inputFile, 'utf8');
+    expect(payload).not.toMatch(/OPENAI_API_KEY|apiKey|sk-[A-Za-z0-9]/);
+
+    resolveKey.mockImplementation(async () => {
+      process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
+      return 'sk-test-resolved-in-the-child';
+    });
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(resolveKey).toHaveBeenCalledWith(input.request.projectRoot);
+    expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
+  });
+
+  it('leaves it off when nothing resolves, and the popup still opens', async () => {
+    const paths = files();
+    const input = await validInput();
+    writeFileSync(paths.inputFile, JSON.stringify(input), 'utf8');
+    resolveKey.mockImplementation(async () => null);
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    const output = await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(output.result).toEqual({ state: 'selected_original' });
+    expect(runPopup).toHaveBeenCalledTimes(1);
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
+  });
+
+  it('leaves it off when resolution throws, and the popup still opens', async () => {
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => { throw new Error('keychain locked'); });
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    const output = await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    expect(output.result).toEqual({ state: 'selected_original' });
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
+  });
+});
+
+describe('the pass reports into the log, under its own name', () => {
+  it('hands the popup a sink even though the tier does not ship, and the log says which', async () => {
+    // ⚠️ The sink is handed over whether or not the tier runs, and that is the fix for something
+    // the ruling would otherwise have broken twice over: a tier that is off would log NOTHING, so
+    // anyone asking "why is there no model bold" gets silence — and the sink's own wiring would
+    // sit in a branch nothing reaches, untested until the day it is turned back on.
+    //
+    // ⛔ `tierShips` is in the record because the outcome alone reads as "no client", which would
+    // send that reader hunting for a key that resolved perfectly well.
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => {
+      process.env['OPENAI_API_KEY'] = 'sk-test-resolved-in-the-child';
+      return 'sk-test-resolved-in-the-child';
+    });
+    const debug = vi.spyOn(logger, 'debug').mockImplementation(() => {});
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    const passed = (runPopup.mock.calls[0]![0] as {
+      emphasisModel?: { enabled?: boolean; onOutcome?: (e: unknown) => void };
+    }).emphasisModel;
+    // The sink is there; the opt-in is not — which is the whole shape of the decision.
+    expect(typeof passed?.onOutcome).toBe('function');
+    expect(passed?.enabled).toBeUndefined();
+    expect(PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1).toBe(false);
+
+    // ⛔ The name is the point: the stage classifier's provider-error event is what `nexpath
+    // status` reports, and a timeout here costs a few unbolded words, nothing more.
+    passed!.onOutcome!({ event: PROMPT_ENHANCEMENT_EMPHASIS_CALL_EVENT_V1, outcome: 'gated_out_no_client', phraseCount: 0 });
+    expect(debug).toHaveBeenCalledWith(
+      'prompt_enhancement_emphasis_call',
+      expect.objectContaining({ outcome: 'gated_out_no_client', phraseCount: 0, tierShips: false }),
+    );
+    debug.mockRestore();
+  });
+
+  it('hands it no sink when there is no key, because it starts no call either', async () => {
+    const paths = files();
+    writeFileSync(paths.inputFile, JSON.stringify(await validInput()), 'utf8');
+    resolveKey.mockImplementation(async () => null);
+    const runPopup = vi.fn(async () => ({ state: 'selected_original' as const }));
+
+    await runPromptEnhancementPopupHostCommandV1(
+      { ...paths, db: ':memory:' },
+      { openStore: async () => ({} as Store), closeStore: vi.fn(), runPopup },
+    );
+
+    // ⚠️ The invariant is that the pass is not STARTED, not that the object is absent: the sink
+    //    now rides along in every case so the log records what happened. `enabled` is the opt-in.
+    expect((runPopup.mock.calls[0]![0] as { emphasisModel?: { enabled?: boolean } }).emphasisModel?.enabled)
+      .toBeUndefined();
   });
 });

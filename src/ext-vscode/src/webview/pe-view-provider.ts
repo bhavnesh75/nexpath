@@ -25,7 +25,7 @@ interface PeWebviewMessage {
   [key: string]: unknown;
 }
 
-/** Default message handler: does nothing. Real routing arrives in P6. */
+/** Default message handler: does nothing. Real routing arrives with its consumer. */
 async function noopOnMessage(_msg: PeWebviewMessage): Promise<void> {
   // intentionally inert — see class doc
 }
@@ -42,7 +42,38 @@ export class NexpathPromptEnhancementViewProvider
     private readonly onMessage: (
       msg: PeWebviewMessage,
     ) => Promise<void> | void = noopOnMessage,
+    /**
+     * What the caller can actually act on, declared rather than guessed.
+     *
+     * Absent, every controlled surface is off — the safe default, because the cost
+     * of being wrong the other way is a control that does nothing.
+     */
+    private readonly capabilities?: { readonly sectionRemoval?: boolean },
   ) {}
+
+  /**
+   * Whether the rendered surface may offer a per-section remove control.
+   *
+   * ⛔ THE CALLER DECLARES IT, and this is the second answer to that question. The
+   * first inferred it — a handler other than the inert default was taken as proof
+   * that a click had somewhere to go — and that inference is WRONG, measurably:
+   * this extension injects a handler that routes four message types and drops
+   * every other, so a removal click was routed into a router with no case for it.
+   * The control would have rendered and done nothing, which is the exact failure
+   * the gate exists to prevent.
+   *
+   * 🔑 A handler existing is not evidence. What the caller must assert is that the
+   * MESSAGE THIS CONTROL SENDS is one something acts on — and the caller can ask
+   * its own router that, rather than promise it.
+   *
+   * ⚠️ Still not a promise that the far side is reachable: the cut is performed by
+   * the side that owns the section rules, over a transport that does not exist.
+   * That division is deliberate — whether a click is acted on is knowable here,
+   * whether the action completes is not.
+   */
+  private get sectionRemovalAvailable(): boolean {
+    return this.capabilities?.sectionRemoval === true;
+  }
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -58,6 +89,7 @@ export class NexpathPromptEnhancementViewProvider
 
     webviewView.webview.html = renderPromptEnhancementHtml(this.currentPayload, {
       cspSource: webviewView.webview.cspSource,
+      sectionRemoval: this.sectionRemovalAvailable,
     });
 
     webviewView.webview.onDidReceiveMessage((raw: unknown) => {
@@ -79,6 +111,7 @@ export class NexpathPromptEnhancementViewProvider
     if (!this.view) return;
     this.view.webview.html = renderPromptEnhancementHtml(payload, {
       cspSource: this.view.webview.cspSource,
+      sectionRemoval: this.sectionRemovalAvailable,
     });
     this.view.show(true);
   }

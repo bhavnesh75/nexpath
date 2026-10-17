@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { Command } from 'commander';
 import { closeStore, openStore, DEFAULT_DB_PATH, type Store } from '../../store/db.js';
 import { recordActionSignal } from '../../store/feedback-signals.js';
+import { resolveOpenAIKey } from '../../config/ApiKeyResolver.js';
 import {
   validatePromptEnhancementPrepareRequestV1,
   validatePromptEnhancementPrepareResultV1,
@@ -25,8 +26,13 @@ import {
   type PromptEnhancementCliMpsContinuationOutcomeV1,
 } from '../../prompt-enhancement/cli-mps-continuation-run.js';
 import { recordPromptEnhancementCliFeedbackV1 } from './auto.js';
+import {
+  isPromptEnhancementEmphasisPhraseListV1,
+  type PromptEnhancementEmphasisPhraseV1,
+} from '../../store/pending-prompt-enhancements.js';
 import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { logger } from '../../logger.js';
+import { PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1 } from '../../prompt-enhancement/emphasis-model-call.js';
 
 const POPUP_HOST_PROTOCOL_VERSION_V1 = 1;
 
@@ -34,6 +40,12 @@ export interface PromptEnhancementPopupHostInputV1 {
   protocolVersion: typeof POPUP_HOST_PROTOCOL_VERSION_V1;
   request: unknown;
   result: unknown;
+  /**
+   * The popup's bold phrases, carried across the spawn so a window host renders what the in-process
+   * popup would. Optional in both directions: a payload written without it stays valid, so the
+   * protocol version does not move for it.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }
 
 export interface PromptEnhancementPopupHostOutputV1 {
@@ -120,12 +132,19 @@ function asInput(value: unknown): PromptEnhancementPopupHostInputV1 | undefined 
     protocolVersion: POPUP_HOST_PROTOCOL_VERSION_V1,
     request: input.request,
     result: input.result,
+    // Additive and optional, and held to the SAME shape the store holds it to, so a phrase list is
+    // the same thing on both roads to the popup. Absent or malformed is simply dropped, exactly as a
+    // payload written before this field existed behaves — it never makes an input invalid.
+    ...(isPromptEnhancementEmphasisPhraseListV1(input.emphasisPhrases)
+      ? { emphasisPhrases: input.emphasisPhrases }
+      : {}),
   };
 }
 
 function validatedInput(value: unknown): {
   request: PromptEnhancementPrepareRequestV1;
   result: PromptEnhancementPrepareResultV1;
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 } | undefined {
   const input = asInput(value);
   if (!input) return undefined;
@@ -135,7 +154,7 @@ function validatedInput(value: unknown): {
   const request = input.request as PromptEnhancementPrepareRequestV1;
   const result = input.result as PromptEnhancementPrepareResultV1;
   if (request.requestId !== result.requestId || request.projectRoot !== result.projectRoot) return undefined;
-  return { request, result };
+  return { request, result, ...(input.emphasisPhrases ? { emphasisPhrases: input.emphasisPhrases } : {}) };
 }
 
 /**
@@ -244,9 +263,44 @@ export async function runPromptEnhancementPopupHostCommandV1(
           }
         }
         if (!mpsHandled) {
+          // ⚠️ The key is resolved HERE, in the child, and never carried in the payload file — a
+          // secret does not belong in a temp file. On Windows and macOS this child is always where
+          // the popup lives, so without this the optional pass would run on Linux only, and the
+          // tier most people get would be the one nobody measured. Nothing resolving is simply
+          // "no key": the popup shows its rule-based marks and starts no call.
+          // 🔒 …and it does not ship — see PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1, which carries
+          // the numbers that decided it. The key is still resolved because this process resolves it
+          // for whatever else needs it, and because the day the tier is turned back on the only
+          // change here is the constant.
+          let emphasisEnabled = false;
+          try {
+            await resolveOpenAIKey(input.request.projectRoot);
+            emphasisEnabled = PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1
+              && typeof process.env['OPENAI_API_KEY'] === 'string'
+              && process.env['OPENAI_API_KEY'].length > 0;
+          } catch {
+            // Resolution is best effort; a failure here must never keep the popup from opening.
+          }
           popupResult = await dependencies.runPopup({
             request: input.request,
             result: input.result,
+            // The pass reports under its OWN event name, so a timeout costing a few unbolded
+            // words is never read here as the stage classifier's provider failure.
+            // ⚠️ The SINK is handed over unconditionally and only `enabled` is gated. The pass
+            // reports once for every outcome **including the ones where it started nothing**, so
+            // this way the log records that the tier did not run instead of saying nothing at all
+            // — and someone reading it is not left to guess whether a key failed to resolve.
+            // `tierShips` is in the record for exactly that: the outcome alone reads as "no
+            // client", which would send a reader hunting for a missing key.
+            emphasisModel: {
+              ...(emphasisEnabled ? { enabled: true } : {}),
+              onOutcome: (event: { event: string; outcome: string; phraseCount: number }) => logger.debug(event.event, {
+                projectRoot: input.request.projectRoot,
+                outcome: event.outcome,
+                phraseCount: event.phraseCount,
+                tierShips: PROMPT_ENHANCEMENT_EMPHASIS_TIER_SHIPS_V1,
+              }),
+            },
             onFirstRender: options.readinessFile ? markReadyOnce : undefined,
             feedbackSink: (event: PromptEnhancementPopupEventV1) => dependencies.recordFeedback(
               store!,
@@ -255,6 +309,7 @@ export async function runPromptEnhancementPopupHostCommandV1(
               input.request,
             ),
             costObservabilitySink: (result) => emitPromptEnhancementCostObservabilityV1(result, 'popup_action', logger),
+            emphasisPhrases: input.emphasisPhrases,
             // NF Plan B (B-2): content-free per-action telemetry — buffered locally, sent on the
             // feedback-consent flush. Store-backed sink (this child process owns the store).
             actionSignalSink: (kind, occurredAt) => dependencies.recordActionSignal(store!, input.request.projectRoot, kind, occurredAt),

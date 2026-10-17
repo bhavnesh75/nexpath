@@ -42,7 +42,28 @@ import {
   type PromptEnhancementEditorFieldV1,
   type PromptEnhancementMultilineEditorStateV1,
 } from './multiline-editor.js';
+import type { PromptEnhancementSectionMapInputV1 } from './popup-section-map.js';
+import { buildPromptEnhancementSectionNumberSuffixesV1 } from './popup-section-numbers.js';
+import {
+  mergePromptEnhancementEmphasisPhrasesV1,
+  startPromptEnhancementEmphasisModelCallV1,
+  type PromptEnhancementEmphasisModelClientV1,
+  type PromptEnhancementEmphasisModelInputV1,
+} from './emphasis-model-call.js';
+import {
+  buildPromptEnhancementEmphasisSpansV1,
+  buildPromptEnhancementUnmarkableRowsV1,
+  type PromptEnhancementEmphasisSpanV1,
+} from './popup-emphasis-overlay.js';
+import {
+  promptEnhancementRemovableSectionTopV1,
+  promptEnhancementSectionRemovalNoticeV1,
+  removePromptEnhancementSectionV1,
+  stepPromptEnhancementSectionRemovalChordV1,
+  type PromptEnhancementSectionRemovalOutcomeV1,
+} from './popup-section-removal.js';
 import type { PromptActionSignalKind } from '../store/feedback-signals.js';
+import type { PromptEnhancementEmphasisPhraseV1 } from '../store/pending-prompt-enhancements.js';
 import {
   isPromptEnhancementSettingsShortcutKeyV1,
   runPromptEnhancementSettingsChooserV1,
@@ -61,7 +82,14 @@ export type PromptEnhancementCliPopupCommandV1 =
   | { type: 'feedback_suggested'; category: 'not_relevant_enough' | 'too_much_or_too_long' }
   | { type: 'feedback_other'; text: string }
   | { type: 'go_back' }
-  | { type: 'close' };
+  | { type: 'close' }
+  /**
+   * One section was removed from the body — or an attempt was refused, which the
+   * outcome names. The body buffer has already changed; this reports what happened.
+   * `sectionIndex` is the removed section's place in the view's sections, absent for
+   * the applied-details block and for every refusal.
+   */
+  | { type: 'remove_section'; outcome: PromptEnhancementSectionRemovalOutcomeV1; sectionIndex?: number };
 
 /**
  * NF Plan B (B-2): content-free action telemetry — maps a popup command to its per-action signal kind.
@@ -85,13 +113,48 @@ export interface PromptEnhancementCliPopupViewV1 {
   editedBodyText: string;
   additionalDetailsText: string;
   publicNotice?: string;
+  /**
+   * True when {@link publicNotice} should survive exactly one repaint. Today's notices carry no
+   * flag and behave as they always have — they stay until the next command. A removal's refusal
+   * sets this, so the next keystroke clears it without the user having to do anything.
+   */
+  publicNoticeTransient?: boolean;
   /** True when the current result is a directional refinement (adds the Go back row). */
   refinement?: boolean;
+  /**
+   * The composed sections in body order — each title and the text it was composed with —
+   * so the shell can number them on screen. Optional and display-only: a consumer that
+   * ignores it sees exactly the view it saw before.
+   */
+  sections?: readonly PromptEnhancementCliPopupSectionV1[];
+  /**
+   * The phrases this frame draws in bold, as the pending row carries them. Optional and
+   * display-only in the same way: with none supplied the frame is byte-identical to the one
+   * drawn before the field existed, and the text the popup sends is never touched either way.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
+}
+
+/**
+ * A composed section as the view carries it: what the section map needs to place the numbers,
+ * plus the kind, which the emphasis overlay needs to leave the two never-marked sections alone.
+ * The kind is optional so a caller that only wants numbering is unchanged.
+ */
+export interface PromptEnhancementCliPopupSectionV1 extends PromptEnhancementSectionMapInputV1 {
+  sectionKind?: string;
 }
 
 export interface PromptEnhancementCliPopupInteractionV1 {
   next(view: PromptEnhancementCliPopupViewV1): Promise<PromptEnhancementCliPopupCommandV1>;
   close(): void;
+  /**
+   * Draw the frame again with a different set of phrases, without waiting for a keystroke.
+   *
+   * The loop is parked inside `next` for as long as the reader is reading, so a suggestion that
+   * arrives while they sit there has no other way onto the screen. Optional: an interaction that
+   * does not implement it simply never repaints, which is the same as no suggestion arriving.
+   */
+  repaintWithPhrases?(phrases: readonly PromptEnhancementEmphasisPhraseV1[]): void;
 }
 
 export type PromptEnhancementCliPopupResultV1 =
@@ -232,6 +295,27 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   actionSignalSink?: (kind: PromptActionSignalKind, occurredAt: number) => void;
   onFirstRender?: () => void;
   /**
+   * The phrases this popup would render in bold, carried from the pending row. Accepted and typed
+   * today, drawn by nothing: the frame is byte-identical whether it is absent, empty or filled.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
+  /**
+   * The optional pass that suggests more phrases to emphasise, if the caller wants one.
+   *
+   * Nothing here waits for it. Absent — which is the default, and what the browser surface gets —
+   * the popup draws the rule-based marks and never starts a call at all.
+   */
+  emphasisModel?: {
+    client?: PromptEnhancementEmphasisModelClientV1;
+    enabled?: boolean;
+    /**
+     * Where the pass reports what became of it — one call, its own event name, every outcome.
+     * The CLI hosts give it the log; without a sink the pass runs exactly as before and says
+     * nothing, which is what the browser surface gets.
+     */
+    onOutcome?: PromptEnhancementEmphasisModelInputV1['onOutcome'];
+  };
+  /**
    * Ctrl+T — read/write the advisory frequency and the project role from inside the popup (owner
    * request 2026-09-18; the root menu with role beside it, 2026-09-19), restoring the two-entry menu
    * the disabled Decision Session popup used to carry. Supplied by the CLI hosts, which own the open
@@ -253,10 +337,57 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
     : input.interaction;
   if (!interaction) return { state: 'not_shown', reasonCodes: ['no_tty'] };
 
+  // The optional pass, started here and never awaited: this is the last point before the first
+  // frame, and the popup is now certain to be shown. Once per popup — a refinement replaces the
+  // body inside the same session and starts nothing further. Whatever it settles is merged with
+  // the rule-based marks and repainted; every way it can fail leaves the frame exactly as drawn.
+  const emphasisSections = currentResult.currentBody.sections.map((section) => ({
+    sectionKind: section.sectionKind,
+    bodyText: section.bodyText,
+  }));
+  const emphasisCall = startPromptEnhancementEmphasisModelCallV1({
+    originalPromptText: currentResult.currentBody.originalPromptText,
+    sections: emphasisSections,
+    ...(input.emphasisModel?.client ? { client: input.emphasisModel.client } : {}),
+    ...(input.emphasisModel?.enabled === true ? { enabled: true } : {}),
+    ...(input.emphasisModel?.onOutcome ? { onOutcome: input.emphasisModel.onOutcome } : {}),
+  });
+  // ⚠️ Held here, not read off `input` each time round. The loop builds a fresh view on every
+  // pass, so a merged list that lived only in the repaint would be replaced by the rule-based one
+  // the moment the reader pressed a key — the suggestion would appear and then vanish under them.
+  let emphasisPhrases = input.emphasisPhrases;
+  emphasisCall.onSettled(() => {
+    const suggested = emphasisCall.read();
+    if (suggested.length === 0) return;
+    const floor = input.emphasisPhrases ?? [];
+    const merged = mergePromptEnhancementEmphasisPhrasesV1({
+      floor,
+      model: suggested.map((phrase) => phrase.text),
+      sections: emphasisSections,
+    });
+    // ⚠️ The gate is on what SURVIVED, not on what came back. Every rule can behave and the reply
+    // still change nothing: the optional pass may return a phrase the floor already holds, the
+    // output filter keeps it — it is verbatim, on a markable row — and the merge then drops it as a
+    // duplicate. The list is the floor's again, the frame would be byte-identical, and a repaint
+    // there is a flicker the reader is given no reason for.
+    //
+    // The test is exact rather than approximate: the merge returns the floor whole with the
+    // survivors appended, so a longer list is the only way anything was added.
+    if (merged.length === floor.length) return;
+    emphasisPhrases = merged;
+    try {
+      interaction.repaintWithPhrases?.(merged);
+    } catch {
+      // A repaint that fails leaves the frame that is already there — never the popup's problem.
+    }
+  });
+
   let model = rendered.model;
   let editedBodyText = model.body.text;
   let additionalDetailsText = '';
   let publicNotice: string | undefined;
+  // Set beside publicNotice for a notice that should last one repaint (a refused removal).
+  let publicNoticeTransient = false;
   // Refinement (directional-action) tracking so "Go back" can restore the main state.
   let inRefinement = false;
   let savedMain: { result: PromptEnhancementPrepareResultV1; body: string } | null = null;
@@ -274,8 +405,22 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
 
   try {
     for (;;) {
-      const command = await interaction.next({ model, editedBodyText, additionalDetailsText, publicNotice, refinement: inRefinement });
+      const command = await interaction.next({
+        model,
+        editedBodyText,
+        additionalDetailsText,
+        publicNotice,
+        publicNoticeTransient,
+        refinement: inRefinement,
+        sections: currentResult.currentBody.sections.map((section) => ({
+          title: section.title,
+          bodyText: section.bodyText,
+          sectionKind: section.sectionKind,
+        })),
+        ...(emphasisPhrases ? { emphasisPhrases } : {}),
+      });
       publicNotice = undefined;
+      publicNoticeTransient = false;
 
       // NF Plan B (B-2): record the user's action (content-free kind + timestamp) at the moment it is
       // issued — one event per mapped action, regardless of outcome. Observation-only; the send happens
@@ -305,6 +450,21 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
       if (command.type === 'edit_body') {
         if (model.body.editable && command.text.trim().length > 0) editedBodyText = command.text;
         else reportActionFailure('edit_body', 'rejected_empty_or_uneditable');
+        continue;
+      }
+      if (command.type === 'remove_section') {
+        // The body buffer already changed where the key was handled, and the shell
+        // draws from that buffer; this loop's own copy catches up at the next commit.
+        // Nothing is reported: a removal is not an engine action, and a refusal is not
+        // a failure of one.
+        //
+        // A refusal says so once. A completed removal says nothing — the section is gone
+        // from the body, which is the whole of the feedback.
+        const notice = promptEnhancementSectionRemovalNoticeV1(command.outcome);
+        if (notice) {
+          publicNotice = notice;
+          publicNoticeTransient = true;
+        }
         continue;
       }
       if (command.type === 'use_current') {
@@ -474,6 +634,9 @@ export async function runPromptEnhancementCliSubmitPopupV1(input: {
   } catch {
     return { state: 'not_shown', reasonCodes: ['renderer_failure'] };
   } finally {
+    // Tear the suggestion call down with the popup. Nothing should still be in flight behind a
+    // frame the reader has closed, and a socket left open would hold the process past its window.
+    emphasisCall.abort();
     interaction.close();
   }
 }
@@ -529,6 +692,49 @@ const PROMPT_ENHANCEMENT_CLI_DETAILS_HINT_V1 = 'Enter applies these details · u
 const PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1 = process.platform === 'darwin'
   ? 'Cmd+J new line · Cmd+↑/↓ move line'
   : 'Ctrl+J new line · Ctrl+↑/↓ move line';
+/**
+ * Removing a section: the shortcut, shown with the other editing keys on the focused body row.
+ *
+ * Nine characters on purpose. The line is 68 columns without it, the docked popup window never
+ * narrows below 80, and " · " plus nine more characters is what still fits on one row there —
+ * longer text wraps, and the frame then takes a row the chrome probe did not measure.
+ *
+ * ⚠️ macOS keeps Ctrl+X, unlike the editing keys just above, which switch to their Cmd names:
+ * the prefix is a control byte, not a Cmd chord. This constant is the one place that decides it,
+ * on every platform — if the key or its wording ever moves, it moves here.
+ */
+const PROMPT_ENHANCEMENT_CLI_REMOVE_SECTION_HINT_V1 = 'Ctrl+X #N' as const;
+/**
+ * What the same line says once the prefix is pressed: the question the digit answers. It replaces
+ * the whole hint line rather than joining it, so the frame keeps its line count either way and
+ * nothing below it moves.
+ */
+const PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_HINT_V1 = 'Remove which section? 1–9' as const;
+/**
+ * The range inside that line, exactly as it is written above. Named so the substitution below
+ * has one thing to find, rather than the same literal typed in a second place.
+ */
+const PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_FULL_RANGE_V1 = '1–9' as const;
+/**
+ * The same question, carrying the range the frame actually offers.
+ *
+ * `1–9` is the span of the KEY SEQUENCE, and as a label it was wrong for every popup with fewer
+ * than nine sections: the reader counts five numbers on screen, is asked for one of nine, and
+ * concludes the popup does not know its own body (owner 2026-09-27).
+ *
+ * ⚠️ The wording is not rebuilt here. The sentence above is the only place it is written, and
+ * this substitutes the range substring of it — so the words, spacing and punctuation cannot
+ * drift from the line that was ruled, whatever the count turns out to be.
+ *
+ * A single section is asked for as `1` rather than `1–1`: a range of one is not a range.
+ * `undefined` leaves the line exactly as it ships — there is nothing to count, and a body with
+ * no sections refuses every digit anyway, so no number would be truer than another.
+ */
+function promptEnhancementCliRemoveArmedHintV1(top: number | undefined): string {
+  if (top === undefined) return PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_HINT_V1;
+  const range = top === 1 ? '1' : `1–${top}`;
+  return PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_HINT_V1.replace(PROMPT_ENHANCEMENT_CLI_REMOVE_ARMED_FULL_RANGE_V1, range);
+}
 
 /** Left indent applied to every wrapped line of editable content (body / details). */
 export const PROMPT_ENHANCEMENT_CLI_CONTENT_INDENT_V1 = 6 as const;
@@ -705,6 +911,41 @@ export interface PromptEnhancementCliFrameStateV1 {
   /** Mutable sink the renderer fills with the caret's 1-based screen position (see `caret`). */
   caretOut?: { row: number; col: number };
   /**
+   * One entry per body row as displayed: the section number to draw after that row, or
+   * `undefined` for none. Display-only — the row's text is drawn exactly as without it.
+   * Absent for the probe frame, so the chrome measurement is unchanged.
+   */
+  bodyLineSuffixes?: readonly (number | undefined)[];
+  /**
+   * One entry per body row as displayed: the column ranges of that row to draw in bold, or an
+   * empty list for a row with nothing marked. Display-only in the strictest sense — the bytes
+   * added are SGR and nothing else, so the row's text, its width and the caret are unchanged.
+   * Absent for the probe frame, so the chrome measurement is unchanged.
+   */
+  bodyLineSpans?: readonly (readonly PromptEnhancementEmphasisSpanV1[])[];
+  /**
+   * One entry per body row as displayed: true where the row carries nothing that may ever be
+   * marked — a section title, or a line of a section the standard never marks. Those rows stay at
+   * full weight when the rest of the body is drawn lighter: a title is what the reader navigates
+   * by, and the verbatim section is their own prompt quoted back. Absent means "treat every row
+   * alike", which is what a caller that does not know the sections must not be made to guess at.
+   */
+  bodyLineUnmarkable?: readonly boolean[];
+  /** Draw the suffixes without any styling, whatever `colorize` says (the `NO_COLOR` rule). */
+  plainMarks?: boolean;
+  /**
+   * True while the removal chord is armed, so the focused body row asks which section instead of
+   * listing its keys. Passed to the chrome probe as well as the drawn frame — the measurement has
+   * to see the same line the user does, even though both are one line.
+   */
+  sectionRemovalArmed?: boolean;
+  /**
+   * The highest digit that names a section in the body being drawn, for the armed line's range.
+   * Read only while `sectionRemovalArmed` is true, and absent means "do not name a range" — a
+   * caller that does not know the body's sections must not be made to guess at one.
+   */
+  removableSectionTop?: number;
+  /**
    * Ctrl+T hint appended to the footer. Set only by the raw-TTY shell, and only when it was given a
    * settings control — a surface that cannot act on Ctrl+T (the browser panel) must not advertise
    * it. The current VALUES live in the chooser's root menu, not here. See `cli-settings-shortcut.ts`.
@@ -813,19 +1054,68 @@ export function renderPromptEnhancementPopupFrameV1(
     // Shortcut/action hints (Ctrl+J · Enter sends · Enter applies) — LIGHT YELLOW (owner request
     // 2026-08-07): a distinct, clearly-visible colour on every OS.
     const hint = (text: string) => (c ? `    ${c.lightYellow}${text}${c.reset}` : `    ${text}`);
+    // The emphasised stretches of one body row, wrapped in the popup's own bold. Applied here,
+    // after publicText and inside the row's own text, so the attribute opened on a row is always
+    // closed on that same row — every line is erased to its end after it is written, and an open
+    // attribute would bleed into the next one. Nothing else about the row changes: no character is
+    // added, removed or moved, which is why the caret and the row's width are unaffected.
+    // Columns are clamped to the line so a row can never be drawn short.
+    const emphasise = (line: string, spans: readonly PromptEnhancementEmphasisSpanV1[], dimRest = false): string => {
+      if (!c || frameState.plainMarks === true) return line;
+      // Unmarked text, drawn lighter when this body has something to contrast it against. An empty
+      // run is left alone rather than wrapped, so no row gains an SGR pair that spans nothing.
+      const rest = (text: string): string => (dimRest && text.length > 0 ? `${c.dim}${text}${c.reset}` : text);
+      if (spans.length === 0) return rest(line);
+      let out = '';
+      let at = 0;
+      for (const span of spans) {
+        const start = Math.max(at, Math.min(span.startColumn, line.length));
+        const end = Math.max(start, Math.min(span.endColumn, line.length));
+        if (end === start) continue;
+        out += rest(line.slice(at, start)) + c.bold + line.slice(start, end) + c.reset;
+        at = end;
+      }
+      return out + rest(line.slice(at));
+    };
     // A field content line: real prompt text renders plain; a scroll indicator ("↑/↓ N more
     // lines …") renders in plain gray — the "normal" dim (owner request 2026-08-07: the light
     // yellow hints already provide the distinction, so the marker needs no extra darkening).
-    const contentLine = (line: string) =>
-      c && isPromptEnhancementScrollMarkerLineV1(line) ? `    ${c.gray}${line}${c.reset}` : `    ${line}`;
+    // A scroll indicator carries no emphasis either: it is the window's own text, not the
+    // buffer's, and the plain line is what decides that — before any SGR is added to it.
+    const contentLine = (line: string, spans: readonly PromptEnhancementEmphasisSpanV1[] = [], dimRest = false) =>
+      c && isPromptEnhancementScrollMarkerLineV1(line) ? `    ${c.gray}${line}${c.reset}` : `    ${emphasise(line, spans, dimRest)}`;
     const editable = row.kind === 'editor_heading' || row.kind === 'additional_details';
     if (row.kind === 'editor_heading') {
       recordCaret('enhanced_body');
-      for (const bodyLine of publicText(view.editedBodyText).split('\n')) lines.push(contentLine(bodyLine));
+      // A section's number, when the shell supplies one for this row, follows the row's text
+      // after four spaces: dim when colour is on, plain when it is off or the marks are plain.
+      // The row's own text is drawn exactly as it is without the number.
+      const suffixFor = (index: number): string => {
+        const number = frameState.bodyLineSuffixes?.[index];
+        if (number === undefined) return '';
+        const mark = `#${number}`;
+        return c && !frameState.plainMarks ? `    ${c.dim}${mark}${c.reset}` : `    ${mark}`;
+      };
+      // Lighter only where there is something to be lighter THAN: a body with no mark on screen is
+      // drawn exactly as it always was, rather than uniformly faint with nothing standing out.
+      const dimUnmarkedBody = (frameState.bodyLineSpans ?? []).some((spans) => spans.length > 0);
+      publicText(view.editedBodyText).split('\n').forEach((bodyLine, index) => {
+        // …and never a row that could not have carried a mark in the first place.
+        const dimThisRow = dimUnmarkedBody && frameState.bodyLineUnmarkable?.[index] !== true;
+        lines.push(contentLine(bodyLine, frameState.bodyLineSpans?.[index] ?? [], dimThisRow) + suffixFor(index));
+      });
       // Body block: the "Enter sends this prompt" hint shows ONLY when this row (Use enhanced prompt) is
       // focused — otherwise it is misleading, because Enter acts on whichever row IS focused, not on the
       // enhanced body (owner 2026-08-19). When focused, the edit-keys and the send hint share ONE line.
-      if (focused) lines.push(hint(`${PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_BODY_HINT_V1}`));
+      //
+      // The removal shortcut sits between them: it is an editing key like the two before it, while
+      // Enter is the terminal action. While the chord is armed the whole line becomes the question
+      // the digit answers — one line either way, so the caret's row and the body's height do not move.
+      if (focused) {
+        lines.push(hint(frameState.sectionRemovalArmed === true
+          ? promptEnhancementCliRemoveArmedHintV1(frameState.removableSectionTop)
+          : `${PROMPT_ENHANCEMENT_CLI_EDIT_KEYS_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_REMOVE_SECTION_HINT_V1} · ${PROMPT_ENHANCEMENT_CLI_BODY_HINT_V1}`));
+      }
     } else if (row.kind === 'additional_details') {
       // UI-8: no "Apply" button — pressing Enter on this row applies the details.
       // An empty field renders blank (§8.5). Sending the body ignores unapplied details.
@@ -956,6 +1246,11 @@ export interface PromptEnhancementCliInteractionStateV1 {
   focusIndex: number;
   helpExpanded: boolean;
   editor: PromptEnhancementMultilineEditorStateV1;
+  /**
+   * True between the removal chord's prefix key and the key that follows it. Absent
+   * means disarmed, so a state built without it behaves exactly as before.
+   */
+  sectionRemovalArmed?: boolean;
 }
 
 function editableFieldForRow(row: PromptEnhancementCliActionRowV1 | undefined): PromptEnhancementEditorFieldV1 | null {
@@ -1020,9 +1315,34 @@ export function reducePromptEnhancementCliInteractionV1(
   state: PromptEnhancementCliInteractionStateV1,
   rows: readonly PromptEnhancementCliActionRowV1[],
   key: PromptEnhancementCliKeyV1,
+  sections?: readonly PromptEnhancementSectionMapInputV1[],
 ): { state: PromptEnhancementCliInteractionStateV1; commands: readonly PromptEnhancementCliPopupCommandV1[] } {
   const focusedRow = rows[state.focusIndex];
   const field = editableFieldForRow(focusedRow);
+
+  // The removal chord is decided before any other branch looks at the key, so every
+  // key kind passes it: the prefix arms, a digit after it is used, and anything else
+  // disarms and goes on to mean exactly what it means without the chord. The chord
+  // acts on the body whatever row has focus, and moves focus nowhere.
+  const chord = stepPromptEnhancementSectionRemovalChordV1(state.sectionRemovalArmed === true, key);
+  if (chord.consumed) {
+    // The prefix arms and stops here. A digit after it removes the section it names,
+    // and reports what happened — including a refusal, which leaves the body untouched.
+    if (chord.sectionNumber === undefined) {
+      return { state: { ...state, sectionRemovalArmed: true }, commands: [] };
+    }
+    const removal = removePromptEnhancementSectionV1(state.editor, sections ?? [], chord.sectionNumber);
+    return {
+      state: { ...state, sectionRemovalArmed: false, editor: removal.editor },
+      commands: [{
+        type: 'remove_section',
+        outcome: removal.outcome,
+        ...(removal.sectionIndex === undefined ? {} : { sectionIndex: removal.sectionIndex }),
+      }],
+    };
+  }
+  // Any other key disarms and falls through to mean exactly what it means today.
+  if (state.sectionRemovalArmed === true) state = { ...state, sectionRemovalArmed: false };
 
   if (key.kind === 'up' || key.kind === 'down') {
     const nextIndex = key.kind === 'up'
@@ -1424,9 +1744,16 @@ function createPromptEnhancementCliPopupInteractionV1(
     // rows, and the current details block — no hardcoded chrome constant — so the frame always
     // fills to the window bottom and never overflows/scrolls. The reducer's own viewportRows is
     // resized to match, so cursor-keeping and the display agree.
+    // The armed line's range, from the LIVE buffer — the same text the `#N` marks are placed
+    // from below, so the range and the marks are one derivation and cannot disagree in a frame.
+    // Given to the probe as well: the measurement has to render the line the user reads.
+    const removableSectionTop = promptEnhancementRemovableSectionTopV1(
+      current.editor.buffers.enhanced_body.text,
+      view.sections,
+    );
     const probeChrome = renderPromptEnhancementPopupFrameV1(
       { model: view.model, editedBodyText: 'x', additionalDetailsText: detailsDisplay, publicNotice: view.publicNotice },
-      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: false },
+      { focusIndex: current.focusIndex, helpExpanded: current.helpExpanded, refinement: view.refinement, colorize: false, sectionRemovalArmed: current.sectionRemovalArmed, removableSectionTop },
     ).split('\n').length - 1;
     const measuredBodyRows = Math.max(4, (output.rows ?? 24) - 1 - probeChrome);
     if (current === state) {
@@ -1438,6 +1765,50 @@ function createPromptEnhancementCliPopupInteractionV1(
     const bodyBuffer = current.editor.buffers.enhanced_body;
     const bodyWindow = windowPromptEnhancementFieldForDisplayWithStartV1(bodyBuffer, editorWidth, measuredBodyRows);
     const bodyDisplay = bodyWindow.text;
+    // Each section's number, placed on the display row that carries its title, from the
+    // same window the display used. The window replaced a row with a scroll marker only
+    // when it marks that edge; those rows carry no number. Display-only: the buffer,
+    // the caret and everything the popup sends are untouched.
+    const bodyDisplayLines = bodyDisplay.split('\n');
+    const bodyLineSuffixes = view.sections === undefined ? undefined : buildPromptEnhancementSectionNumberSuffixesV1({
+      text: bodyBuffer.text,
+      sections: view.sections,
+      fieldWidth: editorWidth,
+      windowStart: bodyWindow.start,
+      windowRows: bodyDisplayLines.length,
+      markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
+      markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
+    });
+    // Each emphasised phrase found again on the LIVE buffer and mapped to the rows on screen,
+    // from the same window the display and the numbers used. Re-found every frame on purpose: the
+    // phrases are stored without offsets, so a phrase the user has just edited away is not found
+    // and not drawn, rather than drawn somewhere it no longer is.
+    const bodyLineSpans = view.sections === undefined || view.emphasisPhrases === undefined
+      ? undefined
+      : buildPromptEnhancementEmphasisSpansV1({
+        text: bodyBuffer.text,
+        sections: view.sections,
+        phrases: view.emphasisPhrases,
+        fieldWidth: editorWidth,
+        windowStart: bodyWindow.start,
+        windowRows: bodyDisplayLines.length,
+        markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
+        markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
+      });
+    // Which of those rows may carry no mark at all — asked of the same window, the same text and
+    // the same sections the spans were built from, so the two can never disagree about a row.
+    const bodyLineUnmarkable = view.sections === undefined
+      ? undefined
+      : buildPromptEnhancementUnmarkableRowsV1({
+        text: bodyBuffer.text,
+        sections: view.sections,
+        fieldWidth: editorWidth,
+        windowStart: bodyWindow.start,
+        windowRows: bodyDisplayLines.length,
+        markerAbove: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[0] ?? ''),
+        markerBelow: isPromptEnhancementScrollMarkerLineV1(bodyDisplayLines[bodyDisplayLines.length - 1] ?? ''),
+      });
+    const plainMarks = Boolean(process.env['NO_COLOR']);
     // Caret row is window-relative, derived from the SAME window the display used (its `start`),
     // not the raw buffer scroll. If it still falls outside the shown lines, leave the caret unset
     // so the cursor is hidden rather than placed on a wrong row.
@@ -1462,6 +1833,15 @@ function createPromptEnhancementCliPopupInteractionV1(
         colorize: true,
         caret,
         caretOut,
+        // Both sides' options, in the shape the incoming branch gave this call: the section
+        // numbers, the bold spans, the NO_COLOR gate and the armed line are this branch's; the
+        // settings hint is main's. Neither reads the other, and the renderer takes them all.
+        bodyLineSuffixes,
+        bodyLineSpans,
+        bodyLineUnmarkable,
+        plainMarks,
+        sectionRemovalArmed: current.sectionRemovalArmed,
+        removableSectionTop,
         settingsHint: settingsHint(),
       },
     );
@@ -1567,6 +1947,14 @@ function createPromptEnhancementCliPopupInteractionV1(
         firstRenderAcknowledged = true;
       }
 
+      // One repaint, and no more: a transient notice is drawn by the render above and is gone from
+      // every render after it, including the one a terminal resize triggers — `render` keeps the
+      // view it was last handed, so the notice cannot come back. A notice with no flag is today's,
+      // and is handed on unchanged: it stays until the next command.
+      const afterFirstPaint = view.publicNoticeTransient
+        ? { ...view, publicNotice: undefined }
+        : view;
+
       for (;;) {
         const raw = await readKey();
         if (raw === CTRL_C) return { type: 'close' };
@@ -1577,7 +1965,10 @@ function createPromptEnhancementCliPopupInteractionV1(
           render(view, state);
           continue;
         }
-        const stepped = reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw));
+        // ⚠️ `view.sections` is this branch's fourth argument and it MUST survive the merge. The
+        // parameter is optional, so main's three-argument call compiles perfectly and the removal
+        // chord then silently has no sections to remove — a break no type check would report.
+        const stepped = reducePromptEnhancementCliInteractionV1(state, rows, decodePromptEnhancementCliKeyV1(raw), view.sections);
         state = stepped.state;
         if (stepped.commands.length > 0) {
           const only = stepped.commands.length === 1 ? stepped.commands[0] : undefined;
@@ -1590,8 +1981,16 @@ function createPromptEnhancementCliPopupInteractionV1(
           }
           return queue.shift()!;
         }
-        render(view, state);
+        render(afterFirstPaint, state);
       }
+    },
+    repaintWithPhrases(phrases) {
+      if (closed || !lastView || !state) return;
+      // The view the loop last handed over, with the new list in place of the old one. Everything
+      // else about the frame is the frame that is already on screen, so the only thing that can
+      // move is which words are emboldened.
+      lastView = { ...lastView, emphasisPhrases: phrases };
+      repaint();
     },
     close() {
       if (closed) return;

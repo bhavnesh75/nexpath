@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 //    root test run must exclude it too, or it fails with "Cannot find package 'better-sqlite3'".
 
 // ── Suites that read the PRIVATE planning submodule ──────────────────────────
-// These assert on markdown inside `lib/shared/submodules/nexpath-prompt-enhancement-submodule/`,
+// These assert on markdown inside `lib/shared/sub-module/nexpath-prompt-enhancement-submodule/`,
 // which is a separate private repo. They are deliberately written to FAIL rather than skip when it
 // is missing — a guard that quietly passes when its subject is absent is the problem it exists to
 // catch — and that is right for a developer who is supposed to have it checked out.
@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 // run and assert exactly as their authors intended. Absent ⇒ they are not part of the run, and the
 // notice below says so out loud, in the CI log, every time. Not collected is honest; silently
 // passing would not be.
-const PLANNING_SUBMODULE = 'lib/shared/submodules/nexpath-prompt-enhancement-submodule';
+const PLANNING_SUBMODULE = 'lib/shared/sub-module/nexpath-prompt-enhancement-submodule';
 const NEEDS_PLANNING_SUBMODULE = [
   'src/prompt-enhancement/dev-plan-table-integrity.test.ts',
   'src/prompt-enhancement/hv1-env-supply.test.ts',

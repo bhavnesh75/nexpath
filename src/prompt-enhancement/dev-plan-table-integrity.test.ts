@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from 'node:fs';
  */
 
 const PLAN =
-  'lib/shared/submodules/nexpath-prompt-enhancement-submodule/docs/dev/' +
+  'lib/shared/sub-module/nexpath-prompt-enhancement-submodule/docs/dev/' +
   'user-experience-improvements-sub-11-prompt-enhancement-intent-family-routing-misses-debug-intents-dev-plan.md';
 
 /** Pipes that actually split cells: every unescaped one, code spans included, per GFM. */

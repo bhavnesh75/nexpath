@@ -13,6 +13,15 @@
  * sends, which is strictly worse than today's "no advisory appears".
  */
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+// A real, disposable project root. This used to be an absolute POSIX literal, which on Windows
+// resolves against the current drive — so the invocation markers these tests write landed at the
+// drive root and stayed there. A temporary directory is what a fake project root was always
+// standing in for.
+const PROJECT_ROOT = mkdtempSync(join(tmpdir(), 'nexpath-promptsubmit-'));
 vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
   // RC71 hermetic: the real spawner would launch a detached `node <argv[1]> submit-expiry-consume`
   // from inside the test runner. The constant is kept real; only the spawn is stubbed.
@@ -227,7 +236,7 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
     const order: string[] = [];
     const suppress = vi.fn(async (root: string, session: string) => {
       order.push(`suppress:${session}`);
-      expect(root).toBe('/proj');
+      expect(root).toBe(PROJECT_ROOT);
       return 2;
     });
     const h = harness({
@@ -239,8 +248,8 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
       order.push('handle');
       return { child: null };
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
-    expect(suppress).toHaveBeenCalledWith('/proj', 'traj-suppress-1');
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
+    expect(suppress).toHaveBeenCalledWith(PROJECT_ROOT, 'traj-suppress-1');
     // RC58 FLIP (2026-08-24): the sweep still runs, but the old-flow `handle`
     // no longer does — under the switch the post leg ENDS after the sweep
     // (its popups were undeliverable with suppressDsAdvisory armed).
@@ -255,7 +264,7 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
       readStdin: async () => '{"tool_info":{}}',
       suppressOldAdvisorySurface: suppress,
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
     expect(suppress).not.toHaveBeenCalled();
     expect(h.handle).not.toHaveBeenCalled(); // RC58: post leg closed under the switch
   });
@@ -268,7 +277,7 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
       readStdin,
       suppressOldAdvisorySurface: suppress,
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
     expect(suppress).not.toHaveBeenCalled();
     expect(readStdin).not.toHaveBeenCalled(); // the wrapper must not consume stdin when off
     const handleArgs = (h.handle as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -281,7 +290,7 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
       readStdin: async () => PAYLOAD,
       suppressOldAdvisorySurface: vi.fn(async () => { throw new Error('db locked'); }),
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
     expect(h.handle).not.toHaveBeenCalled(); // RC58: post leg closed under the switch
     expect(h.exit).toHaveBeenCalledWith(0);
   });
@@ -294,7 +303,7 @@ describe('post_cascade_response — old-advisory suppression under the switch', 
       suppressOldAdvisorySurface: suppress,
       decidePromptSubmit: vi.fn(async () => 'allow'),
     });
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, h.deps as never);
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, h.deps as never);
     expect(suppress).not.toHaveBeenCalled();
   });
 });
@@ -306,7 +315,7 @@ describe('suppressOldAdvisorySurfaceForSession (the sweep itself)', () => {
     const markShown = vi.fn();
     const closeStore = vi.fn();
     const { suppressOldAdvisorySurfaceForSession } = await import('./windsurf-hook.js');
-    const n = await suppressOldAdvisorySurfaceForSession('/proj', 'sess', {
+    const n = await suppressOldAdvisorySurfaceForSession(PROJECT_ROOT, 'sess', {
       openStore: async () => ({}),
       closeStore,
       getRow: getRow as never,
@@ -322,7 +331,7 @@ describe('suppressOldAdvisorySurfaceForSession (the sweep itself)', () => {
     const getRow = vi.fn(() => ({ id: 1 })); // never runs out
     const markShown = vi.fn();
     const { suppressOldAdvisorySurfaceForSession } = await import('./windsurf-hook.js');
-    const n = await suppressOldAdvisorySurfaceForSession('/proj', 'sess', {
+    const n = await suppressOldAdvisorySurfaceForSession(PROJECT_ROOT, 'sess', {
       openStore: async () => ({}),
       closeStore: () => {},
       getRow: getRow as never,
@@ -333,7 +342,7 @@ describe('suppressOldAdvisorySurfaceForSession (the sweep itself)', () => {
 
   it('store open failure returns 0 and never throws (fail-open)', async () => {
     const { suppressOldAdvisorySurfaceForSession } = await import('./windsurf-hook.js');
-    const n = await suppressOldAdvisorySurfaceForSession('/proj', 'sess', {
+    const n = await suppressOldAdvisorySurfaceForSession(PROJECT_ROOT, 'sess', {
       openStore: async () => { throw new Error('no db'); },
       closeStore: () => {},
     });
@@ -354,8 +363,8 @@ describe('post-leg stdin bound (live-proven race, 2026-08-12)', () => {
       postStdinTimeoutMs: 5_000,   // post-leg bound — generous
       suppressOldAdvisorySurface: suppress,
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
-    expect(suppress).toHaveBeenCalledWith('/proj', 'traj-slow');
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
+    expect(suppress).toHaveBeenCalledWith(PROJECT_ROOT, 'traj-slow');
   });
 
   it('stdin slower than even the post bound: suppression skipped, hook still completes fail-open', async () => {
@@ -367,7 +376,7 @@ describe('post-leg stdin bound (live-proven race, 2026-08-12)', () => {
       postStdinTimeoutMs: 50,
       suppressOldAdvisorySurface: suppress,
     });
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, h.deps as never);
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, h.deps as never);
     expect(suppress).not.toHaveBeenCalled();
     expect(h.exit).toHaveBeenCalledWith(0);
   });

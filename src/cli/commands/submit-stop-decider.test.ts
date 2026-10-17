@@ -21,9 +21,17 @@ vi.mock('../../store/pending-sequences.js', async (importOriginal) => {
     getActivePendingPromptSequence: vi.fn(actual.getActivePendingPromptSequence),
   };
 });
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// Real, disposable project roots. These used to be absolute POSIX literals, which on Windows resolve
+// against the current drive — so the writes these tests drive landed at the drive root and stayed
+// there, and another package's tests then failed because one of those paths had become stat-able.
+// A temporary directory is what a fake project root was always standing in for.
+const PROJECT_ROOT = mkdtempSync(join(tmpdir(), 'nexpath-decider-'));
+const ALT_PROJECT_ROOT = mkdtempSync(join(tmpdir(), 'nexpath-decider-alt-'));
 import {
   buildStopDrivenPromptSubmitDecider,
   parseStopBlockOutput,
@@ -67,7 +75,7 @@ function harness(stdout: string, exitCode: number | null = 0) {
   const { child, writes } = fakeChild(stdout, exitCode);
   const spawnFn = vi.fn(() => child);
   const decide = buildStopDrivenPromptSubmitDecider(
-    { project: '/proj' },
+    { project: PROJECT_ROOT },
     { host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: writeDecision as never, logEvent: () => {},
       // RC70: hermetic — never read the developer's real ~/.nexpath heartbeats; 'absent' = today's behaviour.
       readDelivererState: (() => ({ state: 'absent' as const })) as never,
@@ -103,26 +111,26 @@ describe('parseStopBlockOutput — Layer C\'s own block line, nothing invented',
 describe('⭐ the decider — stop selection ⇒ block + persisted decision', () => {
   it('blocks on stop\'s block line and persists the replacement for the extension', async () => {
     const h = harness('{"decision":"block","reason":"the refined prompt"}\n');
-    const decision = await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'user prompt');
+    const decision = await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'user prompt');
     expect(decision).toBe('block');
     expect(h.writeDecision).toHaveBeenCalledTimes(1);
     const rec = h.writeDecision.mock.calls[0]![0] as Record<string, unknown>;
     expect(rec.replacementText).toBe('the refined prompt');
     expect(rec.host).toBe('cursor');
-    expect(rec.projectRoot).toBe('/proj');
+    expect(rec.projectRoot).toBe(PROJECT_ROOT);
   });
 
   it('sends stop the same stdin payload the old flow does', async () => {
     const h = harness('');
-    await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'user prompt');
+    await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'user prompt');
     expect(JSON.parse(h.stdinWrites[0]!)).toEqual({
-      cwd: '/proj', hook_event_name: 'Stop', stop_hook_active: false,
+      cwd: PROJECT_ROOT, hook_event_name: 'Stop', stop_hook_active: false,
     });
   });
 
   it('allows when stop shows/skips (no block line) — an ordinary turn', async () => {
     const h = harness('');
-    await expect(h.decide('e', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    await expect(h.decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('allow');
     expect(h.writeDecision).not.toHaveBeenCalled();
   });
 
@@ -130,7 +138,7 @@ describe('⭐ the decider — stop selection ⇒ block + persisted decision', ()
     // MUTATION GUARD: blocking on a non-zero exit would cancel the user's
     // prompt on the say-so of a process that died mid-flight.
     const h = harness('{"decision":"block","reason":"text"}\n', 1);
-    await expect(h.decide('e', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    await expect(h.decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('allow');
     expect(h.writeDecision).not.toHaveBeenCalled();
   });
 
@@ -138,27 +146,27 @@ describe('⭐ the decider — stop selection ⇒ block + persisted decision', ()
     const writeDecision = vi.fn(async () => { throw new Error('disk full'); });
     const { child } = fakeChild('{"decision":"block","reason":"text"}\n');
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       { host: 'windsurf', mkdirFn: (() => {}) as never, spawnFn: (() => child) as never, writeDecision: writeDecision as never, logEvent: () => {}, ...FAKE_SWEEP_STORE },
     );
-    await expect(decide('e', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    await expect(decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('allow');
   });
 
   it('fail-open: a throwing spawn allows', async () => {
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       { host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: (() => { throw new Error('ENOENT'); }) as never, writeDecision: vi.fn() as never, logEvent: () => {} },
     );
-    await expect(decide('e', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    await expect(decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('allow');
   });
 
   it('a blank prompt allows WITHOUT spawning stop (nothing to refine, no popup)', async () => {
     const spawnFn = vi.fn();
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       { host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: vi.fn() as never, logEvent: () => {} },
     );
-    await expect(decide('e', { project: '/proj' }, '   ')).resolves.toBe('allow');
+    await expect(decide('e', { project: PROJECT_ROOT }, '   ')).resolves.toBe('allow');
     expect(spawnFn).not.toHaveBeenCalled();
   });
 
@@ -166,13 +174,13 @@ describe('⭐ the decider — stop selection ⇒ block + persisted decision', ()
     const seen: unknown[] = [];
     const { child } = fakeChild('');
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       {
         host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: (() => child) as never, writeDecision: vi.fn() as never,
         logEvent: () => {}, onChild: (c) => { seen.push(c); },
       },
     );
-    await decide('e', { project: '/proj' }, 'p');
+    await decide('e', { project: PROJECT_ROOT }, 'p');
     expect(seen).toEqual([child]);
   });
 });
@@ -189,7 +197,7 @@ describe('⭐ RC10 — a block sweeps every leftover pending row', () => {
     let advisoryCalls = 0;
     const fakeStore = {};
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       {
         host: 'windsurf', mkdirFn: (() => {}) as never,
         spawnFn: (() => child) as never,
@@ -202,14 +210,14 @@ describe('⭐ RC10 — a block sweeps every leftover pending row', () => {
         // lacks .db — it throws, is caught, and must NOT break the block.
       },
     );
-    await expect(decide('e', { project: '/proj' }, 'p')).resolves.toBe('block');
+    await expect(decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('block');
     void shown; void advisoryCalls;
   });
 
   it('a sweep failure never un-blocks (fail-open, block already persisted)', async () => {
     const { child } = fakeChild('{"decision":"block","reason":"the text"}\n');
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       {
         host: 'cursor', mkdirFn: (() => {}) as never,
         spawnFn: (() => child) as never,
@@ -219,7 +227,7 @@ describe('⭐ RC10 — a block sweeps every leftover pending row', () => {
         closeStoreFn: (() => {}) as never,
       },
     );
-    await expect(decide('e', { project: '/proj' }, 'p')).resolves.toBe('block');
+    await expect(decide('e', { project: PROJECT_ROOT }, 'p')).resolves.toBe('block');
   });
 });
 
@@ -314,7 +322,7 @@ describe('⭐ RC37 — stale-sequence scrub on the no-block path', () => {
 
   it('a throwing store can never affect the decision (fail-open, behavioural)', async () => {
     const { decide } = harness('');   // no block line + sweep store throws
-    expect(await decide('pre_user_prompt', { project: '/proj' }, 'real prompt')).toBe('allow');
+    expect(await decide('pre_user_prompt', { project: PROJECT_ROOT }, 'real prompt')).toBe('allow');
   });
 
   it('the scrub logs what it did, under its own event name', () => {
@@ -338,7 +346,7 @@ describe('⭐ RC41 — runSequenceContinuationStop', () => {
   it('no active sequence ⇒ {ran:false} and NOTHING is spawned (old flow byte-identical)', async () => {
     const spawnFn = vi.fn();
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(null as never);
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: spawnFn as never, ...seqStore(false), logEvent: () => {},
     });
     expect(r).toEqual({ ran: false });
@@ -350,20 +358,20 @@ describe('⭐ RC41 — runSequenceContinuationStop', () => {
     // first, and a pre-made fakeChild would emit exit before listeners attach.
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce({ id: 1, payload: { items: [{}] } } as never);
     let writes: string[] = [];
-    const r = await runSequenceContinuationStop('/proj', 'cursor', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'cursor', {
       spawnFn: (() => { const f = fakeChild(''); writes = f.writes; return f.child; }) as never,
       ...seqStore(true), logEvent: () => {},
       latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
       writeDecision: (async () => {}) as never,
     });
     expect(r).toEqual({ ran: true, blocked: false });
-    expect(JSON.parse(writes[0]!)).toEqual({ cwd: '/proj', hook_event_name: 'Stop', stop_hook_active: true });
+    expect(JSON.parse(writes[0]!)).toEqual({ cwd: PROJECT_ROOT, hook_event_name: 'Stop', stop_hook_active: true });
   });
 
   it('⭐ a continuation BLOCK persists the decision for the delivery pipeline (host threaded)', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce({ id: 1, payload: { items: [{}] } } as never);
     const writeDecision = vi.fn(async () => {});
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: (() => fakeChild('{"decision":"block","reason":"item two body — long enough for the echo floor to apply cleanly"}\n').child) as never,
       ...seqStore(true), logEvent: () => {},
       latestEchoAt: (() => null) as never, // hermetic: '/proj/.nexpath' is writable on Windows; a real registry there deferred this pin
@@ -379,7 +387,7 @@ describe('⭐ RC41 — runSequenceContinuationStop', () => {
 
   it('a failing spawn/store can never throw out of the runner (fail-open)', async () => {
     vi.mocked(getActivePendingPromptSequence).mockImplementationOnce(() => { throw new Error('store gone'); });
-    const r = await runSequenceContinuationStop('/proj', 'cursor', { logEvent: () => {} });
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'cursor', { logEvent: () => {} });
     expect(r).toEqual({ ran: false });
   });
 });
@@ -398,7 +406,7 @@ describe('⭐ RC42 — itemless active row is logged, behaviour unchanged', () =
   it('items:[] ⇒ warn sequence_continuation_row_has_no_items AND the stop still runs', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(rowWith([]));
     const warns: Array<[string, string]> = [];
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: ((lvl: string, name: string) => { warns.push([lvl, name]); }) as never,
@@ -412,7 +420,7 @@ describe('⭐ RC42 — itemless active row is logged, behaviour unchanged', () =
   it('a worded row logs NO such warn (healthy chain stays quiet)', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(rowWith([{ itemKind: 'first_task' }]));
     const warns: string[] = [];
-    await runSequenceContinuationStop('/proj', 'cursor', {
+    await runSequenceContinuationStop(PROJECT_ROOT, 'cursor', {
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: ((_l: string, name: string) => { warns.push(name); }) as never,
@@ -436,7 +444,7 @@ describe('⭐ RC43 — the post-block quiet window', () => {
   it('⭐ an event inside the window ⇒ {ran:false, deferred:true} and NO stop spawns', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(activeRow());
     const spawnFn = vi.fn();
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: spawnFn as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: () => {},
@@ -449,7 +457,7 @@ describe('⭐ RC43 — the post-block quiet window', () => {
 
   it('the real completion (window elapsed) runs the stop as before', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(activeRow());
-    const r = await runSequenceContinuationStop('/proj', 'cursor', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'cursor', {
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: () => {},
@@ -462,7 +470,7 @@ describe('⭐ RC43 — the post-block quiet window', () => {
 
   it('no registry (null) ⇒ runs — fail-open, exactly the pre-RC43 behaviour', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(activeRow());
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: () => {}, latestEchoAt: (() => null) as never,
@@ -473,7 +481,7 @@ describe('⭐ RC43 — the post-block quiet window', () => {
 
   it('a throwing reader ⇒ runs (the guard can never break the runner)', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce(activeRow());
-    const r = await runSequenceContinuationStop('/proj', 'windsurf', {
+    const r = await runSequenceContinuationStop(PROJECT_ROOT, 'windsurf', {
       spawnFn: (() => fakeChild('').child) as never,
       openStoreFn: (async () => ({ db: {} })) as never, closeStoreFn: (() => {}) as never,
       logEvent: () => {}, latestEchoAt: (() => { throw new Error('fs gone'); }) as never,
@@ -519,7 +527,7 @@ describe('⭐ RC45 — ensureNodeDirOnPath', () => {
   it('⭐ the continuation runner spawns stop with node-resolvable PATH', async () => {
     vi.mocked(getActivePendingPromptSequence).mockReturnValueOnce({ id: 1, payload: { items: [{}] } } as never);
     let seenEnv: NodeJS.ProcessEnv | undefined;
-    await runSequenceContinuationStop('/proj', 'cursor', {
+    await runSequenceContinuationStop(PROJECT_ROOT, 'cursor', {
       spawnFn: ((cmd: string, args: string[], opts: { env?: NodeJS.ProcessEnv }) => {
         seenEnv = opts.env; return fakeChild('').child;
       }) as never,
@@ -558,13 +566,13 @@ describe('⭐ RC51 — unwritable project root allows without a popup', () => {
   it('a writable root passes through to the normal flow (regression pin)', async () => {
     const { child } = fakeChild('');
     const decide = buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       {
         host: 'windsurf', spawnFn: (() => child) as never, writeDecision: vi.fn() as never,
         logEvent: () => {}, mkdirFn: (() => {}) as never, ...FAKE_SWEEP_STORE,
       },
     );
-    await expect(decide('e', { project: '/proj' }, 'a real prompt')).resolves.toBe('allow');
+    await expect(decide('e', { project: PROJECT_ROOT }, 'a real prompt')).resolves.toBe('allow');
   });
 });
 
@@ -586,7 +594,7 @@ describe('⭐ RC70 — the decider refuses to block without a deliverer', () => 
     (child as unknown as { stdin: unknown }).stdin = { write: () => {}, end: () => {} };
     const events: Array<{ name: string; data: Record<string, unknown> }> = [];
     const writeDecision = vi.fn(async () => {});
-    const decide = buildStopDrivenPromptSubmitDecider({ project: '/proj' }, {
+    const decide = buildStopDrivenPromptSubmitDecider({ project: PROJECT_ROOT }, {
       host: 'cursor', mkdirFn: (() => {}) as never, spawnFn: spawnFn as never, writeDecision: writeDecision as never,
       logEvent: ((_l: string, name: string, data?: Record<string, unknown>) => { events.push({ name, data: data ?? {} }); }) as never,
       readDelivererState: (() => state) as never,
@@ -597,7 +605,7 @@ describe('⭐ RC70 — the decider refuses to block without a deliverer', () => 
 
   it('⭐ fresh NOT-ARMED beat (consent declined) ⇒ allow, no stop spawned, no decision written, warn logged with the reason', async () => {
     const h = withDeliverer({ state: 'not_armed', ageMs: 1_000, reason: 'consent_not_granted', pid: 42 });
-    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('allow');
+    expect(await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'refine me')).toBe('allow');
     expect(h.spawnFn).not.toHaveBeenCalled();
     expect(h.writeDecision).not.toHaveBeenCalled();
     const warn = h.events.find((e) => e.name === 'submit_flow_no_deliverer');
@@ -606,31 +614,31 @@ describe('⭐ RC70 — the decider refuses to block without a deliverer', () => 
 
   it('⭐ STALE beat (extension gone) ⇒ allow without a popup', async () => {
     const h = withDeliverer({ state: 'stale', ageMs: 120_000, pid: 7 });
-    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('allow');
+    expect(await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'refine me')).toBe('allow');
     expect(h.spawnFn).not.toHaveBeenCalled();
   });
 
   it('⭐ ARMED ⇒ proceeds to the popup and blocks exactly as before', async () => {
     const h = withDeliverer({ state: 'armed', ageMs: 3_000, pid: 42 });
-    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('block');
+    expect(await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'refine me')).toBe('block');
     expect(h.spawnFn).toHaveBeenCalledTimes(1);
     expect(h.events.find((e) => e.name === 'submit_flow_deliverer')?.data).toMatchObject({ state: 'armed' });
   });
 
   it('⭐ ABSENT (older extension / unknown) ⇒ proceeds as before — a newer CLI never mutes an older extension', async () => {
     const h = withDeliverer({ state: 'absent' });
-    expect(await h.decide('beforeSubmitPrompt', { project: '/proj' }, 'refine me')).toBe('block');
+    expect(await h.decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'refine me')).toBe('block');
     expect(h.spawnFn).toHaveBeenCalledTimes(1);
   });
 
   it('the check runs AFTER the empty-prompt and root-writability gates (unchanged order)', async () => {
     const readDelivererState = vi.fn(() => ({ state: 'not_armed' as const }));
-    const decide = buildStopDrivenPromptSubmitDecider({ project: '/proj' }, {
+    const decide = buildStopDrivenPromptSubmitDecider({ project: PROJECT_ROOT }, {
       host: 'cursor', mkdirFn: (() => { throw new Error('EACCES'); }) as never, logEvent: () => {},
       readDelivererState: readDelivererState as never,
     });
-    expect(await decide('beforeSubmitPrompt', { project: '/proj' }, '')).toBe('allow');          // empty prompt
-    expect(await decide('beforeSubmitPrompt', { project: '/proj' }, 'x')).toBe('allow');         // unwritable root
+    expect(await decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, '')).toBe('allow');          // empty prompt
+    expect(await decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'x')).toBe('allow');         // unwritable root
     expect(readDelivererState).not.toHaveBeenCalled();
   });
 });
@@ -652,7 +660,7 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
     // before spawning, so a child created up-front would emit `exit` before listeners
     // attach — in production the child does not exist until `spawn` either.
     return buildStopDrivenPromptSubmitDecider(
-      { project: '/proj' },
+      { project: PROJECT_ROOT },
       {
         host: 'cursor', mkdirFn: (() => {}) as never,
         spawnFn: (() => { events.push('spawn:stop'); return fakeChild('').child; }) as never,   // stop shows nothing ⇒ allow
@@ -670,10 +678,10 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
     const events: string[] = [];
     const consume = vi.fn((_s: unknown, input: { projectRoot: string; before: number }) => { events.push(`consume:${input.projectRoot}:${input.before}`); return { advisories: 0, promptEnhancements: 1 }; });
     const decide = build({ consumeStaleRows: consume }, events);
-    await expect(decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 1_000_000 }, 'p')).resolves.toBe('allow');
+    await expect(decide('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: 1_000_000 }, 'p')).resolves.toBe('allow');
     expect(consume).toHaveBeenCalledTimes(1);
     const consumeAt = events.findIndex((e) => e.startsWith('consume:'));
-    expect(events[consumeAt]).toBe('consume:/proj:999999');
+    expect(events[consumeAt]).toBe(`consume:${PROJECT_ROOT}:999999`);
     expect(consumeAt).toBeLessThan(events.indexOf('spawn:stop'));
     expect(events.indexOf('store:open')).toBeLessThan(consumeAt);
     expect(events.indexOf('store:close')).toBeLessThan(events.indexOf('spawn:stop'));
@@ -685,12 +693,12 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
     const events: string[] = [];
     const consume = vi.fn(() => ({ advisories: 0, promptEnhancements: 0 }));
     const decide = build({ consumeStaleRows: consume }, events);
-    await expect(decide('beforeSubmitPrompt', { project: '/proj' }, 'p')).resolves.toBe('allow');
+    await expect(decide('beforeSubmitPrompt', { project: PROJECT_ROOT }, 'p')).resolves.toBe('allow');
     expect(consume).not.toHaveBeenCalled();
     expect(events.slice(0, events.indexOf('spawn:stop'))).not.toContain('store:open');
     for (const bad of [0, -1, Number.NaN]) {
       events.length = 0;
-      await decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: bad }, 'p');
+      await decide('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: bad }, 'p');
       expect(consume).not.toHaveBeenCalled();
     }
   });
@@ -698,7 +706,7 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
   it('nothing stale ⇒ silent (no consumed-log line), stop runs as before', async () => {
     const events: string[] = [];
     const decide = build({ consumeStaleRows: vi.fn(() => ({ advisories: 0, promptEnhancements: 0 })) }, events);
-    await decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p');
+    await decide('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: 5 }, 'p');
     expect(events.some((e) => e.includes('stale_rows_consumed'))).toBe(false);
     expect(events).toContain('spawn:stop');
   });
@@ -706,14 +714,14 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
   it('⭐ fail-open: the consumer throwing, or the store not opening, is logged and stop still runs', async () => {
     const e1: string[] = [];
     const d1 = build({ consumeStaleRows: () => { throw new Error('locked'); } }, e1);
-    await expect(d1('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    await expect(d1('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
     expect(e1).toContain('spawn:stop');
     expect(e1.some((e) => e.startsWith('log:submit_stop_decider_stale_sweep_failed:') && e.includes('locked'))).toBe(true);
     expect(e1).toContain('store:close');            // the store is closed even when the consumer threw
 
     const e2: string[] = [];
     const d2 = build({ openStoreFn: async () => { e2.push('store:open-failed'); throw new Error('no store'); }, consumeStaleRows: vi.fn() }, e2);
-    await expect(d2('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    await expect(d2('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
     expect(e2).toContain('spawn:stop');
     expect(e2.some((e) => e.startsWith('log:submit_stop_decider_stale_sweep_failed:'))).toBe(true);
   });
@@ -722,7 +730,7 @@ describe('⭐ RC76 — stale rows from earlier turns are consumed before stop ru
     const events: string[] = [];
     const consume = vi.fn(() => ({ advisories: 0, promptEnhancements: 0 }));
     const decide = build({ consumeStaleRows: consume, readDelivererState: (() => ({ state: 'not_armed' as const, reason: 'consent' })) as never }, events);
-    await expect(decide('beforeSubmitPrompt', { project: '/proj', turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
+    await expect(decide('beforeSubmitPrompt', { project: PROJECT_ROOT, turnStartedAt: 5 }, 'p')).resolves.toBe('allow');
     expect(consume).not.toHaveBeenCalled();
     expect(events).not.toContain('spawn:stop');
   });
@@ -742,7 +750,7 @@ describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () 
   it('stamps the caller-supplied pids on a block record (the detached supervisor passes the HOOK\'s)', async () => {
     const writeDecision = vi.fn(async () => {});
     const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
-    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+    const decide = buildStopDrivenPromptSubmitDecider({ project: ALT_PROJECT_ROOT }, {
       host: 'windsurf',
       spawnFn: (() => child) as never,
       writeDecision: writeDecision as never,
@@ -753,7 +761,7 @@ describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () 
       hookPid: 1111,
       hookShellPid: 2222,
     });
-    await expect(decide('pre_user_prompt', { project: '/p' }, 'prompt')).resolves.toBe('block');
+    await expect(decide('pre_user_prompt', { project: ALT_PROJECT_ROOT }, 'prompt')).resolves.toBe('block');
     expect(writeDecision).toHaveBeenCalledTimes(1);
     expect((writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0]).toMatchObject({ hookPid: 1111, hookShellPid: 2222 });
   });
@@ -761,7 +769,7 @@ describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () 
   it('without the ports the record still names THIS process (byte-identical to RC77 for in-process callers)', async () => {
     const writeDecision = vi.fn(async () => {});
     const { child } = fakeChild(JSON.stringify({ decision: 'block', reason: 'body' }) + '\n', 0);
-    const decide = buildStopDrivenPromptSubmitDecider({ project: '/p' }, {
+    const decide = buildStopDrivenPromptSubmitDecider({ project: ALT_PROJECT_ROOT }, {
       host: 'windsurf',
       spawnFn: (() => child) as never,
       writeDecision: writeDecision as never,
@@ -770,7 +778,7 @@ describe('RC78 — hookPid / hookShellPid ports on the stop-driven decider', () 
       logEvent: () => {},
       ...FAKE_SWEEP_STORE,
     });
-    await decide('pre_user_prompt', { project: '/p' }, 'prompt');
+    await decide('pre_user_prompt', { project: ALT_PROJECT_ROOT }, 'prompt');
     const rec = (writeDecision.mock.calls[0] as unknown as [Record<string, unknown>])[0];
     expect(rec.hookPid).toBe(process.pid);
     if (process.platform !== 'win32') expect('hookShellPid' in rec).toBe(false);

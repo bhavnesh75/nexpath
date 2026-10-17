@@ -131,7 +131,7 @@ export function createPePoller(deps: PePollerDeps): PePoller {
       if (best.row.createdAt <= handledAt) return; // already attempted this row
 
       handledAt = best.row.createdAt; // mark handled BEFORE the attempt — never retry, even on failure
-      const parsed = parsePromptEnhancementExtensionPayloadV1(best.row.resultJson);
+      const parsed = parsePromptEnhancementExtensionPayloadV1(best.row.resultJson, best.row.emphasisPhrasesJson);
       if (!parsed) return; // malformed/unparseable row — nothing deliverable
 
       deps.onPublish?.(parsed);

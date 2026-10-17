@@ -368,6 +368,13 @@ export function applyIncrementalMigrations(db: Database): void {
   // item list so the Stop-hook batch can resolve them to text for items 2…N. Same nullable/local
   // treatment as planner_items_json — old rows and non-sequence prepares read back NULL.
   addIfMissing('pending_prompt_enhancements', 'planner_prompt_directives_json', 'TEXT');
+
+  // Popup emphasis (2026-09-17). The phrases the submit popup renders in bold, carried on the pending
+  // row so the Stop-hook popup draws the same emphasis the prepare decided — whether it renders in
+  // process or in a spawned window. Nullable, default NULL: old rows and every prepare that produced
+  // none read back as null, which is deliberately distinct from a computed-but-empty '[]'. Local store
+  // only, never emitted in telemetry, and never read back into anything the agent receives.
+  addIfMissing('pending_prompt_enhancements', 'emphasis_phrases_json', 'TEXT');
 }
 
 /**
@@ -442,4 +449,11 @@ export function runMigrations(db: Database): void {
   // item list so the Stop-hook batch can resolve them to text for items 2…N. Same nullable/local
   // treatment as planner_items_json — old rows and non-sequence prepares read back NULL.
   addIfMissing('pending_prompt_enhancements', 'planner_prompt_directives_json', 'TEXT');
+
+  // Popup emphasis (2026-09-17). The phrases the submit popup renders in bold, carried on the pending
+  // row so the Stop-hook popup draws the same emphasis the prepare decided — whether it renders in
+  // process or in a spawned window. Nullable, default NULL: old rows and every prepare that produced
+  // none read back as null, which is deliberately distinct from a computed-but-empty '[]'. Local store
+  // only, never emitted in telemetry, and never read back into anything the agent receives.
+  addIfMissing('pending_prompt_enhancements', 'emphasis_phrases_json', 'TEXT');
 }

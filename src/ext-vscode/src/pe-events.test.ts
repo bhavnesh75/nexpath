@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import {
   routePeWebviewMessage,
   describePeEventSafely,
   UNMAPPED_HANDOFF_CONCEPTS,
+  PE_ROUTED_MESSAGE_TYPES,
+  peWebviewMessageTypeIsRouted,
   type PeEventV1,
 } from './pe-events.js';
 
@@ -324,5 +327,59 @@ describe('describePeEventSafely — raw-text leak test (PEH-9 extended to PE eve
       'staleOrMismatched',
       'timestampMs',
     ]);
+  });
+});
+
+/**
+ * The routed-type list, pinned to the router's own source.
+ *
+ * ⛔ THIS TEST EXISTS BECAUSE THE ALTERNATIVE SHIPPED A DEAD BUTTON. A webview
+ * control is a promise that pressing it does something, and the only honest
+ * evidence is whether this router has a case for the message it sends. The first
+ * gate inferred that from "a handler was injected", which is not the same thing —
+ * this extension injects a handler that routes four types and drops the rest, so a
+ * removal click was routed into a router with no case for it and the control would
+ * have rendered and done nothing.
+ *
+ * A hand-maintained list would drift the same way. So the list is read back against
+ * the switch itself: add a case without listing it, or list one the router does not
+ * have, and this fails.
+ */
+describe('the routed message types are exactly the router\'s own cases', () => {
+  const source = readFileSync(
+    new URL('./pe-events.ts', import.meta.url),
+    'utf8',
+  );
+
+  /** Every `case '…'` inside routePeWebviewMessage's switch, in source order. */
+  const casesInRouter = (): string[] => {
+    const start = source.indexOf('export function routePeWebviewMessage');
+    expect(start, 'the router must be findable by name').toBeGreaterThan(-1);
+    // Up to the next top-level export, so a later switch cannot be counted.
+    const end = source.indexOf('\nexport ', start + 1);
+    const body = source.slice(start, end === -1 ? source.length : end);
+    return [...body.matchAll(/case '([a-z_]+)':/g)].map((m) => m[1] as string);
+  };
+
+  it('lists every case the router has, and no others', () => {
+    expect([...PE_ROUTED_MESSAGE_TYPES].sort()).toEqual(casesInRouter().sort());
+  });
+
+  it('is not vacuous — the router really does have cases', () => {
+    expect(casesInRouter().length).toBeGreaterThan(0);
+  });
+
+  it('answers for a type it routes, and for one it does not', () => {
+    expect(peWebviewMessageTypeIsRouted('pe_directional_action')).toBe(true);
+    expect(peWebviewMessageTypeIsRouted('pe_not_a_real_message')).toBe(false);
+  });
+
+  /**
+   * ⚠️ The state of the removal today, asserted rather than assumed. It is NOT
+   * routed, so a control that sends it must not be offered. When the router learns
+   * it, this test is the thing that says so — and the control turns on by itself.
+   */
+  it('does NOT route a section removal yet, which is why no control is offered', () => {
+    expect(peWebviewMessageTypeIsRouted('pe_remove_section')).toBe(false);
   });
 });

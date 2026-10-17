@@ -43,6 +43,18 @@ export interface PendingPromptEnhancementRow {
   requestJson: string;
   /** Opaque JSON text of the typed prepare-result payload. Not parsed here. */
   resultJson:  string;
+  /**
+   * Opaque JSON text of the phrases the popup draws in bold, or `null`.
+   *
+   * ⚠️ NULLABLE, unlike the two above. The column was added to an existing table
+   * and every row written before it exists without one, so `null` is an ordinary
+   * state and not a corrupt row — it means "this prompt has no bold", which is
+   * exactly what a reader should then draw.
+   *
+   * Opaque here for the same reason the other two are: this module never parses,
+   * and never imports the types that would let it.
+   */
+  emphasisPhrasesJson: string | null;
 }
 
 /** Reads the latest raw `pending_prompt_enhancements` row for a project (injectable for tests). */
@@ -64,7 +76,8 @@ export const defaultReadPendingPromptEnhancementRow: ReadPendingPromptEnhancemen
 ) =>
   stagedGetRow(
     dbPath,
-    `SELECT id, project_root, session_id, prompt_count, status, created_at, request_json, result_json
+    `SELECT id, project_root, session_id, prompt_count, status, created_at, request_json, result_json,
+            emphasis_phrases_json
        FROM pending_prompt_enhancements
       WHERE project_root = ? AND status = 'pending'
       ORDER BY created_at DESC
@@ -210,5 +223,12 @@ export async function readPendingPromptEnhancement(
     createdAt,
     requestJson: row.request_json,
     resultJson:  row.result_json,
+    // Anything that is not a non-empty string reads as absent — a NULL column, a
+    // row written before it existed, or a driver handing back something else.
+    // All three mean the same thing to a reader: no bold.
+    emphasisPhrasesJson:
+      typeof row.emphasis_phrases_json === 'string' && row.emphasis_phrases_json.length > 0
+        ? row.emphasis_phrases_json
+        : null,
   };
 }

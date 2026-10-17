@@ -239,6 +239,38 @@ const GENERIC_UPPER_TOKENS: ReadonlySet<string> = new Set([
   'CLI', 'PDF', 'UUID', 'JWT', 'CORS', 'CRUD', 'REST', 'NOT', 'AND', 'THE', 'FOR', 'ALL',
 ]);
 
+/**
+ * The item-shaped floor extracts of a text, with the ones a CONSUMER must not act on removed.
+ *
+ * Two questions, two answers. A floor matcher asks *"did the developer's item survive?"*, and for
+ * that it must stay generous — a command they actually wrote keeps its preservation floor whatever
+ * it looks like, so the matchers are byte-untouched. A consumer asks the opposite, *"did we invent
+ * this?"* or *"is this the developer's own wording?"*, and there one shape is reliably prose rather
+ * than an invocation: an English verb head followed by a single plain lowercase word — *make
+ * necessary changes*, *make informed decisions*. Measured as the only false-positive class across
+ * 477 real composed sections. A real target keeps a shape word — *make build-all*, *node server.js*
+ * — and survives.
+ *
+ * Only the eight item-shaped floors are read; the other ten are clause-shaped and are not item
+ * evidence.
+ *
+ * ⛔ **One definition, every consumer.** The invention gate below and the popup's emphasis consumer
+ * both read these extracts, and two copies of this rule would drift — the drifting one being
+ * whichever is tested less. Anything reading a floor extract to decide what to SHOW or to REPORT
+ * comes through here, which is also why `FLOOR_MATCHERS` stays private.
+ */
+export function filterFloorExtractForConsumersV1(text: string): readonly string[] {
+  const items: string[] = [];
+  for (const matcher of FLOOR_MATCHERS) {
+    if (!INVENTION_ITEM_FLOOR_IDS.has(matcher.floorId)) continue;
+    for (const item of matcher.extract(text)) {
+      if (matcher.floorId === 'commands' && /^(?:make|python|node)\s+[a-z]+$/.test(item.trim())) continue;
+      items.push(item);
+    }
+  }
+  return items;
+}
+
 export interface PromptEnhancementInventionViolationV1 {
   item: string;
   hardFailReason: string;
@@ -260,19 +292,7 @@ export function findPromptEnhancementInventionViolationsV1(input: {
       hardFailReason: 'Section under the no-invention state names a tool, file, API or project fact that is in neither the prompt nor a source fact.',
     });
   };
-  for (const matcher of FLOOR_MATCHERS) {
-    if (!INVENTION_ITEM_FLOOR_IDS.has(matcher.floorId)) continue;
-    for (const item of matcher.extract(input.sectionText)) {
-      // Consumer-side guard on the commands matcher (the GENERIC_UPPER_TOKENS precedent — the
-      // SHARED matcher is byte-untouched, so a command the USER wrote keeps its preservation
-      // floor). An English-verb command head followed by one plain lowercase word is prose,
-      // not an invocation: "make necessary changes", "make informed decisions" — measured as
-      // the only false-positive class across 477 real composed sections. A real target keeps
-      // a shape word ("make build-all", "node server.js") and still reports.
-      if (matcher.floorId === 'commands' && /^(?:make|python|node)\s+[a-z]+$/.test(item.trim())) continue;
-      report(item);
-    }
-  }
+  for (const item of filterFloorExtractForConsumersV1(input.sectionText)) report(item);
   for (const pattern of PRODUCT_NAME_PATTERNS) {
     for (const item of allMatches(input.sectionText, pattern)) {
       if (GENERIC_UPPER_TOKENS.has(item)) continue;

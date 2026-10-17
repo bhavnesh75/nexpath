@@ -8,7 +8,16 @@ vi.mock('./submit-expiry-consumer.js', async (importOriginal) => {
   return { ...mod, spawnExpiryConsumer: vi.fn(() => ({ spawned: true, pid: 4242 })) };
 });
 import { EventEmitter } from 'node:events';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Command } from 'commander';
+
+// A real, disposable project root. This used to be an absolute POSIX literal, which on Windows
+// resolves against the current drive — so the invocation markers these tests write landed at the
+// drive root and stayed there. A temporary directory is what a fake project root was always
+// standing in for.
+const PROJECT_ROOT = mkdtempSync(join(tmpdir(), 'nexpath-windsurf-'));
 import {
   awaitChild,
   handleWindsurfHookCli,
@@ -172,8 +181,8 @@ describe('runWindsurfHookAction — popup-raise gate', () => {
   it('passes the project option through to the handler', async () => {
     const h = harness();
     const handle = withChild(null);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, { ...h.deps, handle });
-    expect(handle).toHaveBeenCalledWith('pre_user_prompt', { project: '/proj' });
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, { ...h.deps, handle });
+    expect(handle).toHaveBeenCalledWith('pre_user_prompt', { project: PROJECT_ROOT });
   });
 });
 
@@ -203,7 +212,7 @@ describe('VED-PE-10 — replacement echo never re-opens the submit popup', () =>
   it('echo: exits 0 even when the decider would block', async () => {
     const exits: number[] = [];
     const decide = vi.fn(async () => 'block' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, {
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, {
       env: GATE_ENV,
       checkReplacementEcho: async () => true,
       readStdin: async () => PROMPT_PAYLOAD,
@@ -219,7 +228,7 @@ describe('VED-PE-10 — replacement echo never re-opens the submit popup', () =>
   it('non-echo: the deferred decision still runs', async () => {
     const exits: number[] = [];
     const decide = vi.fn(async () => 'allow' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, {
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, {
       env: GATE_ENV,
       checkReplacementEcho: async () => false,
       readStdin: async () => PROMPT_PAYLOAD,
@@ -237,7 +246,7 @@ describe('isReplacementEcho — store-backed echo detection', () => {
   const state = (last: string | null) => ({ current: { lastInjectedPrompt: last } });
 
   it('true when the prompt equals lastInjectedPrompt', async () => {
-    await expect(isReplacementEcho('/proj', 'the replacement', {
+    await expect(isReplacementEcho(PROJECT_ROOT, 'the replacement', {
       openStore: async () => ({}),
       closeStore: () => {},
       loadState: () => state('the replacement'),
@@ -245,7 +254,7 @@ describe('isReplacementEcho — store-backed echo detection', () => {
   });
 
   it('false on a different prompt', async () => {
-    await expect(isReplacementEcho('/proj', 'a fresh user prompt', {
+    await expect(isReplacementEcho(PROJECT_ROOT, 'a fresh user prompt', {
       openStore: async () => ({}),
       closeStore: () => {},
       loadState: () => state('the replacement'),
@@ -254,13 +263,13 @@ describe('isReplacementEcho — store-backed echo detection', () => {
 
   it('false (short-circuit, no store open) for an empty prompt or missing project', async () => {
     const openStore = vi.fn();
-    await expect(isReplacementEcho('/proj', '   ', { openStore } as never)).resolves.toBe(false);
+    await expect(isReplacementEcho(PROJECT_ROOT, '   ', { openStore } as never)).resolves.toBe(false);
     await expect(isReplacementEcho(undefined, 'text', { openStore } as never)).resolves.toBe(false);
     expect(openStore).not.toHaveBeenCalled();
   });
 
   it('fails open (false) when the store cannot be opened', async () => {
-    await expect(isReplacementEcho('/proj', 'text', {
+    await expect(isReplacementEcho(PROJECT_ROOT, 'text', {
       openStore: async () => { throw new Error('locked'); },
     })).resolves.toBe(false);
   });
@@ -281,27 +290,27 @@ describe('⭐ RC12 — decorated replacements still register as echoes', () => {
   });
 
   it('exact match still echoes (fast path)', async () => {
-    await expect(isReplacementEcho('/proj', BODY, ports(BODY))).resolves.toBe(true);
+    await expect(isReplacementEcho(PROJECT_ROOT, BODY, ports(BODY))).resolves.toBe(true);
   });
 
   it('⭐ bridge-decorated resubmit (prefix + suffix) echoes via containment', async () => {
     const decorated = `guidance.@[nexpath:advisory] ${BODY} — attached context`;
-    await expect(isReplacementEcho('/proj', decorated, ports(BODY))).resolves.toBe(true);
+    await expect(isReplacementEcho(PROJECT_ROOT, decorated, ports(BODY))).resolves.toBe(true);
   });
 
   it('whitespace-normalised variants echo', async () => {
     const reflowed = BODY.replace(/ /g, '  ').replace('Context', '\nContext');
-    await expect(isReplacementEcho('/proj', reflowed, ports(BODY))).resolves.toBe(true);
+    await expect(isReplacementEcho(PROJECT_ROOT, reflowed, ports(BODY))).resolves.toBe(true);
   });
 
   it('short prompts NEVER fuzzily skip (length floor)', async () => {
-    await expect(isReplacementEcho('/proj', 'fix it', ports('fix'))).resolves.toBe(false);
-    await expect(isReplacementEcho('/proj', 'a genuinely new user prompt', ports('new user'))).resolves.toBe(false);
+    await expect(isReplacementEcho(PROJECT_ROOT, 'fix it', ports('fix'))).resolves.toBe(false);
+    await expect(isReplacementEcho(PROJECT_ROOT, 'a genuinely new user prompt', ports('new user'))).resolves.toBe(false);
   });
 
   it('a genuinely different long prompt is not an echo', async () => {
     const other = 'Completely different request about building an inventory tracker with barcode scanning and stock reports for warehouse staff members.';
-    await expect(isReplacementEcho('/proj', other, ports(BODY))).resolves.toBe(false);
+    await expect(isReplacementEcho(PROJECT_ROOT, other, ports(BODY))).resolves.toBe(false);
   });
 });
 
@@ -463,10 +472,10 @@ describe('⭐ RC41 — post_cascade_response runs the sequence continuation', ()
     const exits: number[] = [];
     const handle = vi.fn(async () => ({ child: null } as never));
     const runSequenceContinuation = vi.fn(async () => ({ ran: true, blocked: true }));
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, base({
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, base({
       handle, runSequenceContinuation, exit: (c: number) => { exits.push(c); },
     }) as never);
-    expect(runSequenceContinuation).toHaveBeenCalledWith('/proj', 'windsurf');
+    expect(runSequenceContinuation).toHaveBeenCalledWith(PROJECT_ROOT, 'windsurf');
     expect(handle).not.toHaveBeenCalled();
     expect(exits).toEqual([0]);
   });
@@ -479,7 +488,7 @@ describe('⭐ RC41 — post_cascade_response runs the sequence continuation', ()
     // wait for the next submit, where the decider delivers them.
     const exits: number[] = [];
     const handle = vi.fn(async () => ({ child: null } as never));
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, base({
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, base({
       handle, runSequenceContinuation: vi.fn(async () => ({ ran: false })), exit: (c: number) => { exits.push(c); },
     }) as never);
     expect(handle).not.toHaveBeenCalled();
@@ -489,7 +498,7 @@ describe('⭐ RC41 — post_cascade_response runs the sequence continuation', ()
   it('⭐ switch OFF ⇒ the runner is never consulted (regression pin for the old flow)', async () => {
     const handle = vi.fn(async () => ({ child: null } as never));
     const runSequenceContinuation = vi.fn(async () => ({ ran: true }));
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, {
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, {
       env: {}, handle, runSequenceContinuation,
       checkReplacementEcho: async () => false, waitForChild: async () => {},
       raisePopup: () => {}, exit: () => {},
@@ -508,7 +517,7 @@ describe('⭐ RC43 — deferred continuation ends the event (no old-flow fallthr
   it('deferred ⇒ handle NOT called, exit 0', async () => {
     const exits: number[] = [];
     const handle = vi.fn(async () => ({ child: null } as never));
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, {
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, {
       env: { NEXPATH_WINDSURF_PROMPTSUBMIT_ADVISORY: '1' },
       readStdin: async () => JSON.stringify({ trajectory_id: 'traj-1' }),
       suppressOldAdvisorySurface: async () => {},
@@ -533,7 +542,7 @@ describe('⭐ RC43 — deferred continuation ends the event (no old-flow fallthr
 describe('⭐ RC58 — switch ON closes the post leg entirely; switch OFF untouched', () => {
   it('⭐ switch OFF ⇒ post leg still reaches handle (old flow byte-identical)', async () => {
     const handle = vi.fn(async () => ({ child: null } as never));
-    await runWindsurfHookAction('post_cascade_response', { project: '/proj' }, {
+    await runWindsurfHookAction('post_cascade_response', { project: PROJECT_ROOT }, {
       env: {}, handle, checkReplacementEcho: async () => false,
       waitForChild: async () => {}, raisePopup: () => {}, exit: () => {},
     } as never);
@@ -711,7 +720,7 @@ describe('⭐ RC64 — duplicate windsurf invocations (global + workspace both e
   it('⭐ switch OFF ⇒ the guard is never consulted (old flow byte-identical)', async () => {
     const check = vi.fn(() => ({ duplicate: true, key_kind: 'execution_id' as const }));
     const handle = vi.fn(async () => ({ child: null } as never));
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, {
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, {
       env: {},
       checkDuplicateInvocation: check,
       handle, checkReplacementEcho: async () => false,
@@ -759,7 +768,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
 
   it('⭐ decider timeout ⇒ windsurf_hook_hold_expired{segment:decider} + hold_split{decider_timed_out} and exit 0 (fail-open)', async () => {
     const c = collect(); const exits: number[] = [];
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, holdBudget: holdThatExpiresAt(4),
       decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
     }) as never);
@@ -776,7 +785,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
 
   it('⭐ auto-wait timeout ⇒ windsurf_hook_hold_expired{segment:auto}, no split (no decision ran), exit 0', async () => {
     const c = collect(); const exits: number[] = []; const decide = vi.fn(async () => 'block' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, holdBudget: holdThatExpiresAt(3), decidePromptSubmit: decide,
       exit: (code: number) => { exits.push(code); },
     }) as never);
@@ -791,7 +800,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
 
   it('a normal block run ⇒ hold_split{decision:block} with numeric fields, NO hold_expired, exit 2', async () => {
     const c = collect(); const exits: number[] = [];
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, decidePromptSubmit: async () => 'block' as const,
       exit: (code: number) => { exits.push(code); },
     }) as never);
@@ -807,7 +816,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
 
   it('⭐ switch OFF ⇒ the sink is never called (old flow byte-identical)', async () => {
     const c = collect();
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       env: {}, logEvent: c.logEvent, exit: () => {},
     }) as never);
     expect(c.logEvent).not.toHaveBeenCalled();
@@ -830,7 +839,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
     }
     it('⭐ preparation 60 s, popup window 30 min: a block chosen after 5 minutes still blocks (exit 2)', async () => {
       const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
-      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
         logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 30 * 60_000,
         decidePromptSubmit: () => new Promise((r) => { v.advance(5 * 60_000); setTimeout(() => r('block' as const), 0); }),
         exit: (code: number) => { exits.push(code); },
@@ -842,7 +851,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
     });
     it('the popup window still expires (a forgotten popup is not forever) — same fail-open as RC67', async () => {
       const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
-      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
         logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 120_000,
         decidePromptSubmit: () => new Promise(() => { v.advance(120_000); }),
         exit: (code: number) => { exits.push(code); },
@@ -852,7 +861,7 @@ describe('⭐ RC67 — windsurf hold expiry logged with the budget split', () =>
     });
     it('an exhausted preparation never grants a popup window', async () => {
       const c = collect(); const exits: number[] = []; const v = virtualBudget(60_000);
-      await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+      await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
         logEvent: c.logEvent, holdBudget: v.budget, popupWaitBudgetMs: () => 30 * 60_000,
         readStdin: async () => { v.advance(60_000); return PAYLOAD; },
         decidePromptSubmit: async () => 'block' as const,
@@ -900,14 +909,14 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
     const c = collect(); const exits: number[] = [];
     const consumer = vi.fn(() => ({ spawned: true, pid: 77 }));
     const t0 = Date.now();
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, holdBudget: holdWith(60_000, 4), spawnExpiryConsumer: consumer,
       decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
     }) as never);
     expect(consumer).toHaveBeenCalledTimes(1);
     const arg = consumer.mock.calls[0]![0] as unknown as { projectRoot: string; before: number; reason: string };
     expect(arg.reason).toBe('decider_expired');
-    expect(arg.projectRoot).toBe('/proj');
+    expect(arg.projectRoot).toBe(PROJECT_ROOT);
     expect(arg.before).toBeGreaterThanOrEqual(t0);
     expect(arg.before).toBeLessThanOrEqual(Date.now());
     expect(c.find('windsurf_hook_expiry_consume')).toEqual([{ level: 'info', name: 'windsurf_hook_expiry_consume',
@@ -917,7 +926,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
 
   it('⭐ auto expiry ⇒ consumer {reason:auto_expired}; decider never consulted', async () => {
     const consumer = vi.fn(() => ({ spawned: true, pid: 1 })); const decide = vi.fn(async () => 'block' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: () => {}, holdBudget: holdWith(60_000, 3), spawnExpiryConsumer: consumer,
       decidePromptSubmit: decide, exit: () => {},
     }) as never);
@@ -929,7 +938,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
   it('⭐ below the floor after auto ⇒ hold_floor logged, decider SKIPPED, consumer {reason:below_floor}, no split, exit 0', async () => {
     const c = collect(); const exits: number[] = [];
     const consumer = vi.fn(() => ({ spawned: true, pid: 2 })); const decide = vi.fn(async () => 'block' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS - 1), spawnExpiryConsumer: consumer,
       decidePromptSubmit: decide, exit: (code: number) => { exits.push(code); },
     }) as never);
@@ -947,7 +956,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
 
   it('exactly AT the floor the decider still runs and nothing is consumed', async () => {
     const consumer = vi.fn(() => ({ spawned: true, pid: 3 })); const decide = vi.fn(async () => 'allow' as const);
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: () => {}, holdBudget: holdWith(SUBMIT_POPUP_MIN_REMAINING_MS), spawnExpiryConsumer: consumer,
       decidePromptSubmit: decide, exit: () => {},
     }) as never);
@@ -957,7 +966,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
 
   it('a normal block run (real budget) ⇒ consumer never spawned, exit 2 unchanged', async () => {
     const consumer = vi.fn(() => ({ spawned: true, pid: 4 })); const exits: number[] = [];
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: () => {}, spawnExpiryConsumer: consumer,
       decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
     }) as never);
@@ -967,7 +976,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
 
   it('a failed consumer spawn is logged as warn and never changes the fail-open exit', async () => {
     const c = collect(); const exits: number[] = [];
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       logEvent: c.logEvent, holdBudget: holdWith(60_000, 4),
       spawnExpiryConsumer: () => ({ spawned: false, error: 'EACCES' }),
       decidePromptSubmit: async () => 'block' as const, exit: (code: number) => { exits.push(code); },
@@ -979,7 +988,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
   it('⭐ gated ⇒ NEXPATH_HOLD_REMAINING_MS is set (numeric) before `handle` spawns auto; switch OFF ⇒ never set, consumer never spawned', async () => {
     const seen: Array<string | undefined> = [];
     const env: Record<string, string> = { ...GATE_ENV };
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       env, logEvent: () => {}, handle: async () => { seen.push(env.NEXPATH_HOLD_REMAINING_MS); return { child: null } as never; },
       decidePromptSubmit: async () => 'allow' as const, exit: () => {},
     }) as never);
@@ -987,7 +996,7 @@ describe('⭐ RC71 — windsurf expiry consume + 6.1 floor', () => {
     expect(Number(seen[0])).toBeGreaterThan(0);
     const offEnv: Record<string, string> = {};
     const consumer = vi.fn(() => ({ spawned: true, pid: 5 }));
-    await runWindsurfHookAction('pre_user_prompt', { project: '/proj' }, base({
+    await runWindsurfHookAction('pre_user_prompt', { project: PROJECT_ROOT }, base({
       env: offEnv, logEvent: () => {}, spawnExpiryConsumer: consumer, exit: () => {},
     }) as never);
     expect(offEnv.NEXPATH_HOLD_REMAINING_MS).toBeUndefined();
@@ -1012,19 +1021,19 @@ describe('⭐ double-close — isReplacementEcho reads the session without closi
 
   it('⭐ default reader: the persisted lastInjectedPrompt is read and NOTHING is written (no fold, no save)', async () => {
     const { store, run, exec } = storeWith(state({}));
-    await expect(isReplacementEcho('/proj', BODY, { openStore: async () => store, closeStore: () => {} })).resolves.toBe(true);
-    expect(exec).toHaveBeenCalledWith('SELECT state_json FROM session_states WHERE project_root = ?', ['/proj']);
+    await expect(isReplacementEcho(PROJECT_ROOT, BODY, { openStore: async () => store, closeStore: () => {} })).resolves.toBe(true);
+    expect(exec).toHaveBeenCalledWith('SELECT state_json FROM session_states WHERE project_root = ?', [PROJECT_ROOT]);
     expect(run).not.toHaveBeenCalled();
   });
   it('past the 30-minute gap the session counts as over — same answer load() gave (fresh session, no injected prompt)', () => {
     const { store } = storeWith(state({ lastPromptAt: Date.now() - 30 * 60 * 1000 }));
-    expect(readInjectedPromptSnapshot(store, '/proj').current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(store, PROJECT_ROOT).current.lastInjectedPrompt).toBeNull();
     const live = storeWith(state({ lastPromptAt: Date.now() - 30 * 60 * 1000 + 5_000 }));
-    expect(readInjectedPromptSnapshot(live.store, '/proj').current.lastInjectedPrompt).toBe(BODY);
+    expect(readInjectedPromptSnapshot(live.store, PROJECT_ROOT).current.lastInjectedPrompt).toBe(BODY);
   });
   it('no row / corrupt JSON / non-string field ⇒ null, never a throw', () => {
-    expect(readInjectedPromptSnapshot(storeWith(null).store, '/proj').current.lastInjectedPrompt).toBeNull();
-    expect(readInjectedPromptSnapshot(storeWith('{not json').store, '/proj').current.lastInjectedPrompt).toBeNull();
-    expect(readInjectedPromptSnapshot(storeWith(state({ lastInjectedPrompt: 42 })).store, '/proj').current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(storeWith(null).store, PROJECT_ROOT).current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(storeWith('{not json').store, PROJECT_ROOT).current.lastInjectedPrompt).toBeNull();
+    expect(readInjectedPromptSnapshot(storeWith(state({ lastInjectedPrompt: 42 })).store, PROJECT_ROOT).current.lastInjectedPrompt).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import type { Store } from '../../store/db.js';
 import { openStore, closeStore, DEFAULT_DB_PATH } from '../../store/db.js';
 import { classifyStage } from '../../classifier/stage-classifier.js';
 import { startSensitiveActionMicroClearanceV1 } from '../../classifier/sensitive-action-micro-clearance.js';
+import { startQueueRankMicroCallV1, estimateQueueIfStageStaysV1 } from '../../classifier/queue-rank-micro-call.js';
 import { SessionStateManager } from '../../classifier/SessionStateManager.js';
 import { detectAbsenceFlags, ABSENCE_MIN_PROMPTS } from '../../classifier/AbsenceDetector.js';
 import { buildRuntimeContext } from '../../classifier/runtime-context.js';
@@ -30,18 +31,21 @@ import { getConfig } from '../../store/config.js';
 import { buildPromptEnhancementSettingsControlV1 } from '../shared/pe-settings-control.js';
 import { getProject, upsertProject } from '../../store/projects.js';
 import { getRecentPrompts } from '../../store/prompts.js';
-import { importHistoricalPrompts } from '../../store/historical-import.js';
+import { importHistoricalPrompts, type HistoryImportSummary } from '../../store/historical-import.js';
+import { readChatHistoryConsent } from './chat-history-consent.js';
 import { classifyUserProfileLLM, MIN_PROFILE_PROMPTS } from '../../core/classifier/LLMProfileClassifier.js';
 import { isUsableLlmCredential } from '../../config/credential-shape.js';
 import { isProfileStale } from '../../classifier/UserProfileClassifier.js';
 import { OpenAILLMAdapter } from '../adapters/llm.adapter.js';
 import { loggerAdapter } from '../adapters/log.adapter.js';
 import { logger, initLogger } from '../../logger.js';
+import { SIGNAL_MAP as RANK_SIGNAL_MAP } from '../../core/classifier/signals.js';
 import { stripBom, headBytesHex } from '../../utils/strip-bom.js';
 import type { LogLevel } from '../../logger.js';
 import { writeHookStats } from '../../store/hook-stats.js';
 import { upsertPendingAdvisory } from '../../store/pending-advisories.js';
-import { upsertPendingPromptEnhancement, type PendingPromptEnhancement } from '../../store/pending-prompt-enhancements.js';
+import { upsertPendingPromptEnhancement, type PendingPromptEnhancement, type PromptEnhancementEmphasisPhraseV1 } from '../../store/pending-prompt-enhancements.js';
+import { buildPromptEnhancementEmphasisPhrasesV1 } from '../../prompt-enhancement/emphasis-locate.js';
 import {
   preparePromptEnhancementStopBridgeDelivery,
   type PromptEnhancementDeliveryRequestV1,
@@ -1069,6 +1073,36 @@ export function createPromptEnhancementCliHostConsumerV1(
  * @param openai   Optional OpenAI client (injectable for testing)
  * @returns AutoOutcome — what the pipeline decided and did
  */
+/**
+ * The phrases this prepared body may show in bold.
+ *
+ * One derivation for both store sites: the row is written in two branches of runAuto and only
+ * one runs per prepare, but they must never derive the list differently — the popup reads
+ * whichever row was written, and a difference between them would be invisible until it showed
+ * on screen.
+ *
+ * Read-only. It runs after the body is final, so it cannot change a byte of what the agent
+ * receives; it only says which of those bytes the popup may draw louder.
+ */
+function emphasisPhrasesForPreparedBodyV1(
+  result: PromptEnhancementPrepareResultV1,
+  request: PromptEnhancementPrepareRequestV1,
+): readonly PromptEnhancementEmphasisPhraseV1[] {
+  return buildPromptEnhancementEmphasisPhrasesV1({
+    originalPromptText: result.currentBody.originalPromptText,
+    sections: result.currentBody.sections.map((section) => ({
+      sectionKind: section.sectionKind,
+      bodyText: section.bodyText,
+      ...(section.groundedFactValues ? { groundedFactValues: section.groundedFactValues } : {}),
+      ...(section.sourceFactIds ? { sourceFactIds: section.sourceFactIds } : {}),
+      ...(section.sourceIds ? { sourceIds: section.sourceIds } : {}),
+    })),
+    ...(request.reviewMomentContext.detectedLanguage
+      ? { detectedLanguage: request.reviewMomentContext.detectedLanguage }
+      : {}),
+  });
+}
+
 export async function runAuto(
   input:   AutoInput,
   store:   Store,
@@ -1154,8 +1188,15 @@ export async function runAuto(
   // uncaught throw here would cost the user their live prompt AND fail the hook on
   // their very first prompt — losing old history is bad, losing the current one is
   // worse. Failure is logged and the pipeline continues.
+  // Cursor's and Devin Local's history is read only for editors whose user allowed NexPath to
+  // read their AI chat history (asked only when the import runs); the live prompt is passed so
+  // it is never imported twice.
+  let historyImport: HistoryImportSummary | undefined;
   try {
-    await importHistoricalPrompts(store, input.projectRoot);
+    historyImport = await importHistoricalPrompts(store, input.projectRoot, {
+      livePrompt: input.promptText,
+      otherAgentConsent: readChatHistoryConsent,
+    });
   } catch (err) {
     logger.warn('historical_import_failed', {
       project: input.projectRoot,
@@ -1176,11 +1217,14 @@ export async function runAuto(
   // Once per session (first prompt): record the dev-environment trajectory — probe the project's
   // env facts, and emit a flap-damped change event if a fact moved since the last confirmed probe
   // (e.g. version control added). Consent-gated + best-effort; never blocks the pipeline.
-  if (mgr.current.promptCount === 0) {
+  // A session the import just created from Cursor or Devin Local history alone would have started
+  // empty here without that history, so the probe runs as it did then, at an empty session's index.
+  const seededFromOtherAgentsOnly = historyImport?.seededFromOtherAgentsOnly === true;
+  if (mgr.current.promptCount === 0 || seededFromOtherAgentsOnly) {
     try {
       recordEnvTrajectory(store, input.projectRoot, {
         sessionId:       mgr.current.sessionId,
-        promptIndex:     mgr.current.promptCount,
+        promptIndex:     seededFromOtherAgentsOnly ? 0 : mgr.current.promptCount,
         stage:           mgr.current.currentStage,
         stageConfidence: mgr.current.stageConfidence,
       });
@@ -1280,8 +1324,17 @@ export async function runAuto(
   // below, and is read synchronously (then aborted if still pending) right after that await —
   // added wall time is exactly zero and the hook process's lifetime is unchanged. Every
   // failure mode reads as "no clearance", which keeps today's confirmation behaviour intact.
+  // Build the queue the engine will enforce if the stage stays, ready for the ranking micro-call that is
+  // issued beside the classifier below. Never awaited; read at the pick; zero added wall time.
+  let rankCandidateKeys: string[] = [];
+  try {
+    const rankProjectType = getProject(store, input.projectRoot)?.projectType ?? undefined;
+    const rankRuntimeContext = buildRuntimeContext(mgr.current as import('../../classifier/types.js').SessionState);
+    rankCandidateKeys = estimateQueueIfStageStaysV1(mgr.current as import('../../core/classifier/types.js').SessionState, mgr.current.profile, rankProjectType, freqConfig.signalAbsenceThresholdMultiplier, freqConfig.signalAbsenceMinFloor, rankRuntimeContext);
+  } catch (e) { logger.info('queue_rank_error', { where: 'prequeue', error: String(e) }); rankCandidateKeys = []; }
+  const rankRecentPrompts = [...mgr.current.promptHistory.slice(-3).map((p) => p.text), input.promptText];
   const microClearance = startSensitiveActionMicroClearanceV1(input.promptText, openai);
-  const stageResult = await classifyStage(
+  const stagePromise = classifyStage(
     {
       promptText:        input.promptText,
       window:            [...mgr.current.promptHistory.map((p) => ({ text: p.text })), { text: input.promptText }],
@@ -1312,6 +1365,11 @@ export async function runAuto(
       },
     },
   );
+  // Issued AFTER the classifier's own call so runAuto's first call stays the stage classifier's, and
+  // BEFORE the await below so both are in flight across it — the concurrency is unchanged either way.
+  const queueRank = startQueueRankMicroCallV1(rankCandidateKeys, rankRecentPrompts, openai as any);
+  logger.info('queue_rank_start', { promptCountBefore: mgr.current.promptCount, n: rankCandidateKeys.length, outcome: queueRank.outcome() });
+  const stageResult = await stagePromise;
   microClearance.abort();
   const settledClearance = microClearance.read();
   // Observability for the capture/failure rate (the I1 lesson, applied here from day one):
@@ -1526,6 +1584,8 @@ export async function runAuto(
         // prepares → NULL columns.
         plannerItems: capturedPlannerItems,
         plannerPromptDirectives: capturedPlannerPromptDirectives,
+        // Display only: the popup may draw these louder, and the agent never sees the difference.
+        emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, request),
       });
       const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
       logger.debug('pending_prompt_enhancement_stored', {
@@ -1732,9 +1792,29 @@ export async function runAuto(
     effectiveFlagType = 'stage_transition';
   } else {
     const qualifyingKeys = new Set(triggerResult.qualifyingFlags.map((f) => f.signalKey));
+    // Read the ranked pick (synchronous — whatever settled beside the classifier), validate it against the
+    // REAL queue, and only then let it replace today's file-order fallback. Tier 1 is untouched.
+    const rankedKey = queueRank.read();
+    queueRank.abort();
+    const rankedUsable = rankedKey !== undefined && qualifyingKeys.has(rankedKey);
+    // The tier-3 fallback is no longer file order. Order the queue by FEWEST expected stages
+    // (the more specific signal), then by the SMALLEST wait number; both are existing SignalDefinition fields,
+    // so no signal is ranked by hand. Ties keep file order — Array#sort is stable — so this is a strict
+    // refinement of today's behaviour, never a reshuffle of equals.
+    const fallbackRank = (k: string): [number, number] => {
+      const s = RANK_SIGNAL_MAP.get(k) as { expectedStages?: readonly string[]; absenceThreshold?: number } | undefined;
+      return [s?.expectedStages?.length ?? Number.MAX_SAFE_INTEGER, s?.absenceThreshold ?? Number.MAX_SAFE_INTEGER];
+    };
+    const fallbackOrdered = [...triggerResult.qualifyingFlags].sort((a, b) => {
+      const ra = fallbackRank(a.signalKey); const rb = fallbackRank(b.signalKey);
+      return (ra[0] - rb[0]) || (ra[1] - rb[1]);
+    });
+    const fallbackKey = fallbackOrdered[0]!.signalKey;
     const selectedKey = qualifyingKeys.has(stageResult.selectedSignalKey)
       ? stageResult.selectedSignalKey
-      : triggerResult.qualifyingFlags[0]!.signalKey;
+      : (rankedUsable ? rankedKey : fallbackKey);
+    logger.info('absence_fallback_rank', { promptCount: mgr.current.promptCount, fileOrderFirst: triggerResult.qualifyingFlags[0]!.signalKey, rubricFirst: fallbackKey, changed: triggerResult.qualifyingFlags[0]!.signalKey !== fallbackKey, queueSize: triggerResult.qualifyingFlags.length });
+    logger.info('queue_rank_pick', { promptCount: mgr.current.promptCount, offered: rankCandidateKeys.length, outcome: queueRank.outcome(), ranked: rankedKey ?? null, rankedInQueue: rankedUsable, classifierInQueue: qualifyingKeys.has(stageResult.selectedSignalKey), used: selectedKey, tier: qualifyingKeys.has(stageResult.selectedSignalKey) ? 1 : (rankedUsable ? 2 : 3) });
     effectiveFlagType = `absence:${selectedKey}`;
     // Same list the gate used, for the same reason — by now 6.8 has persisted the fresh raises, so
     // the duplicates this introduces are absorbed rather than counted twice.
@@ -1848,6 +1928,8 @@ export async function runAuto(
         // prepares → NULL columns.
         plannerItems: capturedPlannerItems,
         plannerPromptDirectives: capturedPlannerPromptDirectives,
+        // Display only: the popup may draw these louder, and the agent never sees the difference.
+        emphasisPhrases: emphasisPhrasesForPreparedBodyV1(preparation.result, peIntegration.request),
       });
       const handoffPresent = Boolean(preparation.result.uiView.handoffAndSequenceSummary);
       logger.debug('pending_prompt_enhancement_stored', {

@@ -22,6 +22,9 @@ import {
 import { recordSignal, readSignals } from '../adapters/lifecycle-signals.js';
 import { _resetIdentityInFlight } from '../adapters/rating-identity.js';
 import type { PePanelCommandV1, PePanelViewV1 } from '../ui/pe-contract.js';
+// The engine's own section map — the consumer of the projected section list.
+// Imported here, not in the worker: the numbers belong wherever they are drawn.
+import { buildPromptEnhancementSectionMapV1 } from '../../prompt-enhancement/popup-section-map.js';
 
 function makeLog(): { log: LogPort; events: Array<[string, Record<string, unknown> | undefined]> } {
   const events: Array<[string, Record<string, unknown> | undefined]> = [];
@@ -320,6 +323,232 @@ describe('buildPePanelView — whitelist projection', () => {
       onFirstRendered: vi.fn().mockResolvedValue(undefined),
     });
     expect((second.views[0] as unknown as Record<string, unknown>).currentFrequency).toBeUndefined();
+  });
+});
+
+describe('buildPePanelView — the sections the panel numbers from', () => {
+  /** The engine's render view, reduced to the fields the projection reads. */
+  const engineView = (
+    editedBodyText: string,
+    sections?: readonly { title: string; bodyText: string; sectionKind?: string }[],
+  ): Parameters<typeof buildPePanelView>[0] => ({
+    model: {
+      title: 't', editorHeading: 'Use enhanced prompt',
+      body: { editable: true },
+      publicCopy: { trustCues: [], diagnostics: [] },
+      controls: {
+        directional: [], original: { availability: 'available' },
+        close: { availability: 'available' },
+      },
+    },
+    editedBodyText,
+    additionalDetailsText: '',
+    ...(sections ? { sections } : {}),
+  } as unknown as Parameters<typeof buildPePanelView>[0]);
+
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.', sectionKind: 'context_and_constraints' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.', sectionKind: 'acceptance_or_output_expectation' },
+  ];
+  /** The numbers a consumer derives — the engine's own map, on the text in front of it. */
+  const numbersFor = (text: string, view: PePanelViewV1): (readonly [string, number])[] =>
+    buildPromptEnhancementSectionMapV1(text, view.sections ?? [])
+      .entries.map((e) => [e.title, e.number] as const);
+
+  it('carries the real engine\'s own sections, in body order, each title a real title line', async () => {
+    const { log } = makeLog();
+    const { sendToTab, views } = scriptedTab(log, [() => ({ type: 'close' })]);
+    await runBrowserPePopup({
+      log, projectRoot: ROOT, apiKey: null, record, sendToTab,
+      onFirstRendered: vi.fn().mockResolvedValue(undefined),
+    });
+    const v = views[0]!;
+    expect(v.sections, 'the real engine view carries sections, so the panel view must too').toBeDefined();
+    expect(v.sections!.length).toBeGreaterThan(0);
+
+    // Every section names a line the reader can actually see, which is the only
+    // thing a number is for; and they arrive in the order they appear.
+    const lines = v.bodyText.split('\n').map((l) => l.trimEnd());
+    for (const section of v.sections!) expect(lines).toContain(`${section.title}:`);
+    const at = v.sections!.map((section) => lines.indexOf(`${section.title}:`));
+    expect(at).toEqual([...at].sort((a, b) => a - b));
+
+    // And they are exactly what the engine's map needs: 1..N over the real body.
+    const numbers = numbersFor(v.bodyText, v);
+    expect(numbers.map(([, n]) => n)).toEqual(numbers.map((_, i) => i + 1));
+    expect(numbers.length).toBe(v.sections!.length);
+  });
+
+  /**
+   * ⏪ This used to assert that the kind must NOT ride along, and the bold overlay
+   * changed that deliberately: the standard keeps marks out of the kinds it
+   * excludes, and a surface that cannot see the kind cannot honour it. So the
+   * assertion is inverted rather than loosened — the kind is now REQUIRED to
+   * cross, and the list of fields is still closed, because a closed list is what
+   * makes "and nothing else" mean anything.
+   */
+  it('projects the title, the composed text and the kind — and NOTHING else', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(view.sections).toEqual([
+      { title: 'Scope', bodyText: 'the login route only.', sectionKind: 'context_and_constraints' },
+      { title: 'Acceptance', bodyText: 'the password is hashed.', sectionKind: 'acceptance_or_output_expectation' },
+    ]);
+    for (const section of view.sections!) {
+      expect(Object.keys(section).sort()).toEqual(['bodyText', 'sectionKind', 'title']);
+    }
+  });
+
+  /**
+   * The phrase list, and the four things about it that are behaviour rather than
+   * plumbing. It is the engine side's own deterministic pass, run in the worker on
+   * the composed sections — never re-derived here, never read from the CLI's
+   * database, and never a model call.
+   */
+  describe('the phrases the body emphasises', () => {
+    const BOLD_BODY = [
+      'Scope:',
+      'Do not delete the audit log while refactoring, and run the test suite before reporting done.',
+    ].join('\n');
+    const BOLD_SECTIONS = [
+      { title: 'Scope', bodyText: 'Do not delete the audit log while refactoring, and run the test suite before reporting done.', sectionKind: 'context_and_constraints' },
+    ];
+
+    it('finds marks on a body that has them — so the plumbing is not vacuous', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      expect(view.emphasisPhrases, 'a body with limits and actions must earn marks').toBeDefined();
+      expect(view.emphasisPhrases!.length).toBeGreaterThan(0);
+      // Every phrase is text that is actually in the body — a mark with nowhere to
+      // go would be drawn nowhere, and a phrase from somewhere else is a defect.
+      for (const phrase of view.emphasisPhrases!) expect(BOLD_BODY).toContain(phrase);
+    });
+
+    /**
+     * ⚠️ The body here is `the login route.` and NOT the fixture's own
+     * `the login route only.`, which was the first thing tried and does earn a
+     * mark: the rules return `only` on its own. That is the standard's `only …`
+     * shape, already recorded as a quality observation about marks cut
+     * mid-phrase — so it makes a poor "nothing to mark" fixture and a good
+     * reminder that this one was picked by measuring rather than by eye.
+     */
+    it('omits the field entirely when nothing earns a mark — absent means absent', () => {
+      const plain = [{ title: 'Scope', bodyText: 'the login route.', sectionKind: 'context_and_constraints' }];
+      const view = buildPePanelView(engineView('Scope:\nthe login route.', plain), 1);
+      expect(view.emphasisPhrases).toBeUndefined();
+    });
+
+    it('omits the field when the engine view carries no sections at all', () => {
+      expect(buildPePanelView(engineView(BOLD_BODY), 1, undefined, 'x').emphasisPhrases).toBeUndefined();
+    });
+
+    it('carries no duplicates — the same words twice would draw the same mark twice', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      const phrases = view.emphasisPhrases ?? [];
+      expect(new Set(phrases).size).toBe(phrases.length);
+    });
+
+    it('draws one mark for a clause the body repeats in two sections — the engine says so, not this file', () => {
+      // ⏪ This test exists because of a change that was made here and reverted the same day: the dedupe
+      // was re-keyed on text AND section, reasoning that the same words in two sections are two marks.
+      // They would be — except the CLASSIFIER dedupes a candidate by class and text over the whole body,
+      // by a deliberate ruling, so a body never offers one text twice. Measured over the 35 recorded
+      // bodies: not one does.
+      //
+      // Pinned here so the next person reaches for the measurement instead of the reasoning.
+      const repeated = 'Do not delete the audit log';
+      const twoSections = [
+        { title: 'Scope', bodyText: `${repeated} while refactoring.`, sectionKind: 'context_and_constraints' },
+        { title: 'How to verify', bodyText: `${repeated} before reporting done.`, sectionKind: 'verification_or_test_plan' },
+      ];
+      const body = twoSections.flatMap((section) => [`${section.title}:`, section.bodyText, '']).join('\n');
+      const view = buildPePanelView(engineView(body, twoSections), 1, undefined, 'add a login page');
+      expect((view.emphasisPhrases ?? []).filter((phrase) => phrase === repeated)).toHaveLength(1);
+    });
+
+    it('carries a section for every phrase, index for index', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      expect(view.emphasisPhraseSections).toBeDefined();
+      // ⛔ The alignment IS the contract: the panel indexes one array with the other's index and must
+      // ignore the pair entirely if the lengths disagree.
+      expect(view.emphasisPhraseSections!.length).toBe(view.emphasisPhrases!.length);
+      for (const index of view.emphasisPhraseSections!) {
+        expect(index).toBeGreaterThanOrEqual(0);
+        expect(index).toBeLessThan(BOLD_SECTIONS.length);
+      }
+    });
+
+    it('omits the sections when it omits the phrases', () => {
+      const plain = [{ title: 'Scope', bodyText: 'the login route.', sectionKind: 'context_and_constraints' }];
+      const view = buildPePanelView(engineView('Scope:\nthe login route.', plain), 1);
+      expect(view.emphasisPhrases).toBeUndefined();
+      expect(view.emphasisPhraseSections).toBeUndefined();
+    });
+
+    it('still marks without the prompt — one class needs it, the others do not', () => {
+      const withPrompt = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      const without = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1);
+      expect(without.emphasisPhrases, 'the other classes do not need the prompt').toBeDefined();
+      expect(without.emphasisPhrases!.length).toBeGreaterThan(0);
+      // And the prompt can only ever ADD: it feeds the developer's-own-words class.
+      expect(withPrompt.emphasisPhrases!.length).toBeGreaterThanOrEqual(without.emphasisPhrases!.length);
+    });
+
+    it('never puts the phrases into the body — the bold is display-only and the text is what is sent', () => {
+      const view = buildPePanelView(engineView(BOLD_BODY, BOLD_SECTIONS), 1, undefined, 'add a login page');
+      expect(view.bodyText).toBe(BOLD_BODY);
+      expect(view.bodyText).not.toContain('<strong>');
+    });
+  });
+
+  it('omits the field when the engine view carries no sections — an older worker draws the frame it always drew', () => {
+    expect(buildPePanelView(engineView(BODY), 1).sections).toBeUndefined();
+    // An empty list is the same absence, never an empty array on the wire.
+    expect(buildPePanelView(engineView(BODY, []), 1).sections).toBeUndefined();
+  });
+
+  /**
+   * The reason the NUMBER is not on the wire.
+   *
+   * The CLI renumbers from the live editor buffer on every frame. The panel gets
+   * a new view only when the engine re-renders, and plain typing never reaches
+   * the worker — `SurfaceEvent` carries no text-changed case at all, and
+   * `pe-inject.ts` shows a surface only on a pushed view. So a number decided in
+   * the worker would describe the text as it was when the popup opened. Carrying
+   * the sections AS COMPOSED keeps the answer derivable from whatever the field
+   * holds at the moment it is drawn, which is what this proves.
+   */
+  it('stays correct after edits the worker never sees — a deleted title drops out, the rest stay contiguous', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(numbersFor(BODY, view)).toEqual([['Scope', 1], ['Acceptance', 2]]);
+
+    // The user deletes a title line in the panel. No command, no new view.
+    const edited = BODY.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    expect(numbersFor(edited, view)).toEqual([['Acceptance', 1]]);
+
+    // And undoes it — back to both, still from the same view.
+    expect(numbersFor(BODY, view)).toEqual([['Scope', 1], ['Acceptance', 2]]);
+
+    // Retyped somewhere else instead, the engine's in-order title matching finds
+    // only the moved one. Pinned rather than worked around: it is exactly what
+    // the CLI does with the same buffer, and the panel must not diverge from it.
+    const moved = `${edited}\nScope:\nthe login route only.`;
+    expect(numbersFor(moved, view)).toEqual([['Scope', 1]]);
+
+    // Every title gone: no numbers, and the view itself never had to change.
+    expect(numbersFor('Add a login page.', view)).toEqual([]);
+  });
+
+  it('never puts a number into the text — bodyText is byte-identical to the engine\'s', () => {
+    const view = buildPePanelView(engineView(BODY, SECTIONS), 1);
+    expect(view.bodyText).toBe(BODY);
+    expect(view.bodyText).not.toContain('#');
   });
 });
 

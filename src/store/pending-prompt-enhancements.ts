@@ -16,6 +16,42 @@ import type { PromptEnhancementSequenceItemV1, PromptEnhancementSequenceOffsetRa
  * Mirrors `pending-advisories.ts`: one pending row per project_root, JSON-serialised typed
  * payload, fail-closed validation on read.
  */
+/**
+ * One phrase the submit popup renders in bold.
+ *
+ * Phrases, not offsets: the user edits the body, so a stored offset goes stale on the first
+ * keystroke while a phrase is re-found on the live buffer at render time. Nothing here says where
+ * the phrase sits, or which section it fell in — both are re-derived from the body being drawn.
+ */
+export interface PromptEnhancementEmphasisPhraseV1 {
+  /** The phrase as it read in the body when it was chosen; re-located at render. */
+  text: string;
+  /** Which kind of emphasis it is (1–5). The kinds are fixed and are measured separately. */
+  emphasisClass: 1 | 2 | 3 | 4 | 5;
+  /**
+   * Where the phrase came from. Everything written to the store is `'floor'` — a phrase produced
+   * locally, with no call. `'model'` marks one produced at runtime and is never persisted.
+   */
+  source: 'floor' | 'model';
+  /**
+   * Which of the body's sections this phrase was charged to, when that is known.
+   *
+   * 🔑 **Why a display-only phrase needs to remember its section.** The cap that chose these phrases
+   * spends four per SECTION, and it decided which section each one belongs to. A surface that then
+   * searches the whole body for the phrase's first occurrence can place it somewhere else entirely —
+   * so the per-section budget the cap computed is not the budget the reader sees, two phrases can land
+   * on overlapping stretches the cap never compared, and the overlay's range merge then draws the pair
+   * as one long bold blob. Measured on a reported popup: `account if the email` and `email matches`
+   * rendered as a single heavy run across both.
+   *
+   * ⚠️ **Optional, and every reader must work without it.** Rows written before this existed carry no
+   * section, and so do phrases from the optional model tier; a phrase without one is placed exactly as
+   * it always was — first eligible occurrence anywhere in the body. The store's validator asks only for
+   * a string `text`, so an old row still reads back whole and a new row still reads back on old code.
+   */
+  sectionIndex?: number;
+}
+
 export interface PendingPromptEnhancement {
   id:          number;
   projectRoot: string;
@@ -38,6 +74,14 @@ export interface PendingPromptEnhancement {
    * is (non-sequence / old row / corrupt) — an empty sequence directive list stores as `[]`.
    */
   plannerPromptDirectives?: readonly PromptEnhancementSequenceOffsetRangeV1[];
+  /**
+   * The phrases the submit popup renders in bold, as they read in the body when they were chosen.
+   * Undefined on old rows, on any prepare that produced none, and on a corrupt stored value — the
+   * popup then draws no emphasis at all. A stored `[]` means something different: phrases WERE
+   * computed and none qualified, and the two are kept apart on purpose. Display-only — this list
+   * never reaches the send path, so it cannot change a single byte of what the agent receives.
+   */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }
 
 export interface UpsertPendingPromptEnhancementInput {
@@ -50,6 +94,8 @@ export interface UpsertPendingPromptEnhancementInput {
   plannerItems?: readonly PromptEnhancementSequenceItemV1[];
   /** MPS P1b-ii whole-prompt directive ranges (see {@link PendingPromptEnhancement.plannerPromptDirectives}). */
   plannerPromptDirectives?: readonly PromptEnhancementSequenceOffsetRangeV1[];
+  /** Popup bold phrases (see {@link PendingPromptEnhancement.emphasisPhrases}). */
+  emphasisPhrases?: readonly PromptEnhancementEmphasisPhraseV1[];
 }
 
 /**
@@ -66,8 +112,8 @@ export function upsertPendingPromptEnhancement(
   );
   store.db.run(
     `INSERT INTO pending_prompt_enhancements
-       (project_root, session_id, prompt_count, status, created_at, request_json, result_json, planner_items_json, planner_prompt_directives_json)
-     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
+       (project_root, session_id, prompt_count, status, created_at, request_json, result_json, planner_items_json, planner_prompt_directives_json, emphasis_phrases_json)
+     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
     [
       input.projectRoot,
       input.sessionId,
@@ -79,6 +125,8 @@ export function upsertPendingPromptEnhancement(
       input.plannerItems ? JSON.stringify(input.plannerItems) : null,
       // Directive ranges travel with the item list; a sequence with no directives stores '[]'.
       input.plannerPromptDirectives ? JSON.stringify(input.plannerPromptDirectives) : null,
+      // Nullable on purpose: nothing computed stores NULL, while a computed-but-empty list stores '[]'.
+      input.emphasisPhrases ? JSON.stringify(input.emphasisPhrases) : null,
     ],
   );
   saveStore(store);
@@ -142,6 +190,41 @@ function parsePlannerPromptDirectives(raw: unknown): readonly PromptEnhancementS
 }
 
 /**
+ * True when an already-parsed value is a well-formed phrase list: an array whose every entry is an
+ * object with a string `text`. A light structural guard, like the planner one — the phrase is what
+ * gets re-found on the live buffer, so a list that cannot name one is worth nothing.
+ *
+ * Exported because the phrases reach the popup by two roads — this row, and the payload the spawned
+ * window host reads — and the two must agree on what a phrase list is. One definition, both callers.
+ */
+export function isPromptEnhancementEmphasisPhraseListV1(
+  value: unknown,
+): value is readonly PromptEnhancementEmphasisPhraseV1[] {
+  return Array.isArray(value) && value.every(
+    (phrase) => phrase !== null && typeof phrase === 'object'
+      && typeof (phrase as { text?: unknown }).text === 'string',
+  );
+}
+
+/**
+ * Parse the carried bold phrases, fail-OPEN to undefined: NULL (old rows, or a prepare that produced
+ * none), non-JSON, a value that is not an array, or any entry without a string `text` all read back
+ * as undefined — the popup then draws plain text. A corrupt value here must never hide the popup, so
+ * this never joins the fail-closed request/result pair. An empty `[]` is a valid, meaningful value
+ * (phrases were computed and none qualified) and is preserved as an empty array.
+ */
+function parseEmphasisPhrases(raw: unknown): readonly PromptEnhancementEmphasisPhraseV1[] | undefined {
+  if (typeof raw !== 'string') return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  return isPromptEnhancementEmphasisPhraseListV1(parsed) ? parsed : undefined;
+}
+
+/**
  * Return the most recent pending PE for a project, or null if none / corrupt. When sessionId is
  * provided only PEs from that session are returned. A row whose stored JSON fails typed
  * validation is treated as absent (fail-closed) — the Stop hook then shows no PE popup.
@@ -156,7 +239,7 @@ export function getPendingPromptEnhancement(
     ? [projectRoot, sessionId]
     : [projectRoot];
   const result = store.db.exec(
-    `SELECT id, project_root, session_id, prompt_count, status, created_at, request_json, result_json, planner_items_json, planner_prompt_directives_json
+    `SELECT id, project_root, session_id, prompt_count, status, created_at, request_json, result_json, planner_items_json, planner_prompt_directives_json, emphasis_phrases_json
      FROM pending_prompt_enhancements
      WHERE project_root = ?${sessionFilter} AND status = 'pending'
      ORDER BY created_at DESC
@@ -172,6 +255,8 @@ export function getPendingPromptEnhancement(
   // the popup — so a bad planner_* column must NOT fail-close the whole pending PE (unlike req/result).
   const plannerItems = parsePlannerItems(row[8]);
   const plannerPromptDirectives = parsePlannerPromptDirectives(row[9]);
+  // Same posture, one step further: a bad emphasis column costs the bold, never the popup.
+  const emphasisPhrases = parseEmphasisPhrases(row[10]);
   return {
     id:          row[0] as number,
     projectRoot: row[1] as string,
@@ -183,6 +268,7 @@ export function getPendingPromptEnhancement(
     result:      resultPayload,
     ...(plannerItems ? { plannerItems } : {}),
     ...(plannerPromptDirectives ? { plannerPromptDirectives } : {}),
+    ...(emphasisPhrases ? { emphasisPhrases } : {}),
   };
 }
 

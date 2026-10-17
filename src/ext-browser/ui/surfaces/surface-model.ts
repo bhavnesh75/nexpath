@@ -79,6 +79,98 @@ export type SurfaceRow =
        * (:1354-1365).
        */
       maxLines?: number;
+      /**
+       * Display-only numbers for this field's own lines: given the text the
+       * field currently holds, which logical line (0-based) carries which
+       * number. The renderer draws each one dim after its line and nowhere
+       * else; nothing here reaches the text, the caret, or what is sent.
+       *
+       * A FUNCTION rather than a list, and that is the load-bearing part. The
+       * field's text changes under the user's fingers with no re-render — this
+       * surface has no text-changed event and the producer is not asked for one
+       * — so a precomputed list would describe the text as it was when the model
+       * was built. Asked afresh on every keystroke, the answer is always about
+       * what is actually on screen.
+       *
+       * It also keeps this layer honest: the surfaces know nothing about what a
+       * number MEANS. Whoever builds the model owns that rule and passes it in.
+       *
+       * ⚠️ A rule is bound to the content its producer built it from. Deriving a
+       * model whose field holds DIFFERENT content — a locally recomposed body,
+       * say — must rebuild the rule rather than carry this one across, or the
+       * new text is numbered against the old structure.
+       */
+      lineNumbers?: (text: string) => ReadonlyMap<number, number>;
+      /**
+       * Remove the numbered part a digit names from this field's text and give
+       * back what remains — or `undefined` when the rule refuses, which is the
+       * only way it can say no. A refusal leaves the field exactly as it was.
+       *
+       * A rule for the same reasons as `lineNumbers`, and it must agree with it:
+       * the digit a reader types is the number they can SEE, so both answers are
+       * computed from the text in front of them, and neither layer here knows
+       * what a section is or which removals are refused. Whoever builds the
+       * model owns both, and owns keeping them consistent.
+       */
+      removeSection?: (text: string, sectionNumber: number) => string | undefined;
+      /**
+       * Which stretches of this field's text are emphasised — half-open
+       * `[start, end)` character offsets into the text as given, in any order.
+       *
+       * A rule for the same reasons as `lineNumbers`: asked afresh on every
+       * keystroke, so the answer is always about what is on screen, and this
+       * layer knows nothing about what an emphasised stretch MEANS. Whoever
+       * builds the model owns that rule — including the standard's two
+       * exclusions, a title line and a section whose kind is excluded, which are
+       * decided before a range ever reaches here.
+       *
+       * ⛔ DISPLAY-ONLY, and this is the whole of it: a range never touches
+       * `text`, so the field's value is what it always was and what is sent is
+       * unchanged. Absent means no bold, and the row is then the row it was
+       * before this field existed — down to the DOM.
+       */
+      boldRanges?: (text: string) => readonly { start: number; end: number }[];
+      /**
+       * The stretches that may never hold a mark — a section title, a section the
+       * standard never marks. Asked about the LIVE text like {@link boldRanges}.
+       *
+       * Used only to decide what NOT to draw lighter. Absent means every unmarked
+       * stretch is treated alike, which is right for a surface that has no sections
+       * to reason about.
+       */
+      unmarkableRanges?: (text: string) => readonly { start: number; end: number }[];
+      /**
+       * The line to show INSTEAD of this field's focused hint while the removal
+       * chord is armed — the question the digit answers.
+       *
+       * It replaces the hint rather than joining it, which is the CLI's own
+       * rule and its reason: the frame keeps its line count either way, so
+       * nothing below the hint moves when the chord arms. A line that appeared
+       * would push the rows down and back on every press.
+       *
+       * Absent means the chord changes nothing on screen — which is what the
+       * surface did before this existed.
+       */
+      /*
+       * A function is asked about the LIVE text, the way {@link lineNumbers} and
+       * {@link removeSection} are, so a line naming a RANGE cannot fall out of step
+       * with the body after an edit. A plain string is for a surface whose line does
+       * not depend on the text at all.
+       */
+      armedHint?: string | ((text: string) => string);
+      /**
+       * What to say when {@link removeSection} refuses.
+       *
+       * ONE string for every refusal, as the CLI settled: a number naming no
+       * section, a locked body, and a cut that would leave the prompt blank all
+       * read the same to a reader, who needs to know only that the section did
+       * not go. Why it did not is not their question.
+       *
+       * It is shown for ONE render and then clears itself. This surface runs its
+       * own loop rather than the engine's, so nothing else would ever take it
+       * down again.
+       */
+      removalNotice?: string;
     }
   | {
       kind: 'action';

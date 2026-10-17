@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { autoGrow, growFields, renderSurface } from './surface-view.js';
-import { PE_FIXTURE, PE_FOOTER, DETAILS_HINT, EDIT_KEYS_HINT, BODY_HINT } from './fixtures/pe.js';
+import { PE_FIXTURE, PE_FOOTER, DETAILS_HINT, EDIT_KEYS_HINT, BODY_HINT, REMOVAL_HINT } from './fixtures/pe.js';
 import { MPS_FIRST_FIXTURE, MPS_CONTINUATION_FIXTURE } from './fixtures/mps.js';
 import { PEF_FIXTURE } from './fixtures/pef.js';
 import type { SurfaceModel } from './surface-model.js';
@@ -104,7 +104,10 @@ describe('PE surface — hints follow focus (D3.4)', () => {
 
   it('shows the send hint only while the body is focused', () => {
     // Off-focus it would be a lie: Enter acts on whichever row IS focused.
-    expect(hints(0)).toContain(`${EDIT_KEYS_HINT} · ${BODY_HINT}`);
+    // The removal hint sits between the edit keys and the send hint, where the
+    // CLI puts its own — the assertion carries it so the WHOLE line is pinned
+    // rather than a fragment that would still pass if a part went missing.
+    expect(hints(0)).toContain(`${EDIT_KEYS_HINT} · ${REMOVAL_HINT} · ${BODY_HINT}`);
     expect(hints(1).some((h) => h.includes(BODY_HINT))).toBe(false);
     expect(hints(2).some((h) => h.includes(BODY_HINT))).toBe(false);
   });
@@ -191,6 +194,117 @@ describe('what the parity test cannot see', () => {
     expect(cancel!.classList.contains('np-cancel')).toBe(true);
     expect(mps.querySelectorAll('.np-cancel')).toHaveLength(1);
     expect(renderSurface(document, PE_FIXTURE, { focusIndex: 0 }).querySelector('.np-cancel')).toBeNull();
+  });
+});
+
+describe('the field\'s line numbers — the CLI\'s #N, display-only', () => {
+  const TEXT = ['Add a login page.', '', 'Scope:', 'the login route only.', 'Acceptance:', 'x'].join('\n');
+  /** A model whose body row numbers the two title lines, like the CLI does. */
+  const withNumbers = (rule?: (text: string) => ReadonlyMap<number, number>): SurfaceModel => ({
+    id: 'prompt_enhancement',
+    label: 'Prompt enhancement',
+    rows: [{
+      kind: 'field',
+      label: 'Use enhanced prompt',
+      text: TEXT,
+      ...(rule ? { lineNumbers: rule } : {}),
+    }],
+    footer: PE_FOOTER,
+  });
+  /** The rule the producer supplies: title lines, numbered in order. */
+  const titleLines = (text: string): ReadonlyMap<number, number> => {
+    const out = new Map<number, number>();
+    text.split('\n').forEach((line, index) => {
+      if (/^\S.*:$/.test(line)) out.set(index, out.size + 1);
+    });
+    return out;
+  };
+  /** jsdom lays nothing out, so the one measurement the drawing gates on is stubbed. */
+  const layOut = (frame: HTMLElement): HTMLTextAreaElement => {
+    const field = frame.querySelector('textarea')!;
+    Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+    return field;
+  };
+  const markTexts = (frame: HTMLElement): string[] =>
+    [...frame.querySelectorAll('.np-marks span')].map((el) => el.textContent ?? '');
+
+  it('draws nothing at all when the model asks for no numbers', () => {
+    const frame = renderSurface(document, withNumbers(), { focusIndex: 0 });
+    expect(frame.querySelector('.np-marks')).toBeNull();
+  });
+
+  it('draws one dim mark per numbered line, after the line, when it asks', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    const field = layOut(frame);
+    growFields(frame);
+
+    expect(markTexts(frame)).toEqual(['    #1', '    #2']);
+    for (const mark of frame.querySelectorAll('.np-marks span')) {
+      expect(mark.classList.contains('np-dim')).toBe(true);
+    }
+    // The layer is decoration: nothing can focus it, read it aloud, or click it.
+    expect(frame.querySelector('.np-marks')!.getAttribute('aria-hidden')).toBe('true');
+    // …and it is positioned against its own row, not whatever ancestor happens
+    // to be positioned — the marks would otherwise be placed against the frame.
+    expect(frame.querySelector('.np-marks')!.parentElement!.classList.contains('np-has-marks')).toBe(true);
+    expect(field.value).toBe(TEXT);
+  });
+
+  it('follows the text as it is typed — the worker is never asked', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    const field = layOut(frame);
+    growFields(frame);
+    expect(markTexts(frame)).toHaveLength(2);
+
+    // A title line deleted in the panel. No command, no re-render, no new model.
+    field.value = TEXT.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(markTexts(frame)).toEqual(['    #1']);
+
+    // And a new section typed in — numbered without anything being rebuilt.
+    field.value = `${TEXT}\nVerification:\nrun the suite.`;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(markTexts(frame)).toEqual(['    #1', '    #2', '    #3']);
+  });
+
+  /**
+   * The property the whole feature rests on, asserted directly.
+   *
+   * It cannot be read off the parity suites or the recorded baseline: both read
+   * a row holding a textarea as `field.value` and never visit its other
+   * children, so the marks are invisible to them by construction. That is what
+   * makes them safe, and it is also why their absence there proves nothing. The
+   * comparison has to be made here.
+   */
+  it('changes not one line of the frame a reader sees, and not one byte of the text', () => {
+    const lines = (model: SurfaceModel): string[] => {
+      const frame = renderSurface(document, model, { focusIndex: 0 });
+      layOut(frame);
+      growFields(frame);
+      const out: string[] = [];
+      for (const row of frame.querySelectorAll('.np-row')) {
+        if (row.classList.contains('np-marker-hidden')) continue;
+        const field = row.querySelector('textarea');
+        if (field) { for (const line of field.value.split('\n')) out.push(line.trimEnd()); continue; }
+        out.push(rowText(row));
+      }
+      return out;
+    };
+    expect(lines(withNumbers(titleLines))).toEqual(lines(withNumbers()));
+
+    // …and the marks really were drawn in the frame that matched.
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    layOut(frame);
+    growFields(frame);
+    expect(markTexts(frame).length).toBeGreaterThan(0);
+    expect(frame.querySelector('textarea')!.value).not.toContain('#');
+  });
+
+  it('draws nothing where it cannot measure — an unlaid-out field gets no misplaced mark', () => {
+    const frame = renderSurface(document, withNumbers(titleLines), { focusIndex: 0 });
+    growFields(frame); // no clientHeight stub: jsdom's zero-height field
+    expect(markTexts(frame)).toEqual([]);
+    expect(frame.querySelector('.np-marks')).not.toBeNull(); // the layer is there, waiting
   });
 });
 
@@ -448,5 +562,292 @@ describe('field window policy — the CLI sizing rules (cli-submit-popup.ts:1335
     growFields(host);
     expect(field.style.maxHeight).toBe('60px'); // max(60, 100-450) — the floor
     host.remove();
+  });
+});
+
+/**
+ * The field's bold — the mirror behind the textarea.
+ *
+ * ⛔ jsdom lays nothing out, and this drawing GATES on a layout measurement: the
+ * mirror only goes up if bold is the same width as normal in the font that
+ * actually resolved, because where it is not, every mark would push the rest of
+ * its line sideways. So the measurement is stubbed here, in both directions —
+ * which is the point, because the fallback is as load-bearing as the drawing and
+ * a test that could only see one of them would be half a test.
+ */
+describe('the field\'s bold', () => {
+  const TEXT = [
+    'Scope:',
+    'Do not delete the audit log while refactoring.',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  /** Offsets of `Do not delete` in TEXT — the first mark a producer would ask for. */
+  const MARK = { start: TEXT.indexOf('Do not delete'), end: TEXT.indexOf('Do not delete') + 'Do not delete'.length };
+
+  const withBold = (
+    rule?: (text: string) => readonly { start: number; end: number }[],
+    keepFull?: (text: string) => readonly { start: number; end: number }[],
+  ): SurfaceModel => ({
+    ...PE_FIXTURE,
+    rows: [{
+      kind: 'field',
+      label: 'Use enhanced prompt',
+      text: TEXT,
+      ...(rule ? { boldRanges: rule } : {}),
+      ...(keepFull ? { unmarkableRanges: keepFull } : {}),
+    }],
+    footer: PE_FOOTER,
+  });
+
+  /**
+   * Make the font answer the guard's question.
+   *
+   * `sameWidth: true` is a true monospace face — bold measures exactly as wide as
+   * normal, which is what was measured on a real browser and what lets the mirror
+   * be trusted.
+   * `false` is a proportional one, where bold is wider and the mirror must refuse.
+   */
+  const withFont = (sameWidth: boolean, run: () => void): void => {
+    const real = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+      const weight = (this as HTMLElement).style?.fontWeight;
+      const width = weight === '700' && !sameWidth ? 120 : 100;
+      return { width, height: 15, top: 0, left: 0, right: width, bottom: 15, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    };
+    try { run(); } finally { Element.prototype.getBoundingClientRect = real; }
+  };
+
+  /** The frame, laid out enough for the drawing to run, with the input fired once. */
+  const draw = (
+    rule?: (text: string) => readonly { start: number; end: number }[],
+    keepFull?: (text: string) => readonly { start: number; end: number }[],
+  ): HTMLElement => {
+    const frame = renderSurface(document, withBold(rule, keepFull), { focusIndex: 0 });
+    document.body.appendChild(frame);
+    const field = frame.querySelector('textarea')!;
+    Object.defineProperty(field, 'clientWidth', { value: 365, configurable: true });
+    Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+    field.dispatchEvent(new Event('input'));
+    return frame;
+  };
+
+  it('adds no element at all when the model asks for no bold — the row is the row it always was', () => {
+    const frame = renderSurface(document, withBold(), { focusIndex: 0 });
+    expect(frame.querySelector('.np-bold')).toBeNull();
+    expect(frame.className.includes('np-has-marks')).toBe(false);
+  });
+
+  it('draws the body once, with the marked stretch in strong', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const layer = frame.querySelector('.np-bold')!;
+      expect(layer.querySelectorAll('strong')).toHaveLength(1);
+      expect(layer.querySelector('strong')!.textContent).toBe('Do not delete');
+      // The body exactly once: a mirror that duplicated text would still look
+      // plausible in a tag count.
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('leaves the text a reader sends untouched — the bold is display-only', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      expect(field.value).toBe(TEXT);
+      expect(field.value).not.toContain('<strong>');
+    });
+  });
+
+  it('🔴 refuses to draw when bold is NOT the same width — the fallback, not a smaller mirror', () => {
+    withFont(false, () => {
+      const frame = draw(() => [MARK]);
+      const layer = frame.querySelector('.np-bold') as HTMLElement;
+      expect(layer.hidden, 'a mirror that cannot line up must not go up at all').toBe(true);
+      expect(layer.querySelectorAll('strong')).toHaveLength(0);
+      // And the field keeps its own text visible, so nothing is invisible.
+      expect(frame.querySelector('textarea')!.style.color).not.toBe('transparent');
+    });
+  });
+
+  it('hides the mirror again when the marks go away', () => {
+    withFont(true, () => {
+      let ranges: readonly { start: number; end: number }[] = [MARK];
+      const frame = draw((_t) => ranges);
+      expect((frame.querySelector('.np-bold') as HTMLElement).hidden).toBe(false);
+      ranges = [];
+      frame.querySelector('textarea')!.dispatchEvent(new Event('input'));
+      const layer = frame.querySelector('.np-bold') as HTMLElement;
+      expect(layer.hidden).toBe(true);
+      expect(layer.textContent).toBe('');
+      expect(frame.querySelector('textarea')!.style.color).not.toBe('transparent');
+    });
+  });
+
+  it('takes its width from the FIELD, not the row — the scrollbar is the field\'s to lose', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      expect((frame.querySelector('.np-bold') as HTMLElement).style.width).toBe('365px');
+    });
+  });
+
+  it('gives the field a caret colour, because its text has gone transparent', () => {
+    withFont(true, () => {
+      const field = draw(() => [MARK]).querySelector('textarea')!;
+      expect(field.style.color).toBe('transparent');
+      expect(field.style.caretColor, 'without this the caret goes transparent with the text').not.toBe('');
+    });
+  });
+
+  it('is inert: out of the accessibility tree and out of every pointer\'s way', () => {
+    withFont(true, () => {
+      const layer = draw(() => [MARK]).querySelector('.np-bold')!;
+      expect(layer.getAttribute('aria-hidden')).toBe('true');
+    });
+  });
+
+  it('draws one run for overlapping ranges, never nested tags or doubled text', () => {
+    withFont(true, () => {
+      const a = { start: MARK.start, end: MARK.start + 10 };
+      const b = { start: MARK.start + 5, end: MARK.end };
+      const layer = draw(() => [b, a]).querySelector('.np-bold')!; // deliberately out of order
+      expect(layer.querySelectorAll('strong')).toHaveLength(1);
+      expect(layer.querySelector('strong')!.querySelector('strong')).toBeNull();
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('cannot be made to emit markup from the body', () => {
+    withFont(true, () => {
+      const hostile = 'Scope:\nuse <img src=x onerror="alert(1)"> carefully';
+      const frame = renderSurface(document, {
+        ...PE_FIXTURE,
+        rows: [{ kind: 'field', label: 'Use enhanced prompt', text: hostile, boldRanges: () => [{ start: 11, end: 40 }] }],
+        footer: PE_FOOTER,
+      } as unknown as SurfaceModel, { focusIndex: 0 });
+      document.body.appendChild(frame);
+      const field = frame.querySelector('textarea')!;
+      Object.defineProperty(field, 'clientWidth', { value: 365, configurable: true });
+      Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+      field.dispatchEvent(new Event('input'));
+      const layer = frame.querySelector('.np-bold')!;
+      expect(layer.querySelector('img')).toBeNull();
+      expect(layer.textContent).toBe(hostile);
+    });
+  });
+
+  it('follows the field\'s scroll, so the mirror does not sit still while the text moves', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      field.scrollTop = 30;
+      field.dispatchEvent(new Event('scroll'));
+      expect((frame.querySelector('.np-bold') as HTMLElement).scrollTop).toBe(30);
+    });
+  });
+
+  it('re-measures on INPUT, not only when the frame is resized', () => {
+    withFont(true, () => {
+      const frame = draw(() => [MARK]);
+      const field = frame.querySelector('textarea')!;
+      // The scrollbar appears as the body grows, so the field's text width moves
+      // while the reader types. The mirror must take the new one.
+      Object.defineProperty(field, 'clientWidth', { value: 350, configurable: true });
+      field.dispatchEvent(new Event('input'));
+      expect((frame.querySelector('.np-bold') as HTMLElement).style.width).toBe('350px');
+    });
+  });
+});
+
+/**
+ * The unmarked body, drawn lighter so the marks carry.
+ *
+ * The CLI paints its own text and can dim a run in place; the panel cannot touch a textarea, so the
+ * lighter weight lands on the mirror's unmarked runs instead. Two things are asserted, and the second
+ * is the one that was got wrong on the CLI first: the stretches that may never hold a mark — a
+ * section title, the developer's own prompt quoted back — keep FULL weight, because fading what
+ * someone just wrote says nothing true about it.
+ */
+describe("the field's bold — the unmarked text is lighter", () => {
+  const TEXT = [
+    'Scope:',
+    'Do not delete the audit log while refactoring.',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const MARK = { start: TEXT.indexOf('Do not delete'), end: TEXT.indexOf('Do not delete') + 'Do not delete'.length };
+  /** The first title line — the shape the real rule returns for a heading. */
+  const TITLE = { start: 0, end: 'Scope:'.length };
+
+  const withBold = (
+    rule?: (text: string) => readonly { start: number; end: number }[],
+    keepFull?: (text: string) => readonly { start: number; end: number }[],
+  ): SurfaceModel => ({
+    ...PE_FIXTURE,
+    rows: [{
+      kind: 'field',
+      label: 'Use enhanced prompt',
+      text: TEXT,
+      ...(rule ? { boldRanges: rule } : {}),
+      ...(keepFull ? { unmarkableRanges: keepFull } : {}),
+    }],
+    footer: PE_FOOTER,
+  });
+
+  const withFont = (run: () => void): void => {
+    const real = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function rect(this: Element): DOMRect {
+      return { width: 100, height: 15, top: 0, left: 0, right: 100, bottom: 15, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    };
+    try { run(); } finally { Element.prototype.getBoundingClientRect = real; }
+  };
+
+  const draw = (
+    rule?: (text: string) => readonly { start: number; end: number }[],
+    keepFull?: (text: string) => readonly { start: number; end: number }[],
+  ): HTMLElement => {
+    const frame = renderSurface(document, withBold(rule, keepFull), { focusIndex: 0 });
+    document.body.appendChild(frame);
+    const field = frame.querySelector('textarea')!;
+    Object.defineProperty(field, 'clientWidth', { value: 365, configurable: true });
+    Object.defineProperty(field, 'clientHeight', { value: 200, configurable: true });
+    field.dispatchEvent(new Event('input'));
+    return frame;
+  };
+
+  it('draws the unmarked stretches in their own class, and the marked one in strong', () => {
+    withFont(() => {
+      const layer = draw(() => [MARK])!.querySelector('.np-bold')!;
+      expect(layer.querySelectorAll('strong')).toHaveLength(1);
+      expect(layer.querySelectorAll('.np-plain').length).toBeGreaterThan(0);
+      // The body exactly once, however it was split up.
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('leaves a stretch that may never hold a mark at full weight', () => {
+    withFont(() => {
+      const layer = draw(() => [MARK], () => [TITLE])!.querySelector('.np-bold')!;
+      const lighter = [...layer.querySelectorAll('.np-plain')].map((el) => el.textContent ?? '').join('');
+      expect(lighter).not.toContain('Scope:');
+      // …and the rest of the unmarked body still is lighter, or the test would pass by drawing nothing.
+      expect(lighter).toContain('the audit log');
+      expect(layer.textContent).toBe(TEXT);
+    });
+  });
+
+  it('treats every unmarked stretch alike when it is told of none', () => {
+    withFont(() => {
+      const layer = draw(() => [MARK])!.querySelector('.np-bold')!;
+      const lighter = [...layer.querySelectorAll('.np-plain')].map((el) => el.textContent ?? '').join('');
+      expect(lighter).toContain('Scope:');
+    });
+  });
+
+  it('adds nothing at all when there is no mark to contrast against', () => {
+    withFont(() => {
+      const frame = renderSurface(document, withBold(), { focusIndex: 0 });
+      expect(frame.querySelector('.np-bold')).toBeNull();
+    });
   });
 });

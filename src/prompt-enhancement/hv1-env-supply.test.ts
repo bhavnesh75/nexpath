@@ -475,7 +475,7 @@ describe('§46.3c — the analysis table HV-2 will read must carry HV-1\'s corre
   // imported and never run, and it can be listed as a consumer while importing nothing from its
   // supposed source. This pins that the annotations survive in the file HV-2 reads.
   const ANALYSIS =
-    'lib/shared/submodules/nexpath-prompt-enhancement-submodule/docs/dev/' +
+    'lib/shared/sub-module/nexpath-prompt-enhancement-submodule/docs/dev/' +
     'user-experience-improvements-sub-11-prompt-enhancement-intent-family-routing-misses-debug-intents-analysis.md';
 
   it('the analysis file is present', () => {
@@ -526,7 +526,7 @@ describe('§46.3c — the PRE-FIX BASELINE must survive every annotation', () =>
   // These are the exact strings the table carried before HV-1 measured anything. They are the
   // baseline, so they are pinned as literals rather than described.
   const ANALYSIS =
-    'lib/shared/submodules/nexpath-prompt-enhancement-submodule/docs/dev/' +
+    'lib/shared/sub-module/nexpath-prompt-enhancement-submodule/docs/dev/' +
     'user-experience-improvements-sub-11-prompt-enhancement-intent-family-routing-misses-debug-intents-analysis.md';
 
   const BASELINE_CELLS = [

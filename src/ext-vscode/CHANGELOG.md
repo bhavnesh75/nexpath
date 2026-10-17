@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.1.58 — 2026-10-16
+
+- Your earlier prompts now count from the start in Cursor and Devin as well. On the
+  first prompt Nexpath sees in a project, it has always imported that project's earlier
+  Claude Code prompts into its local store. It now also imports the project's earlier
+  Cursor agent chats and Devin Local sessions, but only from an editor where you clicked
+  **Allow** on the chat-history prompt and that is open with Nexpath running at the time.
+  Everything is merged in time order and the newest 500 are kept. This happens once per
+  project. The imported prompts sit in the same local store as the rest of your prompt
+  history, so your first suggestions in that project already have that history to work
+  from.
+- Importing Devin Local sessions needs Node.js 22.13 or newer. On an older Node they are
+  skipped, and everything else works as before.
+- A resumed Claude Code session no longer has its earlier prompts imported twice.
+- Each section of the enhanced prompt in the submit-time popup now shows its number after
+  its title (`#2`).
+- Press **Ctrl+X** and then a section's number to remove that section in one step. This
+  is Ctrl+X on macOS too. There is no undo, but your original prompt stays one keypress
+  away. If the number names no section, or removing it would leave the prompt empty, the
+  popup says `this section not found` and changes nothing.
+- The popup now shows the key phrases of the enhanced prompt in bold: the instructions,
+  limits and conditions, the safety line, and terms you used yourself. This is display
+  only, and the text that is sent is exactly the same. Section titles and the section
+  that quotes your own prompt back are never marked, and no extra model call is made for
+  it.
+- The Prompt Enhancement panel now lists the enhanced prompt's sections, with their
+  numbers, above the text you edit. It also shows the bold phrases in a read-only preview
+  below it. The text you edit and send is unchanged.
+- Choosing which skipped practice to suggest: when two or more qualify, a small extra
+  model call ranks them for the stage you are in. It runs alongside the existing call and
+  adds no waiting. If it gives no usable answer, the practice tied to the fewest stages is
+  preferred. Before this, the order the practices happen to be listed in the code decided.
+
+## 0.1.55 — 2026-09-20
+
+- The submit-time popup can come back sooner. The default gap between popups is now 3
+  prompts instead of 7.
+- On the High setting:
+  - a popup that was prepared but never shown no longer uses up the session's budget or
+    silences that suggestion for the rest of the session;
+  - the limit of 20 popups per session is gone.
+- A practice that is still missing can be suggested again after its cooldown. Before
+  this, a suggestion could appear only once per session.
+- High is now the default suggestion frequency, both for new installs and wherever no
+  frequency was ever set. A setting you chose yourself is kept.
+- **Ctrl+T** in the popup opens a small settings menu. From it you can change how often
+  Nexpath suggests (High, Medium or Low) and your project role.
+- The Setup Complete summary no longer shows a Telemetry row. Telemetry is still off
+  unless you turn it on yourself.
+
 ## 0.1.36 — 2026-09-08
 
 - Chat-history capture survives an editor update. Cursor and Windsurf ship their own

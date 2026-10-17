@@ -454,6 +454,487 @@ describe('REAL prepare → whitelisted view → real dock DOM (plan §7: fixture
   });
 });
 
+describe('the body row\'s section numbers (the producer side)', () => {
+  const BODY = ['Add a login page.', '', 'Scope:', 'the login route only.', 'Acceptance:', 'x'].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'x' },
+  ];
+  const bodyRow = (v: PePanelViewV1) => {
+    const row = peSurfaceModel(v).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    return row;
+  };
+
+  it('supplies no rule at all when the view carries no sections', () => {
+    expect(bodyRow(view({ bodyText: BODY })).lineNumbers).toBeUndefined();
+  });
+
+  it('turns the view\'s sections into the CLI\'s own numbering', () => {
+    const rule = bodyRow(view({ bodyText: BODY, sections: SECTIONS })).lineNumbers!;
+    // Line 2 is `Scope:`, line 4 is `Acceptance:` — numbered in body order.
+    expect([...rule(BODY)]).toEqual([[2, 1], [4, 2]]);
+  });
+
+  it('answers about the text it is GIVEN, not the text the view was built with', () => {
+    const rule = bodyRow(view({ bodyText: BODY, sections: SECTIONS })).lineNumbers!;
+
+    // The panel's own text after edits the worker never saw.
+    const edited = BODY.split('\n').filter((l) => l !== 'Scope:').join('\n');
+    expect([...rule(edited)]).toEqual([[3, 1]]);
+    expect([...rule('nothing here')]).toEqual([]);
+    // …and the original answer is unchanged, so the rule holds no state.
+    expect([...rule(BODY)]).toEqual([[2, 1], [4, 2]]);
+  });
+
+  /**
+   * The whole chain in one place: a REAL engine prepare, through the worker's
+   * whitelist, through the producer, into the REAL dock DOM.
+   *
+   * The three links are each proven on their own elsewhere. This is the one that
+   * fails if the wiring BETWEEN them is broken — a field renamed on the view, a
+   * rule not passed to the row, a row not passed to the renderer — none of which
+   * any of the three would notice on its own.
+   */
+  it('a real engine prepare draws its own section numbers in the real dock', { timeout: 30_000 }, async () => {
+    const { buildBrowserPeRequest, prepareBrowserPe } = await import('../background/pe-prepare.js');
+    const { buildPePanelView } = await import('../background/pe-popup-host.js');
+    const prep = await prepareBrowserPe(buildBrowserPeRequest({
+      projectRoot: 'https://bolt.new/~/real-numbers',
+      promptText: 'add a login page with email and password to the app',
+      sessionId: 's-num', promptCount: 6,
+      currentStage: 'implementation', prevStage: 'implementation',
+      triggerKind: 'absence', effectiveFlagType: 'absence:tests_before_merge',
+      firedKey: 'absence:tests_before_merge@implementation', triggerConfidence: 0.9,
+      classifierState: 'fire_recommended', profile: null, configuredRole: 'founder',
+      detectedLanguage: undefined, streamBOutputs: [],
+      triggerEligibility: 'fresh_trigger_eligible', recentPromptRefs: [],
+    }));
+    expect(prep.safeFallback).toBe(false);
+    if (prep.safeFallback) return;
+
+    const { buildPromptEnhancementPopupRenderModelV1 } = await import('../../prompt-enhancement/popup-render-model.js');
+    const rm = buildPromptEnhancementPopupRenderModelV1({
+      result: prep.result, timestampMs: 1, deliverySurface: prep.result.delivery.deliveryChannel,
+    });
+    expect(rm.state).toBe('render_model_ready');
+    if (rm.state !== 'render_model_ready') return;
+
+    // The engine's own composed sections, exactly as the popup loop passes them.
+    const sections = prep.result.currentBody.sections.map((s) => ({ title: s.title, bodyText: s.bodyText }));
+    expect(sections.length).toBeGreaterThan(0);
+    const panelView = buildPePanelView(
+      { model: rm.model, editedBodyText: rm.model.body.text, additionalDetailsText: '', refinement: false, sections },
+      1,
+    );
+    expect(panelView.sections).toHaveLength(sections.length);
+
+    adapter.show(panelView);
+    const field = bodyField();
+    // jsdom lays nothing out, so the one measurement the drawing gates on is
+    // stubbed; an input event redraws against it. Where each mark LANDS needs a
+    // real browser — what this proves is that the chain produces them at all.
+    Object.defineProperty(field, 'clientHeight', { value: 400, configurable: true });
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const marks = [...surfaceEl().querySelectorAll('.np-marks span')].map((el) => el.textContent);
+    expect(marks).toEqual(sections.map((_, index) => `    #${index + 1}`));
+
+    // And the body the user sees and sends is still the engine's, byte for byte.
+    expect(field.value).toBe(rm.model.body.text);
+    expect(field.value).not.toContain('#');
+  });
+
+  it('puts the numbers on screen and leaves the sent text alone', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    expect(field.value).toBe(BODY);
+    expect(field.value).not.toContain('#');
+    // Enter sends what the field holds — the numbers are not in it.
+    field.focus();
+    pressOn(field, 'Enter');
+    expect(commands()).toEqual([{ type: 'use_current', bodyText: BODY }]);
+  });
+});
+
+describe('removing a section in the panel (Alt+Shift+R, then a digit)', () => {
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    '',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.' },
+  ];
+  const chord = (field: HTMLTextAreaElement, digit: string): void => {
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: digit, code: `Digit${digit}`, bubbles: true, cancelable: true,
+    }));
+  };
+  /** The CLI's own cut, run directly, as the reference. */
+  const cliRemoval = async (text: string, n: number): Promise<string | undefined> => {
+    const { removePromptEnhancementSectionV1 } = await import('../../prompt-enhancement/popup-section-removal.js');
+    const { buildPromptEnhancementMultilineEditorStateV1 } = await import('../../prompt-enhancement/multiline-editor.js');
+    const result = removePromptEnhancementSectionV1(
+      buildPromptEnhancementMultilineEditorStateV1({
+        identity: { enhancementId: 'e', currentBodyId: 'b', bodyRevision: 1, validationDecisionId: 'v' },
+        enhancedBodyText: text, fieldWidth: 72, viewportRows: 6,
+      }),
+      SECTIONS,
+      n,
+    );
+    return result.outcome === 'removed' ? result.editor.buffers.enhanced_body.text : undefined;
+  };
+
+  it('produces the body the CLI produces, byte for byte, and sends it as an edit', async () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+
+    const expected = await cliRemoval(BODY, 1);
+    expect(expected).toBeDefined();
+    expect(bodyField().value).toBe(expected);
+    // D2: a removal is an EDIT. It goes out as the engine's own edit_body — no
+    // new command type, so nothing on the wire had to change to carry it.
+    expect(commands()).toEqual([{ type: 'edit_body', bodyText: expected }]);
+  });
+
+  it('renumbers as the CLI does: after one removal the next digit means the next section', async () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+    expect(afterFirst).not.toContain('Scope:');
+
+    // No new view has arrived. #1 is now what used to be #2.
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(await cliRemoval(afterFirst, 1));
+    expect(bodyField().value).not.toContain('Acceptance:');
+  });
+
+  it('refuses what the ENGINE refuses — a number that names nothing', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '9');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('refuses to empty the prompt — the engine\'s would-blank rule, not a second copy', async () => {
+    const onlyOne = 'Scope:\nthe login route only.';
+    expect(await cliRemoval(onlyOne, 1), 'the engine itself refuses this cut').toBeUndefined();
+
+    adapter.show(view({ bodyText: onlyOne, sections: [SECTIONS[0]!] }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(onlyOne);
+    expect(commands()).toEqual([]);
+  });
+
+  it('refuses on a locked body, the way the engine refuses every other edit to one', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS, bodyEditable: false }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('is absent, not inert, when the view carries no sections', () => {
+    adapter.show(view({ bodyText: BODY }));
+    chord(bodyField(), '1');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+
+  it('the numbers a reader sees and the digit they type name the same section', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    Object.defineProperty(field, 'clientHeight', { value: 400, configurable: true });
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    const marks = [...surfaceEl().querySelectorAll('.np-marks span')].map((el) => el.textContent);
+    expect(marks).toEqual(['    #1', '    #2']);
+
+    // #1 is drawn beside `Scope:`, so 1 must take `Scope:`.
+    chord(bodyField(), '1');
+    expect(bodyField().value).not.toContain('Scope:');
+    expect(bodyField().value).toContain('Acceptance:');
+  });
+});
+
+describe('work done while the panel waits for the engine is never thrown away', () => {
+  /**
+   * The panel goes busy the moment a command leaves it and stays busy until the
+   * engine's next view (`content/pe-inject.ts:117`). The overlay stops the
+   * mouse, but not the keyboard — so a reader can keep editing in that window,
+   * and until this was fixed the arriving view silently reverted everything
+   * they did there.
+   *
+   * Measured before the fix, both of these: the second removal vanished, and so
+   * did anything typed. The engine is told about the newer text instead.
+   */
+  const BODY = [
+    'Add a login page.',
+    '',
+    'Scope:',
+    'the login route only.',
+    '',
+    'Acceptance:',
+    'the password is hashed.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'Scope', bodyText: 'the login route only.' },
+    { title: 'Acceptance', bodyText: 'the password is hashed.' },
+  ];
+  const chord = (field: HTMLTextAreaElement, digit: string): void => {
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: digit, code: `Digit${digit}`, bubbles: true, cancelable: true,
+    }));
+  };
+  const typeInto = (field: HTMLTextAreaElement, text: string): void => {
+    field.value = text;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  it('a second removal inside the window survives, and the engine is told', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);               // what pe-inject does with that edit
+    chord(bodyField(), '1');             // …and the reader removes another
+    const afterSecond = bodyField().value;
+    expect(afterSecond).not.toBe(afterFirst);
+
+    // The engine answers the FIRST edit — all it has heard about.
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+
+    expect(bodyField().value, 'the second removal must still be gone').toBe(afterSecond);
+    expect(commands()).toEqual([
+      { type: 'edit_body', bodyText: afterFirst },
+      { type: 'edit_body', bodyText: afterSecond },
+    ]);
+  });
+
+  it('text typed inside the window survives, and the engine is told', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    const typed = `${afterFirst}\n\nAlso: rate-limit the login route.`;
+    typeInto(bodyField(), typed);
+
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+
+    expect(bodyField().value).toBe(typed);
+    expect(commands()[commands().length - 1]).toEqual({ type: 'edit_body', bodyText: typed });
+  });
+
+  it('does not carry the edit of one popup run into the next', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    typeInto(bodyField(), `${afterFirst}
+left over from the last run`);
+    adapter.hide();                       // the run ends; the field survives it
+
+    // A NEW run whose body happens to equal the previous run's last edit. It is
+    // not an echo of anything — nothing was sent in this run — so it stands.
+    adapter.show(view({ viewSeq: 1, bodyText: afterFirst, sections: SECTIONS }));
+    expect(bodyField().value).toBe(afterFirst);
+  });
+
+  it('REAL news still wins — a body the engine changed is not overwritten by stale local text', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    typeInto(bodyField(), `${afterFirst}\nlocal scribble`);
+
+    // Not an echo of our edit: the engine recomposed the prompt (a refinement,
+    // a go-back, a fallback). Its body is the news and must stand.
+    const recomposed = 'A completely different, recomposed prompt.';
+    adapter.show(view({ viewSeq: 2, bodyText: recomposed, sections: SECTIONS }));
+
+    expect(bodyField().value).toBe(recomposed);
+    expect(commands().some((c) => c?.type === 'edit_body' && c.bodyText.includes('scribble'))).toBe(false);
+  });
+
+  it('settles: once the engine agrees, nothing more is sent', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    chord(bodyField(), '1');
+    const afterFirst = bodyField().value;
+
+    adapter.setBusy(true);
+    chord(bodyField(), '1');
+    const afterSecond = bodyField().value;
+    adapter.show(view({ viewSeq: 2, bodyText: afterFirst, sections: SECTIONS }));
+    const sent = commands().length;
+
+    // The engine now echoes the second edit too. The panel and the engine hold
+    // the same text, so there is nothing left to say — no re-send loop.
+    adapter.show(view({ viewSeq: 3, bodyText: afterSecond, sections: SECTIONS }));
+    expect(bodyField().value).toBe(afterSecond);
+    expect(commands()).toHaveLength(sent);
+  });
+});
+
+describe('what the panel is told to draw lighter', () => {
+  const BODY = [
+    'My original request (verbatim):',
+    'add a retry to the payment gateway client',
+    '',
+    'Context and constraints:',
+    'Keep the payment gateway client as it is.',
+  ].join('\n');
+  const SECTIONS = [
+    { title: 'My original request (verbatim)', bodyText: 'add a retry to the payment gateway client', sectionKind: 'original_request_or_goal' },
+    { title: 'Context and constraints', bodyText: 'Keep the payment gateway client as it is.', sectionKind: 'context_and_constraints' },
+  ];
+  const bodyRow = (v: PePanelViewV1) => {
+    const row = peSurfaceModel(v).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    return row;
+  };
+
+  it('supplies the stretches that must stay at full weight, from the live text', () => {
+    const row = bodyRow(view({ bodyText: BODY, sections: SECTIONS, emphasisPhrases: ['payment gateway client'] }));
+    const keepFull = row.unmarkableRanges;
+    if (typeof keepFull !== 'function') throw new Error('the panel was given no rule for what to keep at full weight');
+
+    const ranges = keepFull(BODY);
+    expect(ranges.length).toBeGreaterThan(0);
+    const covered = (needle: string): boolean => {
+      const at = BODY.indexOf(needle);
+      return at >= 0 && ranges.some((r) => at >= r.start && at < r.end);
+    };
+    // A title, and the section that quotes their own prompt back.
+    expect(covered('My original request (verbatim):')).toBe(true);
+    expect(covered('add a retry to the payment gateway client')).toBe(true);
+    expect(covered('Context and constraints:')).toBe(true);
+    // …and NOT the sentence a mark can land on, or nothing would ever be drawn lighter.
+    expect(covered('Keep the payment gateway client as it is.')).toBe(false);
+  });
+
+  it('asks about the live text, not the view it opened with', () => {
+    const row = bodyRow(view({ bodyText: BODY, sections: SECTIONS, emphasisPhrases: ['payment gateway client'] }));
+    const keepFull = row.unmarkableRanges as (text: string) => readonly { start: number; end: number }[];
+    // A title edited away in the field: the stretch it covered is no longer protected.
+    const edited = BODY.replace('Context and constraints:', 'and also');
+    const before = keepFull(BODY).length;
+    expect(keepFull(edited).length).toBeLessThan(before);
+  });
+});
+
+describe('the removal texts the panel supplies', () => {
+  const BODY = ['Add a login page.', '', 'Scope:', 'the login route only.'].join('\n');
+  const SECTIONS = [{ title: 'Scope', bodyText: 'the login route only.' }];
+  const bodyRow = (v: PePanelViewV1) => {
+    const row = peSurfaceModel(v).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    return row;
+  };
+
+  it('carries all three, and only when the removal itself is there', () => {
+    const withSections = bodyRow(view({ bodyText: BODY, sections: SECTIONS }));
+    expect(withSections.hints?.whenFocused?.[0]).toContain('Alt+Shift+R #N');
+    // Asked about the LIVE text, like the numbering and the cut beside it — so the range can
+    // never fall out of step with the body after an edit.
+    const armed = withSections.armedHint;
+    if (typeof armed !== 'function') throw new Error('the armed hint must be asked about the live text');
+    // ONE section in this body, so one number — never the nine the chord happens to accept.
+    expect(armed(BODY)).toBe('Alt+Shift+R — which section? #1');
+    expect(withSections.removalNotice).toBe('no section with that number');
+
+    // No sections, no removal — so no hint for a chord that cannot run, and no
+    // notice for a refusal that can never happen.
+    const without = bodyRow(view({ bodyText: BODY }));
+    expect(without.hints?.whenFocused?.[0]).not.toContain('Alt+Shift+R #N');
+    expect(without.armedHint).toBeUndefined();
+    expect(without.removalNotice).toBeUndefined();
+  });
+
+  it('advertises nothing on a locked body — the chord cannot work there', () => {
+    const locked = bodyRow(view({ bodyText: BODY, sections: SECTIONS, bodyEditable: false }));
+    expect(JSON.stringify(locked.hints)).not.toContain('Alt+Shift+R');
+  });
+
+  it('belong to the panel, never to the CLI', () => {
+    const row = bodyRow(view({ bodyText: BODY, sections: SECTIONS }));
+    // Resolved before it is stringified: JSON.stringify DROPS a function, which would have
+    // quietly taken the armed line out of this check the day it became one.
+    const armedHint = typeof row.armedHint === 'function' ? row.armedHint(BODY) : row.armedHint;
+    expect(armedHint).toContain('which section?');
+    const all = JSON.stringify([row.hints, armedHint, row.removalNotice]);
+    expect(all).not.toContain('Ctrl+X');
+    expect(all).not.toContain('this section not found');
+    expect(all).not.toContain('Remove which section?');
+  });
+
+  it('shows the question on screen when the chord arms, and takes it back', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const hint = () => [...surfaceEl().querySelectorAll('.np-hint')].map((el) => el.textContent ?? '').join(' | ');
+    expect(hint()).toContain('Alt+Shift+R #N');
+
+    bodyField().dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    expect(hint()).toContain('which section?');
+    expect(hint()).not.toContain('Alt+Shift+R #N');
+  });
+
+  it('names the sections the body has, and follows an edit made in the field', () => {
+    const THREE = [
+      { title: 'Scope', bodyText: 'the login route only.' },
+      { title: 'Acceptance', bodyText: 'a passing test for both paths.' },
+      { title: 'Verification', bodyText: 'paste the suite output.' },
+    ];
+    const threeBody = ['Add a login page.', '', ...THREE.flatMap((s) => [s.title + ':', s.bodyText, ''])].join('\n');
+    adapter.show(view({ bodyText: threeBody, sections: THREE }));
+    const hint = () => [...surfaceEl().querySelectorAll('.np-hint')].map((el) => el.textContent ?? '').join(' | ');
+    const press = (key: string, mods: Record<string, unknown> = {}) => bodyField().dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...mods }),
+    );
+    const arm = () => press('R', { code: 'KeyR', altKey: true, shiftKey: true });
+
+    arm();
+    expect(hint()).toContain('which section? #1–#3');
+    expect(hint()).not.toContain('#1–#9');
+
+    // Disarm, edit one title away in the field, and arm again: the range is re-read from the
+    // text the panel has harvested — the same source `removeSection` cuts from, so the number
+    // offered and the number accepted cannot part company. `input` is what a real edit fires.
+    press('a');
+    bodyField().value = threeBody.replace('Acceptance:', 'and also');
+    bodyField().dispatchEvent(new Event('input', { bubbles: true }));
+    arm();
+    expect(hint()).toContain('which section? #1–#2');
+  });
+
+  it('says so when a digit names no section, and sends nothing', () => {
+    adapter.show(view({ bodyText: BODY, sections: SECTIONS }));
+    const field = bodyField();
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'R', code: 'KeyR', altKey: true, shiftKey: true, bubbles: true, cancelable: true,
+    }));
+    field.dispatchEvent(new KeyboardEvent('keydown', {
+      key: '9', code: 'Digit9', bubbles: true, cancelable: true,
+    }));
+    expect(surfaceEl().textContent).toContain('no section with that number');
+    expect(bodyField().value).toBe(BODY);
+    expect(commands()).toEqual([]);
+  });
+});
+
 describe('read-only fallback bodies (live 2026-08-25: typed edits silently dropped)', () => {
   it('bodyEditable:false renders BOTH fields natively read-only — the field never promises an edit the send path will discard', () => {
     adapter.show(view({ bodyEditable: false }));
@@ -751,5 +1232,64 @@ describe('advisory rating (real dock + controller)', () => {
 
     expect(commands()).toEqual([{ type: 'close' }]);
     expect(bodyField()).toBeTruthy();          // the PE body is back
+  });
+});
+
+/**
+ * Which SECTION the panel draws a mark in (2026-09-29).
+ *
+ * The engine's cap spends four marks per section and decides which section each phrase belongs to. The
+ * panel used to be handed only the phrase TEXTS, so it placed every one at its first occurrence
+ * anywhere in the body — two phrases charged to two sections both landed in the first, where the
+ * overlay's range merge drew them as one heavy run and the second section drew nothing.
+ */
+describe('a mark the panel draws lands in the section it was charged to', () => {
+  /** The same words in two markable sections — the case where placement can go wrong. */
+  const REPEATED = 'the retry queue';
+  const SECTIONS = [
+    { title: 'Context and constraints', bodyText: `Leave ${REPEATED} alone for now.`, sectionKind: 'context_and_constraints' },
+    { title: 'How to verify', bodyText: `Drain ${REPEATED} and count what is left.`, sectionKind: 'verification_or_test_plan' },
+  ];
+  const BODY = [
+    `${SECTIONS[0]!.title}:`,
+    SECTIONS[0]!.bodyText,
+    '',
+    `${SECTIONS[1]!.title}:`,
+    SECTIONS[1]!.bodyText,
+  ].join('\n');
+  /** Where each section's copy of the repeated words sits, read off the fixture. */
+  const FIRST_AT = BODY.indexOf(REPEATED);
+  const SECOND_AT = BODY.indexOf(REPEATED, FIRST_AT + 1);
+
+  const boldOf = (overrides: Partial<PePanelViewV1>) => {
+    const row = peSurfaceModel(view({ bodyText: BODY, sections: SECTIONS, ...overrides })).rows[0]!;
+    if (row.kind !== 'field') throw new Error('body row is not a field');
+    const bold = row.boldRanges;
+    if (typeof bold !== 'function') throw new Error('the panel was given no bold rule');
+    return bold(BODY).map((range) => range.start);
+  };
+
+  it('draws it in the later section when that is the one it was charged to', () => {
+    expect(boldOf({ emphasisPhrases: [REPEATED], emphasisPhraseSections: [1] })).toEqual([SECOND_AT]);
+  });
+
+  it('draws it in the first section when THAT is the one it was charged to', () => {
+    // The other direction, so the test above cannot pass by the mark simply moving.
+    expect(boldOf({ emphasisPhrases: [REPEATED], emphasisPhraseSections: [0] })).toEqual([FIRST_AT]);
+  });
+
+  it('marks each section once when both were charged for the same words', () => {
+    expect(boldOf({ emphasisPhrases: [REPEATED, REPEATED], emphasisPhraseSections: [0, 1] }))
+      .toEqual([FIRST_AT, SECOND_AT]);
+  });
+
+  it('places it as before when no sections travelled — an older worker', () => {
+    // ⛔ The wire-compat half. Absent must mean exactly what it meant before the field existed.
+    expect(boldOf({ emphasisPhrases: [REPEATED] })).toEqual([FIRST_AT]);
+  });
+
+  it('ignores a misaligned sections array rather than guessing', () => {
+    expect(boldOf({ emphasisPhrases: [REPEATED, REPEATED], emphasisPhraseSections: [1] }))
+      .toEqual([FIRST_AT, FIRST_AT]);
   });
 });
