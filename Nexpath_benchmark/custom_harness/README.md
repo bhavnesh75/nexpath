@@ -61,5 +61,3 @@ Every script takes `--help`.
 | `HOW-IT-WORKS.md` | the moving parts, in more detail |
 | `runs/<id>/turns.jsonl` | what the agent must receive, one row per turn (the handover file) |
 | `runs/`, `proxy/cassettes/` | local output — not published |
-
-ing it, and replacing a prompt with the body is only safe while that holds |
