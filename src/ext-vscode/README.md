@@ -121,6 +121,8 @@ Windsurf (Devin).
 
 - **Cursor** or **Windsurf (Devin)** — VS Code `^1.80.0` or compatible.
 - **Node.js ≥ 20.19** on your machine (the bundled engine needs it; older Node will fail to start).
+  Importing your earlier Devin Local sessions needs Node.js 22.13 or newer; on older Node
+  they are skipped.
 - **One credential.** Either your own **OpenAI API key**
   (<https://platform.openai.com/api-keys>), or a **Nexpath token** from a free account at
   [parseos.tech/nexpath](https://parseos.tech/nexpath/) if you would rather not create an
@@ -134,6 +136,9 @@ Windsurf (Devin).
 
 - Your **API key** is stored in your OS keychain (or a `0600` file fallback) — never bundled or logged.
 - **Your prompt history is stored locally** on your machine — never sent to Nexpath servers.
+- On the first prompt in a project, Nexpath copies that project's earlier prompts into this
+  local store: from Claude Code, and, if you clicked **Allow**, from Cursor and Devin
+  Local. This is a one-time read of files on your machine.
 - To generate guidance, Nexpath sends **recent prompt context to OpenAI** using **your**
   key — or, with a Nexpath token configured in the CLI, through **Nexpath's own service**,
   which forwards it to OpenAI and meters your account credit — and only when guidance fires.

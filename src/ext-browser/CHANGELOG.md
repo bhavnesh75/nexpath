@@ -3,6 +3,33 @@
 All notable changes to the browser extension. Versions track the `version` field in
 `manifest.chrome.json` / `manifest.firefox.json`.
 
+## 0.1.58
+
+The panel now numbers the sections of the improved prompt, can remove one with a key
+chord, and shows the prompt's key phrases in bold.
+
+### Added
+- **Section numbers.** Each section of the improved prompt shows its number after its
+  title (`#2`), as the Nexpath CLI popup does. This is display only, and nothing that is
+  sent changes.
+- **Remove a section with Alt+Shift+R and its number.** Press Alt+Shift+R, then the
+  section's number, and that section is removed at once.
+  - While the panel waits for the number, the hint line reads
+    `Alt+Shift+R — which section? #1–#9`.
+  - Any other key cancels the chord and does what it always did.
+  - If the number names no section, or removing it would leave the prompt empty, the
+    panel says `no section with that number` and changes nothing.
+- **Key phrases in bold.** The instructions, limits and conditions, the safety line, and
+  terms from your own prompt are shown in bold. This is display only, and the text that
+  is sent is exactly the same. The bold is worked out in the extension, with no extra
+  model call.
+
+### Fixed
+- **What you do while the panel is busy is no longer undone.** After an action, the panel
+  waits for Nexpath's next view, and while it waited you could still type. Text you typed
+  or applied in that moment, and a second section removal, used to be reverted when the
+  view arrived. They are kept now.
+
 ## 0.1.57
 
 Token mode now delivers the full enhancement, and Nexpath works on Replit chats and
