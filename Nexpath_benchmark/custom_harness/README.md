@@ -62,16 +62,4 @@ Every script takes `--help`.
 | `runs/<id>/turns.jsonl` | what the agent must receive, one row per turn (the handover file) |
 | `runs/`, `proxy/cassettes/` | local output — not published |
 
-## House rules
-
-These are properties of the harness:
-
-| |
-|---|
-| NexPath is called **by full path** to a build you name — never by the `nexpath` command, which may be a different version |
-| **one fresh database per run**; the user's own `~/.nexpath` is never touched |
-| both arms get the **identical** prompt list; a prompt file must be marked `frozen` or the runner refuses it |
-| the API key is read at run time and **never printed, logged or saved**; the proxy drops the `Authorization` header before writing a cassette |
-| the grader is mechanical — **no AI judges anything**, and what the rules cannot decide stays `unknown` |
-| the runner records only; it never scores |
-| every enhanced prompt is checked to still contain the original request **verbatim** — NexPath's body opens by reproducing it, and replacing a prompt with the body is only safe while that holds |
+ing it, and replacing a prompt with the body is only safe while that holds |
